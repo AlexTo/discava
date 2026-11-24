@@ -217,6 +217,10 @@ export const PublicViewCourseOutputSchema = CourseSchema.extend({
   // Only while the course's preview video can be played right now; never its
   // keys or nonces.
   preview: z.object({ durationSeconds: z.number() }).optional(),
+  // The refund terms of a priced course, from core-table, so the page and
+  // the API can't state different ones.
+  refundWindowDays: z.number().optional(),
+  refundProgressLimitPercent: z.number().optional(),
 });
 
 export type IPublicViewCourseOutput = z.output<

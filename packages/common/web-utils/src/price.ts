@@ -78,5 +78,7 @@ export const formatPrice = (amount: number, currency: string): string =>
 
 // The refund terms shown beside a price. One string, so every page that shows
 // the terms says the same thing as the API's refund window.
-export const refundTerms = (days: number): string =>
-  `${days}-day refund if you haven't completed the course.`;
+export const refundTerms = (days: number, percent: number): string =>
+  `${days}-day refund while you've completed less than ${
+    percent === 50 ? 'half' : `${percent}%`
+  } of the course. One refund per course.`;

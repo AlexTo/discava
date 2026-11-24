@@ -26,10 +26,6 @@ import { useAuth } from 'react-oidc-context';
 import { useCoreApi } from '../../../../api';
 import { useCheckoutReturn } from './use-checkout-return';
 
-// The refund period core-api applies (REFUND_WINDOW_DAYS), for the terms line
-// shown before there is an order to read it from.
-const REFUND_WINDOW_DAYS = 14;
-
 const REFUND_POLL_INTERVAL_MS = 2_000;
 
 const errorCode = (error: unknown) =>
@@ -70,15 +66,18 @@ export function EnrolmentActions({
   courseTitle,
   priceAmount = 0,
   priceCurrency = 'USD',
-  refundWindowDays = REFUND_WINDOW_DAYS,
+  refundWindowDays,
+  refundProgressLimitPercent,
   continueTo,
 }: {
   courseId: string;
   courseTitle: string;
   priceAmount?: number;
   priceCurrency?: string;
-  // The refund period shown beside the price; the API decides the real one.
+  // The refund terms shown beside the price, as course.publicView gives them;
+  // the API decides the real ones.
   refundWindowDays?: number;
+  refundProgressLimitPercent?: number;
   // Where a student who has just enrolled goes on: a lesson they were
   // looking at, such as a free preview. Without it they are sent to their
   // next lesson.
@@ -121,6 +120,7 @@ export function EnrolmentActions({
           (current) => ({
             ...enrolment,
             paidFor: current?.paidFor ?? false,
+            refundedBefore: current?.refundedBefore ?? false,
           }),
         );
         if (continueTo) {
@@ -228,14 +228,23 @@ export function EnrolmentActions({
       <p className="text-lg font-semibold">
         {formatPrice(priceAmount, priceCurrency)}
       </p>
-      {pricedCourse ? (
+      {pricedCourse &&
+      refundWindowDays !== undefined &&
+      refundProgressLimitPercent !== undefined ? (
         <p className="text-sm text-muted-foreground">
-          {refundTerms(refundWindowDays)}
+          {refundTerms(refundWindowDays, refundProgressLimitPercent)}
         </p>
       ) : null}
     </>
   );
-  const buy = () =>
+  const refundedBeforeWarning =
+    pricedCourse && enrolment?.refundedBefore ? (
+      <p className="text-sm text-muted-foreground">
+        You were refunded for this course before. If you buy it again, it can't
+        be refunded.
+      </p>
+    ) : null;
+  const buyButton = () =>
     paymentsUnavailable ? (
       <ErrorAlert type="info" header="Payments unavailable">
         {PAYMENTS_UNAVAILABLE}
@@ -256,6 +265,12 @@ export function EnrolmentActions({
           : 'Buy now'}
       </Button>
     );
+  const buy = () => (
+    <>
+      {refundedBeforeWarning}
+      {buyButton()}
+    </>
+  );
   const learnLink = (label: string) => (
     <Button className="w-full" size="lg" asChild>
       <Link to="/learn/$courseId/home" params={{ courseId }}>
@@ -292,6 +307,15 @@ export function EnrolmentActions({
     ) : order.refundBlockedBy === 'completed' ? (
       <p className="text-sm text-muted-foreground">
         A course can't be refunded after you have completed it.
+      </p>
+    ) : order.refundBlockedBy === 'progress-limit' ? (
+      <p className="text-sm text-muted-foreground">
+        Refunds end once you've completed half of the course.
+      </p>
+    ) : order.refundBlockedBy === 'refunded-before' ? (
+      <p className="text-sm text-muted-foreground">
+        You were refunded for this course before, so this purchase can't be
+        refunded.
       </p>
     ) : order.refundBlockedBy === 'other-account' ? (
       <p className="text-sm text-muted-foreground">
