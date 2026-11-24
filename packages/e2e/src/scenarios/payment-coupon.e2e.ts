@@ -94,3 +94,60 @@ test('a student applies a code and pays the discounted price', async ({
     courseId: course.courseId,
   });
 });
+
+// A code that takes the whole price enrols the student with no payment page.
+test('a code that makes the course free enrols the student directly', async ({
+  browser,
+}) => {
+  const title = uniqueName('E2E free-by-code course');
+  const instructor = await apiUser('Ines', ['instructor']);
+  const course = await createPricedCourseViaApi(instructor, title, 2000);
+  const { code } = await instructor.instructor.coupon.create.mutate({
+    courseId: course.courseId,
+    type: 'percent',
+    value: 100,
+    maxRedemptions: 5,
+  });
+  const page = await browser.newPage();
+  const user = newUser('Cleo', ['student']);
+
+  await test.step('applying the code changes the button to Enrol for free', async () => {
+    await openCourse(page, title);
+    await page.getByRole('button', { name: 'Sign in to buy' }).click();
+    await page
+      .getByRole('dialog', { name: 'Sign in to buy' })
+      .getByRole('link', { name: 'Continue to sign in' })
+      .click();
+    await signIn(page, user);
+    await page.getByRole('button', { name: 'Have a code?' }).click();
+    await page.getByLabel('Discount code').fill(code);
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await expect(page.getByText('No payment is needed.')).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Enrol for free' }),
+    ).toBeVisible();
+    await screenshot(page, 'free-coupon-applied');
+  });
+
+  await test.step('pressing it enrols the student without a payment page', async () => {
+    await page.getByRole('button', { name: 'Enrol for free' }).click();
+    await page.waitForURL(/\/learn\/[0-9a-f-]+\/(lesson\/[0-9a-f-]+|home)$/, {
+      timeout: 30_000,
+    });
+    expect(page.url()).not.toContain('/stripe/pay/');
+    await screenshot(page, 'free-coupon-enrolled');
+  });
+
+  await test.step('the code counts one redemption', async () => {
+    const { items } = await instructor.instructor.coupon.list.query({
+      courseId: course.courseId,
+    });
+    expect(items.find((coupon) => coupon.code === code)).toMatchObject({
+      redeemedCount: 1,
+    });
+  });
+
+  await instructor.instructor.course.archive.mutate({
+    courseId: course.courseId,
+  });
+});

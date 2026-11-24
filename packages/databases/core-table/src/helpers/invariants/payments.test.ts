@@ -365,6 +365,23 @@ describe('payments: price, orders and the connection', () => {
       expect(violationsOf('paid-course-enrolment-paid')).toEqual([]);
     });
 
+    it('accepts a late enrolment made by a free order from a code', () => {
+      paidTable();
+      Object.assign(table.orders[0], {
+        amount: 0,
+        discountAmount: 1999,
+        couponCode: 'FREE',
+        couponType: 'percent',
+        couponValue: 100,
+        paymentIntentId: undefined,
+        checkoutSessionId: undefined,
+      });
+      table.enrolments[0].createdAt = '2026-01-05T00:10:00.000Z';
+      expect(violationsOf('paid-course-enrolment-paid')).toEqual([]);
+      expect(violationsOf('order-shape')).toEqual([]);
+      expect(violationsOf('paid-order-has-enrolment')).toEqual([]);
+    });
+
     it('accepts a refunded student restored for free, in a free course and one priced again', () => {
       paidTable();
       Object.assign(table.orders[0], {

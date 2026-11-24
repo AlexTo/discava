@@ -221,7 +221,21 @@ export function EnrolmentActions({
   const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
   const checkout = useMutation(
     trpc.payment.checkout.mutationOptions({
-      onSuccess: ({ checkoutUrl }) => window.location.assign(checkoutUrl),
+      onSuccess: async (result) => {
+        if ('checkoutUrl' in result) {
+          window.location.assign(result.checkoutUrl);
+          return;
+        }
+        // A code that made the course free enrolled the student: no payment.
+        await queryClient.invalidateQueries({
+          queryKey: trpc.course.myEnrolment.queryKey({ courseId }),
+        });
+        if (continueTo) {
+          setEnrolledOpen(true);
+        } else {
+          startLearning(false);
+        }
+      },
       // A refusal of the code at this point (it expired since it was applied)
       // shows its message and goes back to the list price.
       onError: (error) => {
@@ -275,6 +289,9 @@ export function EnrolmentActions({
           onApply={setCoupon}
           onRemove={() => setCoupon(null)}
         />
+        {coupon?.isFree ? (
+          <p className="text-sm text-muted-foreground">No payment is needed.</p>
+        ) : null}
         <Button
           className="w-full"
           size="lg"
@@ -287,10 +304,14 @@ export function EnrolmentActions({
           }
         >
           {checkout.isPending || checkout.isSuccess
-            ? 'Starting payment…'
-            : coupon
-              ? `Pay ${formatPrice(coupon.totalAmount, coupon.currency)}`
-              : 'Buy now'}
+            ? coupon?.isFree
+              ? 'Enrolling…'
+              : 'Starting payment…'
+            : coupon?.isFree
+              ? 'Enrol for free'
+              : coupon
+                ? `Pay ${formatPrice(coupon.totalAmount, coupon.currency)}`
+                : 'Buy now'}
         </Button>
       </>
     );

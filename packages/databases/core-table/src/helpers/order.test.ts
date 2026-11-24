@@ -30,6 +30,7 @@ import {
   refundUndeliverable,
   restoreFreeEnrolment,
   settleOrderPaid,
+  startFreeOrder,
   startOrder,
   unenrolFromCourse,
 } from './order.js';
@@ -750,6 +751,13 @@ describe('refundEligibility', () => {
       now: over.now ?? '2026-11-05T00:00:00.000Z',
     });
 
+  it('is never eligible for an order of nothing made by a free-making code', () => {
+    expect(decide({ order: { amount: 0, couponCode: 'FREE' } })).toEqual({
+      eligible: false,
+      reason: 'not-paid',
+    });
+  });
+
   it('has a 14-day window', () => {
     expect(REFUND_WINDOW_DAYS).toBe(14);
   });
@@ -1468,5 +1476,152 @@ describe('orders with a coupon', () => {
         userId: 'user-2',
       });
     });
+  });
+});
+
+describe('startFreeOrder', () => {
+  const discount = {
+    discountAmount: 1999,
+    couponCode: 'FREE',
+    couponType: 'percent' as const,
+    couponValue: 100,
+  };
+  const freeSetup = (extra: Record<string, unknown> = {}) => {
+    const s = setup();
+    s.fake.put('coupon', {
+      courseId: 'course-1',
+      code: 'FREE',
+      type: 'percent',
+      value: 100,
+      enabled: true,
+      redeemedCount: 0,
+      ...extra,
+    });
+    const startFree = (userId = 'user-1') =>
+      startFreeOrder({
+        coreTable: s.fake.coreTable,
+        course,
+        userId,
+        now: NOW,
+        getConnection: s.getConnection,
+        discount,
+        extraWrites: (entities, created) =>
+          claimCouponWrites(entities, {
+            coupon: { courseId: 'course-1', code: 'FREE' },
+            userId,
+            orderId: created.orderId,
+            status: 'redeemed',
+            now: NOW,
+          }),
+      });
+    return { ...s, startFree };
+  };
+
+  it('writes a paid order of nothing, the redemption and the enrolment in one transaction', async () => {
+    const { fake, startFree } = freeSetup();
+    const created = await startFree();
+    expect(fake.log.transactions).toBe(1);
+    expect(created).toMatchObject({
+      status: 'paid',
+      amount: 0,
+      listAmount: 1999,
+      paidAt: NOW,
+      expiresAt: NOW,
+      accountId: 'acct_1',
+      mode: 'test',
+      ...discount,
+    });
+    expect(created).not.toHaveProperty('checkoutSessionId');
+    expect(fake.row('order', created)?.status).toBe('paid');
+    expect(fake.rows('couponRedemption')[0]).toMatchObject({
+      status: 'redeemed',
+      orderId: created.orderId,
+    });
+    expect(fake.rows('coupon')[0]?.redeemedCount).toBe(1);
+    expect(fake.rows('enrolment')).toHaveLength(1);
+    expect(fake.rows('enrolment')[0]).toMatchObject({
+      userId: 'user-1',
+      orderId: created.orderId,
+    });
+    expect(fake.rows('paymentConnection')[0]?.latestCheckoutExpiresAt).toBe(
+      NOW,
+    );
+  });
+
+  it('restores a dropped enrolment with the order set, keeping a completion', async () => {
+    const { fake, startFree } = freeSetup();
+    fake.put('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+      status: 'dropped',
+      completedAt: EARLIER,
+    });
+    const created = await startFree();
+    expect(fake.rows('enrolment')[0]).toMatchObject({
+      status: 'completed',
+      orderId: created.orderId,
+    });
+  });
+
+  it('writes nothing for a used up code, an enrolled student or an unpublished course', async () => {
+    const used = freeSetup({ maxRedemptions: 1, redeemedCount: 1 });
+    await expect(used.startFree()).rejects.toBeInstanceOf(
+      CheckoutStartCancelledError,
+    );
+    expect(used.fake.rows('order')).toEqual([]);
+    expect(used.fake.rows('enrolment')).toEqual([]);
+
+    const enrolled = freeSetup();
+    enrolled.fake.put('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+      status: 'active',
+    });
+    await expect(enrolled.startFree()).rejects.toBeInstanceOf(
+      CheckoutStartCancelledError,
+    );
+    expect(enrolled.fake.rows('order')).toEqual([]);
+
+    const draft = freeSetup();
+    draft.fake.rows('course')[0]!.status = 'draft';
+    await expect(draft.startFree()).rejects.toBeInstanceOf(
+      CheckoutStartCancelledError,
+    );
+    expect(draft.fake.rows('order')).toEqual([]);
+    expect(draft.fake.rows('enrolment')).toEqual([]);
+  });
+
+  it('refuses when payments are not connected, writing nothing', async () => {
+    const { fake, startFree } = freeSetup();
+    fake.put('paymentConnection', { ...connection, status: 'changing' });
+    await expect(startFree()).rejects.toBeInstanceOf(PaymentsUnavailableError);
+    expect(fake.rows('order')).toEqual([]);
+    expect(fake.rows('couponRedemption')).toEqual([]);
+  });
+
+  it('leaves one enrolment, one order and one redemption when pressed twice at once', async () => {
+    const { fake, startFree } = freeSetup();
+    const results = await Promise.allSettled([startFree(), startFree()]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(fake.rows('order')).toHaveLength(1);
+    expect(fake.rows('couponRedemption')).toHaveLength(1);
+    expect(fake.rows('enrolment')).toHaveLength(1);
+    expect(fake.rows('coupon')[0]?.redeemedCount).toBe(1);
+  });
+
+  it('refuses a discount that leaves something to charge', async () => {
+    const { fake, getConnection } = setup();
+    await expect(
+      startFreeOrder({
+        coreTable: fake.coreTable,
+        course,
+        userId: 'u',
+        now: NOW,
+        getConnection,
+        discount: { ...discount, discountAmount: 1000 },
+        extraWrites: () => [],
+      }),
+    ).rejects.toThrow();
+    expect(fake.rows('order')).toEqual([]);
   });
 });

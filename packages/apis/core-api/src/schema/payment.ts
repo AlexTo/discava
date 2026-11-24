@@ -14,9 +14,12 @@ export type ICheckoutInput = z.output<typeof CheckoutInputSchema>;
 
 // Only the hosted page's address: never the order, the session or any other
 // Stripe field.
-export const CheckoutOutputSchema = z.object({
-  checkoutUrl: z.string(),
-});
+// Stripe's page to pay on, or, for a code that makes the course free, the
+// enrolment itself: nothing to pay.
+export const CheckoutOutputSchema = z.union([
+  z.object({ checkoutUrl: z.string() }),
+  z.object({ enrolled: z.literal(true) }),
+]);
 
 export type ICheckoutOutput = z.output<typeof CheckoutOutputSchema>;
 

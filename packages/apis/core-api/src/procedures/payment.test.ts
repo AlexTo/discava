@@ -511,6 +511,14 @@ describe('refunds', () => {
       });
     });
 
+    it('offers no refund for a free order made by a code', async () => {
+      mocks.orders = [{ ...mocks.orders[0], amount: 0, couponCode: 'FREE' }];
+      await expect(caller.myOrder({ courseId: 'c1' })).resolves.toMatchObject({
+        amount: 0,
+        canRequestRefund: false,
+      });
+    });
+
     it('says why a refund is blocked, and shows a request and a refund', async () => {
       mocks.db.enrolment = { status: 'completed', orderId: 'o1' };
       await expect(caller.myOrder({ courseId: 'c1' })).resolves.toMatchObject({

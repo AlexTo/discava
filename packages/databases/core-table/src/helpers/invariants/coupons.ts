@@ -130,6 +130,42 @@ export const checkCouponRedemptionHasOrder = (
   });
 };
 
+// A free order (paid, nothing charged, made by a code) is how a code that takes
+// the whole price enrols: it has the student's enrolment for the course, which
+// names it. An enrolment dropped since still counts; only a missing one, or
+// one that has been given another order, does not.
+export const checkFreeCouponOrderHasEnrolment = (
+  snapshot: TableSnapshot,
+): Violation[] => {
+  const enrolments = new Map(
+    snapshot.enrolments.map((e) => [`${e.userId} ${e.courseId}`, e]),
+  );
+  return snapshot.orders.flatMap((order) => {
+    if (
+      order.status !== 'paid' ||
+      order.amount !== 0 ||
+      order.couponCode === undefined
+    ) {
+      return [];
+    }
+    const enrolment = enrolments.get(`${order.userId} ${order.courseId}`);
+    const problem = !enrolment
+      ? 'a free order made by a code has no enrolment for the student'
+      : enrolment.orderId !== order.orderId
+        ? 'a free order made by a code is not the order its enrolment names'
+        : undefined;
+    return problem
+      ? [
+          violation(
+            'free-coupon-order-has-enrolment',
+            { orderId: order.orderId },
+            problem,
+          ),
+        ]
+      : [];
+  });
+};
+
 export const COUPONS_CHECKS = [
   {
     name: 'coupon-count-matches-redemptions',
@@ -138,4 +174,8 @@ export const COUPONS_CHECKS = [
   { name: 'coupon-within-limit', check: checkCouponWithinLimit },
   { name: 'coupon-redemption-shape', check: checkCouponRedemptionShape },
   { name: 'coupon-redemption-has-order', check: checkCouponRedemptionHasOrder },
+  {
+    name: 'free-coupon-order-has-enrolment',
+    check: checkFreeCouponOrderHasEnrolment,
+  },
 ] as const satisfies readonly Check[];

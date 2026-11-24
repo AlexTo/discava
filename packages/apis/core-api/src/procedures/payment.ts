@@ -15,6 +15,7 @@ import {
   findOpenOrder,
   getConnection,
   markRefundRequested,
+  NotFoundError,
   normaliseCouponCode,
   type OrderRecord,
   PaymentsUnavailableError,
@@ -24,6 +25,7 @@ import {
   reclaimExpiredReservations,
   refundDeadline,
   refundEligibility,
+  startFreeOrder,
   startOrder,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -296,6 +298,11 @@ const checkoutWithCoupon = async ({
   let conflicts = 0;
   for (;;) {
     const now = new Date().toISOString();
+    if (
+      await alreadyEnrolledByCode({ coreTable, userId, courseId, couponCode })
+    ) {
+      return { enrolled: true as const };
+    }
     let check: Awaited<ReturnType<typeof checkCoupon>>;
     try {
       check = await checkCoupon({
@@ -329,13 +336,6 @@ const checkoutWithCoupon = async ({
       }
       throw error;
     }
-    if (check.price.isFree) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'A code that makes the course free is not supported here yet',
-      });
-    }
-
     const { data: orders } = await coreTable.entities.order.query
       .byStudentCourse({ userId, courseId })
       .go({ pages: 'all' });
@@ -361,6 +361,57 @@ const checkoutWithCoupon = async ({
     }
     const others = pending.filter((o) => o.couponCode !== check.code);
 
+    const discount = {
+      discountAmount: check.price.discountAmount,
+      couponCode: check.code,
+      couponType: check.coupon.type,
+      couponValue: check.coupon.value,
+    };
+
+    if (check.price.isFree) {
+      // Nothing to pay: the order is written already paid, with the enrolment
+      // and the redemption, and Stripe is never called.
+      try {
+        await startFreeOrder({
+          coreTable,
+          course: check.course,
+          userId,
+          now,
+          getConnection: () => getConnection(coreTable),
+          discount,
+          extraWrites: (entities, created) => [
+            ...claimCouponWrites(entities, {
+              coupon: check.coupon,
+              userId,
+              orderId: created.orderId,
+              status: 'redeemed',
+              now,
+            }),
+            ...others.flatMap((earlier) =>
+              expireOrderWrites(entities, earlier),
+            ),
+          ],
+        });
+        return { enrolled: true as const };
+      } catch (error) {
+        if (error instanceof NotFoundError) {
+          throw new TRPCError({ code: 'NOT_FOUND' });
+        }
+        if (error instanceof PaymentsUnavailableError) {
+          throw refuse('Payments are unavailable right now');
+        }
+        if (!(error instanceof CheckoutStartCancelledError)) throw error;
+        if (++conflicts >= CONFLICT_ATTEMPTS) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Too many people are checking out; try again',
+          });
+        }
+        await sleep(50 + Math.floor(Math.random() * 100));
+        continue;
+      }
+    }
+
     let order: OrderRecord;
     try {
       order = await startOrder({
@@ -370,12 +421,7 @@ const checkoutWithCoupon = async ({
         now,
         getConnection: () => getConnection(coreTable),
         ttlSeconds: localCheckoutTtlSeconds(),
-        discount: {
-          discountAmount: check.price.discountAmount,
-          couponCode: check.code,
-          couponType: check.coupon.type,
-          couponValue: check.coupon.value,
-        },
+        discount,
         extraWrites: (entities, created) => [
           ...claimCouponWrites(entities, {
             coupon: check.coupon,
@@ -410,6 +456,34 @@ const checkoutWithCoupon = async ({
 
     return createSession({ coreTable, order, userId, courseId, origin });
   }
+};
+
+// Whether this student already used this code to enrol: its redemption is
+// `redeemed` and the enrolment names that redemption's order. A repeat of the
+// free start answers the same as the first call.
+const alreadyEnrolledByCode = async ({
+  coreTable,
+  userId,
+  courseId,
+  couponCode,
+}: {
+  coreTable: CoreTable;
+  userId: string;
+  courseId: string;
+  couponCode: string;
+}) => {
+  const code = normaliseCouponCode(couponCode);
+  if (code === undefined) return false;
+  const [{ data: redemption }, { data: enrolment }] = await Promise.all([
+    coreTable.entities.couponRedemption.get({ courseId, code, userId }).go(),
+    coreTable.entities.enrolment.get({ courseId, userId }).go(),
+  ]);
+  return (
+    redemption?.status === 'redeemed' &&
+    enrolment !== null &&
+    enrolment.status !== 'dropped' &&
+    enrolment.orderId === redemption.orderId
+  );
 };
 
 // Creates Stripe's hosted page for an order at the order's own amount and
