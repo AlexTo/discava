@@ -31,6 +31,7 @@ const segmentLabels = {
   submissions: 'Submissions',
   questions: 'Questions',
   reviews: 'Reviews',
+  coupons: 'Coupons',
   profile: 'Profile',
   settings: 'Settings',
   notifications: 'Notification settings',
