@@ -245,4 +245,75 @@ describe('coupons', () => {
       ).toEqual([]);
     });
   });
+  describe('free-coupon-order-has-enrolment', () => {
+    // A paid order of nothing, made by a code that took the whole price, with
+    // its redemption and the enrolment it created.
+    const addFreeOrder = (
+      enrolment: Partial<TableSnapshot['enrolments'][number]> | false = {},
+    ) => {
+      addCoupon({ redeemedCount: 1, type: 'percent', value: 100 });
+      addRedemption(
+        {
+          userId: 'student',
+          orderId: 'order-free',
+          status: 'redeemed',
+          reservedUntil: undefined,
+        },
+        {
+          orderId: 'order-free',
+          userId: 'student',
+          amount: 0,
+          discountAmount: 1999,
+          couponType: 'percent',
+          couponValue: 100,
+          status: 'paid',
+          paidAt: T,
+          refundedAt: undefined,
+          refundReason: undefined,
+        },
+      );
+      table.enrolments = table.enrolments.filter((e) => e.userId !== 'student');
+      if (enrolment === false) return;
+      table.enrolments.push({
+        courseId: 'c1',
+        userId: 'student',
+        status: 'active',
+        progressPercent: 0,
+        createdAt: T,
+        orderId: 'order-free',
+        ...enrolment,
+      } as TableSnapshot['enrolments'][number]);
+    };
+    const free = () =>
+      checkTableInvariants(table).filter(
+        (v) => v.invariant === 'free-coupon-order-has-enrolment',
+      );
+
+    it('accepts a free order with its enrolment', () => {
+      addFreeOrder();
+      expect(free()).toEqual([]);
+    });
+
+    it('reports a free order with no enrolment', () => {
+      addFreeOrder(false);
+      expect(free().map((v) => v.message)).toEqual([
+        'a free order made by a code has no enrolment for the student',
+      ]);
+    });
+
+    it('reports a free order whose student is enrolled in another course only', () => {
+      addFreeOrder({ courseId: 'c2' });
+      expect(free()).toHaveLength(1);
+    });
+
+    it('reports an enrolment that names another order', () => {
+      addFreeOrder({ orderId: 'order-other' });
+      expect(free()).toHaveLength(1);
+    });
+
+    it('accepts a free order whose enrolment was later dropped', () => {
+      addFreeOrder({ status: 'dropped' });
+      expect(free()).toEqual([]);
+    });
+  });
 });

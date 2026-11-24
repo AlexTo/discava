@@ -431,6 +431,7 @@ export {
   restoreFreeEnrolment,
   type SettleResult,
   settleOrderPaid,
+  startFreeOrder,
   startOrder,
   unenrolFromCourse,
 } from './helpers/order.js';

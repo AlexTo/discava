@@ -1129,6 +1129,71 @@ describe('EnrolmentActions: a discount code', () => {
     ).toEqual({ courseId: 'course-1' });
   });
 
+  describe('a code that makes the course free', () => {
+    const freePreview = {
+      ...preview,
+      code: 'FREE',
+      discountAmount: 2000,
+      totalAmount: 0,
+      isFree: true,
+    };
+
+    it('changes the button to Enrol for free and says no payment is needed', async () => {
+      const { user } = renderPriced({ 'coupon.preview': () => freePreview });
+      await apply(user, 'free');
+
+      expect(
+        await screen.findByRole('button', { name: 'Enrol for free' }),
+      ).toBeEnabled();
+      expect(screen.getByText('No payment is needed.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Pay/ })).toBeNull();
+    });
+
+    it('starts the checkout with the code and enrols without a payment redirect', async () => {
+      const assign = vi.fn();
+      vi.stubGlobal('location', { ...window.location, assign });
+      const { user, calls } = renderPriced({
+        'coupon.preview': () => freePreview,
+        'payment.checkout': () => ({ enrolled: true }),
+      });
+      await apply(user, 'free');
+      await user.click(
+        await screen.findByRole('button', { name: 'Enrol for free' }),
+      );
+
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith(START));
+      expect(assign).not.toHaveBeenCalled();
+      expect(calls).toContainEqual({
+        path: 'payment.checkout',
+        input: { courseId: 'course-1', couponCode: 'FREE' },
+      });
+    });
+
+    it('shows the message of a refusal and goes back to the list price', async () => {
+      const { user } = renderPriced({
+        'coupon.preview': () => freePreview,
+        'payment.checkout': () => {
+          throw new ApiError(
+            'PRECONDITION_FAILED',
+            'This code has been used the maximum number of times',
+          );
+        },
+      });
+      await apply(user, 'free');
+      await user.click(
+        await screen.findByRole('button', { name: 'Enrol for free' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'This code has been used the maximum number of times',
+      );
+      expect(
+        await screen.findByRole('button', { name: 'Buy now' }),
+      ).toBeEnabled();
+      expect(navigate).not.toHaveBeenCalled();
+    });
+  });
+
   it('shows no code field for a course without a price', async () => {
     renderPreview({ 'course.myEnrolment': () => null });
     await enrolButton();

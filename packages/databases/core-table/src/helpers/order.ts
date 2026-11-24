@@ -222,6 +222,85 @@ export const startOrder = async ({
   throw new Error('Could not start the checkout; try again');
 };
 
+/**
+ * Enrols a student with a code that takes the whole price: one transaction
+ * that creates the order already `paid` (amount 0, no Stripe session, ending
+ * now), raises the connection's `latestCheckoutExpiresAt`, checks the course
+ * is published, and creates the enrolment or restores a `dropped` one, with
+ * the caller's `extraWrites` (the redemption claim, an earlier unpaid order's
+ * end). Throws `payments-unavailable` when the connection isn't active and a
+ * cancelled start when any condition failed, for the caller to read again.
+ */
+export const startFreeOrder = async ({
+  coreTable,
+  course,
+  userId,
+  now,
+  getConnection,
+  discount,
+  extraWrites,
+}: {
+  coreTable: CoreTable;
+  course: OrderCourse;
+  userId: string;
+  now: string;
+  getConnection: () => Promise<OrderConnection | undefined>;
+  discount: OrderDiscount;
+  extraWrites: (
+    entities: TransactionEntities,
+    order: OrderRecord,
+  ) => TransactionItems;
+}): Promise<OrderRecord> => {
+  if (course.status !== 'published') throw new NotFoundError();
+  if (discount.discountAmount !== course.priceAmount) {
+    throw new InvalidRequestError('The discount leaves something to charge');
+  }
+  const connection = await getConnection();
+  if (
+    !connection ||
+    connection.status !== 'active' ||
+    !connection.accountId ||
+    !connection.mode
+  ) {
+    throw new PaymentsUnavailableError();
+  }
+  const { courseId } = course;
+  const { data: enrolment } = await coreTable.entities.enrolment
+    .get({ courseId, userId })
+    .go();
+  if (enrolment && enrolment.status !== 'dropped') {
+    throw new CheckoutStartCancelledError();
+  }
+  const order: OrderRecord = {
+    orderId: uuidv7(),
+    userId,
+    courseId,
+    accountId: connection.accountId,
+    mode: connection.mode,
+    courseTitle: course.title,
+    listAmount: course.priceAmount,
+    amount: 0,
+    currency: course.priceCurrency,
+    ...discount,
+    status: 'paid',
+    expiresAt: now,
+    paidAt: now,
+  };
+  const { canceled } = await coreTable.transaction
+    .write((entities) => [
+      ...startWrites(entities, order, connection.latestCheckoutExpiresAt, now),
+      entities.course
+        .check({ courseId })
+        .where((attr, op) => op.eq(attr.status, 'published'))
+        .commit(),
+      enrolmentGrantWrite(entities.enrolment, order, enrolment),
+      ...extraWrites(entities, order),
+    ])
+    .go();
+  if (canceled) throw new CheckoutStartCancelledError();
+  return order;
+};
+
 const startWrites = (
   { order: orders, paymentConnection }: TransactionEntities,
   order: OrderRecord,
@@ -352,6 +431,27 @@ export const settleOrderPaid = async ({
   throw new Error('Could not settle the order; try again');
 };
 
+// The enrolment a paid order gives: created, or restored from `dropped`.
+const enrolmentGrantWrite = (
+  enrolments: TransactionEntities['enrolment'],
+  {
+    courseId,
+    userId,
+    orderId,
+  }: Pick<OrderRecord, 'courseId' | 'userId' | 'orderId'>,
+  enrolment: { completedAt?: string } | null,
+) =>
+  enrolment
+    ? enrolments
+        .patch({ courseId, userId })
+        .set({
+          status: enrolment.completedAt ? 'completed' : 'active',
+          orderId,
+        })
+        .where((attr, op) => op.eq(attr.status, 'dropped'))
+        .commit()
+    : enrolments.create({ courseId, userId, orderId }).commit();
+
 const settleWrites = (
   {
     order: orders,
@@ -363,7 +463,7 @@ const settleWrites = (
   now: string,
   paymentIntentId: string | undefined,
 ) => {
-  const { courseId, userId } = order;
+  const { courseId } = order;
   return [
     orders
       .patch({ orderId: order.orderId })
@@ -378,18 +478,7 @@ const settleWrites = (
       .check({ courseId })
       .where((attr, op) => op.eq(attr.status, 'published'))
       .commit(),
-    enrolment
-      ? enrolments
-          .patch({ courseId, userId })
-          .set({
-            status: enrolment.completedAt ? 'completed' : 'active',
-            orderId: order.orderId,
-          })
-          .where((attr, op) => op.eq(attr.status, 'dropped'))
-          .commit()
-      : enrolments
-          .create({ courseId, userId, orderId: order.orderId })
-          .commit(),
+    enrolmentGrantWrite(enrolments, order, enrolment),
   ];
 };
 

@@ -3,7 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
-import { CheckoutStartCancelledError } from '@discava/core-table';
+import {
+  CheckoutStartCancelledError,
+  NotFoundError,
+  PaymentsUnavailableError,
+} from '@discava/core-table';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { checkout } from './payment.js';
@@ -15,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   calls: [] as string[],
   composed: [] as any[],
   startOrder: vi.fn(),
+  startFree: vi.fn(),
   create: vi.fn(),
   expireSession: vi.fn(),
   retrieveSession: vi.fn(),
@@ -54,6 +59,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   getConnection: vi.fn(async () => ({ status: 'active', accountId: 'acct_1' })),
   findOpenOrder: vi.fn(async () => mocks.open),
   startOrder: mocks.startOrder,
+  startFreeOrder: mocks.startFree,
   attachCheckoutSession: mocks.attach,
   expireOrder: mocks.expireOrder,
   reclaimExpiredReservations: mocks.reclaim,
@@ -135,6 +141,11 @@ beforeEach(() => {
     mocks.calls.push('startOrder');
     mocks.composed = args.extraWrites({}, created);
     return created;
+  });
+  mocks.startFree.mockImplementation(async (args: any) => {
+    mocks.calls.push('startFreeOrder');
+    mocks.composed = args.extraWrites({}, { ...created, amount: 0 });
+    return { ...created, amount: 0, status: 'paid' };
   });
   mocks.create.mockResolvedValue({ id: 'cs_new', url: 'https://pay/cs_new' });
   mocks.expireSession.mockImplementation(async () => {
@@ -423,5 +434,113 @@ describe('payment.checkout without a code after one with a code', () => {
     mocks.startOrder.mockRejectedValue(new CheckoutStartCancelledError());
     await expect(plain()).rejects.toMatchObject({ code: 'CONFLICT' });
     expect(mocks.startOrder).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('payment.checkout with a code that makes the course free', () => {
+  const freeCoupon = { ...coupon, code: 'FREE', type: 'percent', value: 100 };
+  beforeEach(() => {
+    mocks.db = { course, coupon: freeCoupon };
+  });
+
+  it('enrols directly without calling Stripe, claiming the code as redeemed', async () => {
+    expect(await start('free')).toEqual({ enrolled: true });
+    expect(mocks.startOrder).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.expireSession).not.toHaveBeenCalled();
+    expect(mocks.attach).not.toHaveBeenCalled();
+    expect(mocks.startFree.mock.calls[0]?.[0]).toMatchObject({
+      userId: 'student-1',
+      discount: {
+        discountAmount: 4900,
+        couponCode: 'FREE',
+        couponType: 'percent',
+        couponValue: 100,
+      },
+    });
+    expect(mocks.claim).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'redeemed', orderId: 'new' }),
+    );
+    expect(mocks.composed).toHaveLength(1);
+  });
+
+  it('expires a pending paid checkout first, then ends its order in the same transaction', async () => {
+    mocks.orders = [earlier({ couponCode: 'SPRING-20' })];
+    mocks.open = mocks.orders[0];
+    await start('free');
+    expect(mocks.calls).toEqual(['expireSession', 'startFreeOrder']);
+    expect(mocks.expireSession).toHaveBeenCalledWith('cs_old');
+    expect(mocks.expireWrites).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orderId: 'old' }),
+    );
+    expect(mocks.composed).toHaveLength(2);
+  });
+
+  it('enrols nobody when the old session turns out paid', async () => {
+    mocks.orders = [earlier()];
+    mocks.expireSession.mockRejectedValue(new Error('already complete'));
+    mocks.retrieveSession.mockResolvedValue({ status: 'complete' });
+    await expect(start('free')).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'You are already enrolled in this course',
+    });
+    expect(mocks.startFree).not.toHaveBeenCalled();
+  });
+
+  it('answers a repeat with the same result and writes nothing', async () => {
+    mocks.db.couponRedemption = { status: 'redeemed', orderId: 'o-free' };
+    mocks.db.enrolment = { status: 'active', orderId: 'o-free' };
+    expect(await start('free')).toEqual({ enrolled: true });
+    expect(mocks.startFree).not.toHaveBeenCalled();
+  });
+
+  it('answers a conflicting concurrent call by reading again, then returns the enrolment', async () => {
+    mocks.startFree.mockImplementationOnce(async () => {
+      mocks.db.couponRedemption = { status: 'redeemed', orderId: 'o-free' };
+      mocks.db.enrolment = { status: 'active', orderId: 'o-free' };
+      throw new CheckoutStartCancelledError();
+    });
+    expect(await start('free')).toEqual({ enrolled: true });
+    expect(mocks.startFree).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces CONFLICT after three cancelled starts', async () => {
+    mocks.startFree.mockRejectedValue(new CheckoutStartCancelledError());
+    await expect(start('free')).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mocks.startFree).toHaveBeenCalledTimes(3);
+  });
+
+  it('is refused when the code is used up', async () => {
+    mocks.db.coupon = { ...freeCoupon, maxRedemptions: 1, redeemedCount: 1 };
+    await expect(start('free')).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'This code has been used the maximum number of times',
+    });
+    expect(mocks.startFree).not.toHaveBeenCalled();
+  });
+
+  it('says payments are unavailable when the connection is not active', async () => {
+    mocks.startFree.mockRejectedValue(new PaymentsUnavailableError());
+    await expect(start('free')).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'Payments are unavailable right now',
+    });
+  });
+
+  it('lets a course archived during the call surface as not found', async () => {
+    mocks.startFree.mockRejectedValue(new NotFoundError());
+    await expect(start('free')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('never treats a total below the minimum as free', async () => {
+    mocks.db.coupon = { ...coupon, code: 'ALMOST', type: 'percent', value: 99 };
+    await expect(start('almost')).rejects.toMatchObject({
+      message: 'This code leaves a price too low to pay for',
+    });
+    expect(mocks.startFree).not.toHaveBeenCalled();
   });
 });
