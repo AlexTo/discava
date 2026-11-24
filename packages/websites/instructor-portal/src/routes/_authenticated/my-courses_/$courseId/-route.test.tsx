@@ -163,6 +163,28 @@ describe('course editor', () => {
     await vi.waitFor(() => expect(price).toHaveFocus());
   });
 
+  it.each(['announcement.list', 'certificate.list'])(
+    "waits for %s, which a section starts once the course shows, before going to a section's address",
+    async (path) => {
+      hash = 'announcements';
+      let answer = () => {};
+      render({
+        [path]: () =>
+          new Promise((resolve) => {
+            answer = () => resolve({ items: [] });
+          }),
+      });
+      const heading = await screen.findByRole('heading', {
+        name: 'Announcements',
+      });
+      // Long enough for the scroll to have run, were it not held back.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(heading).not.toHaveFocus();
+      answer();
+      await vi.waitFor(() => expect(heading).toHaveFocus());
+    },
+  );
+
   it('has no link or section for captions when translation is off', async () => {
     render({
       'course.captionLanguages': () => ({
