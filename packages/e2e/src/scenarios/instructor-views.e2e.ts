@@ -92,4 +92,12 @@ test('an instructor reloads and shares the views of My Courses, Questions and Ea
     await page.reload();
     await expect(page.getByLabel('Month (UTC)')).toHaveValue(previous);
   });
+
+  await test.step('Earnings drops a month it cannot read from the address', async () => {
+    await page.goto(`${PORTALS.instructor}/earnings?month=2026-13`);
+    await expect(page).not.toHaveURL(/month=2026-13/);
+    await expect(page.getByLabel('Month (UTC)')).toBeVisible();
+    await expect(page.getByText('Invalid time value')).toHaveCount(0);
+    await screenshot(page, 'earnings after an unreadable month in the address');
+  });
 });
