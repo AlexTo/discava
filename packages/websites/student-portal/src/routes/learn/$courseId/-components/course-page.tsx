@@ -171,6 +171,8 @@ export function CoursePage({ courseId }: { courseId: string }) {
                   courseTitle={course.title}
                   priceAmount={course.priceAmount}
                   priceCurrency={course.priceCurrency}
+                  refundWindowDays={course.refundWindowDays}
+                  refundProgressLimitPercent={course.refundProgressLimitPercent}
                 />
               </div>
             </div>

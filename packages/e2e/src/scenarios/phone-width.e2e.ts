@@ -644,6 +644,29 @@ test('the course editor fits a phone', async ({ page }) => {
     await screenshot(page, 'course editor at phone width', { fullPage: true });
   });
 
+  await test.step('the content comes first, and the section links lead to each section', async () => {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const headerBox = await page.locator('main section').first().boundingBox();
+    const headingBox = await page
+      .getByRole('heading', { name: 'Course content', level: 2 })
+      .boundingBox();
+    expect(headingBox?.y ?? Infinity).toBeLessThanOrEqual(
+      (headerBox?.y ?? 0) + (headerBox?.height ?? 0) + 812,
+    );
+    const links = page.getByRole('navigation', { name: 'Course sections' });
+    await expect(links).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'course editor section links');
+
+    await links.getByRole('link', { name: 'Announcements' }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/my-courses/${courseId}#announcements$`),
+    );
+    const heading = page.getByRole('heading', { name: 'Announcements' });
+    await expect(heading).toBeInViewport();
+    await expect(heading).toBeFocused();
+  });
+
   await test.step('the archived rows fit, with Restore and Delete on screen', async () => {
     const archivedSection = page.getByRole('region', { name: 'Archived' });
     await archivedSection.scrollIntoViewIfNeeded();

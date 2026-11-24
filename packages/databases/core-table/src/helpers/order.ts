@@ -12,6 +12,7 @@ import {
   releaseCouponWrites,
 } from './coupon-redemption.js';
 import { InvalidRequestError, NotFoundError } from './errors.js';
+import { computeProgress, loadCurriculum } from './progress.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 type TransactionWrites = Parameters<CoreTable['transaction']['write']>[0];
@@ -29,6 +30,9 @@ export const CHECKOUT_REUSE_MARGIN_SECONDS = 5 * 60;
 
 /** How long after paying a student may ask for a refund. */
 export const REFUND_WINDOW_DAYS = 14;
+
+/** A student's own refund is refused once this share of the course is done. */
+export const REFUND_PROGRESS_LIMIT_PERCENT = 50;
 
 // Starting a checkout, or settling a paid one, kept losing to other writers.
 const ATTEMPTS = 3;
@@ -638,6 +642,8 @@ export type RefundEligibility =
         | 'not-current-order'
         | 'window-ended'
         | 'completed'
+        | 'progress-limit'
+        | 'refunded-before'
         | 'already-requested'
         | 'other-account';
     };
@@ -652,6 +658,8 @@ export const refundEligibility = ({
   order,
   enrolment,
   connection,
+  progressPercent,
+  refundedBefore,
   now,
 }: {
   order: Pick<
@@ -660,6 +668,10 @@ export const refundEligibility = ({
   >;
   enrolment: { orderId?: string; status: string };
   connection: Pick<OrderConnection, 'status' | 'accountId'> | undefined;
+  /** The student's share of the course as it is now (`computeProgress`). */
+  progressPercent: number;
+  /** An earlier order of theirs for this course was refunded at their request. */
+  refundedBefore: boolean;
   now: string;
 }): RefundEligibility => {
   if (order.status !== 'paid' || !order.paidAt) {
@@ -680,9 +692,73 @@ export const refundEligibility = ({
   if (enrolment.status === 'completed') {
     return { eligible: false, reason: 'completed' };
   }
+  if (progressPercent >= REFUND_PROGRESS_LIMIT_PERCENT) {
+    return { eligible: false, reason: 'progress-limit' };
+  }
+  if (refundedBefore) return { eligible: false, reason: 'refunded-before' };
   const refundableUntil = refundDeadline(order.paidAt);
   if (now > refundableUntil) return { eligible: false, reason: 'window-ended' };
   return { eligible: true, refundableUntil };
+};
+
+/**
+ * Whether an earlier order of the student's for the course was refunded at
+ * their own request. An operator's refund (no `refundRequestedAt`) and an
+ * automatic one (`duplicate`, `unavailable`, `mismatch`) don't count.
+ */
+export const readRefundedBefore = async ({
+  coreTable,
+  userId,
+  courseId,
+}: {
+  coreTable: CoreTable;
+  userId: string;
+  courseId: string;
+}): Promise<boolean> => {
+  const { data: orders } = await coreTable.entities.order.query
+    .byStudentCourse({ userId, courseId })
+    .go({ pages: 'all' });
+  return orders.some(
+    (o) =>
+      o.status === 'refunded' &&
+      o.refundReason === 'requested' &&
+      o.refundRequestedAt !== undefined,
+  );
+};
+
+export interface RefundLimits {
+  progressPercent: number;
+  refundedBefore: boolean;
+}
+
+/**
+ * What `refundEligibility` needs besides the order: the student's progress
+ * computed now from their completions and the current curriculum (not the
+ * stored `progressPercent`, which lags a completion), and `readRefundedBefore`.
+ */
+export const readRefundLimits = async ({
+  coreTable,
+  userId,
+  courseId,
+}: {
+  coreTable: CoreTable;
+  userId: string;
+  courseId: string;
+}): Promise<RefundLimits> => {
+  const [curriculum, { data: completions }, refundedBefore] = await Promise.all(
+    [
+      loadCurriculum(coreTable, courseId),
+      coreTable.entities.itemCompletion.query
+        .primary({ userId, courseId })
+        .go({ pages: 'all' }),
+      readRefundedBefore({ coreTable, userId, courseId }),
+    ],
+  );
+  const { progressPercent } = computeProgress(
+    curriculum,
+    new Set(completions.map(({ contentItemId }) => contentItemId)),
+  );
+  return { progressPercent, refundedBefore };
 };
 
 /**

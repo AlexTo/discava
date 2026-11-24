@@ -101,7 +101,7 @@ function ModuleLessons({
   const published = !draft && !readOnly;
   const { register } = useFocusAfterRemoval(
     module.lessons.map((lesson) => lesson.lessonId),
-    () => document.getElementById('content-heading'),
+    () => document.getElementById('content'),
   );
 
   return (
@@ -319,7 +319,7 @@ export function CourseModules({
   const refreshCourse = useRefreshCourse(courseId);
   const { register } = useFocusAfterRemoval(
     modules.map((module) => module.moduleId),
-    () => document.getElementById('content-heading'),
+    () => document.getElementById('content'),
   );
 
   if (modules.length === 0) {

@@ -32,22 +32,6 @@ const unlessAlreadyCompleted = async (write: () => Promise<unknown>) => {
   }
 };
 
-// The whole curriculum of a course, every page: a course's curriculum can
-// exceed a single 1 MB query page.
-export const loadCurriculum = async (
-  coreTable: CoreTable,
-  courseId: string,
-): Promise<Curriculum> => {
-  const { data } = await coreTable.collections
-    .curriculum({ courseId })
-    .go({ pages: 'all' });
-  return {
-    modules: data.module,
-    lessons: data.lesson,
-    contentItems: data.contentItem,
-  };
-};
-
 // The students to recalculate when a course's curriculum changes: everyone
 // enrolled who hasn't dropped out.
 export const listEnrolledStudents = async (

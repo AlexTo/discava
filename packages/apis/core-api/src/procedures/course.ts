@@ -13,6 +13,8 @@ import {
   type CoreTable,
   filterEffectivelyVisible,
   isOpenFreePreview,
+  REFUND_PROGRESS_LIMIT_PERCENT,
+  REFUND_WINDOW_DAYS,
   resolveFirstLessonPrompt,
   tracksForPlayback,
 } from '@discava/core-table';
@@ -254,6 +256,12 @@ export const publicViewCourse = publicCourseProcedure
       preview: playablePreviewManifest(course, preview)
         ? { durationSeconds: preview!.durationSeconds }
         : undefined,
+      ...(course.priceAmount > 0
+        ? {
+            refundWindowDays: REFUND_WINDOW_DAYS,
+            refundProgressLimitPercent: REFUND_PROGRESS_LIMIT_PERCENT,
+          }
+        : {}),
       modules: modules
         .slice()
         .sort((a, b) => a.order - b.order)

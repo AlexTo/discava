@@ -48,6 +48,7 @@ const enrolment = (overrides: Record<string, unknown> = {}) => ({
   status: 'active',
   progressPercent: 0,
   paidFor: false,
+  refundedBefore: false,
   createdAt: '2026-10-02T00:00:00.000Z',
   updatedAt: '2026-10-02T00:00:00.000Z',
   ...overrides,
@@ -266,7 +267,13 @@ describe('EnrolmentActions', () => {
   });
 });
 
-const priced = { ...course, priceAmount: 2000, priceCurrency: 'USD' };
+const priced = {
+  ...course,
+  priceAmount: 2000,
+  priceCurrency: 'USD',
+  refundWindowDays: 14,
+  refundProgressLimitPercent: 50,
+};
 
 describe('EnrolmentActions: paid courses', () => {
   afterEach(() => {
@@ -554,7 +561,10 @@ describe('EnrolmentActions: refunds', () => {
       month: 'long',
       year: 'numeric',
     });
-  const TERMS = "14-day refund if you haven't completed the course.";
+  const TERMS =
+    "14-day refund while you've completed less than half of the course. One refund per course.";
+  const REFUNDED_BEFORE =
+    "You were refunded for this course before. If you buy it again, it can't be refunded.";
   const UNTIL = '2026-11-20T10:00:00.000Z';
 
   const order = (overrides: Record<string, unknown> = {}) => ({
@@ -760,6 +770,65 @@ describe('EnrolmentActions: refunds', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /refund/i })).toBeNull();
+  });
+
+  it('says refunds end at half the course, with no button', async () => {
+    renderRefund({
+      'course.myEnrolment': () => enrolment({ progressPercent: 50 }),
+      'payment.myOrder': () =>
+        order({ canRequestRefund: false, refundBlockedBy: 'progress-limit' }),
+    });
+
+    expect(
+      await screen.findByText(
+        "Refunds end once you've completed half of the course.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /refund/i })).toBeNull();
+  });
+
+  it('says a course refunded before cannot be refunded again, with no button', async () => {
+    renderRefund({
+      'payment.myOrder': () =>
+        order({ canRequestRefund: false, refundBlockedBy: 'refunded-before' }),
+    });
+
+    expect(
+      await screen.findByText(
+        "You were refunded for this course before, so this purchase can't be refunded.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /refund/i })).toBeNull();
+  });
+
+  it('warns beside Buy now a student who was refunded before', async () => {
+    renderRefund({
+      'course.myEnrolment': () =>
+        enrolment({ status: 'dropped', paidFor: false, refundedBefore: true }),
+      'payment.myOrder': () =>
+        order({ status: 'refunded', refundedAt: '2026-11-10T10:00:00.000Z' }),
+    });
+
+    expect(await screen.findByText(REFUNDED_BEFORE)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Buy now' })).toBeEnabled();
+  });
+
+  it('gives no warning to a student who was not refunded before', async () => {
+    renderRefund({
+      'course.myEnrolment': () => null,
+      'payment.myOrder': () => null,
+    });
+
+    await screen.findByRole('button', { name: 'Buy now' });
+    expect(screen.queryByText(REFUNDED_BEFORE)).toBeNull();
+  });
+
+  it('has no arrow icons in any refund button', async () => {
+    renderRefund();
+    const button = await screen.findByRole('button', {
+      name: 'Request a refund',
+    });
+    expect(button.querySelector('svg')).toBeNull();
   });
 
   it("says a purchase from another account can't be refunded here", async () => {

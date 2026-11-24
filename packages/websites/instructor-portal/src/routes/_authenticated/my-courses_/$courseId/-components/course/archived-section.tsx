@@ -140,23 +140,18 @@ export function ArchivedSection({
   const { register } = useFocusAfterRemoval(
     entries.map((entry) => entry.key),
     () =>
-      document.getElementById('archived-heading') ??
-      document.getElementById('content-heading'),
+      document.getElementById('archived') ?? document.getElementById('content'),
   );
   if (entries.length === 0) {
     return null;
   }
 
   return (
-    <section aria-labelledby="archived-heading" className="space-y-3">
+    <section aria-labelledby="archived" className="space-y-3">
       <div>
         <div className="flex items-center gap-2">
           <Archive className="size-5 text-muted-foreground" />
-          <h2
-            id="archived-heading"
-            tabIndex={-1}
-            className="text-xl font-semibold"
-          >
+          <h2 id="archived" tabIndex={-1} className="text-xl font-semibold">
             Archived
           </h2>
         </div>

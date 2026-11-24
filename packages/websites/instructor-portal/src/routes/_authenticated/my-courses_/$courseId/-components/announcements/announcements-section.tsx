@@ -57,7 +57,7 @@ export function AnnouncementsSection({
     if (next) {
       editButtons.current.get(next.announcementId)?.focus();
     } else {
-      document.getElementById('announcements-heading')?.focus();
+      document.getElementById('announcements')?.focus();
     }
   };
 

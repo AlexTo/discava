@@ -4,6 +4,7 @@
  */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import type { createCoreTableService } from '../service.js';
 import {
   claimCouponWrites,
   reclaimExpiredReservations,
@@ -20,7 +21,10 @@ import {
   type OrderCourse,
   type OrderRecord,
   PaymentsUnavailableError,
+  REFUND_PROGRESS_LIMIT_PERCENT,
   REFUND_WINDOW_DAYS,
+  readRefundedBefore,
+  readRefundLimits,
   refundEligibility,
   refundOrder,
   refundUndeliverable,
@@ -732,6 +736,8 @@ describe('refundEligibility', () => {
       order?: Partial<OrderRecord>;
       enrolment?: { orderId?: string; status: string };
       connection?: { status: string; accountId?: string };
+      progressPercent?: number;
+      refundedBefore?: boolean;
       now?: string;
     } = {},
   ) =>
@@ -739,6 +745,8 @@ describe('refundEligibility', () => {
       order: paid(over.order),
       enrolment: over.enrolment ?? enrolment,
       connection: over.connection ?? active,
+      progressPercent: over.progressPercent ?? 0,
+      refundedBefore: over.refundedBefore ?? false,
       now: over.now ?? '2026-11-05T00:00:00.000Z',
     });
 
@@ -797,6 +805,8 @@ describe('refundEligibility', () => {
         order: paid(),
         enrolment,
         connection: undefined,
+        progressPercent: 0,
+        refundedBefore: false,
         now: PAID,
       }),
     ).toEqual({ eligible: false, reason: 'other-account' });
@@ -829,6 +839,204 @@ describe('refundEligibility', () => {
         now: '2027-01-01T00:00:00.000Z',
       }),
     ).toEqual({ eligible: false, reason: 'completed' });
+  });
+});
+
+describe('refundEligibility: limits', () => {
+  const PAID = '2026-11-01T00:00:00.000Z';
+  const decide = (
+    over: {
+      progressPercent?: number;
+      refundedBefore?: boolean;
+      status?: string;
+      requested?: boolean;
+      now?: string;
+    } = {},
+  ) =>
+    refundEligibility({
+      order: order({
+        status: 'paid',
+        paidAt: PAID,
+        paymentIntentId: 'pi',
+        ...(over.requested ? { refundRequestedAt: PAID } : {}),
+      }),
+      enrolment: { orderId: 'order-1', status: over.status ?? 'active' },
+      connection: { status: 'active', accountId: 'acct_1' },
+      progressPercent: over.progressPercent ?? 0,
+      refundedBefore: over.refundedBefore ?? false,
+      now: over.now ?? '2026-11-05T00:00:00.000Z',
+    });
+
+  it('has a limit of half the course', () => {
+    expect(REFUND_PROGRESS_LIMIT_PERCENT).toBe(50);
+  });
+
+  it('is eligible at 49 percent and refused at 50', () => {
+    expect(decide({ progressPercent: 49 })).toMatchObject({ eligible: true });
+    expect(decide({ progressPercent: 50 })).toEqual({
+      eligible: false,
+      reason: 'progress-limit',
+    });
+    expect(decide({ progressPercent: 80 })).toEqual({
+      eligible: false,
+      reason: 'progress-limit',
+    });
+  });
+
+  it('still reports a completed enrolment as completed', () => {
+    expect(decide({ status: 'completed', progressPercent: 100 })).toEqual({
+      eligible: false,
+      reason: 'completed',
+    });
+  });
+
+  it('refuses a course refunded before', () => {
+    expect(decide({ refundedBefore: true })).toEqual({
+      eligible: false,
+      reason: 'refunded-before',
+    });
+  });
+
+  it('gives each failing condition its own reason, in order', () => {
+    const late = '2027-01-01T00:00:00.000Z';
+    expect(
+      decide({
+        requested: true,
+        status: 'completed',
+        progressPercent: 100,
+        refundedBefore: true,
+        now: late,
+      }),
+    ).toEqual({ eligible: false, reason: 'already-requested' });
+    expect(
+      decide({
+        status: 'completed',
+        progressPercent: 100,
+        refundedBefore: true,
+        now: late,
+      }),
+    ).toEqual({ eligible: false, reason: 'completed' });
+    expect(
+      decide({ progressPercent: 60, refundedBefore: true, now: late }),
+    ).toEqual({ eligible: false, reason: 'progress-limit' });
+    expect(decide({ refundedBefore: true, now: late })).toEqual({
+      eligible: false,
+      reason: 'refunded-before',
+    });
+    expect(decide({ now: late })).toEqual({
+      eligible: false,
+      reason: 'window-ended',
+    });
+  });
+});
+
+describe('readRefundLimits', () => {
+  type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
+  const items = ['i1', 'i2', 'i3', 'i4'];
+  const visible = { visibility: 'visible' as const };
+
+  // The fake has no curriculum collection or completions: give it a
+  // four-item course and the completions asked for.
+  const setup = (completed: string[]) => {
+    const fake = createFakeCoreTable();
+    const base = fake.coreTable as unknown as CoreTable;
+    const coreTable = {
+      ...base,
+      entities: new Proxy(base.entities, {
+        get: (target, name: string) =>
+          name === 'itemCompletion'
+            ? {
+                query: {
+                  primary: () => ({
+                    go: async () => ({
+                      data: completed.map((contentItemId) => ({
+                        contentItemId,
+                      })),
+                    }),
+                  }),
+                },
+              }
+            : (target as Record<string, unknown>)[name],
+      }),
+      collections: {
+        curriculum: () => ({
+          go: async () => ({
+            data: {
+              module: [{ ...visible, moduleId: 'm1' }],
+              lesson: [{ ...visible, moduleId: 'm1', lessonId: 'l1' }],
+              contentItem: items.map((contentItemId) => ({
+                ...visible,
+                moduleId: 'm1',
+                lessonId: 'l1',
+                contentItemId,
+              })),
+            },
+          }),
+        }),
+      },
+    } as unknown as CoreTable;
+    return { fake, coreTable };
+  };
+  const args = (coreTable: CoreTable) => ({
+    coreTable,
+    userId: 'user-1',
+    courseId: 'course-1',
+  });
+  const earlier = (over: Partial<OrderRecord> = {}) =>
+    order({
+      orderId: 'order-0',
+      status: 'refunded',
+      paidAt: NOW,
+      refundedAt: LATER,
+      refundReason: 'requested',
+      refundRequestedAt: NOW,
+      ...over,
+    });
+
+  it('computes the share from completions and the curriculum, not the stored figure', async () => {
+    const { fake, coreTable } = setup(['i1', 'i2']);
+    fake.put('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+      status: 'active',
+      progressPercent: 25,
+    });
+    expect(await readRefundLimits(args(coreTable))).toEqual({
+      progressPercent: 50,
+      refundedBefore: false,
+    });
+  });
+
+  it('counts a refund made at the student request', async () => {
+    const { fake, coreTable } = setup(['i1']);
+    fake.put('order', earlier());
+    expect(await readRefundLimits(args(coreTable))).toEqual({
+      progressPercent: 25,
+      refundedBefore: true,
+    });
+  });
+
+  it.each([
+    ['an operator', { refundRequestedAt: undefined }],
+    ['a duplicate payment', { refundReason: 'duplicate' as const }],
+    ['an unavailable course', { refundReason: 'unavailable' as const }],
+    ['a mismatch', { refundReason: 'mismatch' as const }],
+    ['a pending request', { status: 'paid' as const }],
+  ])('does not count a refund by %s', async (_, over) => {
+    const { fake, coreTable } = setup([]);
+    const row = { ...earlier(over) } as Record<string, unknown>;
+    for (const key of Object.keys(row)) {
+      if (row[key] === undefined) delete row[key];
+    }
+    fake.put('order', row);
+    expect(await readRefundedBefore(args(coreTable))).toBe(false);
+  });
+
+  it('ignores the refunds of another student or course', async () => {
+    const { fake, coreTable } = setup([]);
+    fake.put('order', earlier({ userId: 'user-2' }));
+    fake.put('order', earlier({ orderId: 'order-9', courseId: 'course-2' }));
+    expect(await readRefundedBefore(args(coreTable))).toBe(false);
   });
 });
 
