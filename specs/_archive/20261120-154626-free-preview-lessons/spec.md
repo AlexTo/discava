@@ -10,7 +10,7 @@
 
 **Parent issue**: #595
 
-**Design page**: [`design/public-pages`](../../docs/src/content/docs/en/design/public-pages.mdx) (gains a "Free preview lessons" section)
+**Design page**: [`design/public-pages`](../../../docs/src/content/docs/en/design/public-pages.mdx) (gains a "Free preview lessons" section)
 
 ## Clarifications
 

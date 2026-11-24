@@ -2,7 +2,7 @@
 
 **Branch**: `20261120-154626-free-preview-lessons` | **Date**: 2026-11-20 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/20261120-154626-free-preview-lessons/spec.md`
+**Input**: Feature specification from `/specs/_archive/20261120-154626-free-preview-lessons/spec.md`
 
 ## Summary
 
@@ -103,7 +103,7 @@ No violations, so Complexity Tracking is empty.
 ### Documentation (this feature)
 
 ```text
-specs/20261120-154626-free-preview-lessons/
+specs/_archive/20261120-154626-free-preview-lessons/
 ├── plan.md
 ├── research.md
 ├── data-model.md
