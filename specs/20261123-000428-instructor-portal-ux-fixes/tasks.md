@@ -669,7 +669,7 @@ At 1440px nothing changes, apart from long-content fixes.
 - [ ] T088 (human) On a real phone, or the browser's device mode with touch:
   - rename a lesson, hide it, save a quiz edit, and grade a submission. Confirm nothing needs a sideways scroll or a zoom to reach (SC-003);
   - at 1440px with the browser's text zoom at 200%, confirm that the course editor and a dialog still don't scroll sideways.
-- [ ] T089 Record in `spec.md`'s Assumptions, as a dated note, anything the walk found that this spec left out of scope, so that the next audit starts from it. Do not widen this feature.
+- [x] T089 Record in `spec.md`'s Assumptions, as a dated note, anything the walk found that this spec left out of scope, so that the next audit starts from it. Do not widen this feature.
 
 ---
 
