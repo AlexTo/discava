@@ -753,7 +753,12 @@ export const refundEligibility = ({
 }: {
   order: Pick<
     OrderRecord,
-    'orderId' | 'status' | 'accountId' | 'paidAt' | 'refundRequestedAt'
+    | 'orderId'
+    | 'status'
+    | 'accountId'
+    | 'amount'
+    | 'paidAt'
+    | 'refundRequestedAt'
   >;
   enrolment: { orderId?: string; status: string };
   connection: Pick<OrderConnection, 'status' | 'accountId'> | undefined;
@@ -763,7 +768,8 @@ export const refundEligibility = ({
   refundedBefore: boolean;
   now: string;
 }): RefundEligibility => {
-  if (order.status !== 'paid' || !order.paidAt) {
+  // An order of nothing (a code took the whole price) has no payment to return.
+  if (order.status !== 'paid' || !order.paidAt || order.amount <= 0) {
     return { eligible: false, reason: 'not-paid' };
   }
   if (enrolment.orderId !== order.orderId || enrolment.status === 'dropped') {

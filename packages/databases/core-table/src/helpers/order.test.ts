@@ -751,6 +751,13 @@ describe('refundEligibility', () => {
       now: over.now ?? '2026-11-05T00:00:00.000Z',
     });
 
+  it('is never eligible for an order of nothing made by a free-making code', () => {
+    expect(decide({ order: { amount: 0, couponCode: 'FREE' } })).toEqual({
+      eligible: false,
+      reason: 'not-paid',
+    });
+  });
+
   it('has a 14-day window', () => {
     expect(REFUND_WINDOW_DAYS).toBe(14);
   });
