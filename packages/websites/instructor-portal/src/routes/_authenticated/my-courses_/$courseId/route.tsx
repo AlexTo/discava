@@ -277,7 +277,11 @@ function RouteComponent() {
           <div>
             <div className="flex items-center gap-2">
               <BookOpen className="size-5 text-primary" />
-              <h2 id="content" tabIndex={-1} className="text-xl font-semibold">
+              <h2
+                id="content"
+                tabIndex={-1}
+                className="scroll-mt-20 text-xl font-semibold"
+              >
                 Course content
               </h2>
             </div>
@@ -341,7 +345,7 @@ function RouteComponent() {
                   <h2
                     id="landing-page"
                     tabIndex={-1}
-                    className="text-xl font-semibold"
+                    className="scroll-mt-20 text-xl font-semibold"
                   >
                     Landing page
                   </h2>
@@ -369,7 +373,7 @@ function RouteComponent() {
                   <h2
                     id="catalogue"
                     tabIndex={-1}
-                    className="text-xl font-semibold"
+                    className="scroll-mt-20 text-xl font-semibold"
                   >
                     Catalogue details
                   </h2>
@@ -403,7 +407,7 @@ function RouteComponent() {
                   <h2
                     id="captions"
                     tabIndex={-1}
-                    className="text-xl font-semibold"
+                    className="scroll-mt-20 text-xl font-semibold"
                   >
                     Caption languages
                   </h2>
@@ -426,7 +430,7 @@ function RouteComponent() {
               <h2
                 id="certificates"
                 tabIndex={-1}
-                className="text-xl font-semibold"
+                className="scroll-mt-20 text-xl font-semibold"
               >
                 Certificates
               </h2>
@@ -477,7 +481,7 @@ function RouteComponent() {
                   <h2
                     id="price"
                     tabIndex={-1}
-                    className="text-xl font-semibold"
+                    className="scroll-mt-20 text-xl font-semibold"
                   >
                     Price
                   </h2>
@@ -501,7 +505,7 @@ function RouteComponent() {
               <h2
                 id="announcements"
                 tabIndex={-1}
-                className="text-xl font-semibold"
+                className="scroll-mt-20 text-xl font-semibold"
               >
                 Announcements
               </h2>

@@ -151,7 +151,11 @@ export function ArchivedSection({
       <div>
         <div className="flex items-center gap-2">
           <Archive className="size-5 text-muted-foreground" />
-          <h2 id="archived" tabIndex={-1} className="text-xl font-semibold">
+          <h2
+            id="archived"
+            tabIndex={-1}
+            className="scroll-mt-20 text-xl font-semibold"
+          >
             Archived
           </h2>
         </div>

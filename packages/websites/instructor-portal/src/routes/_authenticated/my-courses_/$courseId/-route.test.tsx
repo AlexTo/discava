@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type Handler,
@@ -109,6 +109,33 @@ describe('course editor', () => {
     });
     expect(nav).toHaveTextContent('Announcements');
     expect(nav).not.toHaveTextContent('Archived');
+  });
+
+  it('keeps every linked heading clear of the sticky header when scrolled to', async () => {
+    render({
+      'course.view': () =>
+        course({
+          modules: [
+            {
+              moduleId: 'm1',
+              title: 'Gone',
+              archivedAt: '2026-01-02T00:00:00.000Z',
+              lessons: [],
+            },
+          ],
+        }),
+    });
+    const nav = await screen.findByRole('navigation', {
+      name: 'Course sections',
+    });
+    await vi.waitFor(() =>
+      expect(within(nav).getAllByRole('link')).toHaveLength(9),
+    );
+    for (const link of within(nav).getAllByRole('link')) {
+      const id = link.getAttribute('href')?.split('#')[1] ?? '';
+      // The portal's header is sticky and h-16 (4rem); the margin is wider.
+      expect(document.getElementById(id)).toHaveClass('scroll-mt-20');
+    }
   });
 
   it('has no link or section for captions when translation is off', async () => {
