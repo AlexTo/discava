@@ -50,6 +50,7 @@ test('an instructor manages discount codes on the Coupons screen', async ({
         .getByRole('navigation', { name: 'breadcrumb' })
         .getByText('Coupons', { exact: true }),
     ).toBeVisible();
+    await screenshot(instructor, 'coupons-breadcrumb');
     await screenshot(instructor, 'coupons-empty');
   });
 
