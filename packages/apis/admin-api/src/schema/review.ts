@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 
-// Admin removal of course reviews (specs/20261116-013307-course-reviews/
+// Admin removal of course reviews (specs/_archive/20261116-013307-course-reviews/
 // contracts/admin-api-review.md). The reason's limit is core-table's
 // (REVIEW_REMOVED_REASON_MAX), which checks it again before writing.
 

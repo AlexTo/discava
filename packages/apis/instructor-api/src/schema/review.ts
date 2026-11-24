@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 
-// Instructor responses to course reviews (specs/20261116-013307-course-reviews/
+// Instructor responses to course reviews (specs/_archive/20261116-013307-course-reviews/
 // contracts/instructor-api-review.md). The limit is core-table's
 // (REVIEW_RESPONSE_MAX), which checks it again before writing.
 

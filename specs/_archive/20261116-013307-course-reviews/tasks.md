@@ -5,7 +5,7 @@ description: "Task list for course ratings and written reviews"
 
 # Tasks: Course Ratings and Written Reviews
 
-**Input**: Design documents from `/specs/20261116-013307-course-reviews/`
+**Input**: Design documents from `/specs/_archive/20261116-013307-course-reviews/`
 
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
 
