@@ -9,6 +9,8 @@ import {
   renderWithInstructorApi,
 } from '../../../../test/render-with-instructor-api';
 
+let hash = '';
+
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const { mockRouter } = await import('@discava/common-web-utils/testing');
   return mockRouter(importOriginal, {
@@ -17,7 +19,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
       select,
     }: {
       select: (state: { location: { hash: string } }) => string;
-    }) => select({ location: { hash: '' } }),
+    }) => select({ location: { hash } }),
     Link: ({
       children,
       to,
@@ -65,6 +67,7 @@ const render = (handlers: Record<string, Handler> = {}) =>
   });
 
 beforeEach(() => {
+  hash = '';
   vi.spyOn(Route, 'useParams').mockReturnValue({ courseId: 'c1' });
 });
 
@@ -137,6 +140,50 @@ describe('course editor', () => {
       expect(document.getElementById(id)).toHaveClass('scroll-mt-20');
     }
   });
+
+  it("waits for the sections' data before going to a section's address", async () => {
+    hash = 'price';
+    let answerCaptions = () => {};
+    render({
+      'course.captionLanguages': () =>
+        new Promise((resolve) => {
+          answerCaptions = () =>
+            resolve({
+              languages: [],
+              supported: [],
+              enabled: true,
+              maxLanguages: 3,
+            });
+        }),
+    });
+    const price = await screen.findByRole('heading', { name: 'Price' });
+    // The caption languages are still loading, and will push Price down.
+    expect(price).not.toHaveFocus();
+    answerCaptions();
+    await vi.waitFor(() => expect(price).toHaveFocus());
+  });
+
+  it.each(['announcement.list', 'certificate.list'])(
+    "waits for %s, which a section starts once the course shows, before going to a section's address",
+    async (path) => {
+      hash = 'announcements';
+      let answer = () => {};
+      render({
+        [path]: () =>
+          new Promise((resolve) => {
+            answer = () => resolve({ items: [] });
+          }),
+      });
+      const heading = await screen.findByRole('heading', {
+        name: 'Announcements',
+      });
+      // Long enough for the scroll to have run, were it not held back.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(heading).not.toHaveFocus();
+      answer();
+      await vi.waitFor(() => expect(heading).toHaveFocus());
+    },
+  );
 
   it('has no link or section for captions when translation is off', async () => {
     render({

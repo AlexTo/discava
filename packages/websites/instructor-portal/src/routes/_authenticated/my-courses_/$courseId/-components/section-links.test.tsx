@@ -78,4 +78,30 @@ describe('SectionLinks', () => {
       screen.getByRole('heading', { name: 'Announcements' }),
     ).toHaveFocus();
   });
+
+  it('waits until ready, then goes to the section once', () => {
+    hash = 'announcements';
+    const scrollIntoView = vi.fn();
+    const page = (ready: boolean) => (
+      <>
+        <SectionLinks sections={sections} ready={ready} />
+        <h2 id="announcements" tabIndex={-1}>
+          Announcements
+        </h2>
+      </>
+    );
+    const { rerender } = render(page(false));
+    const heading = screen.getByRole('heading', { name: 'Announcements' });
+    heading.scrollIntoView = scrollIntoView;
+    expect(heading).not.toHaveFocus();
+
+    rerender(page(true));
+    expect(heading).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    // A later refetch doesn't pull the page back to the section.
+    rerender(page(false));
+    rerender(page(true));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
 });

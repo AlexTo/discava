@@ -16,7 +16,7 @@ import { Card } from '@discava/common-shadcn/components/ui/card';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
-import { useQuery } from '@tanstack/react-query';
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
   Award,
@@ -120,6 +120,10 @@ function RouteComponent() {
   );
   // Left on until the stage's answer says caption translation is off.
   const captionsOn = captionsQuery.data?.enabled !== false;
+  // Sections below the course load their own data and grow when it arrives,
+  // so a section's address is only scrolled to once nothing is loading.
+  const queryClient = useQueryClient();
+  const loading = useIsFetching() > 0;
 
   useBreadcrumbLabel(fullCourse?.title);
   usePageTitle(fullCourse?.title ?? 'Course', fullCourse && 'My Courses');
@@ -236,6 +240,8 @@ function RouteComponent() {
         </section>
 
         <SectionLinks
+          ready={!loading}
+          settled={() => queryClient.isFetching() === 0}
           sections={[
             { id: 'content', label: 'Content' },
             ...(readOnly

@@ -676,6 +676,17 @@ test('the course editor fits a phone', async ({ page }) => {
     await screenshot(page, 'archived rows at phone width');
   });
 
+  await test.step("a section's address opens the editor at that section", async () => {
+    // A reload loads the page afresh, as a new tab would, but keeps this
+    // tab's session, which a new tab would not have.
+    await page.goto(`${page.url().split('#')[0]}#archived`);
+    await page.reload();
+    const heading = page.getByRole('heading', { name: 'Archived', level: 2 });
+    await expect(heading).toBeFocused();
+    await expect(heading).toBeInViewport();
+    await screenshot(page, 'archived address opened on a fresh load');
+  });
+
   await test.step('the quiz builder fits, with Save in reach', async () => {
     await content.getByRole('button', { name: `Edit ${quizTitle}` }).click();
     const dialog = page.getByRole('dialog');
