@@ -74,7 +74,7 @@ test('an instructor makes codes and a student uses them', async ({
 });
 
 // The refusals, through the API a student's browser calls.
-test('a second use of a code is refused and refusals do not reveal which codes exist', async () => {
+test('a second use of a code redeems nothing more and refusals do not reveal which codes exist', async () => {
   const { instructor, courseId } = await createCouponCourse();
   const other = await createCouponCourse('Other coupon course');
   const { code } = await createCode(instructor, courseId, { percent: 100 });
@@ -106,12 +106,18 @@ test('a second use of a code is refused and refusals do not reveal which codes e
     enrolled: true,
   });
   // A free enrolment bought with a code can't be left (it has an order), so
-  // a second use meets the enrolment first.
+  // a second preview meets the enrolment first. Repeating the checkout itself
+  // is idempotent: it finds the redemption and answers the same, so the
+  // student is not charged or counted twice.
   const enrolled = 'You are already enrolled in this course';
   expect(await refusal(sam.core.coupon.preview.query({ courseId, code }))).toBe(
     enrolled,
   );
-  await expect(checkoutWithCode(sam, courseId, code)).rejects.toThrow(enrolled);
+  expect(await checkoutWithCode(sam, courseId, code)).toEqual({
+    enrolled: true,
+  });
+  const { items } = await instructor.instructor.coupon.list.query({ courseId });
+  expect(items.find((coupon) => coupon.code === code)?.redeemedCount).toBe(1);
 
   await instructor.instructor.course.archive.mutate({ courseId });
   await other.instructor.instructor.course.archive.mutate({
