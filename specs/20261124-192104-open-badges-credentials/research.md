@@ -51,26 +51,29 @@ Sources read on 2026-11-24: the Open Badges 3.0 specification (1EdTech, document
 
 - Each credential carries `credentialStatus: { id: "<listUrl>#<index>", type: "BitstringStatusListEntry", statusPurpose: "revocation", statusListIndex: "<index>", statusListCredential: "<listUrl>" }`, where `<listUrl>` is `https://<origin>/credentials/status/<listNumber>`.
 - The list is a new core-table record, `credentialStatusList`, one per list: its bits (131,072 entries, 16 KB, the minimum the Bitstring Status List spec recommends for herd privacy), how many indexes are assigned and a revision.
-- `revokeCertificate` and `restoreCertificate` set or clear the certificate's bit **in their existing transaction**, conditioned on the list's revision, so the bit and the certificate's `revokedAt` can never disagree (an invariant checks it, R-10). A certificate with no credential yet has no bit to write.
-- The page renderer answers `/credentials/status/<n>` with a `BitstringStatusListCredential` built from the record and signed when it is served, with `Cache-Control: public, max-age=60, s-maxage=240`. The renderer's CloudFront behaviour caches at most 300 s, so a revoke or restore is visible to every verifier within 5 minutes (SC-003), with at most one KMS signature per list per 4 minutes per edge.
+- **A revocation is final for that credential.** W3C Bitstring Status List v1.0 §2.1 defines `revocation` as "Used to cancel the validity of a verifiable credential. This status is not reversible." So a bit, once set, is never cleared. `revokeCertificate` sets the bit of the certificate's current credential **in its existing transaction**, conditioned on the list's revision, and in the same transaction moves the certificate's `credential` map into `retiredCredentials` (data-model.md). A certificate with no credential yet has no bit to write.
+- **Restoring writes no bit.** `restoreCertificate` is unchanged apart from leaving `retiredCredentials` alone. The restored certificate has no current credential, so its owner's next download binds a new place (R-5) and gets a credential with a new `id` (R-7) that verifies as valid. Copies of the old credential stay revoked, which is what a verifier who already saw the revocation will believe anyway.
+- So the rule is simply: a bit is set exactly when its place is retired. An invariant checks it (R-10).
+- The page renderer answers `/credentials/status/<n>` with a `BitstringStatusListCredential` built from the record and signed when it is served, with `Cache-Control: public, max-age=60, s-maxage=240`. The renderer's CloudFront behaviour caches at most 300 s, so a revocation is visible to every verifier within 5 minutes (SC-003), with at most one KMS signature per list per 4 minutes per edge.
 
 **Rationale**:
 
 - The specification (§9.1) and certification guide (§4.1) use only `BitstringStatusListEntry`; the implementation guide calls Bitstring Status List "the recommended option". `1EdTechRevocationList` no longer appears in the current spec, and DCC's verifier checks only Bitstring Status List.
 - Writing the bit inside the revoke transaction keeps the rule in one core-table helper every writer calls (constitution IV), without a stream feature and its delay or failure queue.
+- Keeping `revocation` rather than `suspension`: the OB 3.0 conformance guide (§4.1) defines a credential as revoked when its `BitstringStatusListEntry` has `statusPurpose` `revocation`, and mentions no other purpose. An OB verifier is only required to check that one, so a `suspension` bit would let a revoked Discava certificate pass OB verification.
 - Signing on request avoids storing a signed copy that can go stale, and the CDN cache bounds the cost.
 
 **Privacy (FR-012)**: the list shows only bits. Indexes are assigned in order, so someone holding two credentials can guess roughly how many were bound between them; the bits reveal how many credentials in a list are revoked, not which learner. Random assignment would hide the order but needs a claim record per index; it is noted as a limitation, not done.
 
-**Alternatives considered**: a stream feature that publishes the list to the media bucket on each change (an extra Lambda, queue and failure mode, and the list could lag the table); `1EdTechRevocationList` (superseded); a per-credential status URL that the renderer answers from the certificate (not a standard status type; verifiers wouldn't check it).
+**Alternatives considered**: clearing the `revocation` bit on restore (the first version of this plan; it breaks §2.1, and verifiers may treat a seen revocation as final, so a restore couldn't be relied on: raised in review); `statusPurpose: "suspension"`, which is reversible (OB 3.0 verifiers aren't required to check it, see above); both a `suspension` entry for revoke-and-restore and a `revocation` entry for nothing (the same gap, and two lists to keep); a stream feature that publishes the list to the media bucket on each change (an extra Lambda, queue and failure mode, and the list could lag the table); `1EdTechRevocationList` (superseded); a per-credential status URL that the renderer answers from the certificate (not a standard status type; verifiers wouldn't check it).
 
 ## R-5: When a certificate gets its credential facts: on first download
 
-**Decision**: The first time a certificate's credential is built, `bindCertificateCredential` in core-table fixes, on the certificate, a `credential` map: the status list number and index, the recipient identity (salt and hash, R-6) and when it was bound. It is one transaction: the certificate patch conditioned on no `credential` and no `revokedAt`, and the list's `assignedCount` incremented conditioned on its revision. The loser of a race re-reads and uses the winner's map. Every later download builds the same document from the same facts (spec: "the same content and identifier"). A revoked certificate is never bound (FR-008).
+**Decision**: The first time a certificate's credential is built, `bindCertificateCredential` in core-table fixes, on the certificate, a `credential` map: the status list number and index, the recipient identity (salt and hash, R-6) and when it was bound. It is one transaction: the certificate patch conditioned on no `credential` and no `revokedAt`, and the list's `assignedCount` incremented conditioned on its revision. The loser of a race re-reads and uses the winner's map. Every later download builds the same document from the same facts (spec: "the same content and identifier") until a revocation retires the map (R-4); after a restore the next download binds afresh, with a new place, salt and hash. A revoked certificate is never bound (FR-008).
 
 **Rationale**: It gives every certificate a credential whenever it was issued (FR-009) with one code path, instead of one at issue in the progress recalculation and a backfill for the rest. It keeps `issueCertificate`, a hot and well-tested transaction, unchanged. Indexes are only used by certificates whose owner asked for the credential.
 
-**The race with revoke**: `revokeCertificate` already conditions its patch on `revokedAt` not existing. It also conditions on the `credential` state it read (absent, or present with that index), so a binding that lands between its read and write cancels it and it retries, this time writing the bit. A binding conditioned on `revokedAt` not existing fails if the revoke landed first. A concurrency test fires both at once.
+**The race with revoke**: `revokeCertificate` already conditions its patch on `revokedAt` not existing. It also conditions on the `credential` state it read (absent, or present with that index), so a binding that lands between its read and write cancels it and it retries, this time setting the bit and retiring the new map. A binding conditioned on `revokedAt` not existing fails if the revoke landed first. A concurrency test fires both at once.
 
 **Full lists**: when the current list's `assignedCount` reaches 131,072 the binding creates list `n + 1` (create conditioned on not existing) and assigns index 0 there.
 
@@ -91,9 +94,9 @@ The plain email, the user's `sub` and any session value never enter the document
 
 - `@context`: `https://www.w3.org/ns/credentials/v2` then `https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json` (§B.1.2; order matters).
 - `type`: `["VerifiableCredential", "OpenBadgeCredential"]`.
-- `id`: the public page, `https://<origin>/certificates/<XXXX-XXXX-XXXX-XXXX>`, so the identifier is stable and leads a person to the human-readable proof.
 - `validFrom`: the certificate's `issuedAt`; `awardedDate`: its `completedAt`; no `validUntil` (spec clarification 4).
 - `credentialSchema`: the OB 3.0 achievement credential JSON schema with `1EdTechJsonSchemaValidator2019`.
+- `id`: `urn:uuid:<UUIDv5 of the issuer id, certificate ID, status list number and index>`. It is stable across downloads and different for the new credential a restored certificate gets, so a revoked credential and its successor never share an identifier. The public page's address is carried as `evidence` (`{ id: <page URL>, type: ["Evidence"], name: "Certificate verification page" }`) instead of as the `id`.
 - The achievement: `id` `urn:uuid:<UUIDv5 of the issuer id, course ID and criteria version>`, so two certificates issued under the same criteria share an achievement; `achievementType: "CertificateOfCompletion"` (to be checked against the enum in the schema by the builder's test); `name` the course title as recorded; `description` "Completed the course <title>."; `criteria.narrative` the `assessmentStatement` lines; `image` absent.
 - No per-item scores or assessed items (FR-007). No `result`.
 
@@ -109,7 +112,7 @@ The plain email, the user's `sub` and any session value never enter the document
 
 ## R-9: The badge image: SVG with the credential inside
 
-**Decision**: `certificate.badgeImage` returns an SVG built from a fixed template: the brand icon (fetched from the public media bucket and inlined as a `data:` URI, or the default icon), the course title, "Completed <date>" and the platform name, all XML-escaped. As §5.3 says, the root `<svg>` declares `xmlns:openbadges="https://purl.imsglobal.org/ob/v3p0"` and its first child is one `<openbadges:credential>` element holding the signed credential JSON in a CDATA section. Any `]]>` in the JSON is written as `]]>` (valid JSON, so the parsed credential is unchanged).
+**Decision**: `certificate.badgeImage` returns an SVG built from a fixed template: the brand icon (fetched from the public media bucket and inlined as a `data:` URI, or the default icon), the course title, "Completed <date>" and the platform name, all XML-escaped. As §5.3 says, the root `<svg>` declares `xmlns:openbadges="https://purl.imsglobal.org/ob/v3p0"` and its first child is one `<openbadges:credential>` element holding the signed credential JSON in a CDATA section. Any `]]>` in the JSON is written as `]]\u003e` (valid JSON, so the parsed credential is unchanged).
 
 **Rationale**: The spec's Story 4 needs the course title on the image in any script. A PNG would need a server-side rasteriser with fonts for every script (a native dependency in the Lambda bundle, and the PDF's Latin-1 limit shows what happens without one). An SVG is text, drawn by the viewer's fonts, and baking it is string assembly. §5.3 defines SVG baking alongside PNG, and certification tests only displaying baked images (both formats). The spec is amended from PNG to SVG in this pull request.
 
@@ -119,12 +122,12 @@ The plain email, the user's `sub` and any session value never enter the document
 
 New checks in `core-table/src/helpers/invariants/credentials.ts`:
 
-- `credential-status-matches-certificate`: for every certificate with a `credential` map, the bit at its index in its list is set exactly when the certificate has `revokedAt`.
-- `credential-status-index-unique`: no two certificates share a list and index, and every index is below the list's `assignedCount`.
+- `credential-status-matches-certificate`: a bit is set exactly when its place is a retired credential of some certificate. So every current `credential` has its bit clear, every `retiredCredentials` entry has its bit set, and no set bit is unaccounted for. A certificate with `revokedAt` has no current `credential`.
+- `credential-status-index-unique`: no two places (current or retired, across all certificates) share a list and index, and every index is below the list's `assignedCount`.
 - `credential-status-list-shape`: list numbers run from 1 with no gaps, the bits are 16,384 bytes, `assignedCount` is between 0 and 131,072, and only the last list may be not full.
 - `certificate-credential-shape` (extends the existing `certificate-shape`): a `credential` map, when present, has a list number and index, a bound time not before `issuedAt`, and either both salt and hash (a `sha256$` hash of 64 hex characters) or neither.
 
-Not violations: a certificate with no `credential` (never downloaded), and a set bit for a certificate later restored and revoked again (the bit follows the current state).
+Not violations: a certificate with no `credential` (never downloaded, or restored and not downloaded since), and a valid certificate with retired credentials (revoked and restored).
 
 ## R-11: Local development
 

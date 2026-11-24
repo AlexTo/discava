@@ -41,6 +41,7 @@ Unchanged in shape. The student portal shows the new actions from `status === 'v
 
 - Owner gets a document that verifies; another student, a course with no certificate and an unknown course all get `NOT_FOUND`; a revoked certificate gets `PRECONDITION_FAILED`.
 - Two calls return the same document but for `proof.created`/`proofValue`, and bind once.
+- After a revoke and a restore, the call binds a new place: the new document's `id` and `credentialStatus.statusListIndex` differ from the old one's, and the old place's bit is still set.
 - A certificate whose user has no email has only the `name` identifier.
 - The output contains no `sub`, email, `assessedItems` or score (SC-005).
 - Changing any one character of a signed field fails verification (SC-002), over every leaf field.

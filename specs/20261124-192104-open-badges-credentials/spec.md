@@ -22,6 +22,7 @@ Resolved without asking, using the recommended defaults (non-interactive run). E
 - Q: How is the learner identified inside the credential, given there is no wallet sign-up today? → A: By the name printed on the certificate, and by a salted one-way hash of the email address on their account the first time the credential is downloaded, fixed from then on, so a verifier who is told the learner's email can confirm it matches. The email itself never appears. A learner identifier from a digital wallet is out of scope.
 - Q: Do certificates issued before this ships get a credential? → A: Yes. Every certificate, whenever it was issued, can be downloaded as a credential, built from what the certificate recorded at issue. Discava hasn't launched, so this costs nothing to keep compatible.
 - Q: Does a credential expire? → A: No. Certificates have no expiry today, and the credential has none either. Revocation is the only way it stops being valid.
+- Q: What happens to a credential when its certificate is restored after a revocation? → A: It stays revoked. The standard defines a revocation as not reversible (W3C Bitstring Status List §2.1), so verifiers may treat it as final. The restored certificate is valid again on Discava, and its owner downloads a new credential, with a new identifier, that verifies as valid. Added after review of this pull request (research R-4).
 - Q: Which files does the learner get? → A: Two: the credential itself (a JSON file, the form wallets and verifiers import) and an SVG badge image with the same credential embedded in it (the form badge backpacks accept). SVG rather than PNG, because it shows the course title in any script without a server-side image renderer (research R-9). The PDF stays as it is.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -68,16 +69,16 @@ An employer, another school or a wallet receives a credential file. Without a Di
 
 ### User Story 3 - A revoked certificate's credential stops verifying (Priority: P2)
 
-An instructor or administrator revokes a certificate, as they can today. From then on, any verifier checking that certificate's credential, including copies downloaded before the revocation, is told it has been revoked. If the certificate is restored, the same credential verifies as valid again.
+An instructor or administrator revokes a certificate, as they can today. From then on, any verifier checking that certificate's credential, including copies downloaded before the revocation, is told it has been revoked, permanently. If the certificate is restored, the old credential stays revoked and the owner can download a new one that verifies as valid.
 
 **Why this priority**: Without it, revoking a certificate would leave a valid-looking signed copy in circulation forever, which is worse than today's PDF because the signature makes it look trustworthy. It ships right after the MVP and before the feature is announced.
 
-**Independent Test**: Download a credential, revoke the certificate as its instructor, wait five minutes and check the credential with a conforming verifier: it reports the credential as revoked. Restore it as an administrator, wait five minutes and check again: it is valid.
+**Independent Test**: Download a credential, revoke the certificate as its instructor, wait five minutes and check the credential with a conforming verifier: it reports the credential as revoked. Restore it as an administrator: the old file still reports revoked, and a newly downloaded credential, with a different identifier, reports valid.
 
 **Acceptance Scenarios**:
 
 1. **Given** a credential downloaded while the certificate was valid, **When** the certificate is revoked, **Then** within 5 minutes a verifier checking the credential reports it as revoked.
-2. **Given** a revoked certificate, **When** it is restored, **Then** within 5 minutes the same credential, unchanged, verifies as valid again.
+2. **Given** a revoked certificate, **When** it is restored, **Then** every credential downloaded before the revocation still reports revoked, My Learning and the owner's page offer "Download credential" again, and the credential downloaded then has a new identifier and verifies as valid.
 3. **Given** a revoked certificate, **When** a verifier checks its status, **Then** it learns only that the credential is revoked: not the reason, who revoked it, or any note.
 4. **Given** two certificates, one revoked, **When** a verifier checks the other, **Then** it is reported as valid.
 
@@ -107,7 +108,8 @@ Beside "Download credential", the learner can choose "Download badge image". It 
 - **The learner changes their account email later**: the hash in the credential stays the one fixed at the first download. A verifier given the new address won't match it; the learner's name and the public page still identify the certificate.
 - **The learner has no email on their account**: the credential identifies them by name only.
 - **The signing service is unavailable**: the download fails with a retryable error message, and nothing about the certificate changes. The status, issuer and key lookups keep answering, because they need no signature at request time.
-- **Downloading again**: each download returns a credential with the same content and identifier. Its signature bytes may differ, and every copy verifies.
+- **Downloading again**: until the certificate is revoked, each download returns a credential with the same content and identifier. Its signature bytes may differ, and every copy verifies.
+- **Revoked, restored, revoked again**: each revocation revokes the credential current at that moment; every earlier one is already revoked. A certificate can have several revoked credentials and at most one valid one.
 - **A certificate ID that is malformed or unknown**: status and credential lookups answer "not found", the same for both, as the public page does.
 - **Several stages**: each deployment signs with its own key and names itself at its own address. A credential from one stage does not verify as issued by another.
 - **Local development**: downloads, verification lookups and revocation work under local dev, signed with a local key that no deployed stage trusts.
@@ -122,7 +124,7 @@ Beside "Download credential", the learner can choose "Download badge image". It 
 - **FR-002**: The credential MUST name the platform as issuer, with the name, address and image the platform publishes for itself; instructors and courses MUST NOT be issuers.
 - **FR-003**: The credential MUST describe the achievement as completing the course, with the course title, a description, and criteria taken from the certificate's assessment statement, all as recorded on the certificate at issue.
 - **FR-004**: The credential MUST identify the learner by the name printed on the certificate and, when their account has an email address the first time the credential is built, by a salted one-way hash of it, fixed on the certificate from then on, in the standard's identity form; it MUST NOT contain the email address in readable form, the learner's account ID or any session value.
-- **FR-005**: The credential MUST carry a stable identifier derived from the certificate, the certificate ID, the address of the public page, the completion date as the date it was awarded, the issue time as the time it became valid, and no expiry.
+- **FR-005**: The credential MUST carry an identifier that is stable across downloads and unique to that credential (a restored certificate's new credential gets a new one), the certificate ID, the address of the public page, the completion date as the date it was awarded, the issue time as the time it became valid, and no expiry.
 - **FR-006**: The credential MUST be signed by the platform in a proof format the Open Badges 3.0 specification defines, so that conforming verifiers can check it; changing any signed content MUST make verification fail.
 - **FR-007**: The credential MUST NOT include the per-item scores or the list of assessed items kept on the certificate. It MAY include the statement of what was assessed, as the public page shows.
 - **FR-008**: Downloading MUST be refused for a revoked certificate with "This certificate has been revoked", and for any certificate the caller doesn't own with the same answer as a certificate that doesn't exist.
@@ -131,7 +133,7 @@ Beside "Download credential", the learner can choose "Download badge image". It 
 **Verification**
 
 - **FR-010**: The platform MUST publish, at a stable address it names as the issuer's identifier, the issuer's details and every public key it has used to sign credentials, readable without signing in.
-- **FR-011**: Each credential MUST point to a status the platform publishes, readable without signing in, that says whether that credential is revoked; the status MUST follow the certificate's revoked state within 5 minutes of a revoke or restore.
+- **FR-011**: Each credential MUST point to a status the platform publishes, readable without signing in, that says whether that credential is revoked; the status MUST show a revocation within 5 minutes of the certificate being revoked, and MUST never return a revoked credential to valid (the standard's revocation is not reversible).
 - **FR-012**: The published issuer details, keys and status MUST NOT reveal learner names, emails, account IDs, scores, revocation reasons, notes or who acted.
 - **FR-013**: The platform MUST keep publishing a key for as long as any credential signed with it may be presented, so retiring a signing key never invalidates credentials already issued.
 - **FR-014**: The private signing key MUST never leave the platform's managed key service on a deployed stage: no person, API response, log or file holds it. Only the function that builds credentials may use it.
@@ -147,15 +149,15 @@ Beside "Download credential", the learner can choose "Download badge image". It 
 - **FR-018**: The public page MUST say, for a valid certificate, that it is also available as a verifiable credential the owner can download; it MUST NOT offer the file to anyone but the owner.
 - **FR-019**: The certificates design page MUST explain what the credential is, how to verify one and what revocation does to it, and the deployment docs MUST say how an operator adds a new signing key without invalidating earlier credentials.
 - **FR-020**: Every flow above MUST work under local development without an AWS account, signing with a local key.
-- **FR-021**: Revoking or restoring a certificate MUST keep working as today; the credential status follows it without a second action by the instructor or administrator.
+- **FR-021**: Revoking or restoring a certificate MUST keep working as today; revoking also revokes the certificate's current credential without a second action, and restoring lets the owner download a new credential.
 
 ### Key Entities
 
 - **Verifiable credential**: the signed file built from a certificate. It holds the issuer, the achievement (the course), the learner's identity (name and hashed email), the dates, the certificate ID and address, a pointer to its status and the signature. It is built when asked for, from the certificate.
-- **Certificate** (existing): gains, the first time its credential is built, the learner's hashed identity and its place in the published status, both fixed from then on, so every later download describes the same credential.
+- **Certificate** (existing): gains, the first time its credential is built, the learner's hashed identity and its place in the published status, fixed until a revocation, so every later download describes the same credential. A revocation retires that place for good; a restored certificate gets a new place on its next download.
 - **Issuer profile**: the platform as a credential issuer: its name, address, image and the public keys it signs with. One per deployment, published at a stable address.
 - **Signing key**: a private key held in the platform's key service. One is current; earlier ones stay published so their credentials keep verifying.
-- **Credential status**: what the platform publishes about whether a credential is revoked, derived from the certificate's revoked state.
+- **Credential status**: what the platform publishes about whether a credential is revoked. Once revoked, a credential's status never changes back.
 
 ## Success Criteria *(mandatory)*
 
@@ -163,7 +165,7 @@ Beside "Download credential", the learner can choose "Download badge image". It 
 
 - **SC-001**: A credential downloaded from a deployed stage passes the 1EdTech Open Badges 3.0 validator and at least one other independent conforming verifier with no errors.
 - **SC-002**: In tests, every one-character change to a credential's signed content is reported invalid (100%).
-- **SC-003**: A revoke or restore is reflected by the status a verifier reads within 5 minutes, in every test.
+- **SC-003**: A revocation is reflected by the status a verifier reads within 5 minutes, in every test; after a restore, the earlier credential still reads revoked and a newly downloaded one reads valid.
 - **SC-004**: A learner can download their credential or badge image in under 3 seconds from choosing the action.
 - **SC-005**: No credential, issuer profile, key set or status contains a readable email address, an account ID or a per-item score (checked by automated tests on every field).
 - **SC-006**: Every story's independent test passes under local development with no AWS account.

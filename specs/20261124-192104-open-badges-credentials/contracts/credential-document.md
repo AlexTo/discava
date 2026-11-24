@@ -8,7 +8,7 @@ The JSON file `certificate.credential` returns and the badge image embeds (resea
     "https://www.w3.org/ns/credentials/v2",
     "https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json"
   ],
-  "id": "https://<origin>/certificates/<ID>",
+  "id": "urn:uuid:<UUIDv5(issuer id, certificate ID, status list number, index)>",
   "type": ["VerifiableCredential", "OpenBadgeCredential"],
   "name": "<course title as recorded>",
   "issuer": {
@@ -18,6 +18,11 @@ The JSON file `certificate.credential` returns and the badge image embeds (resea
     "url": "https://<origin>",
     "image": { "id": "<brand icon URL>", "type": "Image" }
   },
+  "evidence": [{
+    "id": "https://<origin>/certificates/<ID>",
+    "type": ["Evidence"],
+    "name": "Certificate verification page"
+  }],
   "validFrom": "<certificate.issuedAt>",
   "awardedDate": "<certificate.completedAt>",
   "credentialSubject": {
@@ -61,7 +66,8 @@ The JSON file `certificate.credential` returns and the badge image embeds (resea
 
 - The `emailAddress` identifier is present only when the certificate's `credential` map has a hash (R-6).
 - `issuer.image` is the brand icon on the media CDN, or the default Discava icon's public URL.
-- Every field except `issuer.name`, `issuer.image` and `proof` is a function of the certificate record and the stage's constants: two downloads differ only in `proof.created` and `proof.proofValue`. A unit test builds the unsigned document twice from one record and compares.
+- Every field except `issuer.name`, `issuer.image` and `proof` is a function of the certificate record (including its current `credential` place) and the stage's constants: two downloads between revocations differ only in `proof.created` and `proof.proofValue`. A unit test builds the unsigned document twice from one record and compares.
+- After a revoke and restore, the next download has a new place, so a new `id` and a new `credentialStatus`. The old credential's status stays revoked; it is never set back to valid (`revocation` is not reversible, research R-4).
 - Never present: the user's `sub`, a readable email, `assessment.assessedItems`, any score, `revocationReason`, `revokedByRole`, notes. A test walks every string in the document for these (SC-005).
 - The builder's tests validate the document against the OB 3.0 achievement credential JSON schema (vendored next to the contexts) and verify the proof with `@digitalbazaar/vc` and a fake document loader.
 
