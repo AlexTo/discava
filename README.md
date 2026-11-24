@@ -36,9 +36,11 @@
 - **Scales to zero**: fully serverless, so you pay for what you use and next to nothing when no one is learning.
 - **Scales up too**: the same deployment grows from your first student to your ten-thousandth, with no servers to manage.
 - **Hardened for production**: built on the proven [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws), so you start from battle-tested, secure-by-default infrastructure.
-- **Sell or share**: publish free or paid courses, and get paid through Stripe.
+- **Sell or share**: publish free or paid courses, offer discount codes, and pay instructors their earnings through Stripe.
+- **Make it yours**: your logo, icon, name and brand colour across every portal.
 - **Teach your way**: video lessons with questions along the way, quizzes and graded assignments.
 - **Keep learners moving**: progress tracking, a searchable transcript for every video, and certificates they can share.
+- **Works on any screen**: every portal fits a phone and can be used with a keyboard or a screen reader.
 
 > [!IMPORTANT]
 > Discava is under active development and is not yet feature complete. Expect breaking changes and rough edges until a stable release is tagged.
@@ -49,14 +51,15 @@
 
 - 🔍 Browse a course catalogue by category, or search with suggestions as you type
 - 👀 Watch free preview lessons before you enrol
-- 💳 Enrol in free courses, or buy paid ones with Stripe Checkout, and ask for a refund if it isn't for you
-- 🎬 Adaptive HD video with auto-generated captions, translated into the course's other languages, playback speeds and keyboard shortcuts
+- 💳 Enrol in free courses, or buy paid ones with Stripe Checkout, with a discount code if you have one (a code that makes the course free enrols you straight away)
+- ↩️ Ask for a refund within 14 days if a course isn't for you, as long as you're under halfway through, or leave a free course and keep your progress for later
+- 🎬 Adaptive HD video with auto-generated captions, translated into the course's other languages and labelled as auto-translated, playback speeds and keyboard shortcuts
 - 📜 Read a video's transcript alongside it, search what was said across a course, and jump to that moment
-- ❓ Answer questions that pause the video as you watch, and see where they are on the timeline
+- ❓ Answer questions that pause the video as you watch, see where they are on the timeline, and take a short check when the video ends
 - 📝 Quizzes and assignment submissions, with late submissions flagged, and grades and feedback when your work is returned
 - 📊 Progress tracking that shows how far you are through each course
-- 🏆 Certificates when you complete a course, with what's still needed shown as you go
-- 🔗 Anyone with the link can verify a certificate and see what it assessed
+- 🏆 Certificates when you meet the course's criteria, with what's still needed shown as you go
+- 🔗 Anyone with the link can verify a certificate and see what it assessed, or that it has been revoked
 - 💼 Add your certificate to LinkedIn in one click
 - ⭐ Rate and review the courses you take
 - 💬 Discuss lessons with your instructor and classmates, and get notified of replies and accepted answers
@@ -67,11 +70,12 @@
 - 🎬 Build courses from video, text, files, quizzes and assignments, and add questions to a video's timeline
 - ✏️ Edit your course live and publish a public landing page for it, with a preview video and your instructor profile, server-rendered so search engines can find it
 - 👀 Mark lessons as free previews that anyone can watch before enrolling
-- 🌐 Choose the languages your videos' captions are machine-translated into; a caption file you upload always wins
+- 🌐 Choose the languages your videos' captions are machine-translated into, see each translation's status and translate again; a caption file you upload always wins
 - 👋 Set a prompt in the first lesson to get learners started, and see how many answered it
-- 🏆 Choose whether your course awards certificates, what counts towards completion, and whether every quiz must be passed
-- 💰 Set a price, track your earnings and refunds, and get paid out through Stripe
-- 📊 An instructor dashboard with enrolment and activity trends, and the lessons where learners drop off
+- 🏆 Choose whether your course awards certificates, what counts towards completion, whether every quiz must be passed and what score graded work must reach, and revoke or restore a certificate
+- 💰 Set a price, and create discount codes, percent or fixed amount, with an expiry and a usage limit that holds even when students check out at the same moment
+- 🏦 Connect your Stripe account, see your earnings per course and period, net of discounts, refunds and the platform fee, and follow each payout
+- 📊 An instructor dashboard with enrolment and activity trends, the lessons where learners drop off, and the video questions they miss most
 - ✅ Grade assignment submissions from a queue on your home page, return feedback, and get one notification a day when new work comes in
 - 💬 Answer lesson discussions and respond to reviews
 - 📣 Post announcements to your enrolled learners
@@ -80,6 +84,8 @@
 
 - 🗂️ Manage the category taxonomy that organises the catalogue
 - ⭐ Moderate course reviews from one admin portal
+- 🎨 Brand the platform with your logo, icon, name, share image and colour, or reset to the default
+- 🏆 Revoke and restore any certificate, with a recorded reason
 - 💳 Connect Stripe from the admin portal's Payments page, with no secrets to set by hand
 
 > [!TIP]
