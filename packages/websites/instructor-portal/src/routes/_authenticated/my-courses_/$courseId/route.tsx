@@ -19,9 +19,11 @@ import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
+  Award,
   BookOpen,
   CalendarDays,
   Captions,
+  Coins,
   Info,
   ListChecks,
   Megaphone,
@@ -34,7 +36,10 @@ import {
   courseStatusStyles,
 } from '../../../../lib/course-status';
 import { AnnouncementsSection } from './-components/announcements/announcements-section';
-import { ArchivedSection } from './-components/course/archived-section';
+import {
+  ArchivedSection,
+  archivedEntries,
+} from './-components/course/archived-section';
 import { CourseCaptionLanguagesForm } from './-components/course/course-caption-languages-form';
 import { CourseCatalogueForm } from './-components/course/course-catalogue-form';
 import { CourseCertificateCriteria } from './-components/course/course-certificate-criteria';
@@ -48,6 +53,7 @@ import { CourseStatusActions } from './-components/course/course-status-actions'
 import { LandingPageCard } from './-components/course/landing-page-card';
 import { LandingPageChecklist } from './-components/course/landing-page-checklist';
 import { UnsavedChangesProvider } from './-components/course/unsaved-changes-context';
+import { SectionLinks } from './-components/section-links';
 
 export const Route = createFileRoute('/_authenticated/my-courses_/$courseId')({
   component: RouteComponent,
@@ -109,6 +115,12 @@ function RouteComponent() {
     ? Boolean(profile.headline && profile.photoKey)
     : undefined;
 
+  const captionsQuery = useQuery(
+    trpc.course.captionLanguages.queryOptions({ courseId }),
+  );
+  // Left on until the stage's answer says caption translation is off.
+  const captionsOn = captionsQuery.data?.enabled !== false;
+
   useBreadcrumbLabel(fullCourse?.title);
   usePageTitle(fullCourse?.title ?? 'Course', fullCourse && 'My Courses');
 
@@ -159,6 +171,7 @@ function RouteComponent() {
   const readOnly = course.status === 'archived';
   // A draft isn't open to students yet, which changes what Publish/Hide mean.
   const draft = course.status === 'draft';
+  const hasArchived = archivedEntries(fullCourse.modules).length > 0;
 
   return (
     <UnsavedChangesProvider enabled={!readOnly}>
@@ -219,155 +232,33 @@ function RouteComponent() {
                 Coupons
               </Link>
             </div>
-            <div className="mt-4 border-t pt-4">
-              <h2 className="mb-3 text-lg font-semibold">Course settings</h2>
-              <CourseCertificatesSwitch
-                courseId={course.courseId}
-                certificatesEnabled={course.certificatesEnabled}
-              />
-              <div className="mt-3 ml-12">
-                <CourseCertificateCriteria
-                  courseId={course.courseId}
-                  certificatesEnabled={course.certificatesEnabled}
-                  requireQuizPass={course.certificateCriteria.requireQuizPass}
-                  minUploadScorePercent={
-                    course.certificateCriteria.minUploadScorePercent
-                  }
-                />
-              </div>
-            </div>
-            <div className="mt-4 border-t pt-4">
-              <CourseCertificatesList courseId={course.courseId} />
-            </div>
-            <div className="mt-4 border-t pt-4">
-              <CourseFirstLessonPromptForm
-                courseId={course.courseId}
-                firstLessonPrompt={course.firstLessonPrompt}
-                defaultFirstLessonPrompt={course.defaultFirstLessonPrompt}
-              />
-            </div>
-            <div className="mt-4 border-t pt-4">
-              <CoursePriceForm
-                courseId={course.courseId}
-                priceAmount={course.priceAmount}
-                priceCurrency={course.priceCurrency}
-              />
-            </div>
           </Card>
         </section>
 
-        <section
-          aria-labelledby="landing-checklist-heading"
-          className="space-y-4"
-        >
-          <div>
-            <div className="flex items-center gap-2">
-              <ListChecks className="size-5 text-primary" />
-              <h2
-                id="landing-checklist-heading"
-                className="text-xl font-semibold"
-              >
-                Landing page checklist
-              </h2>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              What makes the public page persuasive. It's a guide only: you can
-              publish at any time.
-            </p>
-          </div>
-          <Card className="p-5 sm:p-6">
-            <LandingPageChecklist
-              publicPageUrl={
-                course.status === 'published' && portals?.StudentPortal
-                  ? `${portals.StudentPortal}/learn/${course.courseId}`
-                  : undefined
-              }
-              hasOutcomes={(course.learningOutcomes?.length ?? 0) > 0}
-              hasRequirements={(course.requirements?.length ?? 0) > 0}
-              hasPreview={course.preview?.status === 'ready'}
-              hasImage={Boolean(course.imageKey)}
-              hasProfile={hasProfile}
-              profileFailed={profileQuery.isError}
-              onRetryProfile={() => void profileQuery.refetch()}
-            />
-          </Card>
-        </section>
-
-        <section aria-labelledby="catalogue-heading" className="space-y-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Tags className="size-5 text-primary" />
-              <h2 id="catalogue-heading" className="text-xl font-semibold">
-                Catalogue details
-              </h2>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              How students find this course when they browse and filter the
-              catalogue.
-            </p>
-          </div>
-          <Card className="p-5 sm:p-6">
-            <CourseCatalogueForm
-              courseId={course.courseId}
-              category={course.category}
-              tags={course.tags}
-              level={course.level}
-              language={course.language}
-              durationHours={course.durationHours}
-              readOnly={readOnly}
-            />
-          </Card>
-        </section>
-
-        <section
-          aria-labelledby="caption-languages-heading"
-          className="space-y-4"
-        >
-          <div>
-            <div className="flex items-center gap-2">
-              <Captions className="size-5 text-primary" />
-              <h2
-                id="caption-languages-heading"
-                className="text-xl font-semibold"
-              >
-                Caption languages
-              </h2>
-            </div>
-          </div>
-          <Card className="p-5 sm:p-6">
-            <CourseCaptionLanguagesForm
-              courseId={course.courseId}
-              readOnly={readOnly}
-            />
-          </Card>
-        </section>
-
-        <section
-          id="landing-page"
-          aria-labelledby="landing-page-heading"
-          className="space-y-4"
-        >
-          <div>
-            <div className="flex items-center gap-2">
-              <Presentation className="size-5 text-primary" />
-              <h2 id="landing-page-heading" className="text-xl font-semibold">
-                Landing page
-              </h2>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              What visitors read on the public course page before they enrol.
-            </p>
-          </div>
-          <Card className="p-5 sm:p-6">
-            <LandingPageCard
-              courseId={course.courseId}
-              learningOutcomes={course.learningOutcomes}
-              requirements={course.requirements}
-              preview={course.preview}
-              readOnly={readOnly}
-            />
-          </Card>
-        </section>
+        <SectionLinks
+          sections={[
+            { id: 'content', label: 'Content' },
+            ...(readOnly
+              ? []
+              : [
+                  { id: 'landing-page', label: 'Landing page' },
+                  { id: 'catalogue', label: 'Catalogue' },
+                ]),
+            ...(captionsOn ? [{ id: 'captions', label: 'Captions' }] : []),
+            { id: 'certificates', label: 'Certificates' },
+            ...(readOnly
+              ? []
+              : [
+                  {
+                    id: 'first-lesson-prompt',
+                    label: 'First-lesson prompt',
+                  },
+                  { id: 'price', label: 'Price' },
+                ]),
+            { id: 'announcements', label: 'Announcements' },
+            ...(hasArchived ? [{ id: 'archived', label: 'Archived' }] : []),
+          ]}
+        />
 
         {readOnly && (
           <ShadcnAlert
@@ -382,15 +273,11 @@ function RouteComponent() {
           </ShadcnAlert>
         )}
 
-        <section aria-labelledby="content-heading" className="space-y-4">
+        <section aria-labelledby="content" className="space-y-4">
           <div>
             <div className="flex items-center gap-2">
               <BookOpen className="size-5 text-primary" />
-              <h2
-                id="content-heading"
-                tabIndex={-1}
-                className="text-xl font-semibold"
-              >
+              <h2 id="content" tabIndex={-1} className="text-xl font-semibold">
                 Course content
               </h2>
             </div>
@@ -408,12 +295,211 @@ function RouteComponent() {
           />
         </section>
 
-        <section aria-labelledby="announcements-heading" className="space-y-4">
+        {!readOnly && (
+          <>
+            <section
+              aria-labelledby="landing-checklist-heading"
+              className="space-y-4"
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <ListChecks className="size-5 text-primary" />
+                  <h2
+                    id="landing-checklist-heading"
+                    className="text-xl font-semibold"
+                  >
+                    Landing page checklist
+                  </h2>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  What makes the public page persuasive. It's a guide only: you
+                  can publish at any time.
+                </p>
+              </div>
+              <Card className="p-5 sm:p-6">
+                <LandingPageChecklist
+                  publicPageUrl={
+                    course.status === 'published' && portals?.StudentPortal
+                      ? `${portals.StudentPortal}/learn/${course.courseId}`
+                      : undefined
+                  }
+                  hasOutcomes={(course.learningOutcomes?.length ?? 0) > 0}
+                  hasRequirements={(course.requirements?.length ?? 0) > 0}
+                  hasPreview={course.preview?.status === 'ready'}
+                  hasImage={Boolean(course.imageKey)}
+                  hasProfile={hasProfile}
+                  profileFailed={profileQuery.isError}
+                  onRetryProfile={() => void profileQuery.refetch()}
+                />
+              </Card>
+            </section>
+
+            <section aria-labelledby="landing-page" className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Presentation className="size-5 text-primary" />
+                  <h2
+                    id="landing-page"
+                    tabIndex={-1}
+                    className="text-xl font-semibold"
+                  >
+                    Landing page
+                  </h2>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  What visitors read on the public course page before they
+                  enrol.
+                </p>
+              </div>
+              <Card className="p-5 sm:p-6">
+                <LandingPageCard
+                  courseId={course.courseId}
+                  learningOutcomes={course.learningOutcomes}
+                  requirements={course.requirements}
+                  preview={course.preview}
+                  readOnly={readOnly}
+                />
+              </Card>
+            </section>
+
+            <section aria-labelledby="catalogue" className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Tags className="size-5 text-primary" />
+                  <h2
+                    id="catalogue"
+                    tabIndex={-1}
+                    className="text-xl font-semibold"
+                  >
+                    Catalogue details
+                  </h2>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  How students find this course when they browse and filter the
+                  catalogue.
+                </p>
+              </div>
+              <Card className="p-5 sm:p-6">
+                <CourseCatalogueForm
+                  courseId={course.courseId}
+                  category={course.category}
+                  tags={course.tags}
+                  level={course.level}
+                  language={course.language}
+                  durationHours={course.durationHours}
+                  readOnly={readOnly}
+                />
+              </Card>
+            </section>
+          </>
+        )}
+
+        {captionsOn && (
+          <>
+            <section aria-labelledby="captions" className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Captions className="size-5 text-primary" />
+                  <h2
+                    id="captions"
+                    tabIndex={-1}
+                    className="text-xl font-semibold"
+                  >
+                    Caption languages
+                  </h2>
+                </div>
+              </div>
+              <Card className="p-5 sm:p-6">
+                <CourseCaptionLanguagesForm
+                  courseId={course.courseId}
+                  readOnly={readOnly}
+                />
+              </Card>
+            </section>
+          </>
+        )}
+
+        <section aria-labelledby="certificates" className="space-y-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <Award className="size-5 text-primary" />
+              <h2
+                id="certificates"
+                tabIndex={-1}
+                className="text-xl font-semibold"
+              >
+                Certificates
+              </h2>
+            </div>
+          </div>
+          <Card className="space-y-4 p-5 sm:p-6">
+            <div>
+              <CourseCertificatesSwitch
+                courseId={course.courseId}
+                certificatesEnabled={course.certificatesEnabled}
+              />
+              <div className="mt-3 ml-12">
+                <CourseCertificateCriteria
+                  courseId={course.courseId}
+                  certificatesEnabled={course.certificatesEnabled}
+                  requireQuizPass={course.certificateCriteria.requireQuizPass}
+                  minUploadScorePercent={
+                    course.certificateCriteria.minUploadScorePercent
+                  }
+                />
+              </div>
+            </div>
+            <div className="border-t pt-4">
+              <CourseCertificatesList courseId={course.courseId} />
+            </div>
+          </Card>
+        </section>
+
+        {!readOnly && (
+          <>
+            <section
+              aria-labelledby="first-lesson-prompt"
+              className="space-y-4"
+            >
+              <Card className="p-5 sm:p-6">
+                <CourseFirstLessonPromptForm
+                  courseId={course.courseId}
+                  firstLessonPrompt={course.firstLessonPrompt}
+                  defaultFirstLessonPrompt={course.defaultFirstLessonPrompt}
+                />
+              </Card>
+            </section>
+
+            <section className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Coins className="size-5 text-primary" />
+                  <h2
+                    id="price"
+                    tabIndex={-1}
+                    className="text-xl font-semibold"
+                  >
+                    Price
+                  </h2>
+                </div>
+              </div>
+              <Card className="p-5 sm:p-6">
+                <CoursePriceForm
+                  courseId={course.courseId}
+                  priceAmount={course.priceAmount}
+                  priceCurrency={course.priceCurrency}
+                />
+              </Card>
+            </section>
+          </>
+        )}
+
+        <section aria-labelledby="announcements" className="space-y-4">
           <div>
             <div className="flex items-center gap-2">
               <Megaphone className="size-5 text-primary" />
               <h2
-                id="announcements-heading"
+                id="announcements"
                 tabIndex={-1}
                 className="text-xl font-semibold"
               >

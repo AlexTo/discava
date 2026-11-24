@@ -621,14 +621,14 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: quickstart, US10.
 
-- [ ] T080 [US10] Test first in `IP/my-courses_/$courseId/-route.test.tsx` (create it if absent), then reorder `IP/my-courses_/$courseId/route.tsx` (C-03, clarification). After the header card come, in order:
+- [x] T080 [US10] Test first in `IP/my-courses_/$courseId/-route.test.tsx` (create it if absent), then reorder `IP/my-courses_/$courseId/route.tsx` (C-03, clarification). After the header card come, in order:
   1. "Course content";
   2. the settings sections (landing page, catalogue, captions, certificates, first-lesson prompt, price);
   3. announcements;
   4. archived.
 
   Give each section's heading the id in [data-model.md](./data-model.md) ("The course editor's sections") and `tabIndex={-1}`. **Test:** the order of the `h2`s.
-- [ ] T081 [US10] Test first, then add `IPC/section-links.tsx`: a `nav` with `aria-label="Course sections"`.
+- [x] T081 [US10] Test first, then add `IPC/section-links.tsx`: a `nav` with `aria-label="Course sections"`.
   - **Links:** one router `Link to="." hash="<id>"` for each section present on the page, in the data-model's order and names. A section not on the page (archived course, no archived items, captions off) has no link.
   - **Row:** `flex gap-2 overflow-x-auto`.
   - **Hash changes:** focus the section's heading, and scroll with `behavior` from `prefers-reduced-motion`.
@@ -637,13 +637,13 @@ At 1440px nothing changes, apart from long-content fixes.
   - the links' `href`s keep the course path;
   - an absent section has no link;
   - after a hash change the heading is focused.
-- [ ] T082 [US10] Extend `packages/e2e/src/scenarios/phone-width.e2e.ts`'s course-editor case (from T014). Assert:
+- [x] T082 [US10] Extend `packages/e2e/src/scenarios/phone-width.e2e.ts`'s course-editor case (from T014). Assert:
   - the "Course content" heading's top is within 812px of the header card's bottom;
   - the section links row doesn't make the page scroll sideways;
   - clicking "Announcements" scrolls to its heading, keeps the course path, and sets `#announcements`.
 
   Screenshot: `'course editor section links'`.
-- [ ] T083 [US10] Run the instructor portal's tests, lint, typecheck and build. Fix failures in the code.
+- [x] T083 [US10] Run the instructor portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 
