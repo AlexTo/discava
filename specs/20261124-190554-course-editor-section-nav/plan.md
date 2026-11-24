@@ -57,7 +57,7 @@ What the code showed:
 - one "Course sections" landmark at every width, so existing locators keep working ([R-3](./research.md#r-3-layout-below-1280px));
 - no sideways page scroll at 375px; links ≥ 24px; motion honours `prefers-reduced-motion` (UI rules)
 
-**Scale/Scope**: one route, about 8 source files and their tests, 3 e2e scenarios, 1 rule. 3 user stories; delivered as two pull requests (see Delivery)
+**Scale/Scope**: one route, about 8 source files and their tests, 3 e2e scenarios, 1 rule. 3 user stories; delivered as three pull requests (see Delivery)
 
 ## Constitution Check
 
@@ -134,10 +134,11 @@ packages/e2e/src/scenarios/
 
 ## Delivery
 
-Two pull requests, each from `main`:
+Three pull requests, each from `main`, as [tasks.md](./tasks.md) groups them:
 
-1. **US1 + US2: the menu stays and marks the current section.** The hook, the menu's two layouts, the current mark, the heading offsets, the rule, the component tests, and the `phone-width` and `course-price` e2e steps. This is the fix for the reported problem, and is useful alone.
-2. **US3: the unsaved mark.** `useUnsavedSections`, the two key changes, the mark, its tests, and the `unsaved-work` e2e step. It needs PR 1's menu.
+1. **Foundations + US1: the menu stays and marks the current section.** The rename, the hook, the menu's two layouts, the current mark, the heading offsets, the rule, the component tests, and the `phone-width` and `course-price` e2e steps. This is the fix for the reported problem, and is useful alone.
+2. **US2: told, not only shown.** Focus rings, a mark that doesn't rely on colour, focus order, reduced motion for the row's scroll, and a keyboard e2e step. Needs PR 1.
+3. **US3: the unsaved mark.** `useUnsavedSections`, the two key changes, the mark, its tests, and the `unsaved-work` e2e step. Needs PR 1's menu, not PR 2.
 
 ## Complexity Tracking
 
