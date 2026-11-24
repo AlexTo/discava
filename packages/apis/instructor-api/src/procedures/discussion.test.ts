@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { MAX_TRANSACTION_ATTEMPTS } from '@discava/common-server-utils/transaction-retry';
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
@@ -459,7 +460,7 @@ describe('hide and unhide', () => {
     await expect(callAs().hide(ref)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
-    expect(transactionGo).toHaveBeenCalledTimes(3);
+    expect(transactionGo).toHaveBeenCalledTimes(MAX_TRANSACTION_ATTEMPTS);
   });
 
   it('decides on fresh state after a cancelled transaction', async () => {
