@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
+import { retryTransaction } from '@discava/common-server-utils/transaction-retry';
 import {
   type CoreTable,
   DiscussionInputError,
@@ -24,9 +24,6 @@ export type StoredPost = NonNullable<
 >;
 export type Caller = { sub: string; groups: string[] };
 
-const MAX_ATTEMPTS = 3;
-// The longest random pause before the first re-run; the second waits twice it.
-const RETRY_JITTER_MS = 50;
 export const CLOSED = 'Questions are closed for this lesson';
 
 export const notFound = () => new TRPCError({ code: 'NOT_FOUND' });
@@ -168,17 +165,17 @@ export interface Step<T> {
 }
 
 // Reads, decides and writes. A cancelled transaction is run again from the
-// reads, so the error is decided on fresh state, up to three times, then
-// CONFLICT. Each run again waits a random moment first, so writers that
-// collided on one thread's counters don't all collide again in step.
-export const writeWithRetry = async <T>(
+// reads, so the error is decided on fresh state. The retry policy (several
+// attempts, exponential backoff with full jitter, then CONFLICT) is
+// `retryTransaction`'s.
+export const writeWithRetry = <T>(
   coreTable: CoreTable,
   step: () => Promise<Step<T>>,
-): Promise<T> => {
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+): Promise<T> =>
+  retryTransaction<T>(async () => {
     const { op, result, notify } = await step();
     if (!op) {
-      return result();
+      return { committed: true, value: await result() };
     }
     // Built fresh on every attempt: they pin the user's notification state.
     // A cancellation from a notification that already exists (a retry)
@@ -198,17 +195,10 @@ export const writeWithRetry = async <T>(
       }
       throw error;
     }
-    if (!canceled) {
-      return result();
-    }
-    if (attempt < MAX_ATTEMPTS - 1) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.random() * RETRY_JITTER_MS * (attempt + 1)),
-      );
-    }
-  }
-  throw transactionConflict();
-};
+    return canceled
+      ? { committed: false }
+      : { committed: true, value: await result() };
+  });
 
 // The caller's own record, for the name a new post carries.
 export const authorOf = async (
