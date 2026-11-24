@@ -306,3 +306,10 @@ Whoever next builds or changes a screen in a portal, a person or an agent, finds
 - The instructor and admin portals, the remaining student-portal pages (course home, video, file and assignment items, My Learning, certificates, settings) and the pages served to crawlers have not been audited. They gain only what a shared component gives them.
 - Screen-reader announcements are checked by a person with a screen reader before merge; automated tests check focus and the markup that causes the announcement.
 - The Web Interface Guidelines are the public guidelines the project's `web-design-guidelines` skill fetches; the written rules link to them and restate only what this project has decided.
+- Note, 2026-11-24 (walk of the quickstart on the local stack at `main` 71769cc, 375px and 1440px). Found, and left out of scope for this feature so the next audit starts from them:
+  1. A course page opened at `#section` in a new tab, or loaded directly (`/learn/<id>#modules`), opens at the top instead of scrolling to the section (quickstart step 9). Clicking a section tab in the same tab and a lesson's step link opened in a new tab both work.
+  2. FR-004 refers to a home page that #807 split into a marketing page (`/`, no Filters control) and `/courses`. On `/courses` the category chips wrap without limit, so with about 40 categories the first course starts near y=1430 on a 375×812 screen. The chips never collapse on a phone.
+  3. On the quiz, Tab from the focused "Question 1 of 3" goes to the options, so the navigator's 1, 2 and 3 are reachable only with Shift+Tab (quickstart step 20 expects them first).
+  4. "No published courses yet." on the instructor profile can never show: `instructorProfilePublicView` has returned NOT_FOUND for an instructor with no published course since #562, so the profile shows "Instructor not found".
+  5. Wording only: a ticked filter reads "Filters 1 active", where the quickstart says "Filters · 1 active".
+  Not covered by the walk: a real phone (touch emulation was used), a real screen reader and real browser text zoom (emulated).
