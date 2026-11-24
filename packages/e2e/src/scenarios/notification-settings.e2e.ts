@@ -38,6 +38,16 @@ test('a student switches a notification email off in settings', async ({
   await page.locator(`label[for="${switchId}"]`).click();
   await expect(changeable).toHaveAttribute('aria-checked', String(wasOn));
   await screenshot(page, 'settings after clicking a switch’s name');
+
+  // The switch's hit area runs the full width of its track, so a click at
+  // the track's right edge flips it.
+  const track = await changeable.boundingBox();
+  expect(track).not.toBeNull();
+  await changeable.click({
+    position: { x: track!.width - 1, y: track!.height / 2 },
+  });
+  await expect(changeable).toHaveAttribute('aria-checked', String(!wasOn));
+  await screenshot(page, 'settings after clicking the edge of a switch');
 });
 
 test('an instructor and an admin reach settings from their user menus', async ({
