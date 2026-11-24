@@ -571,6 +571,32 @@ describe('course prices in outputs', () => {
     expect(result).not.toHaveProperty('orderId');
   });
 
+  it('returns the refund terms of a priced course from publicViewCourse, and none for a free one', async () => {
+    curriculum();
+    await expect(
+      callAnonymously().publicViewCourse({ courseId: priced.courseId }),
+    ).resolves.toMatchObject({
+      refundWindowDays: 14,
+      refundProgressLimitPercent: 50,
+    });
+
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: {
+          course: [{ ...priced, priceAmount: 0 }],
+          module: [],
+          lesson: [],
+          contentItem: [],
+        },
+      }),
+    });
+    const free = await callAnonymously().publicViewCourse({
+      courseId: priced.courseId,
+    });
+    expect(free).not.toHaveProperty('refundWindowDays');
+    expect(free).not.toHaveProperty('refundProgressLimitPercent');
+  });
+
   it('returns the price, and nothing of its history, from viewCourse', async () => {
     curriculum();
     enrolmentGet.mockReturnValue({

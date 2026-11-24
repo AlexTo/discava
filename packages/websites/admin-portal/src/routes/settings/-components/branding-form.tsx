@@ -156,6 +156,8 @@ export function BrandingForm({
   const leaveGuard = useUnsavedChangesGuard(dirty);
   useEffect(() => {
     if (dirty) {
+      // An edit makes "Nothing to save" untrue, so it goes.
+      setNothingToSave(0);
       onEdited();
     }
   }, [dirty, onEdited]);

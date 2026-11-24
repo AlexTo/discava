@@ -118,12 +118,18 @@ describe('formatPrice', () => {
 });
 
 describe('refundTerms', () => {
-  it('takes the number of days', () => {
-    expect(refundTerms(14)).toBe(
-      "14-day refund if you haven't completed the course.",
+  it('takes the number of days and the progress limit', () => {
+    expect(refundTerms(14, 50)).toBe(
+      "14-day refund while you've completed less than half of the course. One refund per course.",
     );
-    expect(refundTerms(30)).toBe(
-      "30-day refund if you haven't completed the course.",
+    expect(refundTerms(30, 50)).toBe(
+      "30-day refund while you've completed less than half of the course. One refund per course.",
+    );
+  });
+
+  it('states a limit other than half as a percentage', () => {
+    expect(refundTerms(14, 30)).toBe(
+      "14-day refund while you've completed less than 30% of the course. One refund per course.",
     );
   });
 });

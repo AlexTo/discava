@@ -12,6 +12,7 @@ import {
   failedAt,
   hasTransactionConflict,
   NotEnrolledError,
+  readRefundedBefore,
   restoreFreeEnrolment,
   unenrolFromCourse,
 } from '@discava/core-table';
@@ -150,9 +151,13 @@ export const enrol = courseProcedure
 
 // `paidFor` tells the portal whether to offer a refund or leaving the course
 // without exposing the order.
-const withPaidFor = (stored: { orderId?: string } & IEnrolment) => ({
+const withPaidFor = (
+  stored: { orderId?: string } & IEnrolment,
+  refundedBefore: boolean,
+) => ({
   ...stored,
   paidFor: Boolean(stored.orderId),
+  refundedBefore,
 });
 
 const getMyEnrolment = async (
@@ -163,7 +168,11 @@ const getMyEnrolment = async (
   const stored = (await coreTable.entities.enrolment
     .get({ courseId, userId })
     .go()) as { data: ({ orderId?: string } & IEnrolment) | null };
-  return stored.data ? withPaidFor(stored.data) : null;
+  if (!stored.data) return null;
+  return withPaidFor(
+    stored.data,
+    await readRefundedBefore({ coreTable, userId, courseId }),
+  );
 };
 
 // The caller's enrolment in a course, or null, so the portal can offer Enrol
