@@ -5,7 +5,7 @@ description: "Task list for free preview lessons"
 
 # Tasks: Free Preview Lessons
 
-**Input**: Design documents from `/specs/20261120-154626-free-preview-lessons/`
+**Input**: Design documents from `/specs/_archive/20261120-154626-free-preview-lessons/`
 
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
 
@@ -218,7 +218,7 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
 ## Phase 7: Polish - docs and manual checks
 
 - [x] T039 [P] Docs, English only, under `docs/src/content/docs/en/`:
-  - a "Free preview lessons" section in `design/public-pages.mdx`: the mark and `isOpenFreePreview`; why the preview is three public operations of its own and the enrolled procedures are untouched (research R-2); what a response contains (R-4); signing scope and the one-hour life (R-5); what unmarking does and does not do (R-6); that nothing is recorded (R-7); the paid-content rule with open preview lessons as its one named exception and where it is tested (R-9); what crawlers get (R-10); and an operator's note that preview video delivery is paid by the platform and where to watch it (plan risk R7). Add the page's "Spec" link to `specs/20261120-154626-free-preview-lessons/spec.md` in its existing link style;
+  - a "Free preview lessons" section in `design/public-pages.mdx`: the mark and `isOpenFreePreview`; why the preview is three public operations of its own and the enrolled procedures are untouched (research R-2); what a response contains (R-4); signing scope and the one-hour life (R-5); what unmarking does and does not do (R-6); that nothing is recorded (R-7); the paid-content rule with open preview lessons as its one named exception and where it is tested (R-9); what crawlers get (R-10); and an operator's note that preview video delivery is paid by the platform and where to watch it (plan risk R7). Add the page's "Spec" link to `specs/_archive/20261120-154626-free-preview-lessons/spec.md` in its existing link style;
   - in `guides/instructor-guide.mdx`: how to mark and unmark a lesson, that assignment lessons can't be marked, that quizzes stay locked, and that removing the mark stops new access at once while a video already playing can run for up to an hour.
 
   Do not hand-write other locales; run `pnpm nx run @discava/docs:translate` if AWS credentials exist, otherwise say "translations pending" in the PR description.

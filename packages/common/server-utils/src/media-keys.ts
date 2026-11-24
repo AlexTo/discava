@@ -57,11 +57,12 @@ export const previewManifestNonce = (manifestKey: string): string | undefined =>
 export const SIGNED_COOKIE_LIFETIME_SECONDS = 4 * 60 * 60;
 
 /**
- * How long the signed cookies for a free preview lesson last (specs
- * 20261120-154626-free-preview-lessons, research R-5). Anonymous playback of a
- * free preview lesson lasts an hour, so a lesson that is unmarked stops
- * playing within the hour. Not longer than `SIGNED_COOKIE_LIFETIME_SECONDS`,
- * so `RETIRED_VERSION_DELAY_MINUTES` still outlasts every preview cookie.
+ * How long the signed cookies for a free preview lesson last
+ * (specs/_archive/20261120-154626-free-preview-lessons, research R-5).
+ * Anonymous playback of a free preview lesson lasts an hour, so a lesson that
+ * is unmarked stops playing within the hour. Not longer than
+ * `SIGNED_COOKIE_LIFETIME_SECONDS`, so `RETIRED_VERSION_DELAY_MINUTES` still
+ * outlasts every preview cookie.
  */
 export const FREE_PREVIEW_COOKIE_LIFETIME_SECONDS = 60 * 60;
 

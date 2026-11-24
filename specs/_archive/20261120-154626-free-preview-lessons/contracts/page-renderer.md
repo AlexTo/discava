@@ -1,6 +1,6 @@
 # Contract: page renderer (crawler content)
 
-Changes to `packages/apis/core-api/src/page-renderer/`. The renderer's routes, caching and headers are those of the public course pages spec ([its contract](../../20261118-223240-public-course-pages/contracts/page-renderer.md)); only the course outline's markup changes.
+Changes to `packages/apis/core-api/src/page-renderer/`. The renderer's routes, caching and headers are those of the public course pages spec ([its contract](../../../20261118-223240-public-course-pages/contracts/page-renderer.md)); only the course outline's markup changes.
 
 ## Landing page `/learn/<courseId>`
 
