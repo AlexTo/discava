@@ -10,16 +10,20 @@ import { describe, expect, it, vi } from 'vitest';
 // are kept to check.
 const shell = vi.hoisted(() => ({
   segmentLabels: {} as Record<string, string>,
+  paramLabels: {} as Record<string, string>,
 }));
 vi.mock('@discava/common-shadcn/components/portal-shell', () => ({
   PortalShell: ({
     navItems,
     segmentLabels,
+    paramLabels,
   }: {
     navItems: { label: string; to: string }[];
     segmentLabels: Record<string, string>;
+    paramLabels: Record<string, string>;
   }) => {
     shell.segmentLabels = segmentLabels;
+    shell.paramLabels = paramLabels;
     return (
       <nav>
         {navItems.map(({ label, to }) => (
@@ -55,5 +59,15 @@ describe('AppLayout', () => {
     render(<AppLayout>content</AppLayout>);
 
     expect(shell.segmentLabels[segment]).toBe(label);
+  });
+
+  it('gives every path parameter a neutral crumb, never its id', () => {
+    render(<AppLayout>content</AppLayout>);
+
+    expect(shell.paramLabels).toEqual({
+      courseId: 'Course',
+      contentItemId: 'Assignment',
+      userId: 'Student',
+    });
   });
 });
