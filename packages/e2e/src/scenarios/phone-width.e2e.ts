@@ -665,6 +665,7 @@ test('the course editor fits a phone', async ({ page }) => {
     const heading = page.getByRole('heading', { name: 'Announcements' });
     await expect(heading).toBeInViewport();
     await expect(heading).toBeFocused();
+    await screenshot(page, 'announcements heading clear of the header');
   });
 
   await test.step('the archived rows fit, with Restore and Delete on screen', async () => {
