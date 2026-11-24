@@ -413,9 +413,13 @@ export {
   type OrderCourse,
   type OrderRecord,
   PaymentsUnavailableError,
+  REFUND_PROGRESS_LIMIT_PERCENT,
   REFUND_WINDOW_DAYS,
   type RefundEligibility,
+  type RefundLimits,
   type RestoreResult,
+  readRefundedBefore,
+  readRefundLimits,
   refundDeadline,
   refundEligibility,
   refundOrder,
@@ -470,6 +474,7 @@ export {
   type Curriculum,
   computeProgress,
   type LessonStatus,
+  loadCurriculum,
   type StudentProgress,
 } from './helpers/progress.js';
 export {

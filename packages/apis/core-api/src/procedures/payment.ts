@@ -12,7 +12,9 @@ import {
   getConnection,
   markRefundRequested,
   PaymentsUnavailableError,
+  REFUND_PROGRESS_LIMIT_PERCENT,
   REFUND_WINDOW_DAYS,
+  readRefundLimits,
   refundDeadline,
   refundEligibility,
   startOrder,
@@ -179,6 +181,7 @@ export const requestRefund = courseProcedure
       order,
       enrolment,
       connection: await getConnection(coreTable),
+      ...(await readRefundLimits({ coreTable, userId, courseId })),
       now,
     });
     if (!decision.eligible) {
@@ -194,6 +197,18 @@ export const requestRefund = courseProcedure
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
             message: "A course can't be refunded after you have completed it",
+          });
+        case 'progress-limit':
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              "A course can't be refunded after you have completed half of it",
+          });
+        case 'refunded-before':
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              "You were refunded for this course before, so this purchase can't be refunded",
           });
         case 'other-account':
           throw new TRPCError({
@@ -268,12 +283,15 @@ export const myOrder = courseProcedure
       order,
       enrolment: enrolment ?? { status: 'dropped' },
       connection: await getConnection(coreTable),
+      ...(await readRefundLimits({ coreTable, userId, courseId })),
       now: new Date().toISOString(),
     });
     const blocked =
       !decision.eligible &&
       (decision.reason === 'window-ended' ||
         decision.reason === 'completed' ||
+        decision.reason === 'progress-limit' ||
+        decision.reason === 'refunded-before' ||
         decision.reason === 'other-account')
         ? decision.reason
         : undefined;
@@ -283,6 +301,7 @@ export const myOrder = courseProcedure
       currency: order.currency,
       paidAt: order.paidAt,
       refundWindowDays: REFUND_WINDOW_DAYS,
+      refundProgressLimitPercent: REFUND_PROGRESS_LIMIT_PERCENT,
       refundableUntil: refundDeadline(order.paidAt),
       canRequestRefund: decision.eligible,
       ...(blocked ? { refundBlockedBy: blocked } : {}),

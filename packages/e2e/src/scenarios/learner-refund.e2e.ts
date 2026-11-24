@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { Page } from '@playwright/test';
 import { connectLocalStripe } from '../helpers/api.js';
 import {
   addLesson,
@@ -13,9 +14,26 @@ import {
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
-import { openCourse } from '../helpers/student-portal.js';
+import {
+  markItemDone,
+  openCourse,
+  startFirstLesson,
+} from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
+
+const TERMS =
+  "14-day refund while you've completed less than half of the course. One refund per course.";
+
+// Buys the open course as the signed-in student and lands in it.
+const buy = async (student: Page) => {
+  await student.getByRole('button', { name: 'Buy now' }).click();
+  await student.waitForURL(/\/stripe\/pay\//);
+  await student.getByRole('button', { name: 'Pay', exact: true }).click();
+  await student.waitForURL(/\/learn\/[0-9a-f-]+\/(lesson\/[0-9a-f-]+|home)$/, {
+    timeout: 30_000,
+  });
+};
 
 // A student who bought a course asks for their money back from its page. The
 // request goes to Stripe; the enrolment ends when Stripe's signed notice
@@ -48,9 +66,7 @@ test('a student requests a refund and the enrolment ends', async ({
   await test.step('a visitor sees the refund terms beside the price', async () => {
     await openCourse(student, title);
     await expect(student.getByText('$19.99').first()).toBeVisible();
-    await expect(
-      student.getByText("14-day refund if you haven't completed the course."),
-    ).toBeVisible();
+    await expect(student.getByText(TERMS)).toBeVisible();
     await screenshot(student, 'refund-terms-beside-the-price');
   });
 
@@ -96,5 +112,102 @@ test('a student requests a refund and the enrolment ends', async ({
       student.getByRole('button', { name: 'Buy now' }),
     ).toBeVisible();
     await screenshot(student, 'enrolment-ended-after-refund-request');
+  });
+});
+
+// A refund is refused once half the course is done, and once a student has
+// been refunded for the course at their own request.
+test('refund limits: half the course, once per course', async ({ browser }) => {
+  const title = uniqueName('E2E refund limits course');
+  await connectLocalStripe();
+
+  await test.step('an instructor publishes a four-item course priced at 19.99', async () => {
+    const instructor = await browser.newPage();
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Rae', ['instructor']));
+    await createCourse(instructor, {
+      title,
+      summary: 'A course whose refunds are limited.',
+    });
+    await instructor.getByLabel('Price', { exact: true }).fill('19.99');
+    await instructor.getByRole('button', { name: 'Save price' }).click();
+    await expect(instructor.getByText('Saved', { exact: true })).toBeVisible();
+    await addModule(instructor, 'Module one');
+    await addLesson(instructor, 'Lesson one');
+    for (const name of ['One', 'Two', 'Three', 'Four']) {
+      await addTextItem(instructor, {
+        title: `Reading ${name}`,
+        body: name,
+      });
+    }
+    await publishCourse(instructor);
+  });
+
+  const half = await browser.newPage();
+  await test.step('a student who completes half of the course is refused', async () => {
+    await openCourse(half, title);
+    await expect(half.getByText(TERMS)).toBeVisible();
+    await screenshot(half, 'refund-limits-terms-signed-out');
+    await half.getByRole('button', { name: 'Sign in to buy' }).click();
+    await half
+      .getByRole('dialog', { name: 'Sign in to buy' })
+      .getByRole('link', { name: 'Continue to sign in' })
+      .click();
+    await signIn(half, newUser('Hal', ['student']));
+    await buy(half);
+    await half.goto(half.url().replace(/\/(lesson\/.*|home)$/, '/home'));
+    await startFirstLesson(half);
+    const lesson = half.url();
+    await markItemDone(half, 'Reading One');
+    await markItemDone(half, 'Reading Two');
+    await half.goto(lesson.replace(/\/lesson\/.*$/, ''));
+    await expect(
+      half.getByText("Refunds end once you've completed half of the course."),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(
+      half.getByRole('button', { name: 'Request a refund' }),
+    ).toHaveCount(0);
+    await screenshot(half, 'refund-refused-at-half-the-course');
+  });
+
+  const quarter = await browser.newPage();
+  await test.step('a student at a quarter is refunded, warned, buys again and is not offered a refund', async () => {
+    await openCourse(quarter, title);
+    await quarter.getByRole('button', { name: 'Sign in to buy' }).click();
+    await quarter
+      .getByRole('dialog', { name: 'Sign in to buy' })
+      .getByRole('link', { name: 'Continue to sign in' })
+      .click();
+    await signIn(quarter, newUser('Quin', ['student']));
+    await buy(quarter);
+    await quarter.goto(quarter.url().replace(/\/(lesson\/.*|home)$/, '/home'));
+    await startFirstLesson(quarter);
+    await markItemDone(quarter, 'Reading One');
+    await openCourse(quarter, title);
+    await quarter.getByRole('button', { name: 'Request a refund' }).click();
+    await quarter
+      .getByRole('dialog', { name: 'Request a refund' })
+      .getByRole('button', { name: 'Request refund' })
+      .click();
+    await expect(quarter.getByText(/Your enrolment has ended\./)).toBeVisible({
+      timeout: 30_000,
+    });
+    const warning = quarter.getByText(
+      "You were refunded for this course before. If you buy it again, it can't be refunded.",
+    );
+    await expect(warning).toBeVisible();
+    await screenshot(quarter, 'refunded-before-warning-beside-buy-now');
+
+    await buy(quarter);
+    await openCourse(quarter, title);
+    await expect(
+      quarter.getByText(
+        "You were refunded for this course before, so this purchase can't be refunded.",
+      ),
+    ).toBeVisible();
+    await expect(
+      quarter.getByRole('button', { name: 'Request a refund' }),
+    ).toHaveCount(0);
+    await screenshot(quarter, 'second-purchase-offered-no-refund');
   });
 });
