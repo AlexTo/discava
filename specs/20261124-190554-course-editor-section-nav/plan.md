@@ -119,7 +119,7 @@ packages/websites/instructor-portal/src/routes/_authenticated/my-courses_/$cours
     ├── announcements/announcement-form.tsx                   # report key
     └── course/
         ├── unsaved-changes-context.tsx                       # + useUnsavedSections
-        ├── unsaved-changes-context.test.tsx                  # new
+        ├── unsaved-changes-context.test.tsx                  # + useUnsavedSections cases
         ├── course-caption-languages-form.tsx                 # report key
         ├── course-first-lesson-prompt-form.tsx               # heading offset
         └── archived-section.tsx                              # heading offset
