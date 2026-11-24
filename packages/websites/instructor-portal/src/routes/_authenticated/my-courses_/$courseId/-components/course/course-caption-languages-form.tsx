@@ -29,8 +29,10 @@ export function CourseCaptionLanguagesForm({
 }) {
   const trpc = useInstructorApi();
   const queryClient = useQueryClient();
+  // The course editor's route asks for these too; the form uses that answer
+  // rather than asking again when it mounts.
   const queryOptions = trpc.course.captionLanguages.queryOptions({ courseId });
-  const current = useQuery(queryOptions);
+  const current = useQuery({ ...queryOptions, refetchOnMount: false });
   const save = useMutation(
     trpc.course.updateCaptionLanguages.mutationOptions(),
   );
