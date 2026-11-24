@@ -92,23 +92,6 @@ describe('/instructors/$handle', () => {
     expect(avatar).not.toHaveAttribute('data-size', 'lg');
   });
 
-  it('says so when there are no published courses, and not otherwise', async () => {
-    open();
-    await screen.findByRole('region', { name: 'Courses by Gil Strang' });
-    expect(screen.queryByText('No published courses yet.')).toBeNull();
-  });
-
-  it('says there are no published courses yet for an instructor without any', async () => {
-    open(() => ({ ...profile, courses: [] }));
-    const section = await screen.findByRole('region', {
-      name: 'Courses by Gil Strang',
-    });
-    expect(
-      within(section).getByText('No published courses yet.'),
-    ).toBeInTheDocument();
-    expect(within(section).queryByRole('link')).toBeNull();
-  });
-
   it('sets the document title to the display name', async () => {
     open();
     await screen.findByRole('heading', { level: 1, name: 'Gil Strang' });

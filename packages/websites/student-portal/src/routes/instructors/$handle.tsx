@@ -138,22 +138,18 @@ function RouteComponent() {
             >
               Courses by {profile.displayName}
             </h2>
-            {profile.courses.length === 0 ? (
-              <p className="mt-6 text-sm text-muted-foreground">
-                No published courses yet.
-              </p>
-            ) : (
-              <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {profile.courses.map((course) => {
-                  const display: DisplayCourse = {
-                    ...toDisplayCourse(course),
-                    // The profile does not carry descriptions.
-                    description: '',
-                  };
-                  return <CourseCard key={course.courseId} course={display} />;
-                })}
-              </div>
-            )}
+            {/* The API returns NOT_FOUND for an instructor with no published
+                course, so this list is never empty. */}
+            <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {profile.courses.map((course) => {
+                const display: DisplayCourse = {
+                  ...toDisplayCourse(course),
+                  // The profile does not carry descriptions.
+                  description: '',
+                };
+                return <CourseCard key={course.courseId} course={display} />;
+              })}
+            </div>
           </section>
         </>
       )}
