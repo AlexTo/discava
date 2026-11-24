@@ -181,6 +181,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      # OpenSearch's image is the largest the stack pulls, and the search index
+      # the last thing global-setup waits for. Pulled while the dependencies
+      # install, it's there by the time `pnpm dev` looks (pull-image.ts only
+      # pulls an image that's missing; one still downloading is shared).
+      - name: Start pulling OpenSearch's image
+        run: |
+          nohup docker pull "$(jq -r .localDev.image packages/databases/search/config.json)" \
+            > "$RUNNER_TEMP/opensearch-pull.log" 2>&1 &
+
       # Logged in to ECR Public, as the Trivy job is: DynamoDB local's image is
       # there, and ECR Public refuses anonymous pulls from shared GitHub runner
       # IPs once their quota's used ("Data limit exceeded").
