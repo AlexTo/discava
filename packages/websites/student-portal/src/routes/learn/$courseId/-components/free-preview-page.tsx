@@ -200,6 +200,10 @@ export function FreePreviewPage({
             courseTitle={courseQuery.data.title}
             priceAmount={courseQuery.data.priceAmount}
             priceCurrency={courseQuery.data.priceCurrency}
+            refundWindowDays={courseQuery.data.refundWindowDays}
+            refundProgressLimitPercent={
+              courseQuery.data.refundProgressLimitPercent
+            }
             continueTo={{ lessonId }}
           />
         </div>

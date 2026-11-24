@@ -297,7 +297,7 @@ export function CourseCertificatesList({ courseId }: { courseId: string }) {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold">Certificates</h2>
+      <h3 className="font-medium">Issued certificates</h3>
       {query.isPending && <Spinner />}
       {query.isError && (
         <div role="alert" className="space-y-3 text-sm">

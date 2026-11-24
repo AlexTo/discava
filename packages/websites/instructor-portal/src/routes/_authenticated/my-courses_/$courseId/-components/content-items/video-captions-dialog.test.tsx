@@ -109,6 +109,12 @@ afterEach(() => {
 });
 
 describe('VideoCaptionsDialog', () => {
+  it('describes the dialog with its intro', async () => {
+    const dialog = await open(renderDialog({}));
+
+    expect(dialog).toHaveAccessibleDescription(/\S/);
+  });
+
   it('lists the tracks with label, language, source and the default', async () => {
     const rendered = renderDialog({});
     const dialog = await open(rendered);

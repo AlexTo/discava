@@ -10,6 +10,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -302,10 +303,10 @@ export function AttachLessonFileDialog({
       >
         <DialogHeader>
           <DialogTitle>{contentItemId ? 'Edit file' : 'Add file'}</DialogTitle>
-          <p className="text-sm text-muted-foreground">
+          <DialogDescription>
             Attach a document for students to download: slides, a worksheet, a
             dataset.
-          </p>
+          </DialogDescription>
         </DialogHeader>
 
         {error && (

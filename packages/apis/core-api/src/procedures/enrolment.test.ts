@@ -25,6 +25,7 @@ const {
   restoreFreeEnrolment,
   unenrolFromCourse,
   dismissPrompt,
+  readRefundedBefore,
   mockModule,
 } = await vi.hoisted(async () => ({
   enrolmentCreate: vi.fn(),
@@ -34,6 +35,7 @@ const {
   restoreFreeEnrolment: vi.fn(),
   unenrolFromCourse: vi.fn(),
   dismissPrompt: vi.fn(),
+  readRefundedBefore: vi.fn(),
   ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
     enrolment: ['get'],
     course: ['get'],
@@ -46,6 +48,7 @@ vi.mock('@discava/core-table', async (importOriginal) =>
     restoreFreeEnrolment,
     unenrolFromCourse,
     dismissFirstLessonPrompt: dismissPrompt,
+    readRefundedBefore,
   }),
 );
 
@@ -93,6 +96,7 @@ const cancelled = (
 
 beforeEach(() => {
   vi.clearAllMocks();
+  readRefundedBefore.mockResolvedValue(false);
   courseCheck.mockReturnValue({
     where: courseCheckWhere.mockReturnValue({ commit: () => 'course-check' }),
   });
@@ -303,16 +307,33 @@ describe('an enrolment with an orderId', () => {
   it('is returned without the orderId by myEnrolment', async () => {
     storedEnrolment(paid);
     const result = await callAsUser().myEnrolment({ courseId: 'course-1' });
-    expect(result).toEqual({ ...enrolment, paidFor: true });
+    expect(result).toEqual({
+      ...enrolment,
+      paidFor: true,
+      refundedBefore: false,
+    });
     expect(result).not.toHaveProperty('orderId');
   });
 });
 
 describe('myEnrolment', () => {
+  it('says whether an earlier order was refunded at the caller’s request, and nothing more', async () => {
+    readRefundedBefore.mockResolvedValue(true);
+    const result = await callAsUser().myEnrolment({ courseId: 'course-1' });
+    expect(result).toEqual({
+      ...enrolment,
+      paidFor: false,
+      refundedBefore: true,
+    });
+    expect(readRefundedBefore).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER_SUB, courseId: 'course-1' }),
+    );
+  });
+
   it('returns the caller’s enrolment in the course', async () => {
     await expect(
       callAsUser().myEnrolment({ courseId: 'course-1' }),
-    ).resolves.toEqual({ ...enrolment, paidFor: false });
+    ).resolves.toEqual({ ...enrolment, paidFor: false, refundedBefore: false });
     expect(enrolmentGet).toHaveBeenCalledWith({
       courseId: 'course-1',
       userId: USER_SUB,
@@ -447,7 +468,7 @@ describe('unenrol', () => {
 
     await expect(
       callAsUser().unenrol({ courseId: 'course-1' }),
-    ).resolves.toEqual({ ...left, paidFor: false });
+    ).resolves.toEqual({ ...left, paidFor: false, refundedBefore: false });
     expect(unenrolFromCourse).toHaveBeenCalledWith({
       coreTable: expect.anything(),
       userId: USER_SUB,
@@ -468,7 +489,7 @@ describe('unenrol', () => {
     storedEnrolment(left);
     await expect(
       callAsUser().unenrol({ courseId: 'course-1' }),
-    ).resolves.toEqual({ ...left, paidFor: false });
+    ).resolves.toEqual({ ...left, paidFor: false, refundedBefore: false });
     expect(unenrolFromCourse).not.toHaveBeenCalled();
   });
 

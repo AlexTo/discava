@@ -106,7 +106,9 @@ describe('Dashboard', () => {
       }),
     ]);
 
-    const first = (await screen.findByText('Intro to DynamoDB')).closest('a')!;
+    const first = (await screen.findByText('Intro to DynamoDB')).closest(
+      '[data-slot="card"]',
+    )!;
     expect(within(first).getByText('Published')).toBeInTheDocument();
     expect(within(first).getByText('Enrolments').nextSibling).toHaveTextContent(
       '12',
@@ -119,7 +121,9 @@ describe('Dashboard', () => {
     ).toHaveTextContent('30%');
     expect(within(first).getByText(/^Last updated /)).toBeInTheDocument();
 
-    const second = screen.getByText('Advanced Queries').closest('a')!;
+    const second = screen
+      .getByText('Advanced Queries')
+      .closest('[data-slot="card"]')!;
     expect(within(second).getByText('Draft')).toBeInTheDocument();
     expect(
       within(second).getByText('Enrolments').nextSibling,
@@ -140,6 +144,14 @@ describe('Dashboard', () => {
       'href',
       '/dashboard/c2',
     );
+  });
+
+  it('names each card’s link by the title and stretches it over the card', async () => {
+    renderPage(() => [summary()]);
+
+    const link = await screen.findByRole('link', { name: 'Intro to DynamoDB' });
+    expect(link).toHaveClass('after:absolute', 'after:inset-0');
+    expect(link.closest('[data-slot="card"]')).toHaveClass('relative');
   });
 
   it('shows the error with a Try again that asks again', async () => {

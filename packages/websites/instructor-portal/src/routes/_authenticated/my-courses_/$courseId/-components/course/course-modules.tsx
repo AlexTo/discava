@@ -101,7 +101,7 @@ function ModuleLessons({
   const published = !draft && !readOnly;
   const { register } = useFocusAfterRemoval(
     module.lessons.map((lesson) => lesson.lessonId),
-    () => document.getElementById('content-heading'),
+    () => document.getElementById('content'),
   );
 
   return (
@@ -319,7 +319,7 @@ export function CourseModules({
   const refreshCourse = useRefreshCourse(courseId);
   const { register } = useFocusAfterRemoval(
     modules.map((module) => module.moduleId),
-    () => document.getElementById('content-heading'),
+    () => document.getElementById('content'),
   );
 
   if (modules.length === 0) {
@@ -421,7 +421,7 @@ export function CourseModules({
                             variant="ghost"
                             size="icon-sm"
                             type="button"
-                            aria-label={`Edit module ${moduleIndex + 1}`}
+                            aria-label={`Edit module ${module.title}`}
                             className="-ml-2"
                           >
                             <PencilLine />
@@ -444,7 +444,7 @@ export function CourseModules({
                             variant="ghost"
                             size="icon-sm"
                             type="button"
-                            aria-label={`Remove module ${moduleIndex + 1}`}
+                            aria-label={`Remove module ${module.title}`}
                             className="-ml-2"
                           >
                             <Trash2 />

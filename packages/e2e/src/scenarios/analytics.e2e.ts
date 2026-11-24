@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { Page } from '@playwright/test';
 import { completeCourse } from '../helpers/certificate.js';
 import {
   addLesson,
@@ -45,6 +46,12 @@ import { waitForAnalytics } from '../helpers/wait-for-analytics.js';
 // table-invariants fixture waits for `analytics-matches-records` (the
 // aggregates equal the sums over the records).
 
+// A dashboard card: the course's title is the link, stretched over the card.
+const courseCard = (page: Page, title: string) =>
+  page
+    .locator('[data-slot="card"]')
+    .filter({ has: page.getByRole('link', { name: title }) });
+
 test('an instructor sees how their course is doing, and no one else can open its analytics', async ({
   browser,
 }) => {
@@ -76,13 +83,18 @@ test('an instructor sees how their course is doing, and no one else can open its
     });
     courseId = instructor.url().split('/').pop() ?? '';
     await instructor.goto(`${PORTALS.instructor}/dashboard`);
-    const card = instructor.getByRole('link', { name: new RegExp(title) });
+    const card = courseCard(instructor, title);
     await expect(card).toBeVisible();
     await expect(card.getByText('No data')).toBeVisible();
     await expect(
       card.getByText('Enrolments').locator('xpath=..'),
     ).toContainText('0');
+    await expect(card.getByRole('link', { name: title })).toHaveAttribute(
+      'href',
+      new RegExp(`/dashboard/${courseId}`),
+    );
     await screenshot(instructor, 'course card before anyone enrols');
+    await screenshot(instructor, 'course card whose title is its link');
   });
 
   await test.step('a student enrols and completes the reading', async () => {
@@ -91,7 +103,7 @@ test('an instructor sees how their course is doing, and no one else can open its
 
   await test.step('the card shows 1 enrolment and 1 active this week within 30 seconds', async () => {
     await expectAfterReloads(instructor, async () => {
-      const card = instructor.getByRole('link', { name: new RegExp(title) });
+      const card = courseCard(instructor, title);
       await expect(
         card.getByText('Enrolments').locator('xpath=..'),
       ).toContainText('1', { timeout: 2_000 });
@@ -103,9 +115,7 @@ test('an instructor sees how their course is doing, and no one else can open its
       ).toContainText('100%', { timeout: 2_000 });
     });
     await expect(
-      instructor
-        .getByRole('link', { name: new RegExp(title) })
-        .getByText(/^Last updated /),
+      courseCard(instructor, title).getByText(/^Last updated /),
     ).toBeVisible();
     await screenshot(instructor, 'course card with an enrolment and activity');
   });

@@ -190,7 +190,7 @@ describe('AnnouncementsSection', () => {
     let items = [item(1), item(2)];
     const { user } = renderWithInstructorApi(
       <>
-        <h2 id="announcements-heading" tabIndex={-1}>
+        <h2 id="announcements" tabIndex={-1}>
           Announcements
         </h2>
         <AnnouncementsSection courseId="course-1" archived />

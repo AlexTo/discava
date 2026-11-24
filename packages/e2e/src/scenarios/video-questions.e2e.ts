@@ -75,7 +75,7 @@ test('an instructor adds questions to a video', async ({ browser }) => {
   await test.step('after a reload both are there, and the row counts them', async () => {
     await instructor.reload();
     const row = instructor.getByRole('button', {
-      name: 'Questions for Video one',
+      name: 'Questions (2) for Video one',
     });
     await expect(row).toHaveText('Questions (2)');
     await screenshot(instructor, 'video row with question count');

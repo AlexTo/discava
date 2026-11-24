@@ -344,7 +344,7 @@ export function VideoQuestionsEditor({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      aria-label={`Move question ${index + 1} up`}
+                      aria-label={`Move up, question ${index + 1}`}
                       disabled={!canMove(questions, question.questionId, 'up')}
                       onClick={() => state.move(question.questionId, 'up')}
                     >
@@ -355,7 +355,7 @@ export function VideoQuestionsEditor({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      aria-label={`Move question ${index + 1} down`}
+                      aria-label={`Move down, question ${index + 1}`}
                       disabled={
                         !canMove(questions, question.questionId, 'down')
                       }

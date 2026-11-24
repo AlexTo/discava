@@ -54,6 +54,7 @@ One file per user-facing flow, in `src/scenarios/`, named `*.e2e.ts`. Build it f
 - `portals.ts`: where everything runs.
 - `discussion.ts`: steps for lesson discussions, a course with a visible lesson, enrolled students, `ask`, `reply` and `readThread`. For `scenarios/discussion.e2e.ts`, `scenarios/discussion-instructor.e2e.ts` and `concurrency/discussion-counters.e2e.ts`.
 - `api.ts`: `apiUser`, a new user signed in on the local OIDC server without a browser, with a typed client for each API; and setup steps such as `createPublishedCourseViaApi` and `createCaptionedVideoViaApi`. For `src/concurrency/` and scenarios that only need data to exist.
+- `earnings.ts`: a priced course, students who buy it on the Stripe stand-in, refunds, the payout run and reading the Earnings page's report. For `scenarios/earnings.e2e.ts` and `concurrency/earnings-recording.e2e.ts`.
 - One file per feature for the rest (`announcement.ts`, `assignment.ts`, `captions.ts`, `catalogue.ts`, `certificate.ts`, `notification.ts`, `public-pages.ts`, `review.ts`, `router.ts`, `wait-for-analytics.ts`, …): check there before writing a step.
 
 Fixtures go in `src/files/`: `three-seconds.mp4`, a 39 KB, 3-second H.264/AAC clip of colour bars with a moving counter, two small 1600×900 JPEGs for course images, and `worksheet.pdf`, a 596-byte one-page PDF. The video and images are made with ffmpeg, the commands in `src/helpers/video.ts` and `src/helpers/images.ts`; the PDF is written by hand (see `src/helpers/files.ts`). Keep fixtures synthetic and small, never real course material.
