@@ -470,7 +470,7 @@ function RouteComponent() {
               </Card>
             </section>
 
-            <section aria-labelledby="price" className="space-y-4">
+            <section className="space-y-4">
               <div>
                 <div className="flex items-center gap-2">
                   <Coins className="size-5 text-primary" />
