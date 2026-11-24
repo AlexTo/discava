@@ -5,7 +5,7 @@
 import { DISCUSSION_BODY_MAX, DISCUSSION_TITLE_MAX } from '@discava/core-table';
 import { z } from 'zod';
 
-// specs/20261116-013334-lesson-discussions/contracts/core-api-discussion.md.
+// specs/_archive/20261116-013334-lesson-discussions/contracts/core-api-discussion.md.
 // Text is trimmed and its length counted by the write helper, which names the
 // field in its error; the limits here only stop absurdly large payloads.
 

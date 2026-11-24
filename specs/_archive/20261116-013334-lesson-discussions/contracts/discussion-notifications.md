@@ -1,6 +1,6 @@
 # Contract: notification hooks (Phase 7, depends on the notifications spec)
 
-Uses the notifications spec's [producer helpers](../../20261115-204427-notifications/contracts/producer-helpers.md) unchanged. It writes no notification record, sends no email and checks no preference.
+Uses the notifications spec's [producer helpers](../../../20261115-204427-notifications/contracts/producer-helpers.md) unchanged. It writes no notification record, sends no email and checks no preference.
 
 ## Registry entries
 

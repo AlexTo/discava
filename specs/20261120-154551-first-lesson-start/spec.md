@@ -12,7 +12,7 @@
 
 **Design page**: [`design/course-analytics`](../../docs/src/content/docs/en/design/course-analytics.mdx) (gains the "Activation" definitions); the learner and instructor guides ([`guides/lesson-discussions`](../../docs/src/content/docs/en/guides/lesson-discussions.mdx)) gain the prompt.
 
-**Extends**: the lesson discussions spec ([`20261116-013334-lesson-discussions`](../20261116-013334-lesson-discussions/spec.md), built) and the instructor dashboard spec ([`20261115-210425-instructor-dashboard`](../20261115-210425-instructor-dashboard/spec.md), built). **Touches the same course page as** the Stripe checkout spec ([`20261116-013315-stripe-checkout`](../20261116-013315-stripe-checkout/spec.md), part built). See [How this fits the checkout spec](#how-this-fits-the-checkout-spec).
+**Extends**: the lesson discussions spec ([`20261116-013334-lesson-discussions`](../_archive/20261116-013334-lesson-discussions/spec.md), built) and the instructor dashboard spec ([`20261115-210425-instructor-dashboard`](../20261115-210425-instructor-dashboard/spec.md), built). **Touches the same course page as** the Stripe checkout spec ([`20261116-013315-stripe-checkout`](../20261116-013315-stripe-checkout/spec.md), part built). See [How this fits the checkout spec](#how-this-fits-the-checkout-spec).
 
 ## Why
 

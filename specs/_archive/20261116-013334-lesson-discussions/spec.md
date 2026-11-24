@@ -10,7 +10,7 @@
 
 **Parent issue**: #280
 
-**Depends on (in flight, not merged)**: the notifications spec ([`specs/20261115-204427-notifications/`](../20261115-204427-notifications/spec.md), PR #331, issue #281). Only the notification hooks (User Story 6) need it; every other story works without it. See [Dependency on the notifications spec](#dependency-on-the-notifications-spec).
+**Depends on (in flight, not merged)**: the notifications spec ([`specs/20261115-204427-notifications/`](../../20261115-204427-notifications/spec.md), PR #331, issue #281). Only the notification hooks (User Story 6) need it; every other story works without it. See [Dependency on the notifications spec](#dependency-on-the-notifications-spec).
 
 ## Dependency on the notifications spec
 
@@ -20,7 +20,7 @@ Everything else (posting, reading, votes, acceptance, the unanswered queue, mode
 
 Related in-flight specs, none of which this one depends on:
 
-- **Announcements** ([`20261115-210422-announcements`](../20261115-210422-announcements/spec.md), #282): one-way, instructor-to-class posts on the course home, with rich text, edited and deleted by instructors only, notifying the whole class. Discussions are many-to-many, belong to one lesson, are plain text, and notify only the people involved. The two share no record, route or component; both are producers of the same pipeline.
+- **Announcements** ([`20261115-210422-announcements`](../../20261115-210422-announcements/spec.md), #282): one-way, instructor-to-class posts on the course home, with rich text, edited and deleted by instructors only, notifying the whole class. Discussions are many-to-many, belong to one lesson, are plain text, and notify only the people involved. The two share no record, route or component; both are producers of the same pipeline.
 - **Instructor dashboard** (#332): may later show an unanswered-question count. This spec's unanswered list is the one source it would read; nothing here waits for it.
 - **Video player** (#330): out of scope here (no timestamped questions); a later feature can add an optional timestamp to a question.
 

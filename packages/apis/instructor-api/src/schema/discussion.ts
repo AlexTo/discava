@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 
-// specs/20261116-013334-lesson-discussions/contracts/instructor-api-discussion.md.
+// specs/_archive/20261116-013334-lesson-discussions/contracts/instructor-api-discussion.md.
 // DiscussionPost is core-api's, as an instructor sees it: always the content
 // (a deleted post has none) and `reportCount`, never the reporters.
 
