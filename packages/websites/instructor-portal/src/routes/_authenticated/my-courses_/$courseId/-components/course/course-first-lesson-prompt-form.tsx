@@ -74,7 +74,7 @@ export function CourseFirstLessonPromptForm({
         <h2
           id="first-lesson-prompt"
           tabIndex={-1}
-          className="text-xl font-semibold"
+          className="scroll-mt-20 text-xl font-semibold"
         >
           First-lesson prompt
         </h2>
