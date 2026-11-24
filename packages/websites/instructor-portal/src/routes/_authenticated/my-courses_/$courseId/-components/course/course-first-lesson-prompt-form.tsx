@@ -67,6 +67,7 @@ export function CourseFirstLessonPromptForm({
       className="space-y-3"
       onSubmit={(event) => {
         event.preventDefault();
+        if (unchanged) return;
         void save(text.trim() === '' ? null : text.trim());
       }}
     >
@@ -117,7 +118,8 @@ export function CourseFirstLessonPromptForm({
           type="submit"
           pending={isPending}
           pendingLabel="Saving…"
-          disabled={unchanged}
+          aria-disabled={unchanged || undefined}
+          className={unchanged ? 'cursor-not-allowed opacity-50' : undefined}
         >
           Save prompt
         </PendingButton>

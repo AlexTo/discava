@@ -89,4 +89,17 @@ describe('PortalShell’s phone sidebar', () => {
       ).toHaveFocus(),
     );
   });
+
+  it('focuses the new page’s h1 after a navigation made from the open sidebar', async () => {
+    location.pathname = '/a';
+    const { rerender } = render(shell());
+    const dialog = await openSidebar();
+    within(dialog).getByRole('link', { name: 'Home' }).focus();
+    location.pathname = '/b';
+    rerender(shell());
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Page' })).toHaveFocus(),
+    );
+  });
 });
