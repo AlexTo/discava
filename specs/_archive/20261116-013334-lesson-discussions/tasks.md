@@ -5,7 +5,7 @@ description: "Task list for Q&A and discussion threads per lesson"
 
 # Tasks: Q&A and Discussion Threads per Lesson
 
-**Input**: Design documents from `/specs/20261116-013334-lesson-discussions/`
+**Input**: Design documents from `/specs/_archive/20261116-013334-lesson-discussions/`
 
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
 
@@ -15,7 +15,7 @@ description: "Task list for Q&A and discussion threads per lesson"
 
 **Organization**: Eight phases, each one agent PR, merged in numeric order (each phase leaves `main` green and working: no phase needs a later one to pass). Story labels: US1 ask a question (P1), US2 reply and read a thread (P1), US3 upvote and accept (P2), US4 instructor's unanswered queue (P1), US5 report, hide, delete (P2), US6 notifications (P2). Paths are relative to the repository root. Only the last PR closes #280; earlier PRs say "Part of #280" and must not use a closing keyword.
 
-**Dependency on the notifications spec**: only Phase 7 (and T045) need [the notifications spec](../20261115-204427-notifications/spec.md): its T001 to T004 (entities, registry, `notificationWrites`) for Phase 7, and its Phase 5 (fan-out and the local event runner) for the notification checks in T045. Phases 1 to 6 and 8 (except T045) do not wait for it.
+**Dependency on the notifications spec**: only Phase 7 (and T045) need [the notifications spec](../../20261115-204427-notifications/spec.md): its T001 to T004 (entities, registry, `notificationWrites`) for Phase 7, and its Phase 5 (fan-out and the local event runner) for the notification checks in T045. Phases 1 to 6 and 8 (except T045) do not wait for it.
 
 ## Format: `[ID] [P?] [Story] Description`
 
