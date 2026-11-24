@@ -39,7 +39,7 @@ A learner with a certificate opens My Learning. Beside View, Download PDF, Copy 
 **Acceptance Scenarios**:
 
 1. **Given** a learner with a valid certificate, **When** they choose "Download credential" in My Learning, **Then** a file is saved whose name includes the certificate ID, and a conforming verifier reports it as a valid Open Badges 3.0 credential issued by the platform.
-2. **Given** the downloaded file, **When** anyone reads it, **Then** it shows the learner's name, the course title as printed on the certificate, the completion date, the certificate ID, the address of the public page, the statement of what was assessed, and the platform as issuer with its name, address and logo.
+2. **Given** the downloaded file, **When** anyone reads it, **Then** it shows the learner's name, the course title as printed on the certificate, the completion date, the issue date, the certificate ID, the address of the public page, the statement of what was assessed, and the platform as issuer with its name, address and logo.
 3. **Given** the downloaded file, **When** any character of its signed content is changed, **Then** a conforming verifier reports the signature as invalid.
 4. **Given** the certificate's owner is signed in, **When** they open its public page, **Then** the page offers "Download credential" with the same result.
 5. **Given** a signed-out visitor, or a signed-in user who isn't the owner, **When** they open the public page, **Then** there is no download action, and no way to obtain the credential except from the learner.
@@ -122,7 +122,7 @@ Beside "Download credential", the learner can choose "Download badge image". It 
 - **FR-002**: The credential MUST name the platform as issuer, with the name, address and image the platform publishes for itself; instructors and courses MUST NOT be issuers.
 - **FR-003**: The credential MUST describe the achievement as completing the course, with the course title, a description, and criteria taken from the certificate's assessment statement, all as recorded on the certificate at issue.
 - **FR-004**: The credential MUST identify the learner by the name printed on the certificate and, when their account has an email address the first time the credential is built, by a salted one-way hash of it, fixed on the certificate from then on, in the standard's identity form; it MUST NOT contain the email address in readable form, the learner's account ID or any session value.
-- **FR-005**: The credential MUST carry a stable identifier derived from the certificate, the certificate ID, the address of the public page, the completion date as the date it became valid, and no expiry.
+- **FR-005**: The credential MUST carry a stable identifier derived from the certificate, the certificate ID, the address of the public page, the completion date as the date it was awarded, the issue time as the time it became valid, and no expiry.
 - **FR-006**: The credential MUST be signed by the platform in a proof format the Open Badges 3.0 specification defines, so that conforming verifiers can check it; changing any signed content MUST make verification fail.
 - **FR-007**: The credential MUST NOT include the per-item scores or the list of assessed items kept on the certificate. It MAY include the statement of what was assessed, as the public page shows.
 - **FR-008**: Downloading MUST be refused for a revoked certificate with "This certificate has been revoked", and for any certificate the caller doesn't own with the same answer as a certificate that doesn't exist.
@@ -145,7 +145,7 @@ Beside "Download credential", the learner can choose "Download badge image". It 
 
 - **FR-017**: My Learning and the owner's view of the public page MUST show "Download credential" and "Download badge image" for a valid certificate, with text-only buttons, and hide both for a revoked one.
 - **FR-018**: The public page MUST say, for a valid certificate, that it is also available as a verifiable credential the owner can download; it MUST NOT offer the file to anyone but the owner.
-- **FR-019**: The certificates design page and the learner help MUST explain what the credential is, how to verify one and what revocation does to it.
+- **FR-019**: The certificates design page MUST explain what the credential is, how to verify one and what revocation does to it, and the deployment docs MUST say how an operator adds a new signing key without invalidating earlier credentials.
 - **FR-020**: Every flow above MUST work under local development without an AWS account, signing with a local key.
 - **FR-021**: Revoking or restoring a certificate MUST keep working as today; the credential status follows it without a second action by the instructor or administrator.
 
