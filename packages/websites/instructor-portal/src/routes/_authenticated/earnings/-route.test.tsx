@@ -175,6 +175,40 @@ describe('earnings period in the address', () => {
     ).toMatchObject({ month: undefined, from: '2026-10-05' });
   });
 
+  // The router gives a route `{ ...address, ...validated }`, so a key the
+  // validated search leaves out would keep the value typed in the address.
+  it('drops what it rejects from the search the router builds', () => {
+    const routed = (raw: Record<string, unknown>) => ({
+      ...raw,
+      ...validate(raw),
+    });
+    expect(routed({ month: '2026-13' }).month).toBeUndefined();
+    expect(
+      routed({ month: '2026-08', from: '2026-07-01', to: '2026-07-10' }).month,
+    ).toBeUndefined();
+    expect(
+      routed({ month: '2026-08', from: '2026-09-20', to: '2026-09-01' }),
+    ).toMatchObject({ month: '2026-08', from: undefined, to: undefined });
+    expect(routed({ from: '2026-02-30', to: '2026-03-05' })).toMatchObject({
+      from: undefined,
+      to: undefined,
+    });
+
+    const beforeLoad = Route.options.beforeLoad as (ctx: {
+      search: unknown;
+      location: { search: Record<string, unknown> };
+    }) => void;
+    for (const raw of [
+      { month: '2026-13' },
+      { month: '2026-08', from: '2026-07-01', to: '2026-07-10' },
+      { from: '2026-09-20', to: '2026-09-01' },
+    ]) {
+      expect(() =>
+        beforeLoad({ search: routed(raw), location: { search: raw } }),
+      ).toThrow();
+    }
+  });
+
   it('asks for the month the address names', async () => {
     search = { month: '2026-02' };
     const { calls } = open();
