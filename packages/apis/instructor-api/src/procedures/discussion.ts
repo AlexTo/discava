@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
+import { retryTransaction } from '@discava/common-server-utils/transaction-retry';
 import {
   type CoreTable,
   DISCUSSION_MAX_VISIBLE_REPLIES,
@@ -33,7 +33,6 @@ type StoredPost = NonNullable<
 >;
 
 const PAGE = 20;
-const MAX_ATTEMPTS = 3;
 
 const notFound = () => new TRPCError({ code: 'NOT_FOUND' });
 
@@ -194,8 +193,8 @@ type ModerateInput = {
 };
 
 // Reads, decides and writes with no course or lesson checks. A cancelled
-// transaction is run again from the reads, up to three times, then CONFLICT.
-// Returns the post as stored after the write.
+// transaction is run again from the reads (see `retryTransaction` for the
+// policy), then CONFLICT. Returns the post as stored after the write.
 const moderate = async (
   coreTable: CoreTable,
   userId: string,
@@ -203,7 +202,7 @@ const moderate = async (
   decide: (post: StoredPost, question: StoredPost) => Step,
 ): Promise<IDiscussionPost> => {
   const kind = kindOf(threadId, postId);
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  return retryTransaction<IDiscussionPost>(async () => {
     // Keyed by the course, so a post of another course is not found.
     const post = await getPost(
       coreTable,
@@ -232,7 +231,7 @@ const moderate = async (
     }
     const { op } = decide(post, question);
     if (!op) {
-      return toPost(post, userId);
+      return { committed: true, value: toPost(post, userId) };
     }
     let canceled: boolean;
     try {
@@ -260,10 +259,10 @@ const moderate = async (
           message: 'The post was not found after it was written',
         });
       }
-      return toPost(fresh, userId);
+      return { committed: true, value: toPost(fresh, userId) };
     }
-  }
-  throw transactionConflict();
+    return { committed: false };
+  });
 };
 
 const stateChange =

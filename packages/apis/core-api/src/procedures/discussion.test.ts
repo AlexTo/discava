@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { MAX_TRANSACTION_ATTEMPTS } from '@discava/common-server-utils/transaction-retry';
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { DiscussionInputError, postIdTime } from '@discava/core-table';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -586,12 +587,12 @@ describe('answerPrompt', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
-  it('retries a cancelled write up to three times, then conflicts', async () => {
+  it('retries a cancelled write with backoff, then conflicts', async () => {
     write.mockResolvedValue({ canceled: true });
     await expect(as(ME).answerPrompt(input)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
-    expect(write).toHaveBeenCalledTimes(3);
+    expect(write).toHaveBeenCalledTimes(MAX_TRANSACTION_ATTEMPTS);
   });
 });
 
@@ -666,10 +667,10 @@ describe('ask', () => {
     expect(write).toHaveBeenCalledTimes(1);
   });
 
-  it('retries a cancelled write up to three times, then conflicts', async () => {
+  it('retries a cancelled write with backoff, then conflicts', async () => {
     write.mockResolvedValue({ canceled: true });
     await expect(as(ME).ask(input)).rejects.toMatchObject({ code: 'CONFLICT' });
-    expect(write).toHaveBeenCalledTimes(3);
+    expect(write).toHaveBeenCalledTimes(MAX_TRANSACTION_ATTEMPTS);
   });
 
   it.each([

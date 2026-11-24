@@ -63,7 +63,7 @@ Primary key: pk `courseId`, `userId`; sk `lessonId`, `threadId`, `postId`. "Did 
 | `report` | `post.patch`: add the reporter to `reportedBy` (condition: `state = shown`, author is not the reporter, `size(reportedBy) < 20` or reporter already in it), set `reported`. At 20, a further report returns success without a write |
 | `dismiss` | `post.patch`: remove `reportedBy` and `reported` (condition: still reported) |
 
-A cancelled transaction is re-read and retried up to three times by the procedure, then `CONFLICT`, as the assignment and announcement procedures do; the precise reason (full thread, hidden meanwhile, not allowed) is decided on the re-read.
+A cancelled transaction is re-read and retried by the procedure — up to seven attempts with exponential backoff and full jitter (`retryTransaction` in `common-server-utils`), then `CONFLICT`, shared by the student and instructor APIs (the other APIs keep their own loops) — the precise reason (full thread, hidden meanwhile, not allowed) is decided on the re-read.
 
 **Post ids.** `newPostId()` (web-utils) mints a UUID v7 when a form opens. The helper accepts an id only if it is a UUID v7 whose time part is within 10 minutes of the server clock, sets `createdAt` from it, and creates only if the id is new. A reply's `threadId` must name an existing question of the same lesson (the `question.patch` condition fails otherwise).
 
