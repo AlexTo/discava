@@ -98,6 +98,8 @@ core-api's `payment.requestRefund` lets a student refund their own purchase, and
 - the order was paid through the Stripe account connected now, and payments are connected;
 - no refund has been requested for it yet;
 - the student hasn't completed the course;
+- the student has completed less than `REFUND_PROGRESS_LIMIT_PERCENT` (50) of it, computed when the request is made from their completions and the current curriculum (`readRefundLimits`), not read from the stored `progressPercent`;
+- none of the student's earlier orders for the course was refunded at their own request (`refundRequestedAt` set; an operator's refund or an automatic refund doesn't count);
 - it is within `REFUND_WINDOW_DAYS` (14) of payment.
 
 `requestRefund` asks Stripe to refund what's left of the amount, with an idempotency key built from the order ID, then sets `refundRequestedAt` on the order. It never moves the order or the enrolment itself: the `charge.refunded` that follows does. Stripe is called before the mark, so a crash between the two leaves a refund the notice still records, never a mark with no refund.
@@ -113,7 +115,7 @@ A dropped enrolment keeps its progress and completions. The student can come bac
 
 ### Terms
 
-The 14-day period is `REFUND_WINDOW_DAYS` in `helpers/order.ts` of core-table, and `payment.myOrder` returns it as `refundWindowDays` so the course page quotes the same number. A student's request is refused after completion; an operator's refund in Stripe is not subject to either term. Requests are refunded automatically, with no review. Certificates survive refunds.
+The 14-day period is `REFUND_WINDOW_DAYS` in `helpers/order.ts` of core-table, and `payment.myOrder` returns it as `refundWindowDays` so the course page quotes the same number. The 50% limit is `REFUND_PROGRESS_LIMIT_PERCENT` in the same file, returned as `refundProgressLimitPercent` by `payment.myOrder` and `course.publicView`, which also returns `refundWindowDays`, so the terms line states what the API applies. A student's request is refused after completion, once half the course is done, and for a course they were refunded for at their own request; `course.myEnrolment` returns `refundedBefore` so the page warns before a second purchase. An operator's refund in Stripe is not subject to either term. Requests are refunded automatically, with no review. Certificates survive refunds.
 
 ### A refund for a payment that doesn't match
 

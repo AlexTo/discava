@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   connection: undefined as any,
   open: undefined as any,
   orders: [] as any[],
+  completions: [] as string[],
   create: vi.fn(),
   startOrder: vi.fn(),
   attach: vi.fn(),
@@ -37,10 +38,34 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
             byStudentCourse: () => ({
               go: async () => ({ data: mocks.orders }),
             }),
+            primary: () => ({
+              go: async () => ({
+                data: mocks.completions.map((contentItemId) => ({
+                  contentItemId,
+                })),
+              }),
+            }),
           },
         }),
       },
     ),
+    // A four-item course.
+    collections: {
+      curriculum: () => ({
+        go: async () => ({
+          data: {
+            module: [{ moduleId: 'm1', visibility: 'visible' }],
+            lesson: [{ moduleId: 'm1', lessonId: 'l1', visibility: 'visible' }],
+            contentItem: ['i1', 'i2', 'i3', 'i4'].map((contentItemId) => ({
+              moduleId: 'm1',
+              lessonId: 'l1',
+              contentItemId,
+              visibility: 'visible',
+            })),
+          },
+        }),
+      }),
+    },
   })),
   getConnection: vi.fn(async () => mocks.connection),
   findOpenOrder: vi.fn(async () => mocks.open),
@@ -281,6 +306,7 @@ describe('refunds', () => {
       order: paid,
     };
     mocks.orders = [paid];
+    mocks.completions = [];
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -380,6 +406,65 @@ describe('refunds', () => {
       expect(mocks.mark).not.toHaveBeenCalled();
     });
 
+    it.each([
+      [
+        'half the course done',
+        { completions: ['i1', 'i2'] },
+        "A course can't be refunded after you have completed half of it",
+      ],
+      [
+        'an earlier refund at the student request',
+        {
+          orders: [
+            {
+              ...paid,
+              orderId: 'o0',
+              status: 'refunded',
+              refundReason: 'requested',
+              refundRequestedAt: PAID,
+            },
+            paid,
+          ],
+        },
+        "You were refunded for this course before, so this purchase can't be refunded",
+      ],
+    ])('refuses %s and never reaches Stripe', async (_, change, message) => {
+      Object.assign(mocks, change);
+      await expect(
+        caller.requestRefund({ courseId: 'c1' }),
+      ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED', message });
+      expect(mocks.refund).not.toHaveBeenCalled();
+      expect(mocks.mark).not.toHaveBeenCalled();
+    });
+
+    it('decides on the completions, not the stored progress', async () => {
+      mocks.db.enrolment = {
+        status: 'active',
+        orderId: 'o1',
+        progressPercent: 40,
+      };
+      mocks.completions = ['i1', 'i2'];
+      await expect(
+        caller.requestRefund({ courseId: 'c1' }),
+      ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+      expect(mocks.refund).not.toHaveBeenCalled();
+    });
+
+    it('refunds a student at a quarter of the course, and after an operator refund', async () => {
+      mocks.completions = ['i1'];
+      mocks.orders = [
+        {
+          ...paid,
+          orderId: 'o0',
+          status: 'refunded',
+          refundReason: 'requested',
+        },
+        paid,
+      ];
+      await caller.requestRefund({ courseId: 'c1' });
+      expect(mocks.refund).toHaveBeenCalledTimes(1);
+    });
+
     it('refuses when payments are not connected', async () => {
       mocks.connection = undefined;
       await expect(
@@ -421,6 +506,7 @@ describe('refunds', () => {
         paidAt: PAID,
         refundWindowDays: 14,
         refundableUntil: '2026-11-19T00:00:00.000Z',
+        refundProgressLimitPercent: 50,
         canRequestRefund: true,
       });
     });
@@ -454,6 +540,31 @@ describe('refunds', () => {
         status: 'refunded',
         canRequestRefund: false,
         refundedAt: NOW.toISOString(),
+      });
+    });
+
+    it('says progress and an earlier refund block a refund, as requestRefund decides', async () => {
+      mocks.completions = ['i1', 'i2'];
+      await expect(caller.myOrder({ courseId: 'c1' })).resolves.toMatchObject({
+        canRequestRefund: false,
+        refundBlockedBy: 'progress-limit',
+        refundProgressLimitPercent: 50,
+      });
+
+      mocks.completions = [];
+      mocks.orders = [
+        {
+          ...paid,
+          orderId: 'o0',
+          status: 'refunded',
+          refundReason: 'requested',
+          refundRequestedAt: PAID,
+        },
+        paid,
+      ];
+      await expect(caller.myOrder({ courseId: 'c1' })).resolves.toMatchObject({
+        canRequestRefund: false,
+        refundBlockedBy: 'refunded-before',
       });
     });
 

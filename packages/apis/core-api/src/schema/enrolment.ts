@@ -45,6 +45,9 @@ export type IMyEnrolmentInput = z.output<typeof MyEnrolmentInputSchema>;
 // purchase (it names an order), without exposing the order.
 export const MyCourseEnrolmentSchema = EnrolmentSchema.extend({
   paidFor: z.boolean(),
+  // An earlier order of theirs for this course was refunded at their own
+  // request, so a new purchase can't be refunded the same way.
+  refundedBefore: z.boolean(),
 });
 
 // null when the caller isn't enrolled in the course.

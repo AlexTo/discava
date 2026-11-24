@@ -94,6 +94,19 @@ describe('the Branding page', () => {
     ).toBeInTheDocument();
   });
 
+  it('stops saying there is nothing to save once something is edited', async () => {
+    const { user } = open();
+    await screen.findByText('Using the default Discava brand');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await screen.findByText('Nothing to save: the branding is as saved.');
+
+    await user.type(screen.getByLabelText('Name'), 'x');
+
+    expect(
+      screen.queryByText('Nothing to save: the branding is as saved.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('says who last changed it', async () => {
     open({
       'branding.get': () => ({

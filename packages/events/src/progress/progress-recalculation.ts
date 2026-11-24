@@ -13,15 +13,12 @@ import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
 import {
   CURRICULUM_ENTITIES,
   createCoreTableService,
+  loadCurriculum,
 } from '@discava/core-table';
 import middy from '@middy/core';
 import { z } from 'zod';
 import { sqsToStreamRecords } from '../router/sqs-stream-records.js';
-import {
-  listEnrolledStudents,
-  loadCurriculum,
-  recalculateStudent,
-} from './recalculate.js';
+import { listEnrolledStudents, recalculateStudent } from './recalculate.js';
 
 process.env.POWERTOOLS_METRICS_NAMESPACE = 'ProgressRecalculation';
 process.env.POWERTOOLS_SERVICE_NAME = 'ProgressRecalculation';

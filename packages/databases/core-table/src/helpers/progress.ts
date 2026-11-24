@@ -4,7 +4,10 @@
  */
 import type { EntityItem } from 'electrodb';
 import type { createProgressEntity } from '../entities/progress.js';
+import type { createCoreTableService } from '../service.js';
 import { filterEffectivelyVisible } from './curriculum.js';
+
+type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
 export type LessonStatus = NonNullable<
   EntityItem<Awaited<ReturnType<typeof createProgressEntity>>>['status']
@@ -24,6 +27,22 @@ export interface Curriculum {
     contentItemId: string;
   })[];
 }
+
+// The whole curriculum of a course, every page: a course's curriculum can
+// exceed a single 1 MB query page.
+export const loadCurriculum = async (
+  coreTable: CoreTable,
+  courseId: string,
+): Promise<Curriculum> => {
+  const { data } = await coreTable.collections
+    .curriculum({ courseId })
+    .go({ pages: 'all' });
+  return {
+    modules: data.module,
+    lessons: data.lesson,
+    contentItems: data.contentItem,
+  };
+};
 
 export interface StudentProgress {
   // Each effectively visible lesson that has an effectively visible item.

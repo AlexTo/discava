@@ -57,8 +57,15 @@ export const MyOrderOutputSchema = z
     refundableUntil: z.string(),
     canRequestRefund: z.boolean(),
     refundBlockedBy: z
-      .enum(['window-ended', 'completed', 'other-account'])
+      .enum([
+        'window-ended',
+        'completed',
+        'progress-limit',
+        'refunded-before',
+        'other-account',
+      ])
       .optional(),
+    refundProgressLimitPercent: z.number(),
     refundRequestedAt: z.string().optional(),
     refundedAt: z.string().optional(),
   })
