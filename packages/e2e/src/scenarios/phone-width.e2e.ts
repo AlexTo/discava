@@ -258,6 +258,20 @@ test('search results come first on a phone, with the filters collapsed', async (
     await screenshot(page, 'course catalogue at phone width');
   });
 
+  await test.step('the category chips on /courses stay in one scrolling row', async () => {
+    await page.goto(`${PORTALS.student}/courses`);
+    const chips = page
+      .getByRole('group', { name: 'Course categories' })
+      .getByRole('link');
+    await expect(chips.first()).toBeVisible();
+    const tops = await chips.evaluateAll((els) =>
+      els.map((el) => Math.round(el.getBoundingClientRect().top)),
+    );
+    expect(new Set(tops).size).toBe(1);
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'category chips in one row at phone width');
+  });
+
   await test.step('the filters open on request', async () => {
     await page.goto(
       `${PORTALS.student}/search?query=${encodeURIComponent(title)}`,
@@ -714,6 +728,20 @@ test('the course editor fits a phone', async ({ page }) => {
     await content.getByRole('button', { name: `Edit ${quizTitle}` }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
+    for (const radio of await dialog
+      .getByRole('radio', { name: /^Option \d is correct$/ })
+      .all()) {
+      await expectTargetAtLeast24(radio);
+    }
+    await expectTargetAtLeast24(
+      dialog.getByRole('checkbox', { name: 'Unlimited' }),
+    );
+    await expectTargetAtLeast24(
+      dialog.getByRole('checkbox', {
+        name: 'Shuffle the options for each student',
+      }),
+    );
+    await screenshot(page, 'quiz builder radios and checkboxes');
     await dialog.getByRole('button', { name: 'Collapse Question 1' }).click();
     await expectDialogFits(dialog);
     await expectOnScreen(dialog.getByRole('button', { name: 'Save quiz' }));

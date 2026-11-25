@@ -75,6 +75,15 @@ test('an instructor chooses caption languages and every video gets them', async 
     await chooseCaptionLanguages(instructor, course, ['Spanish', 'French']);
     await screenshot(instructor, 'caption-languages-chosen');
 
+    // A fresh load of the editor shows the saved choice, from the one request.
+    await instructor.reload();
+    await expect(
+      instructor
+        .getByRole('region', { name: 'Caption languages' })
+        .getByRole('checkbox', { name: /^Spanish / }),
+    ).toBeChecked();
+    await screenshot(instructor, 'caption-languages-after-reload');
+
     const dialog = await expectCaptionTrackListed(
       instructor,
       'Video one',

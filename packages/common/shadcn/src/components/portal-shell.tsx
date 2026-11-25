@@ -51,6 +51,7 @@ export const getBreadcrumbs = (
   defaultBreadcrumb: string,
   overrides: Record<string, string>,
   segmentLabels: Record<string, string> = {},
+  fallbackLabels: Record<string, string> = {},
 ): Crumb[] => {
   const segments = [
     defaultBreadcrumb,
@@ -68,7 +69,11 @@ export const getBreadcrumbs = (
 
     return {
       href: routeExists(href) ? href : undefined,
-      text: overrides[href] ?? segmentLabels[segment] ?? segment,
+      text:
+        overrides[href] ??
+        segmentLabels[segment] ??
+        fallbackLabels[segment] ??
+        segment,
     };
   });
 };
@@ -92,6 +97,13 @@ export interface PortalShellProps {
    * same between renders (a module constant).
    */
   segmentLabels?: Record<string, string>;
+  /**
+   * Neutral labels for path parameters (param name -> label, e.g. courseId ->
+   * 'Course'), shown for a crumb whose title is not available (still loading
+   * or failed) so a raw ID never reaches the breadcrumb. Keep the object the
+   * same between renders (a module constant).
+   */
+  paramLabels?: Record<string, string>;
   /** Shown in the header before the notification bell. */
   headerActions?: React.ReactNode;
   /** Links only this portal has in the user menu. A module constant. */
@@ -149,6 +161,7 @@ export const PortalShell = ({
   label,
   navItems,
   segmentLabels,
+  paramLabels,
   headerActions,
   userMenuItems,
   children,
@@ -203,15 +216,28 @@ export const PortalShell = ({
         depth(route.fullPath) === depth(href)
       );
     };
+    const matches = router.matchRoutes(pathname);
+    const params = (matches[matches.length - 1]?.params ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const fallbackLabels: Record<string, string> = {};
+    for (const [name, value] of Object.entries(params)) {
+      const fallback = paramLabels?.[name];
+      if (fallback && typeof value === 'string') {
+        fallbackLabels[value] = fallback;
+      }
+    }
     const breadcrumbs = getBreadcrumbs(
       routeExists,
       pathname,
       'Home',
       overrides,
       segmentLabels,
+      fallbackLabels,
     );
     setActiveBreadcrumbs(breadcrumbs);
-  }, [router, pathname, overrides, segmentLabels]);
+  }, [router, pathname, overrides, segmentLabels, paramLabels]);
 
   return (
     <BreadcrumbOverrideContext.Provider value={breadcrumbOverrideContextValue}>
