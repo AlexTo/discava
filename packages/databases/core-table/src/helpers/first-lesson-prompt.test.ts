@@ -156,7 +156,7 @@ describe('answering and dismissing against an in-memory table', () => {
   const answerOp = (
     author = student,
     body = 'I want to build things',
-  ): DiscussionOperation => ({
+  ): Extract<DiscussionOperation, { type: 'answerPrompt' }> => ({
     ...scope,
     type: 'answerPrompt',
     postId: nextId(),

@@ -111,7 +111,7 @@ const remove: ReviewWrite = {
 const itemsFor = (write: ReviewWrite): TransactItem[] =>
   coreTable.transaction
     .write((entities) => reviewWrites(entities, write))
-    .params().TransactItems;
+    .params().TransactItems as unknown as TransactItem[];
 
 const requestOf = (item: TransactItem) =>
   (item.ConditionCheck ??

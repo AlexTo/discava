@@ -470,6 +470,7 @@ const fakeCoreTable = (records: {
   videoAnswerSheets?: Record<string, unknown>[];
   progress?: Record<string, unknown>[];
   funnelMarkers?: Record<string, unknown>[];
+  quizSummaries?: Record<string, unknown>[];
   stored?: Record<string, Record<string, unknown>[]>;
 }) => {
   const deletes: unknown[] = [];
