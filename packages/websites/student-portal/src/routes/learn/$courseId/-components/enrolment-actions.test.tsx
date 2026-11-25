@@ -1115,6 +1115,33 @@ describe('EnrolmentActions: a discount code', () => {
     ).toBeEnabled();
   });
 
+  it('applying a working code clears the alert of a refused one', async () => {
+    let refused = true;
+    const { user } = renderPriced({
+      'coupon.preview': () => preview,
+      'payment.checkout': () => {
+        if (refused) {
+          throw new ApiError('PRECONDITION_FAILED', 'This code has expired');
+        }
+        return { checkoutUrl: 'https://pay.test/s-1' };
+      },
+    });
+    await apply(user);
+    await user.click(await screen.findByRole('button', { name: 'Pay $16.00' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't start payment",
+    );
+
+    refused = false;
+    const field = screen.getByLabelText('Discount code');
+    await user.clear(field);
+    await user.type(field, 'spring-30');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(await screen.findByLabelText('Price with code')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('a start without a code sends no couponCode', async () => {
     vi.stubGlobal('location', { ...window.location, assign: vi.fn() });
     const { user, calls } = renderPriced({
@@ -1191,6 +1218,23 @@ describe('EnrolmentActions: a discount code', () => {
         await screen.findByRole('button', { name: 'Buy now' }),
       ).toBeEnabled();
       expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('words a failure for enrolling, not paying', async () => {
+      const { user } = renderPriced({
+        'coupon.preview': () => freePreview,
+        'payment.checkout': () => {
+          throw new ApiError('PRECONDITION_FAILED', 'This code has expired');
+        },
+      });
+      await apply(user, 'free');
+      await user.click(
+        await screen.findByRole('button', { name: 'Enrol for free' }),
+      );
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent("Couldn't enrol you");
+      expect(alert).not.toHaveTextContent(/payment/i);
     });
   });
 
