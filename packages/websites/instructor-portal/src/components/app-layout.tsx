@@ -37,6 +37,14 @@ const segmentLabels = {
   notifications: 'Notification settings',
 };
 
+// Shown for a path parameter whose title hasn't loaded (or failed to), so the
+// breadcrumb never shows an ID.
+const paramLabels = {
+  courseId: 'Course',
+  contentItemId: 'Assignment',
+  userId: 'Student',
+};
+
 const userMenuItems: UserMenuItem[] = [
   { label: 'Public profile', to: '/profile' },
 ];
@@ -56,6 +64,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       label="Instructor"
       navItems={navItems}
       segmentLabels={segmentLabels}
+      paramLabels={paramLabels}
       userMenuItems={userMenuItems}
       headerActions={
         studentPortal ? (
