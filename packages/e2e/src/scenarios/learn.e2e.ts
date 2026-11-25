@@ -68,13 +68,17 @@ test('an instructor publishes a course, and a student completes it', async ({
     await student.goForward();
     await expect(student).toHaveTitle(`${course} · Discava`);
     // A screen reader in browse mode follows a link with a bare click: no
-    // key or pointer press first. Focus still moves to the page's heading.
-    await student.goBack();
-    await expect(student).toHaveTitle(`Search: ${course} · Discava`);
-    await student.getByRole('link', { name: course }).dispatchEvent('click');
-    await expect(student).toHaveTitle(`${course} · Discava`);
-    await expect(student.getByRole('heading', { level: 1 })).toBeFocused();
-    await screenshot(student, 'course page after a screen reader click');
+    // key or pointer press first. A fresh page has had none, so only the
+    // click listener lets focus move to the page's heading.
+    const reader = await browser.newPage();
+    await reader.goto(
+      `${PORTALS.student}/search?query=${encodeURIComponent(course)}`,
+    );
+    await reader.getByRole('link', { name: course }).dispatchEvent('click');
+    await expect(reader).toHaveTitle(`${course} · Discava`);
+    await expect(reader.getByRole('heading', { level: 1 })).toBeFocused();
+    await screenshot(reader, 'course page after a screen reader click');
+    await reader.close();
     await enrol(student, newUser('Sam', ['student']));
     await expect(
       student.getByText('0% complete', { exact: true }),
