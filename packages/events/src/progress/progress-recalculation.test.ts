@@ -164,6 +164,36 @@ describe('studentsToRecalculate', () => {
     expect(asLists(result)).toEqual({ 'course-1': ['s5', 's1', 's2'] });
   });
 
+  const enrolmentChange = (before: string, after: string, userId = 's1') =>
+    record(
+      'MODIFY',
+      { __edb_e__: 'enrolment', courseId: 'course-1', userId, status: before },
+      { __edb_e__: 'enrolment', courseId: 'course-1', userId, status: after },
+    );
+
+  it('recalculates a student whose dropped enrolment is active again', async () => {
+    const result = await studentsToRecalculate(
+      [enrolmentChange('dropped', 'active')],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({ 'course-1': ['s1'] });
+  });
+
+  it.each([
+    ['dropped', 'completed'],
+    ['active', 'completed'],
+    ['active', 'dropped'],
+    ['active', 'active'],
+  ])('ignores an enrolment going from %s to %s', async (before, after) => {
+    const result = await studentsToRecalculate(
+      [enrolmentChange(before, after)],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({});
+  });
+
   it('ignores records of other entities', async () => {
     const result = await studentsToRecalculate(
       [

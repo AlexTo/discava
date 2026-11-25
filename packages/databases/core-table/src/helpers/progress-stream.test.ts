@@ -35,6 +35,8 @@ describe('matchesProgressStreamFilters', () => {
     ['a new quiz summary', record('INSERT', 'NewImage', 'quizSummary')],
     ['a changed quiz summary', record('MODIFY', 'NewImage', 'quizSummary')],
     ['a course edit', record('MODIFY', 'NewImage', 'course')],
+    // The recalculation keeps only a dropped enrolment becoming active.
+    ['a changed enrolment', record('MODIFY', 'NewImage', 'enrolment')],
     [
       'a changed submission',
       record('MODIFY', 'NewImage', 'assignmentSubmission'),
@@ -46,7 +48,8 @@ describe('matchesProgressStreamFilters', () => {
   it.each([
     // The recalculation's own writes, which would otherwise trigger it again.
     ['a progress write', record('MODIFY', 'NewImage', 'progress')],
-    ['an enrolment write', record('MODIFY', 'NewImage', 'enrolment')],
+    ['a new enrolment', record('INSERT', 'NewImage', 'enrolment')],
+    ['a removed enrolment', record('REMOVE', 'OldImage', 'enrolment')],
     ['a removed completion', record('REMOVE', 'OldImage', 'itemCompletion')],
     ['a new lesson', record('INSERT', 'NewImage', 'lesson')],
     ['a new preview', record('INSERT', 'NewImage', 'coursePreview')],
@@ -86,16 +89,12 @@ describe('matchesProgressStreamFilters', () => {
       [`a removed ${entity}`, record('REMOVE', 'OldImage', entity)],
     ]),
     // Payments: an order's writes and the Stripe connection records change no
-    // item, so no progress; an enrolment restored or ended by a refund is an
-    // enrolment write, which is already left out above.
+    // item, so no progress; an enrolment restored by a re-purchase is let through
+    // above, and the recalculation keeps only that change.
     ...['order', 'paymentConnection', 'paymentChange'].flatMap((entity) => [
       [`a new ${entity}`, record('INSERT', 'NewImage', entity)],
       [`a changed ${entity}`, record('MODIFY', 'NewImage', entity)],
     ]),
-    [
-      'an enrolment restored or ended',
-      record('MODIFY', 'NewImage', 'enrolment'),
-    ],
     ['a record with no images', { eventName: 'MODIFY', dynamodb: {} }],
   ])('leaves out %s', (_, streamRecord) => {
     expect(matchesProgressStreamFilters(streamRecord)).toBe(false);

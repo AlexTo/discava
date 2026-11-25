@@ -107,6 +107,14 @@ const changesSubmissionGrade = (record: StreamRecord) => {
   );
 };
 
+// An enrolment that was dropped (refunded, or left) is active again, so the
+// progress it kept while dropped is stale. The recalculation's own enrolment
+// writes (progressPercent, completion) never change a dropped status.
+const reactivatesEnrolment = (record: StreamRecord) =>
+  record.eventName === 'MODIFY' &&
+  record.dynamodb.OldImage?.status === 'dropped' &&
+  record.dynamodb.NewImage?.status === 'active';
+
 // The certificate rules changed, or certificates were switched on or off.
 const changesCertificateRules = (record: StreamRecord) => {
   const before: Image = record.dynamodb.OldImage;
@@ -120,7 +128,7 @@ const changesCertificateRules = (record: StreamRecord) => {
 };
 
 // The students to recalculate, per course: the student of each completion
-// recorded, quiz pass improved or submission regraded, and everyone enrolled in a course whose
+// recorded, quiz pass improved, submission regraded or enrolment re-activated, and everyone enrolled in a course whose
 // visible curriculum, certificate criteria or assessed quizzes changed. Each
 // is recalculated once per batch, however many records name them.
 export const studentsToRecalculate = async (
@@ -148,6 +156,10 @@ export const studentsToRecalculate = async (
       }
     } else if (entity === 'assignmentSubmission') {
       if (changesSubmissionGrade(record)) {
+        add(String(image?.courseId), [String(image?.userId)]);
+      }
+    } else if (entity === 'enrolment') {
+      if (reactivatesEnrolment(record)) {
         add(String(image?.courseId), [String(image?.userId)]);
       }
     } else if (entity === 'course') {
