@@ -199,6 +199,10 @@ export const isConnectNotAllowed = (error: unknown): boolean =>
   (error instanceof Stripe.errors.StripeInvalidRequestError &&
     CONNECT_NOT_ENABLED_TEXT.test(error.message));
 
+/** Whether Stripe rejected the request itself (a bad parameter or resource). */
+export const isInvalidRequest = (error: unknown): boolean =>
+  error instanceof Stripe.errors.StripeInvalidRequestError;
+
 /** Whether Stripe has no such resource, such as a deleted connected account. */
 export const isResourceMissing = (error: unknown): boolean =>
   error instanceof Stripe.errors.StripeInvalidRequestError &&

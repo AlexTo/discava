@@ -34,6 +34,7 @@ import { createStripe } from './client.js';
 import {
   classifyTransferError,
   isConnectNotAllowed,
+  isInvalidRequest,
   isResourceMissing,
   mapAccountStatus,
   PaymentAccountMismatchError,
@@ -270,6 +271,13 @@ describe('isConnectNotAllowed / isResourceMissing', () => {
       false,
     );
     expect(isConnectNotAllowed(new Error('x'))).toBe(false);
+  });
+
+  it('finds any invalid request', () => {
+    expect(isInvalidRequest(invalid('Not a valid URL', 'url_invalid'))).toBe(
+      true,
+    );
+    expect(isInvalidRequest(new Error('x'))).toBe(false);
   });
 
   it('finds resource_missing only', () => {

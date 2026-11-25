@@ -5,6 +5,7 @@
 import { getAllowedOrigin } from '@discava/common-server-utils/cors';
 import {
   isConnectNotAllowed,
+  isInvalidRequest,
   isResourceMissing,
   mapAccountStatus,
   PaymentAccountMismatchError,
@@ -202,7 +203,7 @@ export const startOnboarding = courseProcedure
         error.name === 'StripeInvalidRequestError'
       ) {
         ctx.logger?.error?.('Stripe rejected the payout onboarding request', {
-          errorName: error.name,
+          errorName: 'StripeInvalidRequestError',
           code: (error as { code?: string }).code,
         });
       }
