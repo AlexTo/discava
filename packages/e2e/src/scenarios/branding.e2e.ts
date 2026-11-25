@@ -471,6 +471,45 @@ test('the brand reaches every portal and public page, and the name can be hidden
   });
 });
 
+test('Save waits while a logo is still uploading', async ({ browser }) => {
+  const page = await browser.newPage();
+  // Holds the upload to storage until the scenario lets it go.
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/*', async (route) => {
+    if (route.request().method() === 'PUT') {
+      await released;
+    }
+    await route.continue();
+  });
+  await page.goto(`${PORTALS.admin}/settings/branding`);
+  await signIn(page, newUser('Cara', ['admin']));
+
+  await test.step('Save is held, with the reason, while the logo uploads', async () => {
+    await page.getByLabel('Upload logo').setInputFiles({
+      name: 'logo.svg',
+      mimeType: 'image/svg+xml',
+      buffer: LOGO_SVG,
+    });
+    await expect(page.getByText('Uploading…')).toBeVisible();
+    await page.getByLabel('Name', { exact: true }).fill('Draft name');
+    const held = page.getByRole('button', {
+      name: 'Wait for the upload to finish…',
+    });
+    await expect(held).toHaveAttribute('aria-disabled', 'true');
+    await screenshot(page, 'save held while the logo uploads');
+  });
+
+  await test.step('Save is available again once the upload has finished', async () => {
+    release();
+    await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
+    await expect(page.getByText('Uploading…')).toHaveCount(0);
+    await screenshot(page, 'save available after the upload');
+  });
+});
+
 test('an administrator resets the brand to the default', async ({
   browser,
 }) => {
