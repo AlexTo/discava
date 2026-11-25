@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   matchesProgressStreamFilters,
   PROGRESS_STREAM_FILTERS,
+  type ProgressStreamRecord,
 } from './progress-stream.js';
 
 const record = (
@@ -98,7 +99,9 @@ describe('matchesProgressStreamFilters', () => {
     ],
     ['a record with no images', { eventName: 'MODIFY', dynamodb: {} }],
   ])('leaves out %s', (_, streamRecord) => {
-    expect(matchesProgressStreamFilters(streamRecord)).toBe(false);
+    expect(
+      matchesProgressStreamFilters(streamRecord as ProgressStreamRecord),
+    ).toBe(false);
   });
 });
 
