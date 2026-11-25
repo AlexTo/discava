@@ -44,15 +44,9 @@ export function ResponsivePanel({
         >
           <span className="shrink-0">{label}</span>
           {summary ? (
-            <>
-              <span aria-hidden="true" className="shrink-0">
-                ·
-              </span>
-              <span className="sr-only">, </span>
-              <span className="min-w-0 flex-1 truncate text-left font-normal text-muted-foreground">
-                {summary}
-              </span>
-            </>
+            <span className="min-w-0 flex-1 truncate text-left font-normal text-muted-foreground">
+              {summary}
+            </span>
           ) : (
             <span className="flex-1" />
           )}

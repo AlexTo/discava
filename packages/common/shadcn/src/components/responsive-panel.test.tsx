@@ -36,17 +36,6 @@ describe('ResponsivePanel', () => {
     expect(trigger).toHaveTextContent('2 active');
   });
 
-  it('separates the label from the summary in the accessible name', () => {
-    render(
-      <ResponsivePanel label="Filters" summary="1 active">
-        <p>content</p>
-      </ResponsivePanel>,
-    );
-    expect(
-      screen.getByRole('button', { name: 'Filters, 1 active' }),
-    ).toBeInTheDocument();
-  });
-
   it('hides the trigger and shows the content from the lg breakpoint', () => {
     render(
       <ResponsivePanel label="Filters">
