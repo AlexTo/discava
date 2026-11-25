@@ -107,9 +107,14 @@ test('completing the last item while the curriculum changes issues one certifica
 // The reminder and a LinkedIn click for the same certificate at the same
 // moment (FR-023): the claim is conditioned on no click and the click is
 // recorded whatever the claim did, so each certificate ends either clicked
-// with no reminder, or reminded no later than the click.
+// with no reminder, or clicked with a reminder whose claim won the condition
+// (it was written before the click was). Both writes take their timestamp
+// before they write, and the Lambda and the API have separate clocks, so the
+// stored times can sort either way by about the length of a request; the test
+// allows for that rather than comparing them exactly.
 test('a reminder and a LinkedIn click at the same moment never leave a reminder after the click', async () => {
   const ROUNDS = 4;
+  const CLOCK_TOLERANCE_MS = 5_000;
   const coreTable = await createCoreTableService();
 
   for (let round = 0; round < ROUNDS; round++) {
@@ -152,7 +157,13 @@ test('a reminder and a LinkedIn click at the same moment never leave a reminder 
       'the click is always recorded',
     ).toBeTruthy();
     if (stored?.reminderSentAt) {
-      expect(stored.reminderSentAt <= stored.linkedInClickedAt!).toBe(true);
+      const lateByMs =
+        Date.parse(stored.reminderSentAt) -
+        Date.parse(stored.linkedInClickedAt!);
+      expect(
+        lateByMs,
+        'the reminder is not stamped later than the click by more than the clock tolerance',
+      ).toBeLessThanOrEqual(CLOCK_TOLERANCE_MS);
     }
   }
 });
