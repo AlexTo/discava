@@ -20,11 +20,11 @@ export const Route = createFileRoute(
 
 function RouteComponent() {
   const { courseId } = Route.useParams();
-  useBreadcrumbLabel('Course', `/my-courses/${courseId}`);
   // Shares the course editor's cached answer.
   const courseQuery = useQuery(
     useInstructorApi().course.view.queryOptions({ courseId }),
   );
+  useBreadcrumbLabel(courseQuery.data?.title, `/my-courses/${courseId}`);
   usePageTitle('Reviews', courseQuery.data?.title);
 
   return (

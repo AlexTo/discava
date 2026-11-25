@@ -7,7 +7,10 @@ import { useBrand } from '@discava/common-web-utils/brand';
 import { Link, useLocation, useRouter } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import * as React from 'react';
-import { BreadcrumbOverrideContext } from './breadcrumb-label';
+import {
+  BreadcrumbOverrideContext,
+  type CrumbOptions,
+} from './breadcrumb-label';
 import { NotificationBell, type Portal } from './notification-bell-container';
 import { RouteAnnouncer } from './route-announcer';
 import { MAIN_CONTENT_ID, SkipLink } from './skip-link';
@@ -52,13 +55,15 @@ export const getBreadcrumbs = (
   overrides: Record<string, string>,
   segmentLabels: Record<string, string> = {},
   fallbackLabels: Record<string, string> = {},
+  crumbOptions: Record<string, CrumbOptions> = {},
 ): Crumb[] => {
   const segments = [
     defaultBreadcrumb,
     ...pathName.split('/').filter((segment) => segment !== ''),
   ];
 
-  return segments.map((segment, i) => {
+  const crumbs: Crumb[] = [];
+  segments.forEach((segment, i) => {
     const href =
       i === 0
         ? '/'
@@ -67,15 +72,18 @@ export const getBreadcrumbs = (
             .join('/')
             .replace('//', '/')}`;
 
-    return {
-      href: routeExists(href) ? href : undefined,
+    const options = crumbOptions[href];
+    if (options?.hidden) return;
+    crumbs.push({
+      href: options?.href ?? (routeExists(href) ? href : undefined),
       text:
         overrides[href] ??
         segmentLabels[segment] ??
         fallbackLabels[segment] ??
         segment,
-    };
+    });
   });
+  return crumbs;
 };
 
 export interface PortalNavItem {
@@ -191,10 +199,33 @@ export const PortalShell = ({
     [],
   );
 
+  const [crumbOptions, setCrumbOptionsState] = React.useState<
+    Record<string, CrumbOptions>
+  >({});
+
+  const setCrumbOptions = React.useCallback(
+    (path: string, options: CrumbOptions | undefined) => {
+      setCrumbOptionsState((prev) => {
+        if (options === undefined) {
+          if (!(path in prev)) return prev;
+          const next = { ...prev };
+          delete next[path];
+          return next;
+        }
+        const old = prev[path];
+        if (old?.href === options.href && old?.hidden === options.hidden) {
+          return prev;
+        }
+        return { ...prev, [path]: options };
+      });
+    },
+    [],
+  );
+
   // Memoized: consumers (useBreadcrumbLabel) depend on this identity.
   const breadcrumbOverrideContextValue = React.useMemo(
-    () => ({ setOverride }),
-    [setOverride],
+    () => ({ setOverride, setCrumbOptions }),
+    [setOverride, setCrumbOptions],
   );
 
   React.useEffect(() => {
@@ -235,9 +266,10 @@ export const PortalShell = ({
       overrides,
       segmentLabels,
       fallbackLabels,
+      crumbOptions,
     );
     setActiveBreadcrumbs(breadcrumbs);
-  }, [router, pathname, overrides, segmentLabels, paramLabels]);
+  }, [router, pathname, overrides, crumbOptions, segmentLabels, paramLabels]);
 
   return (
     <BreadcrumbOverrideContext.Provider value={breadcrumbOverrideContextValue}>

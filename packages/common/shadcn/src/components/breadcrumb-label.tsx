@@ -10,7 +10,18 @@ import { createContext, useContext, useEffect } from 'react';
 // Keyed by pathname so PortalShell can look an override up per-crumb.
 export const BreadcrumbOverrideContext = createContext<{
   setOverride: (pathname: string, label: string | undefined) => void;
+  setCrumbOptions: (
+    pathname: string,
+    options: CrumbOptions | undefined,
+  ) => void;
 } | null>(null);
+
+// How a crumb is shown, beyond its label: `href` links it somewhere other than
+// its own path (which may have no page), `hidden` drops it from the trail.
+export interface CrumbOptions {
+  href?: string;
+  hidden?: boolean;
+}
 
 // `path` labels a crumb above the current page (a course, say), for pages
 // that sit under it without rendering inside its layout. It defaults to the
@@ -25,4 +36,19 @@ export function useBreadcrumbLabel(label: string | undefined, path?: string) {
     ctx.setOverride(pathname, label);
     return () => ctx.setOverride(pathname, undefined);
   }, [ctx, pathname, label]);
+}
+
+// Changes how the crumb at `path` links or whether it shows, for a page whose
+// trail skips a level (an assignment crumb that opens its submissions list in
+// place of a separate "Submissions" crumb). Pass a stable `options`, or one
+// whose fields are primitives.
+export function useBreadcrumbOptions(path: string, options: CrumbOptions) {
+  const ctx = useContext(BreadcrumbOverrideContext);
+  const { href, hidden } = options;
+
+  useEffect(() => {
+    if (!ctx) return;
+    ctx.setCrumbOptions(path, { href, hidden });
+    return () => ctx.setCrumbOptions(path, undefined);
+  }, [ctx, path, href, hidden]);
 }

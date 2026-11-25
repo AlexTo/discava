@@ -9,6 +9,7 @@ import { renderWithInstructorApi } from '../../../../../../../test/render-with-i
 // The breadcrumb needs the portal shell's router and context.
 vi.mock('@discava/common-shadcn/components/breadcrumb-label', () => ({
   useBreadcrumbLabel: () => {},
+  useBreadcrumbOptions: () => {},
 }));
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const { mockRouter } = await import('@discava/common-web-utils/testing');

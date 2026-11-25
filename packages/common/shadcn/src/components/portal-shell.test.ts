@@ -64,6 +64,34 @@ describe('getBreadcrumbs', () => {
     ]);
   });
 
+  it('lets an assignment crumb open the submissions list and drops the "Submissions" crumb', () => {
+    const base = '/my-courses/c1/assignments/a1/submissions';
+    const crumbs = getBreadcrumbs(
+      (href) => href !== '/my-courses/c1/assignments/a1',
+      `${base}/u1`,
+      'Home',
+      {
+        '/my-courses/c1': 'Intro to Rust',
+        '/my-courses/c1/assignments/a1': 'Walk assignment',
+        [`${base}/u1`]: 'Sabine',
+      },
+      { 'my-courses': 'My Courses', assignments: 'Assignments' },
+      {},
+      {
+        '/my-courses/c1/assignments/a1': { href: base },
+        [base]: { hidden: true },
+      },
+    );
+    expect(crumbs).toEqual([
+      { href: '/', text: 'Home' },
+      { href: '/my-courses', text: 'My Courses' },
+      { href: '/my-courses/c1', text: 'Intro to Rust' },
+      { href: '/my-courses/c1/assignments', text: 'Assignments' },
+      { href: base, text: 'Walk assignment' },
+      { href: `${base}/u1`, text: 'Sabine' },
+    ]);
+  });
+
   it('never gives a crumb href="#"', () => {
     const crumbs = getBreadcrumbs(() => false, '/a/b', 'Home', {});
     expect(crumbs.some((c) => c.href === '#')).toBe(false);
