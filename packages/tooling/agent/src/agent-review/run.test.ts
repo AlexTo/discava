@@ -33,6 +33,7 @@ interface Scenario {
   pr?: { state?: string; sha?: string; labels?: string[] };
   statuses?: { context: string; state: string }[];
   dryRun?: boolean;
+  agentApp?: string;
 }
 
 const runScenario = (scenario: Scenario) => {
@@ -44,6 +45,7 @@ const runScenario = (scenario: Scenario) => {
       review: {
         body: BODY,
         commit_id: SHA,
+        user: { login: 'AlexTo' },
         author_association: 'OWNER',
         html_url: 'https://github.com/AlexTo/discava/pull/362#review-1',
         ...scenario.review,
@@ -67,6 +69,7 @@ const runScenario = (scenario: Scenario) => {
       GITHUB_REPOSITORY: REPOSITORY,
       GITHUB_EVENT_PATH: eventPath,
       ...(scenario.dryRun && { DRY_RUN: 'true' }),
+      ...(scenario.agentApp && { AGENT_APP_LOGIN: scenario.agentApp }),
     },
     log: (message) => logs.push(message),
     gh: (args) => {
@@ -166,6 +169,17 @@ describe('a review asking for changes on an agent pull request', () => {
     expect(
       runScenario({ review: { author_association: 'NONE' } }).written,
     ).toEqual([]);
+  });
+
+  it('writes the status for a review from the AGENT_APP_LOGIN app, and only that', () => {
+    const review = {
+      user: { login: 'agent[bot]' },
+      author_association: 'NONE',
+    };
+    expect(runScenario({ review, agentApp: 'agent[bot]' }).written).not.toEqual(
+      [],
+    );
+    expect(runScenario({ review }).written).toEqual([]);
   });
 
   it('writes nothing for an edited review', () => {
