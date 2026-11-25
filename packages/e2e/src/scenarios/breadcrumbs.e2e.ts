@@ -125,12 +125,13 @@ test('the instructor portal breadcrumbs and links lead somewhere real', async ({
   page,
 }) => {
   const ASSIGNMENT = 'Breadcrumb essay';
+  const COURSE = uniqueName('E2E crumbs course');
   const ivy = newUser('Ivy', ['instructor']);
   const sam = newUser('Sam', ['student']);
   const instructor = await apiUserFor(ivy);
   const samApi = await apiUserFor(sam);
   const ref = await createUploadAssignmentCourse(instructor, {
-    courseTitle: uniqueName('E2E crumbs course'),
+    courseTitle: COURSE,
     assignmentTitle: ASSIGNMENT,
   });
   await samApi.core.course.enrol.mutate({ courseId: ref.courseId });
@@ -147,10 +148,18 @@ test('the instructor portal breadcrumbs and links lead somewhere real', async ({
     const trail = page.getByRole('navigation', { name: 'breadcrumb' });
     await expect(trail.getByText('Home', { exact: true })).toBeVisible();
     await expect(trail.getByText('My Courses')).toBeVisible();
-    await expect(trail.getByText(ASSIGNMENT)).toBeVisible();
+    await expect(trail.getByText(COURSE)).toBeVisible();
+    await expect(trail.getByText('Course', { exact: true })).toHaveCount(0);
     await expect(trail.getByText('Sam')).toBeVisible();
+    // The assignment crumb opens the submissions list, which has no crumb of
+    // its own.
+    await expect(trail.getByRole('link', { name: ASSIGNMENT })).toHaveAttribute(
+      'href',
+      new RegExp(`/assignments/${ref.contentItemId}/submissions$`),
+    );
+    await expect(trail.getByText('Submissions')).toHaveCount(0);
     await expect(trail).not.toContainText(/[0-9a-f]{8}-[0-9a-f]{4}-/);
-    await screenshot(page, 'breadcrumbs on a submission');
+    await screenshot(page, 'submission breadcrumb names the course');
 
     // Anchors only: the current page's crumb has role "link" but no address.
     const hrefs = await trail
