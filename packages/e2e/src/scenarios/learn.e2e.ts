@@ -67,6 +67,14 @@ test('an instructor publishes a course, and a student completes it', async ({
     await expect(student).toHaveTitle(`Search: ${course} · Discava`);
     await student.goForward();
     await expect(student).toHaveTitle(`${course} · Discava`);
+    // A screen reader in browse mode follows a link with a bare click: no
+    // key or pointer press first. Focus still moves to the page's heading.
+    await student.goBack();
+    await expect(student).toHaveTitle(`Search: ${course} · Discava`);
+    await student.getByRole('link', { name: course }).dispatchEvent('click');
+    await expect(student).toHaveTitle(`${course} · Discava`);
+    await expect(student.getByRole('heading', { level: 1 })).toBeFocused();
+    await screenshot(student, 'course page after a screen reader click');
     await enrol(student, newUser('Sam', ['student']));
     await expect(
       student.getByText('0% complete', { exact: true }),
