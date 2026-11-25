@@ -194,6 +194,25 @@ describe('studentsToRecalculate', () => {
     expect(asLists(result)).toEqual({});
   });
 
+  it('ignores an enrolment record without both images, or not a MODIFY', async () => {
+    const enrolment = {
+      __edb_e__: 'enrolment',
+      courseId: 'course-1',
+      userId: 's1',
+    };
+    const result = await studentsToRecalculate(
+      [
+        record('MODIFY', undefined, { ...enrolment, status: 'active' }),
+        record('MODIFY', { ...enrolment, status: 'dropped' }),
+        record('INSERT', undefined, { ...enrolment, status: 'active' }),
+        record('REMOVE', { ...enrolment, status: 'dropped' }),
+      ],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({});
+  });
+
   it('ignores records of other entities', async () => {
     const result = await studentsToRecalculate(
       [
