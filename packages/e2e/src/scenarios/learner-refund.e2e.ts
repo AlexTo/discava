@@ -338,9 +338,13 @@ test('a pending refund stops polling and offers to check again', async ({
       .getByRole('button', { name: 'Request refund' })
       .click();
     await expect(student.getByText(/Refund requested on/)).toBeVisible();
-    await expect(student.getByText('Still being processed')).toHaveCount(0);
+    await expect(
+      student.getByText('Still being processed', { exact: true }),
+    ).toHaveCount(0);
     await student.clock.fastForward(125_000);
-    await expect(student.getByText('Still being processed')).toBeVisible();
+    await expect(
+      student.getByText('Still being processed', { exact: true }),
+    ).toBeVisible();
     await expect(
       student.getByRole('button', { name: 'Check again' }),
     ).toBeVisible();
@@ -349,7 +353,9 @@ test('a pending refund stops polling and offers to check again', async ({
 
   await test.step('checking again polls for another round', async () => {
     await student.getByRole('button', { name: 'Check again' }).click();
-    await expect(student.getByText('Still being processed')).toHaveCount(0);
+    await expect(
+      student.getByText('Still being processed', { exact: true }),
+    ).toHaveCount(0);
     await expect(student.getByText(/Refund requested on/)).toBeVisible();
   });
 });
