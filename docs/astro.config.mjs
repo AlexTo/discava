@@ -82,7 +82,6 @@ export default defineConfig({
             'guides/reviews',
             'guides/payments',
             'guides/earnings-and-payouts',
-            'guides/branding',
           ],
         },
         {
