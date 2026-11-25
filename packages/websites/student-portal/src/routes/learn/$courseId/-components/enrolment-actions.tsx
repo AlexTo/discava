@@ -351,7 +351,7 @@ export function EnrolmentActions({
   // What a student who bought the course can do about a refund.
   const refundSection =
     order?.status !== 'paid' ? null : refundFailed ? (
-      <ErrorAlert header="Your refund failed">
+      <ErrorAlert type="error" header="Your refund failed">
         The refund you requested on{' '}
         {formatDate(order.refundRequestedAt ?? order.paidAt)} could not be
         completed, and you have not been refunded. Your access continues. Please
