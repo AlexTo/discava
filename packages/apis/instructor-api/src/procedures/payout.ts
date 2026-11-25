@@ -5,6 +5,7 @@
 import { getAllowedOrigin } from '@discava/common-server-utils/cors';
 import {
   isConnectNotAllowed,
+  isResourceMissing,
   mapAccountStatus,
   PaymentAccountMismatchError,
   type PayoutStripe,
@@ -35,6 +36,8 @@ import {
 
 const UNAVAILABLE = "Payouts aren't available yet";
 const CONNECT_NOT_ENABLED = "This platform can't set up payout accounts yet";
+const ACCOUNT_NOT_FOUND =
+  "We can't find your payout account at Stripe. Please contact support";
 
 type CoreTable = Parameters<typeof getConnection>[0];
 
@@ -182,6 +185,25 @@ export const startOnboarding = courseProcedure
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message: CONNECT_NOT_ENABLED,
+        });
+      }
+      if (isResourceMissing(error)) {
+        ctx.logger?.error?.(
+          'Stripe has no record of the instructor payout account',
+          { errorName: error instanceof Error ? error.name : 'unknown' },
+        );
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: ACCOUNT_NOT_FOUND,
+        });
+      }
+      if (
+        error instanceof Error &&
+        error.name === 'StripeInvalidRequestError'
+      ) {
+        ctx.logger?.error?.('Stripe rejected the payout onboarding request', {
+          errorName: error.name,
+          code: (error as { code?: string }).code,
         });
       }
       throw error;
