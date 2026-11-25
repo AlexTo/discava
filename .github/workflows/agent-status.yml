@@ -39,3 +39,7 @@ jobs:
         run: pnpm nx run @discava/tooling-agent:${{ inputs.target }}
         env:
           GH_TOKEN: ${{ github.token }}
+          # The GitHub App the reviewer agent posts as (`my-agent[bot]`), set
+          # as a repository variable; agent-review-status also trusts its
+          # reviews. Unset, only reviews from people with write access count.
+          AGENT_APP_LOGIN: ${{ vars.AGENT_APP_LOGIN }}

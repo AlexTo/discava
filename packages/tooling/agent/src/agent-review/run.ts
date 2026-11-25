@@ -27,6 +27,7 @@ interface ReviewEventPayload {
   review: {
     body: string | null;
     commit_id: string;
+    user: { login: string } | null;
     author_association: string;
     html_url: string;
   };
@@ -75,6 +76,7 @@ export const run = ({ env, gh, log }: Deps): void => {
       action: event.action,
       body: event.review.body ?? '',
       commitSha: event.review.commit_id,
+      author: event.review.user?.login ?? '',
       authorAssociation: event.review.author_association,
       headBranch: event.pull_request.head.ref,
     },
@@ -87,6 +89,8 @@ export const run = ({ env, gh, log }: Deps): void => {
         (status) => status.context === REVIEW_STATUS_CONTEXT,
       )?.state,
     },
+    // The repository's `AGENT_APP_LOGIN` variable, which the workflow passes in.
+    env.AGENT_APP_LOGIN,
   );
 
   if (plan.action === 'ignore') {
