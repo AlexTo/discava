@@ -2,6 +2,15 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Link,
+  Outlet,
+  RouterProvider,
+} from '@tanstack/react-router';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -349,10 +358,45 @@ describe('the Branding page', () => {
 
   it("guards leaving with the portal's own dialog, never window.confirm", async () => {
     const confirm = vi.spyOn(window, 'confirm');
-    const { user } = open();
+    const root = createRootRoute({
+      component: () => (
+        <>
+          <Link to="/other">Other page</Link>
+          <Outlet />
+        </>
+      ),
+    });
+    const branding = createRoute({
+      getParentRoute: () => root,
+      path: '/',
+      component: BrandingSettings,
+    });
+    const other = createRoute({
+      getParentRoute: () => root,
+      path: '/other',
+      component: () => <h1>Other</h1>,
+    });
+    const router = createRouter({
+      routeTree: root.addChildren([branding, other]),
+      history: createMemoryHistory({ initialEntries: ['/'] }),
+    });
+    const { user } = renderWithAdminApi(<RouterProvider router={router} />, {
+      handlers: { 'branding.get': () => none },
+    });
     await user.type(await screen.findByLabelText('Name'), 'Acme');
 
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await user.click(screen.getByRole('link', { name: 'Other page' }));
+
+    expect(
+      await screen.findByText('Leave without saving?'),
+    ).toBeInTheDocument();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe('/');
+
+    await user.click(screen.getByRole('button', { name: 'Leave' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Other' }),
+    ).toBeInTheDocument();
     expect(confirm).not.toHaveBeenCalled();
     confirm.mockRestore();
   });
