@@ -38,7 +38,7 @@ test('a student leaves a free course and enrols again', async ({ browser }) => {
   });
 
   await test.step("a course page opened at a section's address starts there", async () => {
-    const fresh = await student.context().newPage();
+    const fresh = await browser.newPage();
     await fresh.goto(`${student.url().split('#')[0]}#modules`);
     const modules = fresh.locator('#modules');
     await expect(modules).toBeFocused();
