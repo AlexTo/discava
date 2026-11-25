@@ -2,11 +2,27 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { initTRPC } from '@trpc/server';
+import { initTRPC, TRPCError } from '@trpc/server';
 import { CreateAWSLambdaContextOptions } from '@trpc/server/adapters/aws-lambda';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
-import { describe, expect, it } from 'vitest';
-import { createAuthPlugin, IAuthContext } from './trpc-middleware.js';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  createAuthPlugin,
+  createLoggerPlugin,
+  IAuthContext,
+} from './trpc-middleware.js';
+
+const loggerMocks = vi.hoisted(() => ({
+  info: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('@aws-lambda-powertools/logger', () => ({
+  Logger: class {
+    info = loggerMocks.info;
+    error = loggerMocks.error;
+  },
+}));
 
 const buildEvent = (claims?: Record<string, unknown>): APIGatewayProxyEvent =>
   ({
@@ -106,5 +122,50 @@ describe('createAuthPlugin', () => {
       username: undefined,
       groups: [],
     });
+  });
+});
+
+describe('createLoggerPlugin', () => {
+  const lt = initTRPC.create();
+  const loggerRouter = lt.router({
+    refuse: lt.procedure.concat(createLoggerPlugin()).query(() => {
+      throw new TRPCError({ code: 'NOT_FOUND' });
+    }),
+    forbid: lt.procedure.concat(createLoggerPlugin()).query(() => {
+      throw new TRPCError({ code: 'FORBIDDEN' });
+    }),
+    crash: lt.procedure.concat(createLoggerPlugin()).query(() => {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        cause: new Error('boom'),
+      });
+    }),
+  });
+  const loggerCaller = lt.createCallerFactory(loggerRouter)({});
+
+  it.each(['refuse', 'forbid'] as const)(
+    'does not log expected %s refusals at error level',
+    async (procedure) => {
+      loggerMocks.info.mockClear();
+      loggerMocks.error.mockClear();
+      await expect(loggerCaller[procedure]()).rejects.toBeInstanceOf(TRPCError);
+      expect(loggerMocks.error).not.toHaveBeenCalled();
+      expect(loggerMocks.info).toHaveBeenCalledWith(
+        'Request refused',
+        expect.objectContaining({ path: procedure }),
+      );
+    },
+  );
+
+  it('still logs internal errors at error level', async () => {
+    loggerMocks.error.mockClear();
+    await expect(loggerCaller.crash()).rejects.toBeInstanceOf(TRPCError);
+    expect(loggerMocks.error).toHaveBeenCalledWith(
+      'Unexpected error occurred',
+      expect.objectContaining({
+        code: 'INTERNAL_SERVER_ERROR',
+        path: 'crash',
+      }),
+    );
   });
 });
