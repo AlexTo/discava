@@ -23,6 +23,12 @@ import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 import { expectNoSidewaysScroll, PHONE } from '../helpers/viewport.js';
 
+/** A rendered `<title>` shaped `<page> | <platform name>`, for exactly this name. */
+const titleEndingWith = (platformName: string): RegExp =>
+  new RegExp(
+    `<title>[^<]* \\| ${platformName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</title>`,
+  );
+
 // An administrator uploads a logo and an icon on Settings → Branding and saves
 // them; the portals' headers, the tab icon and a public course page then show
 // them. The brand is one record for the whole stack, so the scenario runs
@@ -286,7 +292,7 @@ test('an administrator sets the platform name and share image, and visitors see 
         })
       ).text();
       expect(html).toContain(`<meta property="og:site_name" content="${name}"`);
-      expect(html).toMatch(/<title>[^<]* \| [^<]*<\/title>/);
+      expect(html).toMatch(titleEndingWith(name));
       expect(html).toMatch(
         /<meta property="og:image" content="[^"]*brand\/share-image\//,
       );
@@ -433,7 +439,7 @@ test('the brand reaches every portal and public page, and the name can be hidden
   await test.step('a course landing page carries the name, icon and colour', async () => {
     await expect(async () => {
       const html = await render(`/learn/${courseId}`);
-      expect(html).toMatch(/<title>[^<]*\| [^<]*<\/title>/);
+      expect(html).toMatch(titleEndingWith(name));
       expect(html).toContain(`<meta property="og:site_name" content="${name}"`);
       expect(html).toMatch(/<link rel="icon"[^>]*brand\/icon\//);
       expect(html).toContain(`--primary:${colour}`);
