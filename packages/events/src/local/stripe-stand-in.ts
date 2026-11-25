@@ -480,7 +480,9 @@ export const createStripeStandIn = ({
   ): Promise<boolean> => {
     if (request.method !== 'POST') return false;
     const control =
-      /^\/stripe\/test\/(replay|forge|expire|refund|refunds)$/.exec(path);
+      /^\/stripe\/test\/(replay|forge|expire|refund|refunds|refund-fail)$/.exec(
+        path,
+      );
     if (!control) return false;
     const input = JSON.parse((await readBody(request)) || '{}') as {
       sessionId?: string;
@@ -502,6 +504,33 @@ export const createStripeStandIn = ({
         return true;
       }
       send(response, 200, { refunds: intent.refunds });
+      return true;
+    }
+    if (control[1] === 'refund-fail') {
+      // As Stripe reporting, later, that a refund it accepted has failed.
+      const intent = session ? intents.get(session.paymentIntentId) : undefined;
+      if (!intent) {
+        error(
+          response,
+          404,
+          'invalid_request_error',
+          'No payment for that session',
+        );
+        return true;
+      }
+      await deliver(
+        intent.accountId,
+        newEvent('refund.failed', {
+          id: id('re'),
+          object: 'refund',
+          payment_intent: intent.id,
+          amount: intent.amount - intent.refunded,
+          currency: intent.currency,
+          status: 'failed',
+          failure_reason: 'unknown',
+        }),
+      );
+      send(response, 200, { status: 'failed' });
       return true;
     }
     if (control[1] === 'refund') {

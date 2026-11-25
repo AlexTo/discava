@@ -28,6 +28,9 @@ import { type AppliedCoupon, CouponField } from './coupon-field';
 import { useCheckoutReturn } from './use-checkout-return';
 
 const REFUND_POLL_INTERVAL_MS = 2_000;
+// How long a pending refund is polled before the page says it is still being
+// processed.
+const REFUND_POLL_LIMIT_MS = 120_000;
 
 const errorCode = (error: unknown) =>
   (error as { data?: { code?: string } } | null)?.data?.code;
@@ -174,8 +177,15 @@ export function EnrolmentActions({
     ),
   );
   const order = orderQuery.data;
+  const refundFailed =
+    order?.status === 'paid' && order.refundFailedAt !== undefined;
   const refundPending =
-    order?.status === 'paid' && order.refundRequestedAt !== undefined;
+    order?.status === 'paid' &&
+    order.refundRequestedAt !== undefined &&
+    !refundFailed;
+  // Bumped by "Check again" to poll for another round.
+  const [refundPollRound, setRefundPollRound] = useState(0);
+  const [refundPollTimedOut, setRefundPollTimedOut] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const requestRefund = useMutation(
     trpc.payment.requestRefund.mutationOptions({
@@ -194,9 +204,15 @@ export function EnrolmentActions({
     }),
   );
   // The refund ends the enrolment once Stripe confirms it, so while one is
-  // pending the page asks again, as it does while confirming a payment.
+  // pending the page asks again, as it does while confirming a payment, and
+  // stops after REFUND_POLL_LIMIT_MS.
   useEffect(() => {
     if (!refundPending) return;
+    setRefundPollTimedOut(false);
+    const stop = setTimeout(() => {
+      clearInterval(poll);
+      setRefundPollTimedOut(true);
+    }, REFUND_POLL_LIMIT_MS);
     const poll = setInterval(() => {
       void queryClient.invalidateQueries({
         queryKey: trpc.course.myEnrolment.queryKey({ courseId }),
@@ -205,8 +221,11 @@ export function EnrolmentActions({
         queryKey: trpc.payment.myOrder.queryKey({ courseId }),
       });
     }, REFUND_POLL_INTERVAL_MS);
-    return () => clearInterval(poll);
-  }, [refundPending, queryClient, trpc, courseId]);
+    return () => {
+      clearInterval(poll);
+      clearTimeout(stop);
+    };
+  }, [refundPending, refundPollRound, queryClient, trpc, courseId]);
 
   // A stale page can show a course as free after it got a price.
   const priced =
@@ -331,11 +350,34 @@ export function EnrolmentActions({
 
   // What a student who bought the course can do about a refund.
   const refundSection =
-    order?.status !== 'paid' ? null : order.refundRequestedAt ? (
-      <p className="text-sm text-muted-foreground">
-        Refund requested on {formatDate(order.refundRequestedAt)}. Your access
-        ends when it is confirmed.
-      </p>
+    order?.status !== 'paid' ? null : refundFailed ? (
+      <ErrorAlert header="Your refund failed">
+        The refund you requested on{' '}
+        {formatDate(order.refundRequestedAt ?? order.paidAt)} could not be
+        completed, and you have not been refunded. Your access continues. Please
+        contact support to sort out your refund.
+      </ErrorAlert>
+    ) : order.refundRequestedAt ? (
+      <>
+        <p className="text-sm text-muted-foreground">
+          Refund requested on {formatDate(order.refundRequestedAt)}. Your access
+          ends when it is confirmed.
+        </p>
+        {refundPollTimedOut ? (
+          <>
+            <ErrorAlert type="info" header="Still being processed">
+              Your refund is still being processed. This can take a while.
+            </ErrorAlert>
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={() => setRefundPollRound((round) => round + 1)}
+            >
+              Check again
+            </Button>
+          </>
+        ) : null}
+      </>
     ) : order.canRequestRefund ? (
       <>
         <p className="text-sm text-muted-foreground">

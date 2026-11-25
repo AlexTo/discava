@@ -742,6 +742,54 @@ describe('EnrolmentActions: refunds', () => {
     expect(screen.queryByText(/Refund requested on/)).toBeNull();
   });
 
+  it('stops polling a pending refund after two minutes, and checks again on request', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { user, calls } = renderRefund({
+      'payment.myOrder': () =>
+        order({
+          canRequestRefund: false,
+          refundRequestedAt: '2026-11-10T10:00:00.000Z',
+        }),
+    });
+    await screen.findByText(/Refund requested on/);
+
+    await act(() => vi.advanceTimersByTimeAsync(121_000));
+    expect(await screen.findByText(/still being processed/)).toBeVisible();
+    const orderCalls = () =>
+      calls.filter((call) => call.path === 'payment.myOrder').length;
+    const settled = orderCalls();
+    await act(() => vi.advanceTimersByTimeAsync(20_000));
+    expect(orderCalls()).toBe(settled);
+
+    await user.click(screen.getByRole('button', { name: 'Check again' }));
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
+    expect(orderCalls()).toBeGreaterThan(settled);
+    expect(screen.queryByText(/still being processed/)).toBeNull();
+  });
+
+  it('tells the student a failed refund failed, and stops polling', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { calls } = renderRefund({
+      'payment.myOrder': () =>
+        order({
+          canRequestRefund: false,
+          refundRequestedAt: '2026-11-10T10:00:00.000Z',
+          refundFailedAt: '2026-11-10T11:00:00.000Z',
+        }),
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Your refund failed',
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('contact support');
+    expect(screen.queryByText(/Refund requested on/)).toBeNull();
+    const count = () =>
+      calls.filter((call) => call.path === 'payment.myOrder').length;
+    const settled = count();
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+    expect(count()).toBe(settled);
+  });
+
   it('says the refund period ended, with no button', async () => {
     renderRefund({
       'payment.myOrder': () =>
