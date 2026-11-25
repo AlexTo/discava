@@ -14,6 +14,7 @@ import {
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
+import { failNextRefund, sessionIdOf } from '../helpers/stripe-stand-in.js';
 import {
   markItemDone,
   openCourse,
@@ -209,5 +210,68 @@ test('refund limits: half the course, once per course', async ({ browser }) => {
       quarter.getByRole('button', { name: 'Request a refund' }),
     ).toHaveCount(0);
     await screenshot(quarter, 'second-purchase-offered-no-refund');
+  });
+});
+
+// Stripe can accept a refund and report later that it failed. The order stays
+// paid, the enrolment stays, and the page says so instead of waiting.
+test('a failed refund is shown to the student', async ({ browser }) => {
+  const title = uniqueName('E2E failed refund course');
+  await connectLocalStripe();
+
+  await test.step('an instructor publishes a course priced at 19.99', async () => {
+    const instructor = await browser.newPage();
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Rae', ['instructor']));
+    await createCourse(instructor, {
+      title,
+      summary: 'A course whose refund fails.',
+    });
+    await instructor.getByLabel('Price', { exact: true }).fill('19.99');
+    await instructor.getByRole('button', { name: 'Save price' }).click();
+    await expect(instructor.getByText('Saved', { exact: true })).toBeVisible();
+    await addModule(instructor, 'Module one');
+    await addLesson(instructor, 'Lesson one');
+    await addTextItem(instructor, { title: 'Reading one', body: 'Refund.' });
+    await publishCourse(instructor);
+  });
+
+  const student = await browser.newPage();
+  let sessionId = '';
+  await test.step('a student buys the course', async () => {
+    await openCourse(student, title);
+    await student.getByRole('button', { name: 'Sign in to buy' }).click();
+    await student
+      .getByRole('dialog', { name: 'Sign in to buy' })
+      .getByRole('link', { name: 'Continue to sign in' })
+      .click();
+    await signIn(student, newUser('Fay', ['student']));
+    await student.getByRole('button', { name: 'Buy now' }).click();
+    await student.waitForURL(/\/stripe\/pay\//);
+    sessionId = sessionIdOf(student.url());
+    await student.getByRole('button', { name: 'Pay', exact: true }).click();
+    await student.waitForURL(
+      /\/learn\/[0-9a-f-]+\/(lesson\/[0-9a-f-]+|home)$/,
+      { timeout: 30_000 },
+    );
+  });
+
+  await test.step('the refund fails, and the page says so and keeps the access', async () => {
+    await failNextRefund(sessionId);
+    await openCourse(student, title);
+    await student.getByRole('button', { name: 'Request a refund' }).click();
+    await student
+      .getByRole('dialog', { name: 'Request a refund' })
+      .getByRole('button', { name: 'Request refund' })
+      .click();
+    await expect(student.getByText('Your refund failed')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(student.getByText(/contact support/)).toBeVisible();
+    await expect(student.getByText(/Refund requested on/)).toHaveCount(0);
+    await expect(
+      student.getByRole('button', { name: 'Request a refund' }),
+    ).toHaveCount(0);
+    await screenshot(student, 'refund-failed');
   });
 });

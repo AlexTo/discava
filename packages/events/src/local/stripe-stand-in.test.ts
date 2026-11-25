@@ -51,6 +51,8 @@ const EVENTS = [
   'checkout.session.completed',
   'checkout.session.expired',
   'charge.refunded',
+  'refund.failed',
+  'charge.refund.updated',
 ] as const;
 
 const request = async (path: string, init: RequestInit = {}) => {
@@ -661,6 +663,59 @@ describe('refund control', () => {
 
   it('answers 404 for a session with no payment', async () => {
     const response = await request('/stripe/test/refund', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: 'cs_nope' }),
+    });
+    expect(response.status).toBe(404);
+  });
+});
+
+describe('fail-next-refund control', () => {
+  it('accepts the next refund, then reports it failed, and refunds nothing', async () => {
+    const hook = await receiver();
+    const { secret, stripe, session } = await paid(hook.url);
+    hook.deliveries.length = 0;
+    const armed = await request('/stripe/test/fail-next-refund', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    expect(armed.status).toBe(200);
+    const refund = await stripe.refunds.create({
+      payment_intent: session.payment_intent as string,
+    });
+    expect(refund.status).toBe('pending');
+    await vi.waitFor(() => expect(hook.deliveries).toHaveLength(1), {
+      timeout: 5_000,
+    });
+    const [delivery] = hook.deliveries as [{ body: string; signature: string }];
+    const event = Stripe.webhooks.constructEvent(
+      delivery.body,
+      delivery.signature,
+      secret,
+    );
+    expect(event.type).toBe('refund.failed');
+    expect(event.data.object).toMatchObject({
+      payment_intent: session.payment_intent,
+      status: 'failed',
+    });
+    const listed = await request('/stripe/test/refunds', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    expect(listed.body.refunds).toEqual([]);
+
+    // Only the next refund fails.
+    hook.deliveries.length = 0;
+    await stripe.refunds.create({
+      payment_intent: session.payment_intent as string,
+    });
+    await vi.waitFor(() =>
+      expect(JSON.parse(hook.deliveries[0].body).type).toBe('charge.refunded'),
+    );
+  });
+
+  it('answers 404 for a session with no payment', async () => {
+    const response = await request('/stripe/test/fail-next-refund', {
       method: 'POST',
       body: JSON.stringify({ sessionId: 'cs_nope' }),
     });

@@ -70,6 +70,11 @@ export const expireSession = (sessionId: string) =>
 export const refundSession = (sessionId: string, amount?: number) =>
   control<{ amount_refunded: number }>('refund', { sessionId, amount });
 
+// The next refund asked for the session's payment is accepted, then reported
+// failed (`refund.failed`) a moment later.
+export const failNextRefund = (sessionId: string) =>
+  control<{ failNextRefund: boolean }>('fail-next-refund', { sessionId });
+
 // Every refund the stand-in made for the session's payment.
 export const sessionRefunds = async (sessionId: string) =>
   (await control<{ refunds: { amount: number }[] }>('refunds', { sessionId }))

@@ -579,6 +579,44 @@ describe('a failed refund', () => {
     expect(state.orders.get('o1')?.refundFailedAt).toBeUndefined();
   });
 
+  it('reads the payment intent from an expanded object too', async () => {
+    const body = JSON.stringify({
+      id: 'evt_f2',
+      object: 'event',
+      type: 'refund.failed',
+      data: {
+        object: {
+          id: 're_1',
+          object: 'refund',
+          payment_intent: { id: 'pi_1' },
+          status: 'failed',
+        },
+      },
+    });
+    await send(body);
+    expect(paymentIntents.retrieve).toHaveBeenCalledWith('pi_1');
+    expect(state.orders.get('o1')?.refundFailedAt).toBeDefined();
+  });
+
+  it('records nothing for a refund with no payment intent', async () => {
+    const body = JSON.stringify({
+      id: 'evt_f3',
+      object: 'event',
+      type: 'refund.failed',
+      data: {
+        object: {
+          id: 're_1',
+          object: 'refund',
+          payment_intent: null,
+          status: 'failed',
+        },
+      },
+    });
+    expect(await send(body)).toEqual({ status: 200 });
+    expect(state.orders.get('o1')?.refundFailedAt).toBeUndefined();
+    expect(logger.error).toHaveBeenCalled();
+  });
+
   it('answers 200 for an unknown order', async () => {
     state.orders.clear();
     expect(await send(failedEvent('refund.failed'))).toEqual({ status: 200 });

@@ -201,6 +201,14 @@ describe('payments: price, orders and the connection', () => {
         { status: 'expired', refundRequestedAt: LATER },
         /refund requested, but the order is expired/,
       ],
+      [{ refundFailedAt: LATER }, /refund failed, but no refund was requested/],
+      [
+        {
+          refundRequestedAt: LATER,
+          refundFailedAt: '2026-01-01T00:00:00.000Z',
+        },
+        /refundFailedAt is before refundRequestedAt/,
+      ],
     ])('reports %j', (change, message) => {
       paidTable();
       Object.assign(table.orders[0], change);
