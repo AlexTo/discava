@@ -95,6 +95,8 @@ export function RichTextEditor({
           'prose prose-sm dark:prose-invert max-w-none px-3 py-2 break-words [overflow-wrap:anywhere] focus:outline-none [&_p]:break-words [&_p]:[overflow-wrap:anywhere]',
           minHeightClass,
         ),
+        role: 'textbox',
+        'aria-multiline': 'true',
         'aria-label': ariaLabel,
         ...(labelledBy && { 'aria-labelledby': labelledBy }),
         ...(invalid && { 'aria-invalid': 'true' }),

@@ -26,6 +26,12 @@ describe('RichTextEditor', () => {
     expect(editor).toHaveAttribute('contenteditable', 'true');
   });
 
+  it('exposes the editable area as a multiline textbox with its accessible name', () => {
+    renderEditor();
+    const editor = screen.getByRole('textbox', { name: 'Body' });
+    expect(editor).toHaveAttribute('aria-multiline', 'true');
+  });
+
   it('shows a toolbar with Bold, Italic, Heading, list and Maths controls', () => {
     renderEditor();
 
