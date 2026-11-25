@@ -242,7 +242,12 @@ export class CoreApi<
             ),
           ),
         ),
-        memorySize: 256,
+        // 512 MB, not 256: Lambda's CPU share scales with memory, and the
+        // router loads the whole tRPC bundle plus the DynamoDB and
+        // OpenSearch clients on every cold start. The public catalogue
+        // calls (course.publicSearch, category.list) timed out at 256 MB
+        // (#1146). Applies to every stage.
+        memorySize: 512,
         timeout: Duration.seconds(30),
         tracing: Tracing.ACTIVE,
         ...apiFunctionProps(functionOptions),
