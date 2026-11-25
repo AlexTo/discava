@@ -149,6 +149,9 @@ describe('automatic captions (US4)', () => {
       allows(role, 's3:GetObject*', '/courses/*/transcribe-output/*'),
     ).toBe(true);
     expect(allows(role, 's3:PutObject', '/courses/*/captions/*')).toBe(true);
+    expect(allows(role, 's3:DeleteObject*', '/courses/*/captions/*')).toBe(
+      true,
+    );
     expect(allows(role, 's3:PutObject', '/courses/*/transcribe-output/*')).toBe(
       false,
     );
