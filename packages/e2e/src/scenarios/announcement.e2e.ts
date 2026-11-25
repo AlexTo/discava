@@ -99,7 +99,9 @@ test('an announcement is posted, read by the enrolled students, edited and delet
   const editing = page.getByRole('listitem').filter({
     has: page.getByRole('button', { name: 'Save changes' }),
   });
-  await editing.getByRole('textbox', { name: 'Announcement text' }).fill('Welcome, and good luck.');
+  await editing
+    .getByRole('textbox', { name: 'Announcement text' })
+    .fill('Welcome, and good luck.');
   await editing.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('Welcome, and good luck.')).toBeVisible();
 
