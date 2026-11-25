@@ -258,6 +258,20 @@ test('search results come first on a phone, with the filters collapsed', async (
     await screenshot(page, 'course catalogue at phone width');
   });
 
+  await test.step('the category chips on /courses stay in one scrolling row', async () => {
+    await page.goto(`${PORTALS.student}/courses`);
+    const chips = page
+      .getByRole('group', { name: 'Course categories' })
+      .getByRole('link');
+    await expect(chips.first()).toBeVisible();
+    const tops = await chips.evaluateAll((els) =>
+      els.map((el) => Math.round(el.getBoundingClientRect().top)),
+    );
+    expect(new Set(tops).size).toBe(1);
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'category chips in one row at phone width');
+  });
+
   await test.step('the filters open on request', async () => {
     await page.goto(
       `${PORTALS.student}/search?query=${encodeURIComponent(title)}`,
