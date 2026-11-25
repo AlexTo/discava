@@ -289,6 +289,15 @@ describe('page renderer', () => {
     expect(a?.body).not.toContain('discava-page-data');
   });
 
+  it.each(['/learn', '/instructors', '/certificates'])(
+    'answers 404 with noindex for the bare %s',
+    async (path) => {
+      const response = await build().render(get(path));
+      expect(response.statusCode).toBe(404);
+      expect(response.headers['X-Robots-Tag']).toBe('noindex');
+    },
+  );
+
   it('answers 404 for an unknown instructor and an unknown path', async () => {
     const { render } = build();
     expect((await render(get('/instructors/nobody'))).statusCode).toBe(404);

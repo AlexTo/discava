@@ -303,7 +303,9 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
 
       const [first, id, ...rest] = segments;
       if (first === 'learn') {
-        if (!id || rest.length > 0) {
+        // Bare `/learn` is no page at all.
+        if (!id) return await notFound();
+        if (rest.length > 0) {
           // The learning routes: signed-in, never indexed.
           return shell();
         }
