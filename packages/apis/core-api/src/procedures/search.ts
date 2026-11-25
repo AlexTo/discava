@@ -8,6 +8,7 @@ import { TRPCError } from '@trpc/server';
 import { readCategories } from '../helpers/category-list.js';
 import { buildSearchRequest } from '../helpers/search-query.js';
 import { buildSuggestRequest } from '../helpers/suggest-query.js';
+import { timed } from '../helpers/timing.js';
 import { publicSearchProcedure } from '../init.js';
 import {
   DURATION_BANDS,
@@ -26,7 +27,7 @@ import {
 // the Lambda out of time and API Gateway would return a 502 with no useful
 // message. Timing the request out first, with room to spare under the
 // Lambda's budget, lets this return a clear, retriable error instead.
-const SEARCH_REQUEST_TIMEOUT_MS = 8_000;
+export const SEARCH_REQUEST_TIMEOUT_MS = 8_000;
 
 // Suggestions fire on every typing pause, so a cold search collection must
 // fail fast and quietly (research R-6) instead of holding the box for 8s.
@@ -120,17 +121,20 @@ export const publicSearchCourses = publicSearchProcedure
     const search = ctx.search!;
     const from = input.cursor ?? 0;
     const [{ body }, categories] = await Promise.all([
-      search
-        .search(
-          {
-            index: resolveIndexName('courses'),
-            // The client's request types don't model every aggregation shape.
-            body: buildSearchRequest(input) as never,
-          },
-          { requestTimeout: SEARCH_REQUEST_TIMEOUT_MS },
-        )
-        .catch(mapSearchError),
-      readCategories(ctx.coreTable),
+      timed(
+        'course.publicSearch: opensearch',
+        search
+          .search(
+            {
+              index: resolveIndexName('courses'),
+              // The client's request types don't model every aggregation shape.
+              body: buildSearchRequest(input) as never,
+            },
+            { requestTimeout: SEARCH_REQUEST_TIMEOUT_MS },
+          )
+          .catch(mapSearchError),
+      ),
+      timed('course.publicSearch: categories', readCategories(ctx.coreTable)),
     ]);
 
     const byId = new Map(

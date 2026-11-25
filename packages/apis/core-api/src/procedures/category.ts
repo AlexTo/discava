@@ -5,12 +5,14 @@
 import { resolveIndexName } from '@discava/search';
 import { TRPCError } from '@trpc/server';
 import { readCategories } from '../helpers/category-list.js';
+import { timed } from '../helpers/timing.js';
 import { publicCourseProcedure, publicSearchProcedure } from '../init.js';
 import {
   CategoryBySlugInputSchema,
   CategoryBySlugOutputSchema,
   ListCategoriesOutputSchema,
 } from '../schema/index.js';
+import { mapSearchError, SEARCH_REQUEST_TIMEOUT_MS } from './search.js';
 
 // The taxonomy is bounded at 500 categories; the terms aggregation's default
 // of 10 buckets would drop the rest.
@@ -26,19 +28,31 @@ export const listCategories = publicSearchProcedure
   .output(ListCategoriesOutputSchema)
   .query(async ({ ctx }) => {
     const [categories, { body }] = await Promise.all([
-      readCategories(ctx.coreTable),
-      ctx.search!.search({
-        index: resolveIndexName('courses'),
-        body: {
-          size: 0,
-          query: { bool: { filter: [{ term: { status: 'published' } }] } },
-          aggs: {
-            categories: {
-              terms: { field: 'categoryId', size: MAX_CATEGORIES },
+      timed('category.list: categories', readCategories(ctx.coreTable)),
+      timed(
+        'category.list: opensearch',
+        ctx
+          .search!.search(
+            {
+              index: resolveIndexName('courses'),
+              body: {
+                size: 0,
+                query: {
+                  bool: { filter: [{ term: { status: 'published' } }] },
+                },
+                aggs: {
+                  categories: {
+                    terms: { field: 'categoryId', size: MAX_CATEGORIES },
+                  },
+                },
+              } as never,
             },
-          },
-        } as never,
-      }),
+            // As course.publicSearch: stop waiting on a collection that is
+            // waking up before the Lambda's own timeout turns it into a 502.
+            { requestTimeout: SEARCH_REQUEST_TIMEOUT_MS },
+          )
+          .catch(mapSearchError),
+      ),
     ]);
 
     const counts = new Map(
