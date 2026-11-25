@@ -7,21 +7,26 @@ sidebar:
 
 import Link from '@components/link.astro';
 
-**Spec:** [`specs/_archive/20261120-154626-free-preview-lessons/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261120-154626-free-preview-lessons/)
+**Spec:** [`specs/20261118-223240-public-course-pages/`](https://github.com/AlexTo/discava/tree/main/specs/20261118-223240-public-course-pages/)
+
+**Spec:** [`specs/_archive/20261120-154626-free-preview-lessons/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261120-154626-free-preview-lessons/) (free preview lessons)
 
 A course's landing page (`/learn/<courseId>`) and an instructor's profile (`/instructors/<handle>`) are public: anyone can open them signed out. The student portal is a single-page app, so a crawler or a link preview that doesn't run scripts would see an empty shell. The **page renderer** fixes that by answering those addresses with real HTML.
 
 ## The page renderer
 
-The renderer is a second Lambda handler in `@discava/core-api` (`src/page-renderer/handler.ts`), behind the student portal's CloudFront distribution as the origin for `/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml` and `/robots.txt`. It lives in the Websites stack, with a Function URL that only CloudFront can call. Locally, `pnpm dev` starts it on port 2026 (`src/local-page-renderer.ts`); browsers keep using the Vite server, and crawler responses are fetched from that port.
+The renderer is a second Lambda handler in `@discava/core-api` (`src/page-renderer/handler.ts`). The student portal's CloudFront distribution uses it as the origin for `/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml` and `/robots.txt`. It is built by the `StudentPortal` construct in the Websites stack, with a Function URL that only CloudFront can call. It answers `GET` and `HEAD` only.
+
+Locally, `pnpm dev` starts it on port 2026 (`src/local-page-renderer.ts`). Browsers keep using the Vite server, and crawler responses are fetched from that port.
 
 | Path | Answer |
 |---|---|
 | `/learn/<courseId>` | The landing page of a published course, otherwise a `404` |
-| `/learn/<courseId>/<anything>` | The plain `index.html` with `noindex` (the signed-in learning routes) |
+| `/learn/<courseId>/<anything>` | The plain `index.html` with `noindex` (the signed-in learning routes). It reads nothing |
 | `/instructors/<handle>` | The profile of an instructor who teaches a published course, otherwise a `404` |
 | `/certificates/<ID>` | A head for the link preview (the learner, the course, the date and the platform name), always `noindex`; an unknown ID is a `404` |
-| `/certificates/<ID>/<anything>` | The plain `index.html` (the LinkedIn route) |
+| `/certificates/<ID>/<anything>` | The plain `index.html` with `noindex` (the LinkedIn route) |
+| Anything else | A `404` |
 | `/sitemap.xml` | Every published course, public profile and active category, with `lastmod` |
 | `/robots.txt` | See [the indexing setting](#the-indexing-setting) |
 
@@ -29,19 +34,29 @@ For a page, the renderer takes the built `index.html` and adds:
 
 - the head tags: title, description, canonical address, Open Graph and Twitter card tags, and schema.org JSON-LD (`Course`, or `ProfilePage` with a `Person`);
 - a static rendering inside `#root`: title, image, key facts, outcomes, requirements, description, the curriculum outline, the rating summary, the first page of reviews and the instructor cards;
-- a `<script type="application/json" id="discava-page-data">` element holding the procedure outputs it used.
+- a `<script type="application/json" id="discava-page-data">` element holding the procedure outputs it used;
+- the platform brand: its icon, colour and brand document, so the page shows the admin-set brand from the first paint (see <Link path="design/branding">Branding</Link>). If the brand can't be read, the page renders with the default brand.
 
-On boot the portal reads and removes that element and seeds React Query with it, so the app's first render is the full page and there is no flash when it replaces the static markup. All text is HTML-escaped, and the JSON is serialised with `<`, `>` and `&` escaped, so a course title can't break out of the page.
+On boot the portal reads and removes the page-data element and seeds React Query with it (`src/lib/page-data.ts`). The app's first render is then the full page, with no flash when it replaces the static markup. All text is HTML-escaped, and the JSON is serialised with `<`, `>` and `&` escaped, so a course title can't break out of the page.
 
-**One source of truth for what is public.** The renderer calls `course.publicView`, `instructorProfile.publicView`, `review.summary` and `review.list` in-process through `appRouter.createCaller` with an anonymous context. A crawler therefore never sees more than the API returns. A draft course, an archived course and an unknown ID give byte-identical `404` pages. This holds for everyone, including students enrolled in the course; their access through My Learning doesn't change.
+**One source of truth for what is public.** The renderer calls `course.publicView`, `review.summary`, `review.list`, `instructorProfile.publicView` and `certificate.verify` in-process, through `appRouter.createCaller` with an anonymous context. A crawler therefore never sees more than the API returns. A draft course, an archived course and an unknown ID give byte-identical `404` pages. This holds for everyone, including students enrolled in the course. Their access through My Learning doesn't change.
 
-The canonical address uses the viewer's host, copied by a CloudFront Function into `x-discava-host`, and only if it is one of the stage's student portal domains (or a `*.cloudfront.net` host when none is configured). Any other host falls back to the first configured domain, so pointing a domain at the distribution can't poison canonicals.
+**The canonical address** uses the viewer's host, which a CloudFront Function copies into `x-discava-host`. The host is used only if it is one of the stage's student portal domains (or a `*.cloudfront.net` host when none is configured). Any other host falls back to the first configured domain, so pointing a domain at the distribution can't poison canonicals.
 
-If the table, the settings parameter or the `index.html` read fails, the answer is a plain-text `503` (`Service temporarily unavailable`) with `Cache-Control: no-store`, `X-Robots-Tag: noindex` and `Retry-After: 5`. It is never cached and never turned into a `404`. It has no HTML, so a visitor who loads a landing page or profile during an outage sees that text, not the app; in-app navigation doesn't reach the renderer and keeps working.
+**When a dependency fails** (the table, the settings parameter or the `index.html` read), the answer is a plain-text `503` (`Service temporarily unavailable`) with `Cache-Control: no-store`, `X-Robots-Tag: noindex` and `Retry-After: 5`. It is never cached and never turned into a `404`. It has no HTML, so a visitor who loads a landing page or profile during an outage sees that text, not the app. In-app navigation doesn't reach the renderer and keeps working.
 
 ## Caching and freshness
 
-CloudFront caches each answer: `s-maxage=300` for a page, `60` for a not-found, and browsers always revalidate (`max-age=0`). The cache key ignores the query string, and no cookies or `Authorization` header are forwarded, so an answer never depends on who asked.
+CloudFront caches each answer:
+
+| Answer | `Cache-Control` |
+|---|---|
+| A page or shell | `max-age=0, s-maxage=300`: CloudFront keeps it 5 minutes, browsers always revalidate |
+| A not-found | `max-age=0, s-maxage=60` |
+| `sitemap.xml`, `robots.txt` | `max-age=300, s-maxage=300` |
+| A `503` | `no-store` |
+
+The cache key is the path alone. No query string, cookies or `Authorization` header are forwarded, so an answer never depends on who asked.
 
 That bounds staleness to **5 minutes** with no invalidation. A change to a course or profile reaches crawlers and link previews within 5 minutes, and an archived course or a profile that stops being public starts answering `404` within the same time. Visitors in a browser see the change on the next load, because the app reads the API.
 
@@ -49,7 +64,9 @@ The renderer checks the portal's `index.html` on every cache miss with a conditi
 
 ## The single-page app rewrite
 
-The shared `StaticWebsite` construct used to turn every `404` and `403` into `/index.html` with a `200`. That setting applies to every origin of a distribution, so it would have turned the renderer's `404` into a success page that search engines treat as a soft 404. A CloudFront Function on the default behavior now rewrites any path whose last segment has no file extension to `/index.html`, and the distribution-wide error responses are gone. A missing asset gets S3's error, and the renderer's `404` reaches the viewer. All three portals get this from the shared construct.
+A CloudFront Function on the default behavior (`spa-rewrite.js`, in the shared `StaticWebsite` construct) rewrites any path whose last segment has no file extension to `/index.html`. A missing asset gets S3's error, and the renderer's `404` reaches the viewer. All three portals get this from the shared construct.
+
+The distribution has no error responses that turn a `404` or `403` into `/index.html` with a `200`. Those apply to every origin of a distribution, so they would turn the renderer's `404` into a success page that search engines treat as a soft 404.
 
 ## The indexing setting
 
@@ -61,7 +78,9 @@ The shared `StaticWebsite` construct used to turn every `404` and `403` into `/i
 | Files from S3 | The response headers policy adds `X-Robots-Tag: noindex` | No marker |
 | `/robots.txt` | `Disallow: /` | Disallows `/learn/*/`, `/my-learning`, `/signin` and `/search`, allows the rest and lists the site map |
 
-Crawler content and social cards are served on every stage, so they can be tested before production. The site map is built on request from keyed reads and declared indexes (never a scan), and one file holds up to 50,000 URLs; a site map index is a follow-up beyond that.
+Crawler content and social cards are served on every stage, so they can be tested before production.
+
+The site map is built on request from keyed reads and declared indexes, never a scan (`helpers/sitemap.ts`). It is one file, which the site map protocol limits to 50,000 URLs. A site map index is a follow-up beyond that.
 
 ## The preview video's exposure rules
 
@@ -78,15 +97,46 @@ Anyone can play it, signed in or not, but only under these rules:
 
 An instructor can mark an ordinary lesson as a free preview. Anyone, signed in or not, enrolled or not, can then open it at `/learn/<courseId>/preview/<lessonId>`. This is the one deliberate exception to "unpaid users cannot get paid content".
 
-**The mark.** A lesson carries an optional `freePreview` attribute, stored only as `true` and removed when the lesson is unmarked. Only a lesson of kind `lesson` can carry it: an assignment lesson can't be marked, and the `free-preview-on-ordinary-lesson` table invariant flags one that is. A lesson is an **open** preview when `isOpenFreePreview` (in `@discava/core-table`) holds: the course is published, the module and the lesson are shown (visible and not archived), the lesson is an ordinary lesson and it is marked. That function is the only definition of "open".
+**The mark.** A lesson carries an optional `freePreview` attribute, stored only as `true` and removed when the lesson is unmarked (`lesson.setFreePreview` in instructor-api). Only a lesson of kind `lesson` can carry it: an assignment lesson can't be marked, and the `free-preview-on-ordinary-lesson` table invariant flags one that is.
 
-**Three public operations of its own.** `freePreview.lesson`, `freePreview.videoUrl` and `freePreview.fileUrl` are public queries on core-api, listed in `PUBLIC_OPERATIONS`. They never read the caller, so a signed-out visitor, an unenrolled user and an enrolled student get the same answer. The enrolled procedures (`course.view`, `contentItem.videoUrl`, `contentItem.fileUrl`, `quiz.view`, the progress, completion, assignment and discussion procedures and the rest) are untouched and still need an enrolment, for marked lessons as for any other. A public operation has no claims, so one operation could not serve both a visitor and an enrolled student.
+A lesson is an **open** preview when `isOpenFreePreview` (in `@discava/core-table`) holds. That function is the only definition of "open":
 
-**What a response contains.** Each item is built field by field, so nothing leaves unless it is named. A video gives its title, description, duration and whether it can be played now. Text gives its body. A file gives its name, size and type. A quiz gives only its title and question count, shown as a locked card: no questions, answer key or settings. Assignment items are dropped. No storage key, status or job attribute is returned. A caller who names a lesson that isn't an open preview, or an item that isn't shown under it, gets the same `NOT_FOUND` whatever the reason, and nothing is signed.
+- the course is published;
+- the module and the lesson are shown (visible and not archived);
+- the lesson is an ordinary lesson, and it is marked.
 
-**Signing.** A video's cookies cover that version's folder only, are set with that `Path`, and last **one hour** (`FREE_PREVIEW_COOKIE_LIFETIME_SECONDS`), against the four hours an enrolled student gets. The page asks for the address when the visitor presses play and again every 30 minutes while a video plays, which renews the cookies. A file link covers one object for five minutes. Text needs no signature. The one hour never exceeds the cookie lifetime that `RETIRED_VERSION_DELAY_MINUTES` already covers, so a replaced version's files outlive every preview cookie, and a unit test pins that.
+**Three public operations of its own.** `freePreview.lesson`, `freePreview.videoUrl` and `freePreview.fileUrl` are public queries on core-api, listed in `PUBLIC_OPERATIONS`. They never read the caller, so a signed-out visitor, an unenrolled user and an enrolled student get the same answer.
 
-**What unmarking does and does not do.** The operations read the lesson on every request and nothing caches them, so from the first request after the write (or after the lesson, its module or its course is hidden or archived) all three answer `NOT_FOUND`: no new access. A shared preview address then shows "This preview is no longer available". It does not recall what was already handed out: video cookies keep working until they expire, at most an hour after they were issued and never renewed; a file link works for at most five minutes; text on a screen, a downloaded file or a recording can't be recalled. The landing page may show the "Free preview" label for up to five minutes, because the page renderer caches it.
+The enrolled procedures (`course.view`, `contentItem.videoUrl`, `contentItem.fileUrl`, `quiz.view`, the progress, completion, assignment and discussion procedures and the rest) are untouched and still need an enrolment, for marked lessons as for any other. A public operation has no claims, so one operation could not serve both a visitor and an enrolled student.
+
+**What a response contains.** Each item is built field by field, so nothing leaves unless it is named:
+
+| Item | What a visitor gets |
+|---|---|
+| Video | Title, description, duration and whether it can be played now |
+| Text | Its body |
+| File | Name, size and type |
+| Quiz | Title and question count only, shown as a locked card. No questions, answer key or settings |
+| Assignment | Dropped |
+
+No storage key, status or job attribute is returned. A caller who names a lesson that isn't an open preview, or an item that isn't shown under it, gets the same `NOT_FOUND` whatever the reason, and nothing is signed.
+
+**Signing.**
+
+- A video's cookies cover that version's folder only, are set with that `Path`, and last **one hour** (`FREE_PREVIEW_COOKIE_LIFETIME_SECONDS`), against the four hours an enrolled student gets.
+- The page asks for the address when the visitor presses play and again every 30 minutes while a video plays, which renews the cookies.
+- A file link covers one object for five minutes. Text needs no signature.
+- The one hour never exceeds the cookie lifetime that `RETIRED_VERSION_DELAY_MINUTES` already covers, so a replaced version's files outlive every preview cookie. A unit test pins that.
+
+**What unmarking does.** The operations read the lesson on every request and nothing caches them. From the first request after the write (or after the lesson, its module or its course is hidden or archived) all three answer `NOT_FOUND`: no new access. A shared preview address then shows "This preview is no longer available".
+
+**What unmarking does not do.** It does not recall what was already handed out:
+
+- video cookies keep working until they expire, at most an hour after they were issued, and are never renewed;
+- a file link works for at most five minutes;
+- text on a screen, a downloaded file or a recording can't be recalled.
+
+The landing page may show the "Free preview" label for up to five minutes, because the page renderer caches it.
 
 **Nothing is recorded.** A preview performs no write and reads nothing about the caller. There are no completions, progress, saved video position, quiz attempts or student activity counts, and no discussion. The video starts from the beginning every visit. This keeps every student record tied to an enrolment, which `student-records-enrolled` checks after every e2e test.
 
@@ -98,6 +148,10 @@ An instructor can mark an ordinary lesson as a free preview. Anyone, signed in o
 
 ## Profiles and handles
 
-An instructor's profile is created with their first course (`ensureInstructorProfile`, in the same transaction as `createCourse`), so an instructor card always has somewhere to link to. The URL uses a **handle**, never the account ID: 3 to 30 characters of lower-case letters, digits and single hyphens, unique across instructors through a claim record, as category names are. A profile is public if and only if its owner teaches at least one published course, and it lists exactly those courses. There is no opt-out. Public output carries no email addresses and no account identifiers.
+An instructor's profile is created with their first course, so an instructor card always has somewhere to link to. `course.create` calls `ensureInstructorProfile` (in `@discava/core-table`) just before the course's own transaction. It is idempotent, and a profile without a course breaks no invariant.
+
+- The URL uses a **handle**, never the account ID: 3 to 30 characters of lower-case letters, digits and single hyphens. It is unique across instructors through a claim record (`profileHandleClaim`), as category names are.
+- A profile is public if and only if its owner teaches at least one published course, and it lists exactly those courses. There is no opt-out.
+- Public output carries no email addresses and no account identifiers.
 
 <Link path="guides/instructor-guide">The instructor guide</Link> covers the instructor side.

@@ -27,7 +27,7 @@ The first deploy creates every resource, including several CloudFront distributi
 
 1. **Checks the stage exists** in `stages.config.ts`, so a typo fails before touching AWS.
 
-2. **Forwards configuration overrides.** Every variable on the stage's GitHub environment whose name starts with the stage's prefix (`DISCAVA_DEVELOPMENT_` for `discava-development`) is passed to the build. This is how custom domains reach it.
+2. **Forwards configuration overrides.** Every variable on the stage's GitHub environment (or the repository) whose name starts with the stage's prefix (`DISCAVA_DEVELOPMENT_` for `discava-development`) is passed to the build. This is how custom domains reach it.
 
 3. **Scans with Trivy.** The deploy stops on a known critical vulnerability that has a fix, or a committed secret.
 
@@ -35,13 +35,13 @@ The first deploy creates every resource, including several CloudFront distributi
 
 5. **Synthesizes** the CloudFormation templates with CDK, with the stage's permissions boundary applied to every role.
 
-6. **Deploys** each stack in dependency order. CloudFormation creates the resources as the execution role.
+6. **Deploys** each stack in dependency order. CloudFormation creates the resources as the execution role. An automatic run skips this step if `main` has a newer commit by now.
 
 </Steps>
 
 ## 2. Find your portals
 
-Each portal is a CloudFront distribution. Their addresses are outputs of the `Websites` stack:
+Each portal is a CloudFront distribution. Their addresses are outputs of the `Websites` stack. With your AWS CLI set to the stage's region:
 
 ```sh
 aws cloudformation describe-stacks \
@@ -68,19 +68,19 @@ Users live in a Cognito user pool, in three groups that decide which portal and 
 
 1. Open the **Cognito** console in the stage's region and choose the stage's user pool. Its id is an output of the `discava-development-Data` stack.
 
-2. **Create user**, with an email address and a temporary password.
+2. **Create user**, with an email address and a temporary password. A password needs at least 8 characters, with an upper-case letter, a lower-case letter, a digit and a symbol. The temporary one expires after 3 days.
 
 3. Open the user, choose **Add user to group**, and add each group they need. Add yourself to all three to see everything.
 
-4. Sign in on a portal. Cognito asks you to set a permanent password.
+4. Sign in on a portal with the email address. Cognito asks you to set a permanent password.
 
 </Steps>
 
-On `discava-production`, self sign-up is on: people who sign up are added to the `student` and `instructor` groups automatically. Admins are always added by hand.
+On `discava-production`, self sign-up is on and MFA is required. People who sign up are added to the `student` and `instructor` groups automatically. Admins are always added by hand, on every stage.
 
 ## 4. Add categories
 
-Courses are organised by categories that an admin manages. Either sign in to the admin portal and create them, or write the starting set (Science, Technology, Mathematics, Communication, Business) from your machine:
+Courses are organised by categories that an admin manages. Either sign in to the admin portal and create them, or write the starting set (Science, Technology, Mathematics, Communication, Business) from your clone:
 
 ```sh
 TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
@@ -89,7 +89,7 @@ TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data
 DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}" pnpm nx run @discava/tooling-deploy:seed-categories
 ```
 
-It uses your AWS credentials and region, and skips categories that already exist.
+It uses the AWS credentials and region in your shell, which must be the stage's, and skips categories that already exist. Without `DISCAVA_DYNAMODB_CORE_TABLE` it writes to the local development table instead.
 
 ## 5. Try it end to end
 
@@ -103,11 +103,18 @@ It uses your AWS credentials and region, and skips categories that already exist
 
 </Steps>
 
+Two things an administrator sets in the admin portal, with no deploy:
+
+- The platform's name, logo and colour: <Link path="guides/branding">Branding</Link>
+- The Stripe account, to sell courses: <Link path="guides/payments">Paid courses and payments</Link>
+
 ## Later deploys
 
 - **Automatically:** if you set `AUTO_DEPLOY_STAGE`, every push to `main` that passes CI deploys that stage. A deploy is skipped when a newer commit has reached `main` in the meantime.
 - **Manually:** run the Deploy workflow again. It deploys the commit you run it from, which is also how you roll back: run it from an older commit.
 
 Deploys to one stage never overlap. A second run waits for the first.
+
+After pulling a newer version of Discava, <Link path="deploy/setup">run the setup script again</Link> before deploying, so the stage's roles allow what the new version creates.
 
 Next: <Link path="deploy/configuration">configure your stage</Link> with custom domains and email.

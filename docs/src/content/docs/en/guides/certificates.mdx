@@ -1,0 +1,82 @@
+---
+title: Certificates
+description: Turning certificates on for a course and setting what earns one, the student's requirements card, viewing, downloading and sharing a certificate, the public page, and revoking and restoring.
+---
+
+import Link from '@components/link.astro';
+
+A course can give a certificate of completion to each student who meets its requirements. Every certificate has an ID and a public page that anyone can use to check it.
+
+## For instructors: offering a certificate
+
+1. Open the course from **My Courses** and go to its **Certificates** section.
+2. Switch on **Issue a certificate on completion**.
+3. Optionally tick **Require passing every quiz**. A quiz with a pass mark of 0% doesn't count.
+4. Optionally tick **Require graded assignments to be returned with at least** a percentage, and enter a whole number from 1 to 100.
+
+Completing every item in the course is always required.
+
+Changing the requirements affects only students who don't have a certificate yet. Students who then qualify get theirs automatically, and nobody loses one.
+
+**Issued certificates**, in the same section, lists each learner, the certificate ID, the completion date and the status.
+
+## For students: earning one
+
+The course's **Certificate** card lists what you still need:
+
+| Requirement | What it shows |
+| --- | --- |
+| Complete every item | Whether you have finished everything |
+| Pass every quiz | Each quiz as Passed, Not attempted or Not passed yet |
+| Graded assignments returned with at least a percentage | Each assignment as Done, Not submitted or Waiting to be graded, or the score it was returned with |
+
+A quiz with no attempts left reads "Not passed, no attempts left. Ask your instructor for another attempt."
+
+When everything is met the card says "Your certificate is being prepared." and then offers:
+
+- **View**: opens the certificate's page.
+- **Download PDF**.
+- **Copy link**: copies the address of the certificate's page.
+- **Add to LinkedIn**.
+
+You are also told in the bell and by email, with one later reminder to add it to LinkedIn. See <Link path="guides/notifications">Notifications</Link>.
+
+## The certificate's page
+
+The page at `/certificates/<certificate ID>` is public. It shows "Certificate of completion", the learner's name, the course, the date, what the certificate confirms and the certificate ID. Anyone with the link can read it without signing in.
+
+An ID that doesn't exist shows "Certificate not found".
+
+## Adding it to LinkedIn
+
+1. Choose **Add to LinkedIn**, on the course's **Certificate** card or on your certificate's page while signed in.
+2. Choose **Continue to LinkedIn**.
+3. Save the entry on LinkedIn.
+
+Your certificate's page also lists what LinkedIn asks for, in case you fill the form in by hand: issuing organisation, issue date, credential ID and credential URL.
+
+## Revoking and restoring
+
+A revoked certificate is no longer valid. Its public page says "This certificate has been revoked and is no longer valid." The student is told, and their course card shows the date and the reason. Restoring makes it valid again with the same ID, and the student is told again.
+
+| Who | Where | Reasons they can give |
+| --- | --- | --- |
+| An instructor of the course | **Issued certificates** in the course's **Certificates** section | Academic integrity, Issued in error, Other |
+| An administrator | **Certificates** in the admin portal | The same, and Order refunded |
+
+**For instructors:** choose **Revoke** on a certificate, pick a **Reason**, add a **Note** if you want, and confirm. **Restore** undoes it. **History** shows who revoked and restored it, and when.
+
+**For administrators:**
+
+1. Open **Certificates** in the admin portal.
+2. Enter the **Certificate ID** and choose **Look up**. The certificate shows as **Valid** or **Revoked**.
+3. Choose **Revoke**, pick a **Reason**, and confirm with **Revoke certificate**. The reason Other needs a **Note**.
+
+**Restore**, confirmed with **Restore certificate**, undoes it.
+
+Who can undo whose:
+
+- An administrator can restore any certificate.
+- An instructor can restore a certificate an instructor revoked, but not one an administrator revoked. It shows as "Revoked by an administrator".
+
+A full refund of a paid course doesn't take a certificate away by itself. See <Link path="guides/payments">Paid courses and payments</Link>.

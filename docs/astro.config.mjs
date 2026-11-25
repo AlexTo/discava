@@ -8,12 +8,17 @@ import starlight from '@astrojs/starlight';
 import starlightBlog from 'starlight-blog';
 import astroD2 from 'astro-d2';
 
-const basePath = process.env.DOCS_BASE_PATH || '/discava';
+// Where the site is published. CI sets both from the repository it runs in
+// (see the Build step in .github/workflows/ci.yml), so a fork's docs build for
+// its own GitHub Pages address. Unset, the site builds for the root of
+// whatever serves it, as `astro dev` does.
+const site = process.env.DOCS_SITE || undefined;
+const basePath = (process.env.DOCS_BASE_PATH || '').replace(/\/+$/, '');
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://alexto.github.io',
-  base: basePath,
+  site,
+  base: basePath || '/',
   outDir: './dist',
   // Redirect the root URL to the default locale so visitors land on localised content.
   redirects: {
@@ -23,11 +28,15 @@ export default defineConfig({
     starlight({
       title: 'Discava',
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/AlexTo/discava' },
+        {
+          icon: 'github',
+          label: 'GitHub',
+          href: 'https://github.com/AlexTo/discava',
+        },
       ],
       tableOfContents: {
         minHeadingLevel: 2,
-        maxHeadingLevel: 4,
+        maxHeadingLevel: 3,
       },
       defaultLocale: 'en',
       locales: {
@@ -76,12 +85,20 @@ export default defineConfig({
           label: 'Feature guides',
           items: [
             'guides/instructor-guide',
-            'guides/announcements',
-            'guides/notifications',
+            'guides/admin-guide',
+            'guides/finding-and-taking-courses',
+            'guides/building-a-course',
+            'guides/video-lessons',
+            'guides/quizzes-and-assignments',
+            'guides/certificates',
             'guides/lesson-discussions',
             'guides/reviews',
+            'guides/announcements',
+            'guides/notifications',
+            'guides/course-analytics',
             'guides/payments',
             'guides/earnings-and-payouts',
+            'guides/branding',
           ],
         },
         {

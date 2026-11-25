@@ -2,3 +2,20 @@
 Copyright Discava Contributors. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
+
+/*
+ * Starlight sizes the "On this page" panel with --sl-sidebar-width, the same
+ * 18.75rem as the navigation sidebar. Narrowing the variable on the wrapper
+ * that holds only the panel and the article leaves the navigation sidebar
+ * alone, and the article takes the space the panel gives up.
+ */
+@media (min-width: 72rem) {
+  div:has(> .right-sidebar-container) {
+    --sl-sidebar-width: 13rem;
+    --sl-content-width: 50rem;
+  }
+
+  .right-sidebar-panel {
+    --sl-sidebar-pad-x: 0.75rem;
+  }
+}
