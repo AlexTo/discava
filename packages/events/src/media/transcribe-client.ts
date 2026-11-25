@@ -24,9 +24,7 @@ import {
   type LocalTranscriptionJobRequest,
 } from '@discava/common-server-utils/local-dev';
 import { readOptionalSetting } from '@discava/common-server-utils/settings';
-
-// The language automatic captions are made in, until a course can choose.
-const DEFAULT_CAPTION_LANGUAGE = 'en-US';
+import { DEFAULT_CAPTION_LANGUAGE } from './caption-language.js';
 
 let _client: TranscribeClient | undefined;
 const getTranscribeClient = (): TranscribeClient => {
@@ -132,6 +130,8 @@ export type CaptionJob = CaptionJobTarget & {
   status: string;
   /** The WebVTT's key in the lesson media bucket, if Transcribe wrote one. */
   vttKey?: string;
+  /** The language the job ran in. */
+  languageCode: string;
 };
 
 // Transcribe reports file locations as https://s3.<region>.amazonaws.com/
@@ -159,11 +159,19 @@ export const getCaptionJob = async (jobName: string): Promise<CaptionJob> => {
   const uri = job?.Subtitles?.SubtitleFileUris?.[0];
   const status = job?.TranscriptionJobStatus ?? 'UNKNOWN';
   const vttKey = uri ? keyFromS3Uri(uri) : undefined;
+  const languageCode = job?.LanguageCode ?? DEFAULT_CAPTION_LANGUAGE;
   if (tags.target === 'coursePreview') {
     if (!courseId || !nonce) {
       throw new Error(`Caption job ${jobName} is missing its tags`);
     }
-    return { target: 'coursePreview', status, courseId, nonce, vttKey };
+    return {
+      target: 'coursePreview',
+      status,
+      courseId,
+      nonce,
+      vttKey,
+      languageCode,
+    };
   }
   if (!courseId || !moduleId || !lessonId || !contentItemId || !nonce) {
     throw new Error(`Caption job ${jobName} is missing its tags`);
@@ -176,5 +184,6 @@ export const getCaptionJob = async (jobName: string): Promise<CaptionJob> => {
     contentItemId,
     nonce,
     vttKey,
+    languageCode,
   };
 };

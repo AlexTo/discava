@@ -134,6 +134,12 @@ describe('getCaptionJob', () => {
     },
   });
 
+  it("returns the job's language", async () => {
+    send.mockResolvedValue(found({ LanguageCode: 'fr-FR' }));
+
+    expect((await getCaptionJob('captions-i1-n1')).languageCode).toBe('fr-FR');
+  });
+
   it('returns the tags, status and the VTT key', async () => {
     send.mockResolvedValue(found());
 
@@ -141,6 +147,7 @@ describe('getCaptionJob', () => {
       status: 'COMPLETED',
       ...TARGET,
       vttKey: `${OUTPUT_KEY}captions-i1-n1.vtt`,
+      languageCode: 'en-US',
     });
     expect(send.mock.calls[0][0]).toEqual({
       type: 'get',
@@ -213,6 +220,7 @@ describe('for a course preview', () => {
       ...PREVIEW,
       status: 'COMPLETED',
       vttKey: undefined,
+      languageCode: 'en-US',
     });
   });
 });
