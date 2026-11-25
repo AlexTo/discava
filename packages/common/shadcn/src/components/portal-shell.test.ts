@@ -68,4 +68,16 @@ describe('getBreadcrumbs', () => {
     const crumbs = getBreadcrumbs(() => false, '/a/b', 'Home', {});
     expect(crumbs.some((c) => c.href === '#')).toBe(false);
   });
+
+  it('labels a param segment neutrally when no title overrides it', () => {
+    const crumbs = getBreadcrumbs(
+      matchAll,
+      '/my-courses/0192-abc',
+      'Home',
+      {},
+      { 'my-courses': 'My Courses' },
+      { '0192-abc': 'Course' },
+    );
+    expect(crumbs.map((c) => c.text)).toEqual(['Home', 'My Courses', 'Course']);
+  });
 });

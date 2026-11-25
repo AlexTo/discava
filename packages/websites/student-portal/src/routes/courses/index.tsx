@@ -55,7 +55,7 @@ function RouteComponent() {
       {categories.length > 0 && (
         <div className="mt-8 flex flex-col gap-4 rounded-2xl border bg-muted/30 p-4 sm:p-5">
           <div
-            className="flex flex-wrap gap-2"
+            className="flex gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible lg:pb-0 [&>*]:shrink-0"
             role="group"
             aria-label="Course categories"
           >

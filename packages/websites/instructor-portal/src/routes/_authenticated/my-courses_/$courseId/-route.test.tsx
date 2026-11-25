@@ -185,6 +185,21 @@ describe('course editor', () => {
     },
   );
 
+  it('asks for the caption languages once, for the route and the form together', async () => {
+    const captions = vi.fn(() => ({
+      languages: [],
+      supported: [],
+      enabled: true,
+      maxLanguages: 3,
+    }));
+    render({ 'course.captionLanguages': captions });
+    await screen.findByRole('heading', { name: 'Caption languages' });
+    await vi.waitFor(() =>
+      expect(screen.queryByText('Loading…')).not.toBeInTheDocument(),
+    );
+    expect(captions).toHaveBeenCalledTimes(1);
+  });
+
   it('has no link or section for captions when translation is off', async () => {
     render({
       'course.captionLanguages': () => ({
