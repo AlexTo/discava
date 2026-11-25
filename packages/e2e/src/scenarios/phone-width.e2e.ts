@@ -268,6 +268,12 @@ test('search results come first on a phone, with the filters collapsed', async (
     ).toBeVisible();
     await expectNoSidewaysScroll(page);
     await screenshot(page, 'filters open at phone width');
+    await page.getByRole('checkbox', { name: /^Beginner/ }).click();
+    await page.getByRole('button', { name: /^Filters/ }).click();
+    await expect(
+      page.getByRole('button', { name: 'Filters, 1 active' }),
+    ).toBeVisible();
+    await screenshot(page, 'collapsed filters with a summary at phone width');
   });
 
   await test.step('a 70-character word does not push the page sideways', async () => {
