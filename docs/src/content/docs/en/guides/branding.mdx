@@ -5,7 +5,7 @@ sidebar:
   order: 7
 ---
 
-An administrator can give the platform its own look without a deploy: **Settings → Branding** in the admin portal. The brand applies to the student, instructor and admin portals and to public course and profile pages.
+An administrator can give the platform its own look without a deploy. In the admin portal, open the account menu and choose **Branding**, or choose the **Branding** card on Home. The brand applies to the student, instructor and admin portals and to public course and profile pages.
 
 ## What you can set
 
@@ -17,7 +17,9 @@ An administrator can give the platform its own look without a deploy: **Settings
 | **Share image** | The picture in link previews of a course or profile that has no image of its own |
 | **Colour** | Buttons, focus rings and links across the portals and public pages |
 
-Every part is optional. A part you leave empty keeps the default Discava brand, and the page's footer says "Using the default Discava brand" when nothing is customised. The preview on the page shows your changes before you save, and nothing is applied until you press **Save**.
+Every part is optional. A part you leave empty keeps the default Discava brand. The foot of the page says "Using the default Discava brand" when nothing is customised, and otherwise who last changed the branding and when.
+
+The **Preview** on the page shows your changes before you save. Nothing is applied until you choose **Save**.
 
 ## File rules
 
@@ -27,7 +29,7 @@ The page checks each file as you choose it and says which rule it broke. The ser
 |---|---|---|---|
 | Logo | PNG, JPEG, WebP or SVG | 1 MB | Width at most 4 times the height, and no taller than wide |
 | Icon | PNG | 1 MB | Square, at least 192 × 192 pixels. We suggest 512 × 512 |
-| Share image | PNG, JPEG or WebP | 2 MB | At least 1200 × 630 pixels, about twice as wide as tall |
+| Share image | PNG, JPEG or WebP | 2 MB | At least 1200 × 630 pixels, 1.8 to 2 times as wide as tall |
 
 An SVG logo can't contain scripts, embedded pages, event handlers or links to other files. A file that does is refused, and your file is never rewritten.
 
@@ -35,7 +37,12 @@ The name must be 1 to 50 characters. Turn off **Show the name beside the logo** 
 
 ## The colour and readability
 
-Pick the colour as a hex value, such as `#1d4ed8`. Text on buttons is chosen for you, light or dark, whichever reads better. A colour that neither would read well on is refused with a note to choose a darker or lighter shade. Links use your colour only where it is readable on a white page, and the default text colour otherwise, so a pale brand colour never makes links hard to read. Error and status colours are not changed.
+Pick the colour with the colour picker, or type a hex value such as `#1d4ed8`.
+
+- Text on buttons is chosen for you, light or dark, whichever reads better.
+- A colour that neither would read well on is refused, with a note to choose a darker or lighter shade.
+- Links use your colour only where it is readable on a white page, and the default text colour otherwise. A pale brand colour never makes links hard to read.
+- Error and status colours are not changed.
 
 ## How long changes take
 
@@ -45,7 +52,7 @@ If two administrators edit at the same time, the second to save is told someone 
 
 ## Resetting
 
-Each part has **Reset to default**, and **Reset all to default** (which asks first) resets everything. A reset takes effect when you save. Replaced images stop being served from their old address within 5 minutes and are deleted a day later.
+Each part has its own reset button, such as **Reset the logo to default**. **Reset all to default** resets everything, and asks first. A reset takes effect when you save. Replaced images stop being served from their old address within 5 minutes and are deleted a day later.
 
 ## What is not branded
 

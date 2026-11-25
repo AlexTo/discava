@@ -9,6 +9,11 @@ sidebar:
 
 A student submits one file to an upload assignment and can replace it until it is returned. An instructor of the course lists every enrolled student's work, opens a submission, and either returns it as final with points and feedback, or asks for a resubmission with feedback only. Only the course's instructors can list, read or return submissions.
 
+| Who | API | Procedures |
+|---|---|---|
+| Student | core-api | `assignment.uploadUrl`, `submit`, `mySubmission`, `submissionFileUrl` |
+| Instructor | instructor-api | `assignmentSubmission.list`, `get`, `fileUrl`, `return`, `requestResubmission`, `amendGrade`, and `gradingQueue.list` |
+
 ## Submissions and grading
 
 A submission is one `assignmentSubmission` record per student per assignment. Its `status` moves like this:
@@ -21,21 +26,29 @@ A submission is one `assignmentSubmission` record per student per assignment. It
 | Return as final | Instructor | `version` and `reviewRevision` unchanged, status `submitted` or `resubmission_requested` | `returned`, sets points, locks the student out of resubmitting |
 | Amend grade | Instructor | `reviewRevision` unchanged, status `returned` | Points and feedback change, status stays `returned` |
 
-Every instructor action adds one to `reviewRevision`. Each write is conditioned on the `version` and `reviewRevision` the instructor was looking at, so a return can't land on a file the student has since replaced, and when two instructors act at once exactly one wins. Points are a number from 0 to the assignment's `maxPoints` (at most two decimals); `pointsOutOf` keeps the maximum the work was graded against if `maxPoints` changes later. Returning or amending is refused for a student who is no longer enrolled, though the instructor can still read their work.
-
-A resubmission request doesn't undo the student's completion of the assignment, and a resubmission after a request doesn't count the student a second time in the content item's `studentActivityCount`.
+- **Concurrency.** Every instructor action adds one to `reviewRevision`, and each write is conditioned on the `version` and `reviewRevision` the instructor was looking at. A return can't land on a file the student has since replaced, and when two instructors act at once exactly one wins.
+- **Points** are a number from 0 to the assignment's `maxPoints`, with at most two decimals. `pointsOutOf` keeps the maximum the work was graded against, in case `maxPoints` changes later.
+- **Students who left.** Returning or amending is refused for a student who is no longer enrolled. The instructor can still read their work.
+- **Completion is untouched.** Grading never changes the student's completion or the content item's `studentActivityCount`. A resubmission request doesn't undo the completion, and a resubmission doesn't count the student a second time.
 
 ## Feedback rounds
 
-Each instructor action writes one `submissionFeedback` record: a resubmission request, a final return, or an amendment. Rounds are append-only and keyed by submission and time, so a student's history is one query, newest first. They are separate records because feedback can be 20 000 characters of Tiptap JSON per round and the number of rounds is unbounded; a list on the submission could reach DynamoDB's item size limit. The submission keeps only the current grade. The student sees earlier feedback across resubmissions, so they know what was asked. Feedback is required on a resubmission request and optional on a return.
+Each instructor action writes one `submissionFeedback` record: a resubmission request, a final return, or an amendment. Feedback is required on a resubmission request and optional on a return.
+
+- Rounds are append-only and keyed by submission and time, so a student's history is one query, newest first. The student sees earlier feedback across resubmissions, so they know what was asked.
+- The submission keeps only the current grade. Rounds are separate records because each can hold 20 000 characters of Tiptap JSON and their number is unbounded: a list on the submission could reach DynamoDB's item size limit.
 
 The student is notified in the app and by email (on by default) of each action: `assignment.returned`, `assignment.resubmission_requested` and `assignment.grade_updated`, each deduplicated on the round's `feedbackId`. The notification and the round are written in the same transaction as the submission change.
 
 ## The waiting index and enrolment
 
-Submissions waiting for a first look (status `submitted`) carry `waitingCourseId` and `waitingSince`, which key a sparse index (`byWaiting`) with the course as partition and the submission time as sort key. The grading queue on the instructor home page is therefore one query per course the instructor teaches, each already oldest first, merged in memory. Every write that changes `status` sets or removes both attributes together through `waitingKeys`.
+Submissions waiting for an instructor (status `submitted`) carry `waitingCourseId` and `waitingSince`, which key a sparse index (`byWaiting`) with the course as partition and the submission time as sort key. Every write that changes `status` sets or removes both attributes together through `waitingKeys`.
 
-**Enrolment is applied at read time.** The queue batch-reads the listed students' enrolments and drops those who are `dropped`. Storing enrolment in the index would make refunds and checkout rewrite every submission a student has in the course, inside their own transactions. Reading it instead leaves the payment code alone, and a student who re-enrols reappears in the queue with no write.
+The grading queue on the instructor home page (`gradingQueue.list`) is therefore one query per course the instructor teaches, each already oldest first, merged in memory. It reads every waiting entry, so its total is exact.
+
+**Enrolment is applied at read time.** The queue batch-reads the listed students' enrolments and leaves out students whose enrolment is `dropped` or missing. Storing enrolment in the index would make refunds and checkout rewrite every submission a student has in the course, inside their own transactions. Reading it instead leaves the payment code alone, and a student who re-enrols reappears in the queue with no write.
+
+Because a missing enrolment hides a student, a partial read must not pass as a full one. When DynamoDB leaves keys unprocessed under throttling, the queue asks for them again, up to three times with a growing pause, and then fails the request instead of returning a shorter queue.
 
 The per-assignment list reads every submission and every enrolment of the course (two single-partition queries), merges them, and pages in memory, 50 rows at a time, with a cursor that encodes the last row's sort position. Students with no submission appear as "not submitted", and those who left as "no longer enrolled".
 
@@ -56,4 +69,10 @@ An instructor's unsent points and feedback are kept in their own browser, per su
 
 ## Rules the checks enforce
 
-The shared helpers in `assignment-grading.ts` are the only writers of the grade fields, the waiting keys and `submissionFeedback`. Invariant checks cover: grade shape (`returned` has points within `pointsOutOf`, a returner and times; nothing else does), waiting keys agreeing with `status`, rounds belonging to a submission, round shape, and the newest round matching the submission's state and `reviewRevision`.
+The shared helpers in core-table's `helpers/assignment-grading.ts` are the only writers of the grade fields and `submissionFeedback`. The student's submit, in `helpers/assignment-submission.ts`, sets the waiting keys through the same `waitingKeys`. The checks in `helpers/invariants/assignment-grading.ts` cover:
+
+- grade shape: `returned` has points within `pointsOutOf`, a returner and times, and nothing else does;
+- waiting keys agreeing with `status`;
+- every round belonging to a submission, and round shape;
+- the newest round matching the submission's state and `reviewRevision`;
+- the shape of the daily notice marker.

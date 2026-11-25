@@ -17,7 +17,7 @@
   <a href="https://github.com/AlexTo/discava/actions/workflows/ci.yml">
     <img
       src="https://github.com/AlexTo/discava/actions/workflows/ci.yml/badge.svg"
-      alt="Release badge"
+      alt="CI status"
     />
   </a>
   <a href="https://github.com/AlexTo/discava/commits/main">
@@ -51,9 +51,9 @@
 
 - 🔍 Browse a course catalogue by category, or search with suggestions as you type
 - 👀 Watch free preview lessons before you enrol
-- 💳 Enrol in free courses, or buy paid ones with Stripe Checkout, with a discount code if you have one (a code that makes the course free enrols you straight away)
+- 💳 Enrol in free courses, or buy paid ones with Stripe Checkout, with a discount code if you have one
 - ↩️ Ask for a refund within 14 days if a course isn't for you, as long as you're under halfway through, or leave a free course and keep your progress for later
-- 🎬 Adaptive HD video with auto-generated captions, translated into the course's other languages and labelled as auto-translated, playback speeds and keyboard shortcuts
+- 🎬 Adaptive HD video with playback speeds, keyboard shortcuts and auto-generated captions, translated into the course's other languages
 - 📜 Read a video's transcript alongside it, search what was said across a course, and jump to that moment
 - ❓ Answer questions that pause the video as you watch, see where they are on the timeline, and take a short check when the video ends
 - 📝 Quizzes and assignment submissions, with late submissions flagged, and grades and feedback when your work is returned
@@ -68,13 +68,13 @@
 ### 📚 For instructors
 
 - 🎬 Build courses from video, text, files, quizzes and assignments, and add questions to a video's timeline
-- ✏️ Edit your course live and publish a public landing page for it, with a preview video and your instructor profile, server-rendered so search engines can find it
+- ✏️ Keep editing a course after it's published, and give it a public landing page with a preview video and your instructor profile that search engines can find
 - 👀 Mark lessons as free previews that anyone can watch before enrolling
-- 🌐 Choose the languages your videos' captions are machine-translated into, see each translation's status and translate again; a caption file you upload always wins
+- 🌐 Choose the languages your captions are machine-translated into, or upload your own caption file, which always wins
 - 👋 Set a prompt in the first lesson to get learners started, and see how many answered it
-- 🏆 Choose whether your course awards certificates, what counts towards completion, whether every quiz must be passed and what score graded work must reach, and revoke or restore a certificate
-- 💰 Set a price, and create discount codes, percent or fixed amount, with an expiry and a usage limit that holds even when students check out at the same moment
-- 🏦 Connect your Stripe account, see your earnings per course and period, net of discounts, refunds and the platform fee, and follow each payout
+- 🏆 Choose whether your course awards certificates and what a student must pass to earn one, and revoke or restore a certificate
+- 💰 Set a price, and create discount codes, percent or fixed amount, with an expiry and a usage limit
+- 🏦 Connect your Stripe account, see your earnings per course after discounts, refunds and the platform fee, and follow each payout
 - 📊 An instructor dashboard with enrolment and activity trends, the lessons where learners drop off, and the video questions they miss most
 - ✅ Grade assignment submissions from a queue on your home page, return feedback, and get one notification a day when new work comes in
 - 💬 Answer lesson discussions and respond to reviews
@@ -102,7 +102,7 @@ Discava is a TypeScript monorepo. It is opinionated by design: one cloud provide
 
 #### Try it locally
 
-With Docker running:
+You need Node.js 24, pnpm and Docker running:
 
 ```sh
 pnpm i
@@ -117,13 +117,24 @@ Then open a portal:
 | Instructor | http://localhost:4200 |
 | Admin | http://localhost:4202 |
 
-Sign in as Alice (instructor and student), Bob or Dan (students) or Carol (admin). Payments work locally too, with a stand-in for Stripe.
+Sign in as Alice (instructor and student), Bob or Dan (students) or Carol (admin). There are no passwords. Payments work locally too, with a stand-in for Stripe.
 
-See the docs and [DEVELOPMENT.md](DEVELOPMENT.md) for everything else.
+The catalogue starts empty. To add a few sample courses while `pnpm dev` is running:
+
+```sh
+pnpm nx run @discava/e2e:seed-local-courses
+```
+
+[Run Discava locally](https://alexto.github.io/discava/en/guides/getting-started/) has the details, and [DEVELOPMENT.md](DEVELOPMENT.md) covers tests, code style and how changes are made.
 
 ## Documentation
 
-Architecture and guides live at the [Discava docs site](https://alexto.github.io/discava/).
+The [Discava docs site](https://alexto.github.io/discava/) has:
+
+- [Deploy](https://alexto.github.io/discava/en/deploy/): fork the repository, connect it to your AWS account and let GitHub Actions deploy it
+- [Architecture](https://alexto.github.io/discava/en/architecture/): the components, how they sit on AWS and how a request travels through them
+- Feature guides for instructors, students and admins
+- [Design](https://alexto.github.io/discava/en/design/): how each feature works and the rules it keeps
 
 ## License
 

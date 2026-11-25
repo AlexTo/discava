@@ -1,0 +1,78 @@
+---
+title: Quizzes and assignments
+description: Building a quiz and its settings, taking one as a student, setting an assignment, submitting work, late work, and grading, returning and requesting a resubmission.
+---
+
+import Link from '@components/link.astro';
+
+A quiz is marked automatically. An assignment is work a student uploads and an instructor grades.
+
+## Quizzes: for instructors
+
+In **Course content**, add a **Quiz** to a lesson. The quiz builder has:
+
+- **Questions**: up to 50. Each is **Single choice** or **Multiple choice**, with 2 to 10 options and an optional **Explanation**.
+- **Pass mark (%)**: from 0 to 100.
+- **Attempts allowed**: **Unlimited**, or a number of at least 1.
+- **Show the correct answers**: After each attempt, After the last attempt, or Never.
+- **Shuffle the options for each student**.
+
+There is no time limit.
+
+**Preview as student** lets you take the quiz as a student would. Answers are checked and nothing is saved.
+
+You can edit a quiz after students have attempted it. Their attempts and best scores are kept and never regraded. A student who is in the middle of an attempt is asked to check the changed questions before submitting.
+
+## Quizzes: for students
+
+The quiz shows its number of questions, the pass mark and how many attempts you have.
+
+1. Choose **Start quiz**.
+2. Answer each question. **Next** and **Back** move between them.
+3. Choose **Review answers** to see what you answered and what is still unanswered. **Change** takes you back to a question.
+4. Choose **Submit answers**.
+
+The result shows this attempt's score and whether you passed. Your best score is the one that counts.
+
+- **Resume quiz** carries on an attempt you left.
+- **Retake quiz** starts another attempt, while you have attempts left.
+- Passing the quiz, or using your last attempt, marks it complete.
+- In an archived course, quizzes are closed.
+
+## Assignments: for instructors
+
+In a module, choose **New assignment** and pick its kind:
+
+- **Upload**: students submit a file and you grade it.
+- **Quiz**: a quiz that is graded automatically.
+
+An upload assignment has an **Assignment title**, **Instructions**, **Max points** (a whole number from 1 to 1000) and an optional due date.
+
+### Grading
+
+**Home** lists the submissions **Waiting for grading**. An assignment's **Submissions** link in **Course content** lists every student, as Not submitted, Waiting, Resubmission requested or Returned.
+
+1. Open a submission.
+2. Read the file.
+3. Enter the **Points**, from 0 to the maximum, and your **Feedback**.
+4. Choose **Return** to give the student the grade, or **Request resubmission** to ask for another version.
+
+After you return work you can still change the grade with **Save grade**. The student is told each time. You can read the work of a student who has left the course, but not grade it.
+
+## Assignments: for students
+
+The assignment shows its instructions, the **Maximum points** and the due date, if it has one.
+
+1. Choose **Choose file** and pick your work.
+2. Choose **Submit**.
+
+- You submit one file of up to 100 MB: pdf, docx, xlsx, pptx, odt, ods, odp, txt, csv, md, png, jpg, jpeg, gif, webp or zip.
+- **Late work is accepted.** After the due date your submission is marked **Late**.
+- **Resubmit** replaces your file until the instructor returns it. Returned work can't be changed.
+- If your instructor asks you to resubmit, you see their feedback and can submit a new version.
+- Returned work shows your points and the feedback.
+- In an archived course, work can no longer be submitted.
+
+You are told in the bell, and by email unless you switch it off, when work is returned, when a resubmission is requested and when a grade changes. See <Link path="guides/notifications">Notifications</Link>.
+
+Grades can count towards a certificate. See <Link path="guides/certificates">Certificates</Link>.

@@ -1,17 +1,19 @@
 ---
 title: Payments
-description: How a paid course is bought with Stripe Checkout, the order record, the webhook that delivers the course exactly once, refunds, and the administrator's Stripe connection.
+description: How a paid course is bought with Stripe Checkout, the order record, the webhook that delivers the course exactly once, coupons, refunds, and the administrator's Stripe connection.
 sidebar:
   order: 10
 ---
 
 import Link from '@components/link.astro';
 
-**Spec:** [`specs/20261116-013315-stripe-checkout/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013315-stripe-checkout/)
+**Spec:** [`specs/20261116-013315-stripe-checkout/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013315-stripe-checkout/) (checkout) and [`specs/20261116-013138-coupons-discount-codes/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013138-coupons-discount-codes/) (coupons)
 
 ## The rule
 
 **A priced course is entered only by a paid order, and only Stripe's signed confirmation makes an order paid.** Nothing a browser sends, including the return from Stripe's page, enrols anyone. core-api's `course.enrol` refuses a priced course ("This course must be purchased"), and the webhook is the only caller of `settleOrderPaid`.
+
+There is one case with no payment: a [coupon](#coupons) that takes the whole price. The server computes that the total is zero and writes the order already `paid`, so Stripe is never called.
 
 ## Prices
 
@@ -19,14 +21,14 @@ A course has `priceAmount` and `priceCurrency`. The amount is an integer in the 
 
 - The supported currencies are USD, EUR, GBP, AUD and CAD. All have two decimals. A currency with none or three isn't supported.
 - A price above zero is between 1.00 and 10,000.00.
-- An instructor sets the price with instructor-api's `setCoursePrice`, in any course status. Setting a price above zero needs an active Stripe connection. Going back to free never does.
+- An instructor sets the price with instructor-api's `course.setPrice`, in any course status. Setting a price above zero needs an active Stripe connection. Going back to free never does.
 - A price change applies to new purchases. It never touches an order or an enrolment: students already enrolled keep their access.
 
 The rules and the formatting live in `@discava/common-web-utils/price`, shared by the portals and the APIs.
 
 ## The order
 
-An `order` is one attempt by one student to buy one course. It copies the course title, the amount and the currency when it is created, along with the Stripe account and mode it was started under.
+An `order` is one attempt by one student to buy one course. When it is created it copies the course title, the list price (`listAmount`), the amount to charge (`amount`) and the currency, along with the Stripe account and mode it was started under. An order started with a coupon also copies `discountAmount`, `couponCode`, `couponType` and `couponValue`, and `amount` is the list price less the discount.
 
 | Status | Meaning |
 | --- | --- |
@@ -39,14 +41,16 @@ An `order` is one attempt by one student to buy one course. It copies the course
 
 ## Starting a checkout
 
-core-api's `payment.checkout` takes only a course ID. The amount and currency are the course's, never the input's.
+core-api's `payment.checkout` takes a course ID and an optional `couponCode`. The amount and currency are computed on the server from the course (and the coupon), never taken from the input. Without a code:
 
 1. It refuses a course that isn't published, a free course, and a student who is already enrolled.
-2. If the student has a `pending` order for the course with more than five minutes left, it returns that order's page, so choosing **Buy now** twice makes one order.
+2. If the student has a `pending` order for the course with no coupon and more than five minutes left, it returns that order's page, so choosing **Buy now** twice makes one order.
 3. Otherwise `startOrder` creates a `pending` order in one transaction that also checks the Stripe connection is `active` and raises the connection's `latestCheckoutExpiresAt` to cover the new checkout.
 4. It creates a Stripe Checkout session with the order ID as the idempotency key, card payments only, and the order, student and course IDs in the metadata. The session's address is stored on the order and returned.
 
 A checkout lives for one hour. If Stripe can't be reached, the order is expired and the student sees "Couldn't start the payment".
+
+A checkout with a code follows the same steps with a claim on the code added: see [Coupons](#coupons).
 
 `payment.available` tells the student portal whether a purchase can start: only that the connection is active, nothing about the account or the key.
 
@@ -59,27 +63,79 @@ Stripe posts to `POST /stripe/webhook`, an API Gateway API of its own in the `Pa
 
 | Event | What happens |
 | --- | --- |
-| `checkout.session.completed` | The order is settled, or refunded if it can't be delivered |
-| `checkout.session.expired` | A `pending` order becomes `expired` |
+| `checkout.session.completed` | The order is settled, or refunded if it can't be delivered. A session that isn't paid yet is ignored |
+| `checkout.session.expired` | A `pending` order becomes `expired`, and its coupon claim is released |
 | `charge.refunded` | The refund is recorded against the order |
 
 These three are the only events registered with Stripe.
 
 ### Delivering exactly once
 
-`settleOrderPaid` moves the order from `pending` to `paid` and gives the student their enrolment in **one transaction**, which also checks the course is still published. The enrolment is created, or restored if the student had a `dropped` one. Stripe delivers at least once and in any order, so the same confirmation arriving five times at once still leaves one paid order and one enrolment: every call after the first finds the order is no longer `pending`.
+`settleOrderPaid` moves the order from `pending` to `paid` and gives the student their enrolment in **one transaction**, which also checks the course is still published. The enrolment is created, or restored if the student had a `dropped` one. If the order holds a coupon, the same transaction confirms its redemption. Stripe delivers at least once and in any order, so the same confirmation arriving five times at once still leaves one paid order and one enrolment: every call after the first finds the order is no longer `pending`.
 
 ### A payment that can't be delivered
 
-The money was taken, so it is never kept. The webhook asks Stripe for a full refund, with an idempotency key built from the order ID, and marks the order `refunded` with a reason:
+The money was taken, so it is never kept. The webhook asks Stripe for a full refund, with an idempotency key built from the order ID, and `refundUndeliverable` marks the order `refunded` with a reason. No enrolment is given, and the order's coupon claim is released.
 
 | Reason | When |
 | --- | --- |
 | `duplicate` | The student is already enrolled |
 | `unavailable` | The course is no longer published |
-| `mismatch` | The session's amount, currency or IDs differ from the order's |
+| `mismatch` | The session's amount, currency, or order, student or course ID differs from the order's. This is also logged as an error ("Paid session differs from its order; refunding"), and the student has been refunded by the time the line appears |
 
-A paid session, expired session or refund whose order isn't in the table is logged as an error ("Paid session for an unknown order", "Refund for an unknown order") and answered 200. An operator should watch for these lines: they mean Stripe holds a payment Discava has no record of.
+A paid session, expired session or refund whose order isn't in the table is logged as an error ("Paid session for an unknown order", "Expired session for an unknown order", "Refund for an unknown order") and answered 200. An operator should watch for these lines: they mean Stripe holds a payment Discava has no record of.
+
+## Coupons
+
+An instructor makes discount codes for a paid course with instructor-api's `coupon.create`, `coupon.list`, `coupon.update` and `coupon.delete`. A student types one on the course page: core-api's `coupon.preview` shows what they would pay and writes nothing, and `payment.checkout` takes the code as `couponCode`. The <Link path="guides/payments">Payments guide</Link> covers the screens.
+
+| Record | Key | Holds |
+| --- | --- | --- |
+| `coupon` | Course, then code | `type` (`percent` or `fixed`), `value`, optional `expiresAt` and `maxRedemptions`, `enabled`, and `redeemedCount` |
+| `couponRedemption` | Course and code, then student | The order it belongs to, `status` (`reserved` or `redeemed`), and `reservedUntil` while reserved |
+
+The key of `couponRedemption` is the rule that a student uses a code once.
+
+### Codes and prices
+
+- A code is 4 to 24 characters of A-Z, 0-9 and `-`, stored upper case. A generated code is 8 characters written `XXXX-XXXX`.
+- A percentage is a whole number from 1 to 100. A fixed amount is in the course's currency, above zero and not above the course's price when the code is made.
+- A code's type, value and currency never change. `coupon.update` changes only `enabled`, the expiry and the limit, and can't lower the limit below `redeemedCount`. `coupon.delete` works only while `redeemedCount` is 0; a used code is disabled instead.
+- `priceWithCoupon` in core-table's `helpers/coupon-price.ts` is the one price function. A percentage is rounded down, and a fixed amount never takes more than the list price.
+- A total above zero but under Stripe's minimum charge (0.50, or 0.30 for GBP) can't be paid, so the code is refused.
+
+`coupon.preview` and `payment.checkout` run the same check (`checkCoupon`), so they refuse the same codes with the same messages. An unknown code, another course's code and a fixed code in another currency all get "This code is not valid for this course", so a student can't tell them apart.
+
+### Claim, confirm, release
+
+`helpers/coupon-redemption.ts` in core-table is the only writer of `redeemedCount` and of `couponRedemption`. It builds three sets of writes, each run inside the transaction of the order change that causes it:
+
+| Step | When | What it writes |
+| --- | --- | --- |
+| **Claim** | `payment.checkout` creates the order | Adds one to `redeemedCount`, on the condition that the coupon is enabled, not expired and under its limit. Creates the student's redemption as `reserved`, which fails if they already have one for the code |
+| **Confirm** | `settleOrderPaid` marks the order paid | `reserved` becomes `redeemed` |
+| **Release** | The order expires, is replaced by a new checkout, or is refunded as undeliverable | Deletes the `reserved` redemption and takes one off `redeemedCount` |
+
+`redeemedCount` therefore counts reserved and redeemed redemptions together. Because the claim is a condition in the order's own transaction, the limit holds when many students start a checkout at the same moment. A cancelled transaction writes nothing; checkout reads again to give the exact refusal, and gives up with "Too many people are checking out; try again" after three conflicts.
+
+A reservation lasts until five minutes after its checkout expires (`reservedUntil`). When a code looks used up, checkout first releases its reservations that are past that time and whose Stripe session has ended, then checks once more. A session Stripe reports as complete keeps its reservation: its paid event may still be on the way.
+
+### One live checkout
+
+A student has one live checkout per course. Starting a checkout with a different code, or with none after one with a code, replaces the earlier `pending` order:
+
+1. The earlier order's Stripe session is expired first, so it can never be paid.
+2. The new order's transaction moves the earlier order to `expired` and releases its claim.
+
+If Stripe says the earlier session was already paid, the answer is "You are already enrolled in this course". Starting again with the same code and more than five minutes left returns the open checkout's page.
+
+### A code that takes the whole price
+
+When the total is zero, `startFreeOrder` writes the order already `paid` with amount 0, the enrolment and the redemption as `redeemed`, in one transaction. Stripe is never called and `payment.checkout` returns `enrolled: true` in place of a page address. It still needs an active Stripe connection. Such an order isn't a sale, so it records no <Link path="design/instructor-payouts">earnings</Link>.
+
+### Coupons and refunds
+
+A full refund after delivery leaves the redemption `redeemed`, so the student can't use the same code again.
 
 ## Refunds
 
@@ -115,11 +171,12 @@ A dropped enrolment keeps its progress and completions. The student can come bac
 
 ### Terms
 
-The 14-day period is `REFUND_WINDOW_DAYS` in `helpers/order.ts` of core-table, and `payment.myOrder` returns it as `refundWindowDays` so the course page quotes the same number. The 50% limit is `REFUND_PROGRESS_LIMIT_PERCENT` in the same file, returned as `refundProgressLimitPercent` by `payment.myOrder` and `course.publicView`, which also returns `refundWindowDays`, so the terms line states what the API applies. A student's request is refused after completion, once half the course is done, and for a course they were refunded for at their own request; `course.myEnrolment` returns `refundedBefore` so the page warns before a second purchase. An operator's refund in Stripe is not subject to either term. Requests are refunded automatically, with no review. Certificates survive refunds.
-
-### A refund for a payment that doesn't match
-
-A paid session whose student, course, amount or currency differs from its order's is refunded in full with reason `mismatch` and no enrolment is given. The student has already been refunded by the time the log line appears.
+- The two limits are constants in core-table's `helpers/order.ts`: `REFUND_WINDOW_DAYS` (14) and `REFUND_PROGRESS_LIMIT_PERCENT` (50).
+- `payment.myOrder` and `course.publicView` return them as `refundWindowDays` and `refundProgressLimitPercent`, so the terms line on the course page states what the API applies.
+- `course.myEnrolment` returns `refundedBefore`, so the page warns a student who was refunded at their own request before they buy again.
+- An operator's refund in Stripe is not subject to any of these terms.
+- Requests are refunded automatically, with no review.
+- Certificates survive refunds.
 
 ## The Stripe connection
 
@@ -141,17 +198,21 @@ A switch or disconnect takes a two-minute **lease**: the record's status becomes
 
 ## Invariants
 
-`helpers/invariants/payments.ts` checks the rules that span records, after every end-to-end scenario: an order's fields match its status, a paid order has its enrolment, and an enrolment's `orderId` names a paid order of the same student and course.
+Two files in core-table's `helpers/invariants/` check the rules that span records, after every end-to-end scenario:
+
+- `payments.ts`: an order's fields match its status, the list price less the discount is the amount charged, a paid order has its enrolment, an enrolment's `orderId` names an order of the same student and course, and an enrolment with no order in a priced course dates from when the course was free.
+- `coupons.ts`: `redeemedCount` equals the number of the coupon's redemptions and is within the limit, each redemption has its order (pending while reserved, paid once redeemed), and a free order made by a code has its enrolment.
 
 ## Local development
 
 The event runner includes a Stripe stand-in (`packages/events/src/local/stripe-stand-in.ts`): Stripe's API, a hosted checkout page with **Pay**, **Decline card** and **Cancel**, and signed webhook deliveries to `/stripe/webhook` on port 2024. Connect it as Carol with the key `sk_test_local`. The key is kept in the git-ignored `tmp/local-dev/secrets/` in place of Secrets Manager.
 
-Controls under `/stripe/test/` drive what a real Stripe account would: `refund`, `replay` (deliver a confirmation again), `expire`, `forge` (a wrongly signed message) and `endpoints`.
+Controls under `/stripe/test/` drive what a real Stripe account would: `refund`, `refunds` (list a payment's refunds), `replay` (deliver a confirmation again), `expire`, `forge` (a wrongly signed message) and `endpoints`.
+
+`LOCAL_CHECKOUT_TTL_SECONDS` shortens a checkout's one-hour life, in local dev only.
 
 ## Limitations
 
-- No coupons at checkout. The coupon records and price function exist in core-table, and nothing uses them yet.
 - Card payments only, with no tax handling and no currency conversion.
 
 <Link path="design/instructor-payouts">Instructor payouts</Link> covers what happens to the money after an order is paid.

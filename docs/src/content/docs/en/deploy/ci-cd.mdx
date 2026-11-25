@@ -39,16 +39,16 @@ deploy -> aws
 
 ### CI (`ci.yml`)
 
-Runs on every push to `main`.
+Runs on every push to `main`, and when you run it by hand.
 
 | Job | Does |
 | --- | --- |
 | **Build** | Lints, tests and builds every project. The build synthesizes the CDK app and scans the templates with Checkov. Fails if the build changed any committed file |
 | **Trivy** | Scans dependencies for known vulnerabilities and the repository for secrets |
 | **Playwright cache** | Saves the browser the end-to-end tests use, so pull requests start faster |
-| **Deploy Docs** | Publishes this site to GitHub Pages |
+| **Deploy Docs** | Publishes this site to GitHub Pages. Only on a push to `main`, and skipped if a newer commit has arrived |
 
-CI needs no AWS access, apart from the optional Docker login role.
+CI needs no AWS access, apart from the optional Docker login role, which the Trivy job uses.
 
 ### Deploy (`deploy.yml`)
 
@@ -57,19 +57,28 @@ Runs in two ways:
 - **Manually**, with a stage name. Deploys the commit it is run from.
 - **After CI passes on `main`**, if the repository variable `AUTO_DEPLOY_STAGE` is set. Deploys the commit CI verified, and skips if `main` has moved on since.
 
+A run waits for one that is already deploying the same stage. They never overlap.
+
 The job runs in the GitHub environment named after the stage. That is what makes the stage's variables available and what the AWS deploy role trusts. <Link path="deploy/first-deploy">First deploy</Link> lists its steps.
 
 ### PR Checks (`pr-checks.yml`)
 
-Runs on pull requests to `main`: lint, test and build for the projects the change affects, the end-to-end tests against the local stack, and a few repository-specific checks. It needs no AWS access.
+Runs on pull requests to `main`: lint, test and build for the projects the change affects, the end-to-end tests against the local stack, and a few repository-specific checks. It needs no AWS access, apart from the optional Docker login role.
 
 ### Maintainer automation
 
-The `agent-*.yml` workflows and `archive-specs.yml` drive the project's spec-driven development process, and `post-merge-verify.yml` opens a test issue for each pull request deployed to `discava-development`. They do nothing unless you use that process and can be left alone in a fork. `cache-cleanup.yml` keeps the Actions cache under GitHub's quota.
+These support the project's own development process. A fork can leave them alone or disable them in the **Actions** tab.
+
+| Workflow | Does |
+| --- | --- |
+| `agent-*.yml` | Drive the spec-driven process: they act on spec pull requests and on branches named `openhands/…` |
+| `archive-specs.yml` | Prepares a pull request that archives a finished spec, when a `specs/*/tasks.md` changes on `main` |
+| `post-merge-verify.yml` | After a Deploy run to `discava-development`, opens a test issue for each pull request it deployed. Disable it if you merge pull requests in your fork and don't want these issues |
+| `cache-cleanup.yml` | Deletes a pull request's Actions caches when it closes, to stay under GitHub's quota |
 
 ## Variables and secrets
 
-Everything the workflows read. The setup script sets all the variables for you.
+Everything the workflows read. The setup script sets the variables you need for you.
 
 ### Repository variables
 
@@ -77,6 +86,8 @@ Everything the workflows read. The setup script sets all the variables for you.
 | --- | --- | --- |
 | `AUTO_DEPLOY_STAGE` | Setup script, if you chose it | The one stage to deploy whenever CI passes on `main`. Unset means manual deploys only |
 | `AWS_DOCKER_LOGIN_ROLE_ARN` | Setup script | Signing Docker in to Amazon ECR Public so image pulls aren't rate limited. Unset means anonymous pulls |
+| `AGENT_APP_LOGIN` | Maintainers only | The GitHub App the maintainer automation trusts reviews from. Leave unset in a fork |
+| `DOCS_SITE`, `DOCS_BASE_PATH` | You, optionally | Where the docs site is published, such as `https://docs.example.com` and `/`. Unset means the repository's GitHub Pages address |
 
 ### Environment variables, one set per stage
 
@@ -85,7 +96,7 @@ Everything the workflows read. The setup script sets all the variables for you.
 | `AWS_REGION` | Setup script | The region the deploy signs in to |
 | `AWS_DEPLOY_ROLE_ARN` | Setup script | The role the workflow assumes |
 | `AWS_EXECUTION_ROLE_ARN` | Setup script | The role CloudFormation creates resources with |
-| `<STAGE>_INFRA_…` | Setup script or you | <Link path="deploy/configuration">Configuration overrides</Link>, such as custom domains |
+| `<STAGE>_…` | Setup script or you | <Link path="deploy/configuration">Configuration overrides</Link>, such as custom domains. Every variable starting with the stage's prefix is forwarded, for example `DISCAVA_DEVELOPMENT_INFRA_…` |
 
 ### Secrets
 
@@ -97,7 +108,7 @@ There are **no AWS secrets**. The workflow proves its identity to AWS with a tok
 
 ## How GitHub signs in to AWS
 
-1. The Deploy job asks GitHub for an OIDC token. The token's subject names the repository and the environment: `repo:<owner>/<repo>:environment:<stage>`.
+1. The Deploy job asks GitHub for an OIDC token. The token's subject names the repository and the environment: by default `repo:<owner>/<repo>:environment:<stage>`.
 2. AWS's OIDC provider for GitHub verifies the token.
 3. The deploy role's trust policy accepts only that exact subject, so only a job in your repository, running in that environment, can assume it.
 4. The job receives credentials that last for the run.

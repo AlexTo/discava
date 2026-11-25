@@ -25,7 +25,7 @@ The setup script runs **once per stage, from your machine, with your own AWS cre
 
 ### A region
 
-Pick the region your stage lives in. It must offer every service Discava uses, among them **OpenSearch Serverless**, **MediaConvert**, **Transcribe** and, for notification emails, **SES**. Check the [AWS regional services list](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/) if you are unsure.
+Pick the region your stage lives in. It must offer every service Discava uses, among them **OpenSearch Serverless**, **MediaConvert**, **Transcribe**, **Translate** (caption translation) and, for notification emails, **SES**. Check the [AWS regional services list](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/) if you are unsure.
 
 CloudFront's WAF rules always live in `us-east-1`. A stage with WAF on its portals or media (such as `discava-production`) also deploys small stacks there, whatever its main region.
 
@@ -38,13 +38,13 @@ Everything is serverless and billed by use. `discava-development` is configured 
 | Tool | Why |
 | --- | --- |
 | [Git](https://git-scm.com/) | To clone your fork |
-| [Node.js 24](https://nodejs.org/) | The setup script reads the stage list from the TypeScript config |
+| [Node.js 24](https://nodejs.org/) | The setup script reads the stages from the TypeScript config |
 | [pnpm](https://pnpm.io/) | Installs the workspace. `corepack enable` gives you the version the repository pins |
 | [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | The setup script creates the IAM resources with it |
 | [GitHub CLI (`gh`)](https://cli.github.com/) | Lets the setup script create the GitHub environment and its variables. Optional: without it, the script prints the values for you to enter by hand |
 | Bash | The setup script. The bash that ships with macOS works |
 
-Docker is **not** needed to deploy. It is only needed to <Link path="guides/getting-started">run Discava locally</Link>.
+Docker is **not** needed to set up or deploy. It is only needed to <Link path="guides/getting-started">run Discava locally</Link> and to run the vulnerability scan (`pnpm trivy`) on your machine.
 
 ### Sign in to both CLIs
 
@@ -63,5 +63,6 @@ You need to be able to fork the repository and, on the fork, change settings and
 
 - **Custom domains.** Without them, the portals are served from `*.cloudfront.net` and the APIs from `*.execute-api.amazonaws.com`. To use your own, you need a root domain whose DNS you control, and issued ACM certificates: one each for `core-api.<root>` and `instructor-api.<root>` in the stage's region, and one for `<root>` and `*.<root>` in `us-east-1`. See <Link path="deploy/configuration">Stage configuration</Link>.
 - **Email.** Notification emails need a verified SES identity. Without one, no email is sent and everything else works.
+- **Payments.** Selling courses needs a Stripe account. Nothing is needed at deploy time: an administrator connects it afterwards in the admin portal.
 
 Next: <Link path="deploy/setup">fork and set up</Link>.

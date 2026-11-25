@@ -46,9 +46,12 @@ Text, video and file items never complete on their own: there is no scroll, watc
   - `contentItem.complete` also accepts a quiz, but only once it's passed or no attempts remain. That covers an attempt limit lowered below what a student has already used, where no further submission is possible.
 - **Upload assignment:** completes itself. The student's first submission records the completion in the same transaction as the `assignmentSubmission`, and counts them once in `studentActivityCount`. Resubmitting replaces the file and bumps the submission's `version`; it doesn't count them again. `contentItem.complete` returns an existing completion for an assignment but never creates one: without a submission it fails with "Submit your work to complete it".
 - **Video questions:** answering a question on a video isn't a completion. It creates no `itemCompletion` and changes no lesson or course progress, however many questions are answered, missed or skipped; the video is still completed only by **Mark as done**. The answer is recorded in its own `videoAnswerSheet` (see <Link path="design/quizzes">Quizzes</Link>). It does count as the student's first record of the video for `studentActivityCount` and sets `lastActivityAt`, and **Mark as done** doesn't count the student a second time.
-- **Reading completions:** `course.myItemCompletions` returns a student's completions in a course, including ones for items since hidden or archived. Which of them still count is decided from the current curriculum.
-- **Reading progress:** `course.myLessonProgress` returns a student's lesson progress records in a course, as progress recalculation last wrote them; a lesson without one hasn't been started. The course-level rollup comes with the enrolment (`course.myEnrolment`).
-- **Last activity:** completing an item, or submitting a quiz attempt, sets the enrolment's `lastActivityAt` in the same transaction. It orders the student's courses, most recently active first, so the signed-in home can offer to continue where they left off. Progress recalculation doesn't touch it: an instructor's change isn't the student's activity.
+- **Last activity:** completing an item, submitting a quiz attempt or an assignment, or answering a video question sets the enrolment's `lastActivityAt` in the same transaction, and it only moves forward. It orders the student's courses, most recently active first, so the signed-in home can offer to continue where they left off. Progress recalculation doesn't touch it: an instructor's change isn't the student's activity.
+
+### Reading progress
+
+- **Completions:** `course.myItemCompletions` returns a student's completions in a course, including ones for items since hidden or archived. Which of them still count is decided from the current curriculum.
+- **Lesson progress:** `course.myLessonProgress` returns a student's lesson progress records in a course, as progress recalculation last wrote them; a lesson without one hasn't been started. The course-level rollup comes with the enrolment (`course.myEnrolment`).
 - **Across courses:** `course.myEnrolments` lists a student's enrolments that aren't dropped, most recently active first, each with its progress, the next lesson (the first effectively visible lesson whose progress isn't `completed`) and how many items are new. It powers the signed-in home and My Learning.
 
 ## Lesson and course completion
@@ -77,7 +80,7 @@ The core table's stream (new and old images), through the <Link path="design/str
 | `course` modified | Every enrolled student who hasn't dropped out, only when `certificateCriteria.version` or `certificatesEnabled` differs between the old and new image; any other course edit is ignored |
 | Quiz content item: `settings.passMarkPercent` changed | Every enrolled student who hasn't dropped out. A pass counts only while the best score reaches the current mark, so lowering a mark can make a student eligible, and a mark crossing 0 changes who is assessed |
 
-A filter can't compare a record's old and new images, so every change to a module, lesson, content item, quiz summary or course reaches the Lambda. The Lambda then ignores the ones that leave `visibility` and `archivedAt` as they were (a quiz's pass mark is the exception, see above): a new title, an order or a `studentActivityCount`. The Lambda's own writes, to `progress` and `enrolment`, match no filter, so it never triggers itself.
+A filter can't compare a record's old and new images, so every change to a module, lesson, content item, quiz summary or course reaches the Lambda. The Lambda then ignores the ones that leave `visibility` and `archivedAt` as they were (a quiz's pass mark is the exception, see above): a new title, an order or a `studentActivityCount`. The Lambda's own writes, to `progress`, `enrolment` and `certificate`, match no filter, so it never triggers itself.
 
 ### What it does
 
@@ -91,9 +94,10 @@ For each affected (student, course):
    - No record means not started, so an untouched lesson isn't written.
    - `completed` is only ever set, never cleared: the write is conditioned on the record not already being `completed`.
 4. Write the enrolment's `progressPercent` (rounded down, so it's 100 only when everything is done) if it changed. At 100%, set `status: 'completed'` and `completedAt`, conditioned on the enrolment still being `active`. A course with nothing visible is never completed.
-5. If the enrolment is `completed`, the student isn't dropped and has no certificate yet, check the course's certificate criteria against the student's quiz summaries (`evaluateCertificateCriteria`, see <Link path="design/certificates">Certificates</Link>) and call `issueCertificate` only when they are met.
+5. If the enrolment is `completed`, the student has no certificate yet and the course issues certificates, check the course's certificate criteria (`evaluateCertificateCriteria`, see <Link path="design/certificates">Certificates</Link>) and call `issueCertificate` only when they are met. The student's quiz summaries and graded submissions are read only when the criteria need them.
+6. If the student has a certificate, schedule its one LinkedIn reminder, unless it was already scheduled or sent, a LinkedIn click was recorded, or it is past due.
 
-Students are recalculated a few at a time, and each course's curriculum is loaded once per batch.
+Students are recalculated ten at a time, and each course's curriculum is loaded once per batch.
 
 ### Failures
 
@@ -103,12 +107,12 @@ Enrolments share the course's partition key, so listing the students to recalcul
 
 ### Idempotency
 
-Every run recomputes from scratch, so a duplicate stream record or a burst of instructor edits just produces the same result again. The feature's queue waits up to five seconds to gather a batch, and records in a batch are grouped so each student in each course is recalculated once per batch, however many records name them. Two runs for the same student at the same moment (a completion and a curriculum change land on different stream shards) both recompute from what they read. Neither can undo the other's completion, because completing writes are conditioned on not being completed already.
+Every run recomputes from scratch, so a duplicate stream record or a burst of instructor edits just produces the same result again. The feature's queue waits up to five seconds to gather a batch of at most 100 records, and records in a batch are grouped so each student in each course is recalculated once per batch, however many records name them. Two runs for the same student at the same moment (a completion and a curriculum change land on different stream shards) both recompute from what they read. Neither can undo the other's completion, because completing writes are conditioned on not being completed already.
 
 ### Consequences
 
 - Removing the last lesson a student hadn't finished marks them `completed` even if they never come back.
-- Course lists and instructor reports are never stale.
-- Stored values lag the triggering write by the stream delay, typically under a second to a few seconds.
+- Course lists and instructor reports read stored values, so they never wait for a student to come back.
+- Stored values lag the triggering write by the stream delay and the queue's batching, typically a few seconds.
 
 See <Link path="design/live-course-editing">Live course editing</Link> for which instructor actions trigger a recalculation.
