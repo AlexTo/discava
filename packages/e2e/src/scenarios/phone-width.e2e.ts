@@ -667,7 +667,10 @@ test('the course editor fits a phone', async ({ page }) => {
 
   await test.step('the editor does not scroll sideways at 200% text zoom on a desktop', async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    // Text-only zoom scales the root font size, which rem units follow.
+    // Scaling the root font size makes rem lengths follow, as text-only zoom
+    // does, but media queries still measure rem against the browser's default
+    // size, so `md:` rules keep matching here. Real zoom needs the browser's
+    // own font-size setting; this step guards the rem-sized layout only.
     await page.evaluate(() => {
       document.documentElement.style.fontSize = '200%';
     });
