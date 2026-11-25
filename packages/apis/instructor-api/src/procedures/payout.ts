@@ -198,10 +198,7 @@ export const startOnboarding = courseProcedure
           message: ACCOUNT_NOT_FOUND,
         });
       }
-      if (
-        error instanceof Error &&
-        error.name === 'StripeInvalidRequestError'
-      ) {
+      if (isInvalidRequest(error)) {
         ctx.logger?.error?.('Stripe rejected the payout onboarding request', {
           errorName: 'StripeInvalidRequestError',
           code: (error as { code?: string }).code,
