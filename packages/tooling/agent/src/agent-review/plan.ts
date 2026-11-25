@@ -24,7 +24,9 @@ export const EXHAUSTED_LABEL = 'review-fix-exhausted';
 export const REVIEW_RUN_MARKER = /<!-- openhands-review-run: [^>]*-->/;
 // The verdict ends the review's text, before a provenance footer.
 export const CHANGES_REQUESTED = /^🔄 CHANGES REQUESTED\s*$/m;
-// Only people with write access can make a review that counts.
+// Only people with write access make a review that counts, and the GitHub App
+// the reviewer agent posts as, if the repository names one (the
+// `AGENT_APP_LOGIN` variable): GitHub gives an app the association NONE.
 const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
 // GitHub refuses a status description over 140 characters.
@@ -34,6 +36,8 @@ export interface ReviewEvent {
   action: string;
   body: string;
   commitSha: string;
+  /** The reviewer's login. */
+  author: string;
   authorAssociation: string;
   headBranch: string;
 }
@@ -73,9 +77,20 @@ const describe = (attempt: number): string => {
     : `${text.slice(0, MAX_DESCRIPTION - 1)}…`;
 };
 
+/** Whether a review's author can send the agent back. */
+const isTrustedReviewer = (review: ReviewEvent, agentApp?: string): boolean =>
+  TRUSTED.has(review.authorAssociation) ||
+  // Only an app's login ends in `[bot]`, so a person can't take this one.
+  (!!agentApp?.endsWith('[bot]') && review.author === agentApp);
+
+/**
+ * @param agentApp the login of the GitHub App the reviewer agent posts as,
+ * such as `my-agent[bot]`; without one, only people with write access count.
+ */
 export const planReview = (
   review: ReviewEvent,
   pr: PullRequestState,
+  agentApp?: string,
 ): ReviewPlan => {
   if (!AGENT_BRANCH.test(review.headBranch)) {
     return { action: 'ignore', reason: 'not an agent branch' };
@@ -83,8 +98,11 @@ export const planReview = (
   if (review.action !== 'submitted') {
     return { action: 'ignore', reason: 'the review was not newly submitted' };
   }
-  if (!TRUSTED.has(review.authorAssociation)) {
-    return { action: 'ignore', reason: 'the review is not from a maintainer' };
+  if (!isTrustedReviewer(review, agentApp)) {
+    return {
+      action: 'ignore',
+      reason: "the review is not from a maintainer or the agent's app",
+    };
   }
   if (!REVIEW_RUN_MARKER.test(review.body)) {
     return { action: 'ignore', reason: 'not a review by the reviewer agent' };
