@@ -19,7 +19,7 @@ const AssignmentTargetShape = {
   courseId: z.string(),
   moduleId: z.string(),
   // The assignment's title, shown in the outline.
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
   description: z.string().optional(),
 };
 

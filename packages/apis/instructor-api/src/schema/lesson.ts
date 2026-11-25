@@ -38,7 +38,7 @@ export type ILesson = z.output<typeof LessonSchema>;
 export const CreateLessonInputSchema = z.object({
   courseId: z.string(),
   moduleId: z.string(),
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
   description: z.string().optional(),
 });
 
@@ -52,7 +52,7 @@ export const UpdateLessonInputSchema = z.object({
   courseId: z.string(),
   moduleId: z.string(),
   lessonId: z.string(),
-  title: z.string().min(1).max(200).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
   description: z.string().optional(),
 });
 
