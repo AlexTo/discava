@@ -26,6 +26,7 @@ const review = (overrides: Partial<ReviewEvent> = {}): ReviewEvent => ({
   action: 'submitted',
   body: BODY,
   commitSha: SHA,
+  author: 'AlexTo',
   authorAssociation: 'OWNER',
   headBranch: 'openhands/issue-361',
   ...overrides,
@@ -97,6 +98,23 @@ describe('planReview', () => {
     expect(
       ignored(planReview(review({ authorAssociation: 'NONE' }), pr())),
     ).toBe(true);
+  });
+
+  it("sends the agent back for a review from the repository's agent app", () => {
+    const fromApp = review({ author: 'agent[bot]', authorAssociation: 'NONE' });
+    expect(planReview(fromApp, pr(), 'agent[bot]')).toMatchObject({
+      action: 'send-back',
+      attempt: 1,
+    });
+  });
+
+  it('ignores an app review when no app, another app or a non-app login is set', () => {
+    const fromApp = review({ author: 'agent[bot]', authorAssociation: 'NONE' });
+    expect(ignored(planReview(fromApp, pr()))).toBe(true);
+    expect(ignored(planReview(fromApp, pr(), ''))).toBe(true);
+    expect(ignored(planReview(fromApp, pr(), 'other[bot]'))).toBe(true);
+    const fromPerson = review({ author: 'mallory', authorAssociation: 'NONE' });
+    expect(ignored(planReview(fromPerson, pr(), 'mallory'))).toBe(true);
   });
 
   it('ignores a verdict that is only quoted mid-line', () => {
