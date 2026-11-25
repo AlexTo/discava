@@ -104,6 +104,11 @@ test('a student takes a quiz with the keyboard', async ({ page }) => {
     expect(box?.height).toBeGreaterThanOrEqual(24);
   }
   await screenshot(page, 'quiz question with numbered navigator');
+  await page.keyboard.press('Tab');
+  await expect(navigator.getByRole('button', { name: 'Question 1' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(navigator.getByRole('button', { name: 'Question 2' })).toBeFocused();
+  await screenshot(page, 'tab after start quiz reaches the navigator');
 
   for (let i = 0; i < 3; i++) {
     await quiz.getByRole('radio', { name: 'Right' }).check();
