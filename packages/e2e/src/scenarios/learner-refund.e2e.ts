@@ -14,7 +14,11 @@ import {
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
-import { failNextRefund, sessionIdOf } from '../helpers/stripe-stand-in.js';
+import {
+  failNextRefund,
+  holdNextRefund,
+  sessionIdOf,
+} from '../helpers/stripe-stand-in.js';
 import {
   markItemDone,
   openCourse,
@@ -273,5 +277,79 @@ test('a failed refund is shown to the student', async ({ browser }) => {
       student.getByRole('button', { name: 'Request a refund' }),
     ).toHaveCount(0);
     await screenshot(student, 'refund-failed');
+  });
+});
+
+// A refund that Stripe never settles must not poll for ever: after the limit
+// the page says it is still being processed and offers to check again. The
+// browser's clock is faked so the two minutes pass at once.
+test('a pending refund stops polling and offers to check again', async ({
+  browser,
+}) => {
+  const title = uniqueName('E2E pending refund course');
+  await connectLocalStripe();
+
+  await test.step('an instructor publishes a course priced at 19.99', async () => {
+    const instructor = await browser.newPage();
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Rae', ['instructor']));
+    await createCourse(instructor, {
+      title,
+      summary: 'A course whose refund stays pending.',
+    });
+    await instructor.getByLabel('Price', { exact: true }).fill('19.99');
+    await instructor.getByRole('button', { name: 'Save price' }).click();
+    await expect(instructor.getByText('Saved', { exact: true })).toBeVisible();
+    await addModule(instructor, 'Module one');
+    await addLesson(instructor, 'Lesson one');
+    await addTextItem(instructor, { title: 'Reading one', body: 'Refund.' });
+    await publishCourse(instructor);
+  });
+
+  const student = await browser.newPage();
+  let sessionId = '';
+  await test.step('a student buys the course', async () => {
+    await openCourse(student, title);
+    await student.getByRole('button', { name: 'Sign in to buy' }).click();
+    await student
+      .getByRole('dialog', { name: 'Sign in to buy' })
+      .getByRole('link', { name: 'Continue to sign in' })
+      .click();
+    await signIn(student, newUser('Pia', ['student']));
+    await student.getByRole('button', { name: 'Buy now' }).click();
+    await student.waitForURL(/\/stripe\/pay\//);
+    sessionId = sessionIdOf(student.url());
+    await student.getByRole('button', { name: 'Pay', exact: true }).click();
+    await student.waitForURL(
+      /\/learn\/[0-9a-f-]+\/(lesson\/[0-9a-f-]+|home)$/,
+      { timeout: 30_000 },
+    );
+  });
+
+  await test.step('the refund stays pending, then the page stops waiting', async () => {
+    await holdNextRefund(sessionId);
+    // Installed before the course page loads, so its timers are the fake ones;
+    // time still runs until the clock is moved.
+    await student.clock.install();
+    await openCourse(student, title);
+    await student.getByRole('button', { name: 'Request a refund' }).click();
+    await student
+      .getByRole('dialog', { name: 'Request a refund' })
+      .getByRole('button', { name: 'Request refund' })
+      .click();
+    await expect(student.getByText(/Refund requested on/)).toBeVisible();
+    await expect(student.getByText('Still being processed')).toHaveCount(0);
+    await student.clock.fastForward(125_000);
+    await expect(student.getByText('Still being processed')).toBeVisible();
+    await expect(
+      student.getByRole('button', { name: 'Check again' }),
+    ).toBeVisible();
+    await screenshot(student, 'refund-still-being-processed');
+  });
+
+  await test.step('checking again polls for another round', async () => {
+    await student.getByRole('button', { name: 'Check again' }).click();
+    await expect(student.getByText('Still being processed')).toHaveCount(0);
+    await expect(student.getByText(/Refund requested on/)).toBeVisible();
   });
 });

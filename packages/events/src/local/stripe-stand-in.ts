@@ -61,8 +61,11 @@ interface PaymentIntent {
   refunded: number;
   /** Each refund made, so a test can count them. */
   refunds: { id: string; amount: number }[];
-  /** The next refund asked for is reported failed instead of made. */
-  failNextRefund?: boolean;
+  /**
+   * How the next refund asked for ends: reported failed (`fail`), or left
+   * pending with no notice (`hold`), instead of made.
+   */
+  nextRefund?: 'fail' | 'hold';
 }
 
 interface StripeEvent {
@@ -485,7 +488,7 @@ export const createStripeStandIn = ({
   ): Promise<boolean> => {
     if (request.method !== 'POST') return false;
     const control =
-      /^\/stripe\/test\/(replay|forge|expire|refund|refunds|fail-next-refund)$/.exec(
+      /^\/stripe\/test\/(replay|forge|expire|refund|refunds|fail-next-refund|hold-next-refund)$/.exec(
         path,
       );
     if (!control) return false;
@@ -511,9 +514,13 @@ export const createStripeStandIn = ({
       send(response, 200, { refunds: intent.refunds });
       return true;
     }
-    if (control[1] === 'fail-next-refund') {
+    if (
+      control[1] === 'fail-next-refund' ||
+      control[1] === 'hold-next-refund'
+    ) {
       // The next refund asked for this payment is accepted, then reported
-      // failed, as Stripe does when a bank returns the money.
+      // failed (as Stripe does when a bank returns the money) or never
+      // settled, so the page is left with a refund still pending.
       const intent = session ? intents.get(session.paymentIntentId) : undefined;
       if (!intent) {
         error(
@@ -524,8 +531,8 @@ export const createStripeStandIn = ({
         );
         return true;
       }
-      intent.failNextRefund = true;
-      send(response, 200, { failNextRefund: true });
+      intent.nextRefund = control[1] === 'fail-next-refund' ? 'fail' : 'hold';
+      send(response, 200, { nextRefund: intent.nextRefund });
       return true;
     }
     if (control[1] === 'refund') {
@@ -1132,19 +1139,20 @@ export const createStripeStandIn = ({
         );
         return true;
       }
-      const failing = intent.failNextRefund === true;
-      intent.failNextRefund = false;
+      const outcome = intent.nextRefund;
+      intent.nextRefund = undefined;
       const refund = {
         id: id('re'),
         object: 'refund',
         payment_intent: intent.id,
         amount: amount ?? intent.amount - intent.refunded,
         currency: intent.currency,
-        status: failing ? 'pending' : 'succeeded',
+        status: outcome ? 'pending' : 'succeeded',
       };
       if (slot) idempotent.set(slot, refund);
       send(response, 200, refund);
-      if (failing) {
+      if (outcome === 'hold') return true;
+      if (outcome === 'fail') {
         // Later than the answer, as at Stripe: the request is on record by
         // the time the failure arrives.
         setTimeout(() => {

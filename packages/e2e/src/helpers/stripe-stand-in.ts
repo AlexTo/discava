@@ -73,7 +73,12 @@ export const refundSession = (sessionId: string, amount?: number) =>
 // The next refund asked for the session's payment is accepted, then reported
 // failed (`refund.failed`) a moment later.
 export const failNextRefund = (sessionId: string) =>
-  control<{ failNextRefund: boolean }>('fail-next-refund', { sessionId });
+  control<{ nextRefund: string }>('fail-next-refund', { sessionId });
+
+// The next refund asked for the session's payment is accepted but never
+// settles: no notice arrives, so the page is left with a refund pending.
+export const holdNextRefund = (sessionId: string) =>
+  control<{ nextRefund: string }>('hold-next-refund', { sessionId });
 
 // Every refund the stand-in made for the session's payment.
 export const sessionRefunds = async (sessionId: string) =>

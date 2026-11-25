@@ -714,6 +714,27 @@ describe('fail-next-refund control', () => {
     );
   });
 
+  it('holds the next refund: accepted, pending, no notice, nothing refunded', async () => {
+    const hook = await receiver();
+    const { stripe, session } = await paid(hook.url);
+    hook.deliveries.length = 0;
+    await request('/stripe/test/hold-next-refund', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    const refund = await stripe.refunds.create({
+      payment_intent: session.payment_intent as string,
+    });
+    expect(refund.status).toBe('pending');
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    expect(hook.deliveries).toEqual([]);
+    const listed = await request('/stripe/test/refunds', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    expect(listed.body.refunds).toEqual([]);
+  });
+
   it('answers 404 for a session with no payment', async () => {
     const response = await request('/stripe/test/fail-next-refund', {
       method: 'POST',
