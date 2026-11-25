@@ -698,6 +698,20 @@ test('the course editor fits a phone', async ({ page }) => {
     await content.getByRole('button', { name: `Edit ${quizTitle}` }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
+    for (const radio of await dialog
+      .getByRole('radio', { name: /^Option \d is correct$/ })
+      .all()) {
+      await expectTargetAtLeast24(radio);
+    }
+    await expectTargetAtLeast24(
+      dialog.getByRole('checkbox', { name: 'Unlimited' }),
+    );
+    await expectTargetAtLeast24(
+      dialog.getByRole('checkbox', {
+        name: 'Shuffle the options for each student',
+      }),
+    );
+    await screenshot(page, 'quiz builder radios and checkboxes');
     await dialog.getByRole('button', { name: 'Collapse Question 1' }).click();
     await expectDialogFits(dialog);
     await expectOnScreen(dialog.getByRole('button', { name: 'Save quiz' }));
