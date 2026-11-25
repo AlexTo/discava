@@ -499,14 +499,18 @@ test('Save waits while a logo is still uploading', async ({ browser }) => {
       name: 'Wait for the upload to finish…',
     });
     await expect(held).toHaveAttribute('aria-disabled', 'true');
-    await screenshot(page, 'save held while the logo uploads');
+    await screenshot(page, 'save held while the logo uploads', {
+      fullPage: true,
+    });
   });
 
   await test.step('Save is available again once the upload has finished', async () => {
     release();
     await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
     await expect(page.getByText('Uploading…')).toHaveCount(0);
-    await screenshot(page, 'save available after the upload');
+    await screenshot(page, 'save available after the upload', {
+      fullPage: true,
+    });
   });
 });
 
