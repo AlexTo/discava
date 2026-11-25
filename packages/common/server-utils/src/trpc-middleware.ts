@@ -132,6 +132,22 @@ export const createErrorPlugin = () => {
   });
 };
 
+const EXPECTED_CLIENT_ERROR_CODES: ReadonlySet<string> = new Set([
+  'BAD_REQUEST',
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'METHOD_NOT_SUPPORTED',
+  'TIMEOUT',
+  'CONFLICT',
+  'PRECONDITION_FAILED',
+  'PAYLOAD_TOO_LARGE',
+  'UNSUPPORTED_MEDIA_TYPE',
+  'UNPROCESSABLE_CONTENT',
+  'TOO_MANY_REQUESTS',
+  'CLIENT_CLOSED_REQUEST',
+]);
+
 export interface ILoggerContext {
   logger?: Logger;
 }
@@ -149,7 +165,16 @@ export const createLoggerPlugin = () => {
     });
 
     if (!response.ok) {
-      logger.error('Unexpected error occured', response.error.cause ?? '');
+      const { code } = response.error;
+      if (EXPECTED_CLIENT_ERROR_CODES.has(code)) {
+        logger.info('Request refused', { code, path: opts.path });
+      } else {
+        logger.error('Unexpected error occurred', {
+          code,
+          path: opts.path,
+          cause: response.error.cause ?? '',
+        });
+      }
     }
 
     return response;
