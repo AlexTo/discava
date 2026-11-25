@@ -187,6 +187,45 @@ describe('QuizBuilder', () => {
     expect(onCreated).toHaveBeenCalledTimes(1);
   });
 
+  it('creates a quiz assignment in the module and reports it', async () => {
+    const onAssignmentCreated = vi.fn();
+    const { user, calls, onCreated } = renderBuilder(
+      { lessonId: undefined, onAssignmentCreated },
+      { 'lesson.createQuizAssignment': () => ({}) },
+    );
+
+    await user.type(screen.getByRole('textbox', { name: 'Title' }), 'Check');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Question 1' }),
+      'Pick one',
+    );
+    await user.type(screen.getByRole('textbox', { name: 'Option 1' }), 'Right');
+    await user.type(screen.getByRole('textbox', { name: 'Option 2' }), 'Wrong');
+    await user.click(
+      screen.getByRole('radio', { name: 'Option 1 is correct' }),
+    );
+    await user.click(save());
+
+    await waitFor(() => expect(onAssignmentCreated).toHaveBeenCalledTimes(1));
+    expect(calls.map(({ path }) => path)).toEqual([
+      'lesson.createQuizAssignment',
+    ]);
+    const input = calls[0].input as {
+      questions: { options: { optionId: string }[] }[];
+      answerKey: Record<string, unknown>;
+    };
+    expect(input).toMatchObject({
+      courseId: keys.courseId,
+      moduleId: keys.moduleId,
+      title: 'Check',
+    });
+    expect(input).not.toHaveProperty('lessonId');
+    expect(Object.values(input.answerKey)).toEqual([
+      { correctOptionIds: [input.questions[0].options[0].optionId] },
+    ]);
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
   it('saves an existing quiz against the version it loaded, then the version saved', async () => {
     let version = 4;
     const { user, calls } = renderExisting({
