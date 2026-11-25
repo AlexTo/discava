@@ -37,7 +37,7 @@ test('an instructor posts, edits and deletes an announcement', async ({
   await screenshot(page, 'announcements with none posted');
 
   await page.getByLabel('Title', { exact: true }).fill(title);
-  await page.getByLabel('Announcement text').fill('Welcome to the course.');
+  await page.getByRole('textbox', { name: 'Announcement text' }).fill('Welcome to the course.');
   await page.getByRole('button', { name: 'Post announcement' }).click();
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   await expect(page.getByText('No announcements yet.')).toBeHidden();
@@ -52,7 +52,7 @@ test('an instructor posts, edits and deletes an announcement', async ({
   const editing = page.getByRole('listitem').filter({
     has: page.getByRole('button', { name: 'Save changes' }),
   });
-  await editing.getByLabel('Announcement text').fill('Welcome, and good luck.');
+  await editing.getByRole('textbox', { name: 'Announcement text' }).fill('Welcome, and good luck.');
   await editing.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('Welcome, and good luck.')).toBeVisible();
   await expect(page.getByText(/edited/)).toBeVisible();
