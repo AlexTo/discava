@@ -24,10 +24,15 @@ import { ReportSection } from './-components/report-section';
 const isMonth = (value: unknown): value is string =>
   typeof value === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 
-const isDay = (value: unknown): value is string =>
-  typeof value === 'string' &&
-  /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-  new Date(`${value}T00:00:00Z`).toISOString().startsWith(value);
+const isDay = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return (
+    !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value)
+  );
+};
 
 // The period is kept in the URL so it survives a reload and can be shared:
 // a month, or a range of days that wins over it. Neither is the current month.
