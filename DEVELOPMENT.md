@@ -145,7 +145,7 @@ A change to a main user flow should come with an end-to-end scenario, or an exte
 
 ## Writing Documentation
 
-Docs live in `docs/` (Astro + Starlight, deployed to GitHub Pages). Please only author English content, under `docs/src/content/docs/en/`; other locales are generated from it, not hand-written.
+Docs live in `docs/` (Astro + Starlight, deployed to GitHub Pages). Write English content only, under `docs/src/content/docs/en/`. The other locales hold older translations and aren't kept in step.
 
 To preview the site while you write (it prints the local address):
 
@@ -153,12 +153,3 @@ To preview the site while you write (it prints the local address):
 pnpm nx start @discava/docs
 ```
 
-To translate your changes locally, with AWS credentials configured for Bedrock access:
-
-```sh
-pnpm nx run @discava/docs:translate            # translate files changed vs main
-pnpm nx run @discava/docs:translate -- --all   # translate everything
-pnpm nx run @discava/docs:translate -- --dry-run
-```
-
-There is no CI workflow that runs this automatically yet. If your PR touches English docs, please run the translation locally and commit the result, or note in the PR that translations are pending.

@@ -6,7 +6,7 @@
   "metadata": {
     "generator": "ts#astro-docs",
     "framework": "astro",
-    "includeTranslation": true,
+    "includeTranslation": false,
     "includeBlog": true
   },
   "targets": {
@@ -49,14 +49,6 @@
       "options": {
         "command": "astro dev",
         "cwd": "docs"
-      }
-    },
-    "translate": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx ./scripts/translate.ts",
-        "cwd": "docs",
-        "forwardAllArgs": true
       }
     }
   }
