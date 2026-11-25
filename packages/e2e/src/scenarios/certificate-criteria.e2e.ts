@@ -122,6 +122,12 @@ test('an instructor requires every quiz to be passed for a certificate', async (
         track!.y + track!.height + 1.5,
       );
       await expect(issue).toHaveAttribute('aria-checked', String(expected));
+      // Wait for the save to settle: a click while it is pending is ignored.
+      await expect(issue.locator('xpath=..')).not.toHaveAttribute(
+        'aria-busy',
+        'true',
+      );
+      await expect(issue).toHaveAttribute('aria-checked', String(expected));
       if (expected !== wasOn) {
         await screenshot(
           instructor,
