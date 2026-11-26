@@ -37,6 +37,7 @@ const job = {
   contentItemId: 'item-1',
   nonce: 'nonce-1',
   vttKey: 'courses/x/transcribe-output/nonce-1/captions-item-1-nonce-1.vtt',
+  languageCode: 'fr-FR',
 };
 
 beforeEach(() => {
@@ -59,6 +60,7 @@ describe('transcribeComplete', () => {
       contentItemId: 'item-1',
       nonce: 'nonce-1',
       vttKey: job.vttKey,
+      languageCode: 'fr-FR',
     });
   });
 

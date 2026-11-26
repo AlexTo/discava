@@ -25,6 +25,9 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 vi.mock('../components/app-layout', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
+vi.mock('../components/admin-brand-sync', () => ({
+  AdminBrandSync: () => <p>brand sync</p>,
+}));
 
 import { NotFoundPage } from '../components/not-found-page';
 import { Route } from './__root';
@@ -53,6 +56,19 @@ describe('the admin portal guard, which every route (the Branding page too) sits
     renderAs(['admin']);
     expect(screen.getByText('the page')).toBeInTheDocument();
   });
+
+  it('syncs the saved brand for an administrator', () => {
+    renderAs(['admin']);
+    expect(screen.getByText('brand sync')).toBeInTheDocument();
+  });
+
+  it.each([['student'], ['instructor']])(
+    'mounts no brand sync, so makes no branding.get call, for a %s',
+    (group) => {
+      renderAs([group]);
+      expect(screen.queryByText('brand sync')).not.toBeInTheDocument();
+    },
+  );
 
   it.each([['student'], ['instructor']])(
     'keeps a %s out, whatever the address',

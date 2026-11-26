@@ -164,6 +164,63 @@ describe('studentsToRecalculate', () => {
     expect(asLists(result)).toEqual({ 'course-1': ['s5', 's1', 's2'] });
   });
 
+  const enrolmentChange = (before: string, after: string, userId = 's1') =>
+    record(
+      'MODIFY',
+      { __edb_e__: 'enrolment', courseId: 'course-1', userId, status: before },
+      { __edb_e__: 'enrolment', courseId: 'course-1', userId, status: after },
+    );
+
+  it('recalculates a student whose dropped enrolment is active again', async () => {
+    const result = await studentsToRecalculate(
+      [enrolmentChange('dropped', 'active')],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({ 'course-1': ['s1'] });
+  });
+
+  it('recalculates a student whose dropped, completed enrolment is restored as completed', async () => {
+    const result = await studentsToRecalculate(
+      [enrolmentChange('dropped', 'completed')],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({ 'course-1': ['s1'] });
+  });
+
+  it.each([
+    ['active', 'completed'],
+    ['active', 'dropped'],
+    ['active', 'active'],
+  ])('ignores an enrolment going from %s to %s', async (before, after) => {
+    const result = await studentsToRecalculate(
+      [enrolmentChange(before, after)],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({});
+  });
+
+  it('ignores an enrolment record without both images, or not a MODIFY', async () => {
+    const enrolment = {
+      __edb_e__: 'enrolment',
+      courseId: 'course-1',
+      userId: 's1',
+    };
+    const result = await studentsToRecalculate(
+      [
+        record('MODIFY', undefined, { ...enrolment, status: 'active' }),
+        record('MODIFY', { ...enrolment, status: 'dropped' }),
+        record('INSERT', undefined, { ...enrolment, status: 'active' }),
+        record('REMOVE', { ...enrolment, status: 'dropped' }),
+      ],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({});
+  });
+
   it('ignores records of other entities', async () => {
     const result = await studentsToRecalculate(
       [

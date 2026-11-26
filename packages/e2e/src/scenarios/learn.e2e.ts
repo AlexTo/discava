@@ -31,6 +31,7 @@ import {
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
+import { PHONE } from '../helpers/viewport.js';
 
 // The main path through Discava: an instructor builds and publishes a course,
 // and a student finds it, enrols and completes it. Completing the reading
@@ -238,6 +239,41 @@ test('a quiz that fails to load offers to try again', async ({ page }) => {
   await page.unroute('**/quiz.view*', fail);
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByRole('button', { name: 'Start quiz' })).toBeVisible();
+});
+
+// The start route waits for the learner's completions and progress as well as
+// the course. When they fail it says so with "Try again", rather than showing
+// "Opening your course…" for good (#1164).
+test('opening a course whose completions fail to load offers to try again', async ({
+  page,
+}) => {
+  const title = uniqueName('E2E start error course');
+  await createPublishedCourseViaApi(
+    await apiUser('Ivy', ['instructor']),
+    title,
+  );
+  await openCourse(page, title);
+  await enrolAndLand(page, newUser('Wes', ['student']));
+  const courseId = /\/learn\/([0-9a-f-]+)\//.exec(page.url())?.[1];
+
+  const fail = async (route: Route) => route.abort('connectionfailed');
+  await page.route('**/*course.myItemCompletions*', fail);
+  await page.goto(`${PORTALS.student}/learn/${courseId}/start`);
+
+  await expect(
+    page.getByText(
+      "Couldn't reach Discava. Check your connection and try again.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByText('Opening your course…')).toHaveCount(0);
+  await screenshot(page, 'start route error with Try again at desktop width');
+  await page.setViewportSize(PHONE);
+  await screenshot(page, 'start route error with Try again at phone width');
+
+  await page.unroute('**/*course.myItemCompletions*', fail);
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page).toHaveURL(/\/learn\/[0-9a-f-]+\/lesson\/[0-9a-f-]+$/);
+  await screenshot(page, 'lesson opened after Try again at phone width');
 });
 
 // A step's link is the lesson's address with the item's fragment, so it opens
