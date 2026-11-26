@@ -11,8 +11,6 @@ import {
 } from '../test-support/fake-transaction.js';
 import { uuidV7At } from '../test-support/uuid-v7.js';
 import {
-  DISCUSSION_BODY_MAX,
-  DISCUSSION_TITLE_MAX,
   DiscussionInputError,
   type DiscussionOperation,
   type DiscussionPostRead,
@@ -25,10 +23,7 @@ import {
   type TableSnapshot,
 } from './invariants/index.js';
 
-const NOW = new Date('2026-11-16T10:00:00.000Z');
-
 const v7 = (at: Date) => uuidV7At(at);
-const minutes = (n: number) => new Date(NOW.getTime() + n * 60_000);
 
 // The requests ElectroDB would send, checked without a table.
 

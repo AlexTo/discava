@@ -7,6 +7,7 @@ import { apiUser } from '../helpers/api.js';
 import {
   apiStudent,
   createPricedCourseViaApi,
+  ordersFor,
   pay,
   startCheckout,
   waitForEnrolment,
@@ -96,9 +97,20 @@ test('a partial refund keeps access', async () => {
 
   await refundSession(sessionId, 500);
 
-  // Nothing to wait for: the refund's notice changes nothing, so give it a
-  // moment to arrive and check that access stayed.
-  await new Promise((resolve) => setTimeout(resolve, 3_000));
+  // The refund's notice leaves the enrolment alone but records the refunded
+  // amount on the order, so wait for that before checking that access stayed.
+  await expect
+    .poll(
+      async () =>
+        (await ordersFor(student.sub, course.courseId)).map(
+          ({ refundedAmount }) => refundedAmount,
+        ),
+      {
+        message: "The partial refund was never recorded on the student's order",
+        timeout: 30_000,
+      },
+    )
+    .toEqual([500]);
   expect(
     (await student.core.course.myEnrolment.query({ courseId: course.courseId }))
       ?.status,

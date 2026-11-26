@@ -113,7 +113,7 @@ export interface PortalShellProps {
 
 // The sidebar. On a phone it closes when the page changes, and when it closes
 // otherwise (Escape, its close button) focus returns to the menu button; after
-// a navigation RouteAnnouncer moves focus instead.
+// a navigation focus goes to the new page's h1.
 const ShellSidebar = ({
   pathname,
   triggerRef,
@@ -144,6 +144,17 @@ const ShellSidebar = ({
       event.preventDefault();
       if (navigating.current) {
         navigating.current = false;
+        // The sheet held focus while RouteAnnouncer moved it, and gave up
+        // the page's heading when it closed: put focus on it again.
+        const heading = document
+          .getElementById(MAIN_CONTENT_ID)
+          ?.querySelector<HTMLElement>('h1');
+        if (heading) {
+          heading.tabIndex = -1;
+          heading.focus();
+        } else {
+          document.getElementById(MAIN_CONTENT_ID)?.focus();
+        }
         return;
       }
       triggerRef.current?.focus();
@@ -266,7 +277,7 @@ export const PortalShell = ({
           </SidebarContent>
         </ShellSidebar>
         <SidebarInset>
-          <header className="supports-backdrop-blur:bg-background/60 sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
+          <header className="supports-backdrop-blur:bg-background/60 sticky top-0 z-10 flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 border-b py-2 bg-background/80 px-4 backdrop-blur">
             <div className="flex min-w-0 items-center gap-3">
               <SidebarTrigger ref={triggerRef} className="-ml-1" />
               <Separator orientation="vertical" className="h-6" />
@@ -284,7 +295,7 @@ export const PortalShell = ({
                 )}
               </div>
             </div>
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
               {headerActions}
               <NotificationBell portal={portal} />
               <UserMenu items={userMenuItems} />
@@ -293,7 +304,7 @@ export const PortalShell = ({
           <div
             id={MAIN_CONTENT_ID}
             tabIndex={-1}
-            className="flex flex-1 flex-col gap-6 p-6 pt-4 focus-visible:outline-none"
+            className="flex min-w-0 flex-1 flex-col gap-6 p-6 pt-4 focus-visible:outline-none"
           >
             <Breadcrumb>
               <BreadcrumbList className="break-words">

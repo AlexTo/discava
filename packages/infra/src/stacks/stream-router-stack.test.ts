@@ -256,23 +256,21 @@ describe('certificate reminder', () => {
 describe('caption translation', () => {
   it('hands the function the settings it was given, and the defaults without any', () => {
     const setting = (components: Parameters<typeof synth>[0]) =>
-      JSON.stringify(
-        Object.entries(
-          synth(components)('StreamRouter').findResources(
-            'AWS::Lambda::Function',
-          ),
-        )
-          .filter(([id]) => id.startsWith('CaptionTranslation'))
-          .map(
-            ([, fn]) =>
-              fn.Properties.Environment.Variables
-                .DISCAVA_CAPTION_TRANSLATION_SETTINGS,
-          ),
-      );
+      Object.entries(
+        synth(components)('StreamRouter').findResources(
+          'AWS::Lambda::Function',
+        ),
+      )
+        .filter(([id]) => id.startsWith('CaptionTranslation'))
+        .map(([, fn]) => {
+          const variables = fn.Properties.Environment.Variables;
+          return `${variables.DISCAVA_CAPTION_TRANSLATION_SETTINGS_ENABLED}/${variables.DISCAVA_CAPTION_TRANSLATION_SETTINGS_MAX_LANGUAGES_PER_COURSE}`;
+        })
+        .filter((value, index, all) => all.indexOf(value) === index);
     expect(
       setting({ captionTranslation: { maxLanguagesPerCourse: 3 } }),
-    ).toMatch(/maxLanguagesPerCourse[\s\S]*3/);
-    expect(setting({})).toMatch(/maxLanguagesPerCourse[\s\S]*9/);
+    ).toEqual(['true/3']);
+    expect(setting({})).toEqual(['true/9']);
   });
 
   const stack = synth({});
@@ -359,7 +357,7 @@ describe('brand publishing', () => {
       template.findResources('AWS::Lambda::Function'),
     ).find((resource) =>
       JSON.stringify(resource.Properties.Environment ?? {}).includes(
-        'DISCAVA_S3_PUBLIC_MEDIA_BUCKET',
+        'DISCAVA_S3_PUBLIC_MEDIA_BUCKET_BUCKET_NAME',
       ),
     );
     return (fn?.Properties.Role as { 'Fn::GetAtt': string[] })[
@@ -442,36 +440,36 @@ describe('deploy-time settings per function', () => {
   const template = synth({})('StreamRouter');
   // Function logical-ID prefix to the settings its code reads.
   const required = {
-    CertificateReminder: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    CertificateReminder: ['DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME'],
     ProgressRecalculation: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_CERTIFICATES_REMINDER',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_CERTIFICATES_REMINDER_LAMBDA_ARN',
     ],
     SearchIndexing: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_OPENSEARCH_SEARCH',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_OPENSEARCH_SEARCH_ENDPOINT',
     ],
     TranscriptIndexing: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_OPENSEARCH_SEARCH',
-      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_OPENSEARCH_SEARCH_ENDPOINT',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET_BUCKET_NAME',
     ],
     TranscriptReindex: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_OPENSEARCH_SEARCH',
-      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_OPENSEARCH_SEARCH_ENDPOINT',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET_BUCKET_NAME',
     ],
-    AnalyticsUpdate: ['DISCAVA_DYNAMODB_CORE_TABLE'],
-    NotificationDelivery: ['DISCAVA_DYNAMODB_CORE_TABLE'],
-    EarningsRecording: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    AnalyticsUpdate: ['DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME'],
+    NotificationDelivery: ['DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME'],
+    EarningsRecording: ['DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME'],
     BrandPublishing: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET_BUCKET_NAME',
     ],
     CaptionTranslation: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
-      'DISCAVA_CAPTION_TRANSLATION_SETTINGS',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET_BUCKET_NAME',
+      'DISCAVA_CAPTION_TRANSLATION_SETTINGS_ENABLED',
     ],
   };
 

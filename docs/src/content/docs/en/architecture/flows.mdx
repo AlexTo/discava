@@ -1,13 +1,13 @@
 ---
 title: Request and data flows
-description: How sign-in, an API call, a video upload, a data change and a purchase travel through Discava's components.
+description: How sign-in, an API call, a public page, a video upload, a data change, a purchase and a search travel through Discava's components.
 sidebar:
   order: 2
 ---
 
 import Link from '@components/link.astro';
 
-Five flows explain most of the system.
+Seven flows explain most of the system.
 
 ## Signing in
 
@@ -28,7 +28,7 @@ cognito -> browser: "tokens, with the user's groups"
 
 1. The portal loads and reads `runtime-config.json` to find Cognito.
 2. The user signs in on Cognito's hosted page.
-3. Before issuing tokens, Cognito calls a function that writes the user's record to the core table, so the application always has a row for anyone holding a token.
+3. Before issuing tokens, Cognito calls a function that writes the user's record to the core table, so the application has a row for anyone holding a token. The write is best effort: if it fails or is slow, the user still signs in, and the next sign-in or token refresh tries again.
 4. The browser receives tokens that include the user's groups.
 
 When someone signs up themselves, a second trigger adds them to the `student` and `instructor` groups.
@@ -57,6 +57,30 @@ A request is checked three times before it touches data:
 1. **WAF**, when the stage has it on, filters common attacks.
 2. **API Gateway** verifies the token against the user pool and applies the request limits. A few public procedures, such as viewing a published course's landing page, skip the token check.
 3. **The function** checks the caller's group (instructor-api requires `instructor`, admin-api requires `admin`), validates the input, and applies the rule for that procedure, such as "the caller is enrolled in this course".
+
+## Serving a public page
+
+Course landing pages, instructor profiles and certificate pages must be readable by crawlers and link previews, which don't run the portal's JavaScript.
+
+```d2 title="A public page"
+shape: sequence_diagram
+visitor: "Crawler or browser"
+cf: "Student portal (CloudFront)"
+fn: "Page renderer"
+table: "Core table"
+
+visitor -> cf: "GET /learn/<courseId>"
+cf -> fn: "on a cache miss"
+fn -> table: "read the course"
+fn -> cf: "HTML"
+cf -> visitor: "HTML, cached for up to five minutes"
+```
+
+1. The student portal's CloudFront distribution sends `/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml` and `/robots.txt` to the page renderer. Every other path is the static site.
+2. The renderer reads the table and fills the portal's own `index.html` with the page's content and metadata. It has read-only access, and only CloudFront can call it.
+3. CloudFront caches the answer by path alone, so it never depends on who asks.
+
+<Link path="design/public-pages">Public pages</Link> has the full design.
 
 ## A video's journey
 
@@ -91,9 +115,11 @@ cf -> lesson
 
 **Transcoding.** MediaConvert turns the upload into HLS renditions at several qualities, so the player adapts to the viewer's connection. When the job finishes, an EventBridge rule invokes a function that marks the video ready and starts a Transcribe job for captions.
 
-**Recovering.** A scheduled function finds videos stuck in processing. Each completion handler has a failure queue, and temporary files are removed by scheduled cleanups.
+**Captions.** When Transcribe finishes, a second function saves the caption track. If the course has other caption languages, the caption translation feature (see [Reacting to a change](#reacting-to-a-change)) translates the track with Amazon Translate. The transcript indexing feature adds the caption text to search.
 
-**Playing.** Lesson media is private. When an enrolled student opens a lesson, core-api checks the enrolment and issues a short-lived CloudFront signature. CloudFront serves the video only to requests carrying it. The signing key is held by one dedicated function, not by the API's shared function.
+**Recovering.** A function runs every 30 minutes to find videos stuck in processing. Each completion handler has a failure queue, and retired files are removed by scheduled cleanups.
+
+**Playing.** Lesson media is private. When an enrolled student opens a lesson, core-api checks the enrolment and issues a short-lived CloudFront signature. CloudFront serves the video only to requests carrying it. Two things are open to anyone, signed in or not: a course's preview video, and lessons the instructor marked as free previews. The signing key is held by one dedicated function in each API that signs, not by the API's shared function.
 
 ## Reacting to a change
 
@@ -133,6 +159,19 @@ h2 -> os
 h4 -> ses
 ```
 
+The diagram shows four of the eight features:
+
+| Feature | Reacts to a change by |
+| --- | --- |
+| Progress recalculation | Updating a student's course progress, and issuing the certificate when the course is complete |
+| Search indexing | Updating the course's entry in the courses index |
+| Transcript indexing | Updating a video's caption text in the transcripts index |
+| Analytics update | Updating the course's analytics figures |
+| Notification delivery | Fanning a broadcast out to its students and sending emails through SES |
+| Earnings recording | Recording each instructor's share of a paid order |
+| Caption translation | Translating a video's captions into the course's other languages |
+| Brand publishing | Writing the platform's brand file to public media, where the portals fetch it |
+
 - The **stream router** is the stream's only reader. It copies each change to the queue of every feature whose filter matches.
 - Each **feature** has its own queue, so a slow or failing feature never delays another.
 - A message that keeps failing moves to that feature's **failure queue**, which raises an alarm. An operator fixes the cause and redrives the queue.
@@ -162,7 +201,7 @@ stripe -> hook: "5. signed confirmation"
 hook -> table: "6. order paid + enrolment"
 ```
 
-1. core-api writes a `pending` order with the course's own price, then asks Stripe for a checkout page and sends the student to it.
+1. core-api writes a `pending` order, then asks Stripe for a checkout page and sends the student to it. The amount is the course's own price, less a coupon if the student entered one, and never a figure sent by the browser. A coupon is claimed before the order is written, so its redemption limit holds when several students check out at once.
 2. The student pays on Stripe. Discava never sees a card number.
 3. Stripe posts a signed confirmation to the webhook API. The handler verifies the signature, then marks the order paid and creates the enrolment in one transaction.
 4. Back on the course page, the portal waits for the enrolment to appear, usually within seconds.
@@ -173,4 +212,9 @@ The paid order then travels the change stream like any other write: the earnings
 
 ## Searching
 
-Search reads only from OpenSearch. core-api's search procedure sends the query and filters, and returns published courses ranked by relevance and rating. Because the index is fed from the stream, a newly published course appears in search a few seconds after publishing.
+Search reads from OpenSearch, which the stream keeps up to date.
+
+- **The catalogue.** core-api's public search procedure sends the query and filters, and returns published courses ranked by relevance and rating. A second procedure suggests titles as the student types. A newly published course appears a few seconds after publishing.
+- **Inside a course.** An enrolled student can search what was said in the course's videos. core-api decides which videos the student may watch from the table, and limits the query to them, so the index never decides access.
+
+<Link path="design/search">Search</Link> has the design.

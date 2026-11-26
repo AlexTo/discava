@@ -312,7 +312,7 @@ describe('earnings', () => {
       "reports an entry whose %s differs from its order's",
       (field) => {
         ledger();
-        (table.earningEntries[0] as Record<string, string>)[field] =
+        (table.earningEntries[0] as unknown as Record<string, string>)[field] =
           field === 'mode' ? 'live' : 'acct_other';
         expect(violationsOf('earning-matches-order')[0]?.message).toMatch(
           new RegExp(field),
@@ -324,7 +324,7 @@ describe('earnings', () => {
       "reports an earningOrder whose %s differs from its order's",
       (field) => {
         ledger();
-        (table.earningOrders[0] as Record<string, string>)[field] =
+        (table.earningOrders[0] as unknown as Record<string, string>)[field] =
           field === 'mode' ? 'live' : 'acct_other';
         expect(
           violationsOf('earning-matches-order').some((v) =>

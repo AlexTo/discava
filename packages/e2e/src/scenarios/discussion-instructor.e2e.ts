@@ -169,11 +169,15 @@ test.describe('lesson questions in the instructor portal', () => {
 
     await expect(page.getByText('Using the default prompt.')).toBeVisible();
     await page.getByLabel('Prompt', { exact: true }).fill(custom);
-    await page.getByRole('button', { name: 'Save prompt' }).click();
+    const savePrompt = page.getByRole('button', { name: 'Save prompt' });
+    await savePrompt.focus();
+    await page.keyboard.press('Enter');
     await expect(
       page.getByRole('status').filter({ hasText: 'Saved' }),
     ).toBeVisible();
+    await expect(savePrompt).toBeFocused();
     await expect(page.getByText('Using the default prompt.')).toBeHidden();
+    await screenshot(page, 'first-lesson-prompt-save-keeps-focus');
     await screenshot(page, 'first-lesson-prompt-form');
 
     // A fresh learner is asked the instructor's words.

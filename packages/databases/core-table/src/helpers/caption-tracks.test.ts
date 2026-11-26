@@ -21,7 +21,7 @@ import {
   writeCaptionTracks,
   writeCaptionTranslationOutcome,
   writeTranslatedCaptionTracks,
-} from './caption-tracks';
+} from './caption-tracks.js';
 
 const NONCE = 'n1';
 
@@ -282,6 +282,7 @@ describe('captionWriteCondition', () => {
     const attr = { captionTracksRev: 'r', status: 's', s3Key: 'k' };
     const op = {
       eq: (a: string, v: unknown) => `${a} = ${v}`,
+      exists: (a: string) => `attribute_exists(${a})`,
       notExists: (a: string) => `attribute_not_exists(${a})`,
       contains: (a: string, v: unknown) => `contains(${a}, ${v})`,
     };

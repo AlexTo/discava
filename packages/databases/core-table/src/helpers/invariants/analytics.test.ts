@@ -5,13 +5,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { checkTableInvariants as checkAllInvariants } from './index.js';
 import type { TableSnapshot } from './snapshot.js';
-import { consistentTable, testHelpers } from './test-fixture.js';
+import { consistentTable } from './test-fixture.js';
 
 let table: TableSnapshot;
 beforeEach(() => {
   table = consistentTable();
 });
-const { item } = testHelpers(() => table);
 
 // The fixture enrolment has activity, so it is activated.
 const summary = {

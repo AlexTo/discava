@@ -174,7 +174,7 @@ export const CreateContentItemVideoInputSchema = z.object({
   moduleId: z.string(),
   lessonId: z.string(),
   contentItemId: z.string(),
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
   description: z.string().optional(),
   objectKey: z.string(),
   mimeType: z.string(),
@@ -197,7 +197,7 @@ export const CreateContentItemTextInputSchema = z.object({
   courseId: z.string(),
   moduleId: z.string(),
   lessonId: z.string(),
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
   description: z.string().optional(),
   body: z
     .string()
@@ -220,7 +220,7 @@ export const UpdateContentItemVideoInputSchema = z.object({
   moduleId: z.string(),
   lessonId: z.string(),
   contentItemId: z.string(),
-  title: z.string().min(1).max(200).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
   description: z.string().optional(),
   objectKey: z.string().optional(),
   mimeType: z.string().optional(),
@@ -244,7 +244,7 @@ export const UpdateContentItemTextInputSchema = z.object({
   moduleId: z.string(),
   lessonId: z.string(),
   contentItemId: z.string(),
-  title: z.string().min(1).max(200).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
   description: z.string().optional(),
   body: z
     .string()
@@ -268,7 +268,7 @@ export const CreateContentItemQuizInputSchema = z
     courseId: z.string(),
     moduleId: z.string(),
     lessonId: z.string(),
-    title: z.string().min(1).max(200),
+    title: z.string().trim().min(1).max(200),
     description: z.string().optional(),
     ...quizDefinitionShape,
   })
@@ -297,7 +297,7 @@ export const UpdateContentItemQuizInputSchema = z
     // The version of the quiz the editor loaded. The save is refused with
     // CONFLICT if the quiz has moved on since.
     quizVersion: z.number().int().min(1),
-    title: z.string().min(1).max(200).optional(),
+    title: z.string().trim().min(1).max(200).optional(),
     description: z.string().optional(),
     ...quizDefinitionShape,
   })
@@ -579,7 +579,7 @@ export const CreateContentItemFileInputSchema = z.object({
   moduleId: z.string(),
   lessonId: z.string(),
   contentItemId: z.string(),
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
   description: z.string().optional(),
   objectKey: z.string(),
   fileName: FileNameSchema,
@@ -601,7 +601,7 @@ export const UpdateContentItemFileInputSchema = z
     moduleId: z.string(),
     lessonId: z.string(),
     contentItemId: z.string(),
-    title: z.string().min(1).max(200).optional(),
+    title: z.string().trim().min(1).max(200).optional(),
     description: z.string().optional(),
     // A new file, uploaded with createFileUploadUrl; both or neither.
     objectKey: z.string().optional(),

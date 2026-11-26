@@ -105,7 +105,11 @@ describe('filterEffectivelyVisible', () => {
 });
 
 describe('firstShownLesson', () => {
-  const module = (moduleId: string, order: number, state = visible) => ({
+  const module = (
+    moduleId: string,
+    order: number,
+    state: { visibility: 'visible' | 'hidden' } = visible,
+  ) => ({
     moduleId,
     order,
     ...state,
@@ -114,7 +118,7 @@ describe('firstShownLesson', () => {
     moduleId: string,
     lessonId: string,
     order: number,
-    state = visible,
+    state: { visibility: 'visible' | 'hidden' } = visible,
   ) => ({ moduleId, lessonId, order, ...state });
 
   it('is the first lesson of the first module in course order', () => {

@@ -10,7 +10,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const createCoreTableService = vi.hoisted(() =>
   vi.fn(async () => {
-    throw new Error('Missing deploy-time setting DISCAVA_DYNAMODB_CORE_TABLE');
+    throw new Error(
+      'Missing deploy-time setting DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+    );
   }),
 );
 vi.mock('@discava/core-table', async (importOriginal) => ({

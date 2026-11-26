@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NOTIFICATION_TYPES } from '../notification-types.js';
 import type { TableSnapshot } from './snapshot.js';
 import {
-  AT,
   checkTableInvariants,
   consistentTable,
   testHelpers,

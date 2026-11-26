@@ -39,27 +39,18 @@ export const getDynamoDBClient = (): DynamoDBClient => {
 
 // The deploy-time setting the CoreTable construct binds to every function
 // that uses the table (common-constructs' `bindSettings`). The name is
-// `settingEnvName('dynamodb', runtimeConfigKey)`; common-server-utils depends
-// on this package, so it can't be imported here.
-const SETTING = 'DISCAVA_DYNAMODB_CORE_TABLE';
+// `settingEnvName('dynamodb', runtimeConfigKey, 'tableName')`;
+// common-server-utils depends on this package, so it can't be imported here.
+const SETTING = 'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME';
 
 export const resolveTableName = async (): Promise<string> => {
   if (process.env.LOCAL_DEV === 'true') {
     const { tableName } = localDev();
     return tableName;
   }
-  const raw = process.env[SETTING];
-  if (!raw) {
-    throw new Error(`Missing deploy-time setting ${SETTING}`);
-  }
-  let tableName: string | undefined;
-  try {
-    tableName = (JSON.parse(raw) as { tableName?: string }).tableName;
-  } catch {
-    throw new Error(`Invalid deploy-time setting ${SETTING}`);
-  }
+  const tableName = process.env[SETTING];
   if (!tableName) {
-    throw new Error(`Could not resolve table name from ${SETTING}`);
+    throw new Error(`Missing deploy-time setting ${SETTING}`);
   }
   return tableName;
 };

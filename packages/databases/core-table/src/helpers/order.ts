@@ -61,6 +61,7 @@ export interface OrderRecord {
   refundedAmount?: number;
   refundReason?: OrderRefundReason;
   refundRequestedAt?: string;
+  refundFailedAt?: string;
 }
 
 /** The coupon snapshot an order carries: all four fields, or none. */
@@ -854,6 +855,36 @@ export const readRefundLimits = async ({
     new Set(completions.map(({ contentItemId }) => contentItemId)),
   );
   return { progressPercent, refundedBefore };
+};
+
+/**
+ * Records that Stripe reported the student's requested refund as failed.
+ * Conditioned on `status = paid` and a refund having been requested; a failed
+ * condition is not an error (the order was refunded meanwhile, or no request
+ * of the student's is behind this notice). Keeps the first failure's time and
+ * never changes `status`.
+ */
+export const markRefundFailed = async ({
+  coreTable,
+  order,
+  now,
+}: {
+  coreTable: CoreTable;
+  order: Pick<OrderRecord, 'orderId'>;
+  now: string;
+}): Promise<void> => {
+  try {
+    await coreTable.entities.order
+      .patch({ orderId: order.orderId })
+      .set({ refundFailedAt: now })
+      .where(
+        (attr, op) =>
+          `${op.eq(attr.status, 'paid')} AND ${op.exists(attr.refundRequestedAt)} AND ${op.notExists(attr.refundFailedAt)}`,
+      )
+      .go();
+  } catch (error) {
+    if (!isConditionalFailure(error)) throw error;
+  }
 };
 
 /**

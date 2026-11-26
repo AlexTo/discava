@@ -30,13 +30,18 @@ import Link from '@components/link.astro';
 | `earningEntry` | One line per instructor per sale or refund step: gross, discount, refund, fee and net, when it is released, and the payout that took it |
 | `earningDay` | The sum of an instructor's entries for one course, currency and UTC day |
 
-`helpers/earning.ts` is the only writer of all three. A sale, and each refund step, is **one transaction** holding the entries, the adds to their day rows and the order's counter, so the report and the ledger can't disagree.
+`helpers/earning.ts` in core-table is the only writer of all three, with one exception: `helpers/payout.ts` is the only code that sets or clears an entry's `payoutId`. A sale, and each refund step, is **one transaction** holding the entries, the adds to their day rows and the order's counter, so the report and the ledger can't disagree.
 
 An entry never names the buyer. It also carries the Stripe account and mode its order was paid under: see [the payment account rule](#the-payment-account-rule).
 
 ## Recording
 
-Recording is a <Link path="design/stream-event-router">stream feature</Link>, `earnings-recording`. It receives every change to an `order` and acts on the ones that are sales: an order that is `paid`, or `refunded` because a refund was made, with an amount above zero. An order refunded automatically as undeliverable was never a sale.
+Recording is a <Link path="design/stream-event-router">stream feature</Link>, `earnings-recording`. It receives every change to an `order` and acts on the ones that are sales. An order is a sale when both hold:
+
+- it is `paid`, or `refunded` with the reason `requested`;
+- its amount is above zero.
+
+An order refunded automatically as undeliverable was never a sale, and neither is the zero-amount order of a coupon that takes the whole price. For a discounted order, the entry's gross is the list price and its discount is the difference from the amount paid.
 
 The router delivers at least once and in any order, and the handler is built for that:
 
@@ -57,25 +62,30 @@ instructor-api serves the caller's own figures and takes no instructor ID as inp
 
 ## Payout accounts
 
-An instructor is paid into a Stripe Connect Express account. `payout.startOnboarding` creates the account, idempotently, and returns Stripe's onboarding link. `payout.account` reads the account's state from Stripe and stores it in `payoutAccount`:
+An instructor is paid into a Stripe Connect Express account.
+
+- `payout.startOnboarding` creates the account, idempotently, and returns Stripe's onboarding link.
+- `payout.account` reads the account's state from Stripe and stores it in `payoutAccount` when it changed. If Stripe can't be reached, it returns the stored status marked `stale`.
+- `payout.dashboardLink` returns a sign-in link to the instructor's Stripe Express dashboard, once onboarding is finished.
 
 | Status | Meaning |
 | --- | --- |
-| Not set up | No account yet |
-| In progress | The Stripe form isn't finished |
-| Active | Stripe can send transfers and payouts to it |
-| Restricted | Stripe needs something more |
+| `not_started` | No account yet. Nothing is stored |
+| `in_progress` | The Stripe form isn't finished |
+| `active` | Stripe can send transfers and payouts to it |
+| `restricted` | Stripe needs something more |
 
-Nothing here calls Stripe unless the platform's connection is active.
+Nothing here calls Stripe unless the platform's connection is active. Without one, `payout.account` answers `unavailable`.
 
 ## The payout run
 
 One Lambda function, in the `Payouts` stack, runs once a day on an EventBridge schedule. It can read the Stripe key and nothing else of the secrets.
 
 1. **Bind to the payment account.** The run works for the connection's current account and mode, and only with a key shown to belong to it.
-2. **Recover.** Payouts an earlier run left unsettled are finished first.
-3. **For each instructor with an active account, per currency,** sum the released entries no payout has taken. A sum below the stage's minimum, or not above zero, waits.
-4. **Collect, seal and send.** A payout is created `collecting`, its entries are attached in batches of 99 (a transaction holds 100 items), and it is sealed `pending`. Then the transfer is created in Stripe, with the payout ID as its idempotency key and transfer group, and the payout is marked `sent`.
+2. **Recover.** Payouts an earlier run left unsettled are finished first: one still `collecting` or `releasing` gives its entries back, and a `pending` one is settled as described below.
+3. **For each instructor with an active account,** read the account from Stripe again. One that is no longer active has its new status stored and is skipped.
+4. **Per currency,** sum the released entries no payout has taken. A sum below the stage's minimum, or not above zero, waits.
+5. **Collect, seal and send.** A payout is created `collecting`, its entries are attached in batches of 99 (a transaction holds 100 items), and it is sealed `pending`. Then the transfer is created in Stripe, with the payout ID as its idempotency key and transfer group, and the payout is marked `sent`.
 
 | Status | Meaning |
 | --- | --- |
@@ -92,7 +102,7 @@ One Lambda function, in the `Payouts` stack, runs once a day on an EventBridge s
 - Recovery looks for a `pending` payout's transfer by its transfer group before trying again. If it exists, the payout is marked sent. If not, the same idempotency key is used again.
 - A run claims an unsettled payout before touching it, and leaves alone one another run worked on in the last 15 minutes.
 
-One instructor's failure doesn't stop the others, but the run still ends as failed so an operator sees it.
+One instructor's failure doesn't stop the others, but the run still ends as failed so an operator sees it. If Stripe refuses the saved key, the run stops at once, since no later call can succeed.
 
 ## The payment account rule
 
@@ -108,11 +118,15 @@ Per stage, under `payouts` in `stages.config.ts`. See <Link path="deploy/configu
 
 ## Invariants
 
-`helpers/invariants/earnings.ts` checks, after every end-to-end scenario, that entries match their order, refunds never exceed what was paid, day rows equal the sum of their entries, and a payout's amount equals its entries.
+`helpers/invariants/earnings.ts` in core-table checks, after every end-to-end scenario, that entries match their order, refunds never exceed what was paid, day rows equal the sum of their entries, a payout's amount equals its entries, and each payout account is well formed.
 
 ## Local development
 
-The Stripe stand-in covers the Connect slice: Express accounts, onboarding links and transfers. `POST http://localhost:2024/payout-run` runs the payout run once, and `LOCAL_PAYOUT_RUN_INTERVAL_SECONDS` runs it on a timer.
+The Stripe stand-in covers the Connect slice: Express accounts, onboarding links, dashboard links and transfers.
+
+- `POST http://localhost:2024/payout-run` runs the payout run once. An optional `{ "graceSeconds": n }` body replaces the 15-minute recovery grace.
+- `LOCAL_PAYOUT_RUN_INTERVAL_SECONDS` runs it on a timer.
+- `GET /stripe/test/transfers` lists the transfers made, and `POST /stripe/test/transfers/fail-next` makes the next transfer fail in a chosen way (for example `rejected` or `timeout`).
 
 ## Limitations
 

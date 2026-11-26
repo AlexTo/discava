@@ -24,10 +24,6 @@ pnpm nx build @discava/docs
 
 `astro.config.mjs`の`locales`ブロックにエントリを追加し、`src/content/docs/<locale>/`の下に対応するディレクトリを作成します。Starlightは新しいロケールを自動的に認識します。
 
-:::note[翻訳設定を同期させる]
-新しいロケールを追加する際は、`scripts/translate.config.json`の`targetLanguages`にもそのコードを追加してください。そうすることで、`translate`タスクが最新の状態を保ちます。
-:::
-
 ## ロケール対応リンク
 
 ドキュメント**内**の別のページにリンクする場合は、生成された`Link`コンポーネントを使用してください。現在のロケールを自動的に解決するため、単一の情報源がすべての言語で正しいURLを生成します：

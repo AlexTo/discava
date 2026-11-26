@@ -115,6 +115,7 @@ describe('CreateLessonDialog', () => {
     expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Keep editing' }));
     expect(screen.getByLabelText('Lesson title')).toHaveValue(' typed');
+    expect(screen.getByLabelText('Lesson title')).toHaveFocus();
     await user.keyboard('{Escape}');
     await user.click(screen.getByRole('button', { name: 'Discard changes' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
