@@ -862,7 +862,7 @@ export const readRefundLimits = async ({
  * Conditioned on `status = paid` and a refund having been requested; a failed
  * condition is not an error (the order was refunded meanwhile, or no request
  * of the student's is behind this notice). Keeps the first failure's time and
- * never changes `status`.
+ * never changes `status`. Returns whether it wrote anything.
  */
 export const markRefundFailed = async ({
   coreTable,
@@ -872,7 +872,7 @@ export const markRefundFailed = async ({
   coreTable: CoreTable;
   order: Pick<OrderRecord, 'orderId'>;
   now: string;
-}): Promise<void> => {
+}): Promise<boolean> => {
   try {
     await coreTable.entities.order
       .patch({ orderId: order.orderId })
@@ -882,8 +882,10 @@ export const markRefundFailed = async ({
           `${op.eq(attr.status, 'paid')} AND ${op.exists(attr.refundRequestedAt)} AND ${op.notExists(attr.refundFailedAt)}`,
       )
       .go();
+    return true;
   } catch (error) {
     if (!isConditionalFailure(error)) throw error;
+    return false;
   }
 };
 

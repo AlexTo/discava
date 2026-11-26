@@ -453,6 +453,7 @@ export {
   type PaymentConnectionRecord,
   recordChange,
   rotateKey,
+  setWebhookEvents,
 } from './helpers/payment-connection.js';
 export {
   claimPayout,

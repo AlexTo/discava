@@ -56,6 +56,12 @@ export const createPaymentConnectionEntity = async () =>
         webhookUrl: {
           type: 'string',
         },
+        // The events the endpoint was registered for. Absent on connections
+        // saved before this was recorded.
+        webhookEvents: {
+          type: 'list',
+          items: { type: 'string' },
+        },
         // The largest `expiresAt` of any order started under any connection.
         // Keeps its value through `disconnected`.
         latestCheckoutExpiresAt: {

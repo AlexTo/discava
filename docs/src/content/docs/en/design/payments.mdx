@@ -68,7 +68,7 @@ Stripe posts to `POST /stripe/webhook`, an API Gateway API of its own in the `Pa
 | `charge.refunded` | The refund is recorded against the order |
 | `refund.failed`, `charge.refund.updated` (`status: failed`) | `refundFailedAt` is set on the order, which stays `paid` |
 
-These are the only events registered with Stripe.
+These are the only events registered with Stripe. The list is recorded on the connection when the endpoint is registered. If it differs from this one (a connection saved before an event was added), the admin payments page asks for the key to be saved again, and that save updates the existing endpoint's events without changing its URL, ID or signing secret.
 
 ### Delivering exactly once
 

@@ -1651,7 +1651,7 @@ describe('markRefundFailed', () => {
   it('is a no-op when no refund was requested', async () => {
     const { fake } = setup();
     fake.put('order', paid());
-    await expect(mark(fake)).resolves.toBeUndefined();
+    await expect(mark(fake)).resolves.toBe(false);
     expect(
       fake.row('order', { orderId: 'order-1' })?.refundFailedAt,
     ).toBeUndefined();
