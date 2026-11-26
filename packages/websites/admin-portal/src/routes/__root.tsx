@@ -9,6 +9,7 @@ import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { signOut } from '@discava/common-web-utils/sign-out';
 import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
 import { useAuth } from 'react-oidc-context';
+import { AdminBrandSync } from '../components/admin-brand-sync';
 import AppLayout from '../components/app-layout';
 import { NotFoundPage } from '../components/not-found-page';
 import type { RouterProviderContext } from '../router-context';
@@ -26,8 +27,11 @@ function AdminsOnly() {
   const profile = auth.user?.profile;
 
   if (isInGroup(profile, 'admin')) {
+    // Mounted here, not in main.tsx: branding.get is admin-only, so anyone
+    // else would only collect 403s.
     return (
       <AppLayout>
+        <AdminBrandSync />
         <Outlet />
       </AppLayout>
     );
