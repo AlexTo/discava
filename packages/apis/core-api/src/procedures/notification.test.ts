@@ -256,6 +256,7 @@ describe('notification.preferences', () => {
       'discussion.answered',
       'discussion.accepted',
       'order.refunded',
+      'order.refund_failed',
       'review.received',
     ]);
     expect(result.map((p) => p.emailEnabled)).toEqual([
@@ -271,15 +272,17 @@ describe('notification.preferences', () => {
       true,
       false,
       true,
+      true,
       false,
     ]);
     expect(result.find((p) => p.type === 'certificate.issued')).toMatchObject({
       name: 'Certificates',
       emailEnabled: true,
     });
-    // Only the refund notice is required: it is always emailed.
+    // Only the refund notices are required: it is always emailed.
     expect(result.filter((p) => p.required).map((p) => p.type)).toEqual([
       'order.refunded',
+      'order.refund_failed',
     ]);
     expect(Object.keys(result[0]!).sort()).toEqual([
       'description',
@@ -316,6 +319,7 @@ describe('notification.preferences', () => {
       true,
       true,
       false,
+      true,
       true,
       true,
     ]);
