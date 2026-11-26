@@ -166,6 +166,12 @@ describe('getCaptionJob', () => {
 
     await expect(getCaptionJob('x')).rejects.toThrow('missing its tags');
   });
+
+  it('throws for a response without a job', async () => {
+    send.mockResolvedValue({});
+
+    await expect(getCaptionJob('x')).rejects.toThrow('missing its tags');
+  });
 });
 
 describe('keyFromS3Uri', () => {
