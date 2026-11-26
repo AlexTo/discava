@@ -9,7 +9,9 @@ import Link from '@components/link.astro';
 
 **Spec:** [`specs/20261120-154551-first-lesson-start/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154551-first-lesson-start/) (activation and the first-lesson prompt's answers and dismissals)
 
-The instructor portal's dashboard shows one summary card per course, and each card opens that course's analytics page. Both read figures that are kept up to date from the core table's stream, not counted from the records on every request, so they load quickly however many students are enrolled.
+The instructor portal's dashboard shows one summary card per course, and each card opens that course's analytics page. Both read stored figures that are kept up to date from the core table's stream. Nothing is counted from the records on a request, so the pages load quickly however many students are enrolled.
+
+The portal reads them through instructor-api's `analytics.courseSummaries` (the cards), `analytics.course`, `analytics.quiz` and `analytics.videoQuestions`.
 
 ## Definitions
 
@@ -35,4 +37,10 @@ The figures lag the records by a few seconds, like course progress. A change (an
 
 ## How the figures are kept
 
-The `analytics-update` handler is a <Link path="design/stream-event-router">stream event router</Link> feature. It applies each change once, and a redelivered message leaves the figures unchanged. If the figures ever drift from the records, the `analytics-matches-records` invariant finds it, and `rebuild-analytics` recomputes a course's figures from its records (see the contributor guide).
+The `analytics-update` handler is a <Link path="design/stream-event-router">stream event router</Link> feature. It keeps counters in five core-table records: `courseStats`, `periodStats`, `lessonStats`, `quizScoreStats` and `quizQuestionStats`.
+
+- **Each change counts once.** A change's counts are written in one transaction with an `analyticsMarker` named after the stream record. A redelivered record finds its marker and counts nothing.
+- **Each learner counts once per day and week.** A second marker per learner and period makes "active" a count of distinct learners.
+- **Order doesn't matter.** Counters are only ever added to, and a lesson's drop-off figures are settled from the student's current records, not from the change that arrived.
+
+If the figures ever drift from the records, the `analytics-matches-records` invariant finds it, and `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId>` recomputes a course's figures from its records.

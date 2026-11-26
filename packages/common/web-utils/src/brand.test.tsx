@@ -53,7 +53,7 @@ const renderBrand = (
   );
 
 const serve = (answer: () => Promise<Response>) => {
-  const fetchMock = vi.fn(answer);
+  const fetchMock = vi.fn<typeof fetch>(answer);
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 };

@@ -204,22 +204,25 @@ describe('deploy-time settings per function', () => {
   // Function logical-ID prefix to the settings its code reads.
   const required = {
     CoreApiRouterHandler: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_OPENSEARCH_SEARCH',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_OPENSEARCH_SEARCH_ENDPOINT',
     ],
     CoreApiMediaUrlHandler: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET_BUCKET_NAME',
     ],
     CoreApiAssignmentSubmitHandler: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
-      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
-      'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET_BUCKET_NAME',
+      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET_BUCKET_NAME',
+      'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP_LAMBDA_ARN',
     ],
-    CoreApiPaymentsCheckoutHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
-    NotificationUnsubscribe: ['DISCAVA_DYNAMODB_CORE_TABLE'],
-    SearchReindex: ['DISCAVA_DYNAMODB_CORE_TABLE', 'DISCAVA_OPENSEARCH_SEARCH'],
+    CoreApiPaymentsCheckoutHandler: ['DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME'],
+    NotificationUnsubscribe: ['DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME'],
+    SearchReindex: [
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_OPENSEARCH_SEARCH_ENDPOINT',
+    ],
   };
 
   it('gives each function the settings its code reads', () => {

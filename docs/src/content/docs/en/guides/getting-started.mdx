@@ -26,14 +26,17 @@ pnpm dev
 
 | Service | Port | Stands in for |
 | --- | --- | --- |
-| Instructor / student / admin portal | 4200 / 4201 / 4202 | CloudFront |
+| Student / instructor / admin portal | 4201 / 4200 / 4202 | CloudFront |
 | core-api / instructor-api / admin-api | 2022 / 2023 / 2025 | API Gateway and Lambda |
+| Page renderer | 2026 | The Lambda that serves public pages (course landing pages, instructor profiles, certificates) as HTML |
 | DynamoDB local | 8001 | DynamoDB |
 | S3Mock | 9090 | S3 |
 | ElasticMQ | 9324 | SQS |
 | OpenSearch | 9200 | OpenSearch Serverless |
-| Event runner | 2024 | The table's stream, MediaConvert, Transcribe, SES, EventBridge, Scheduler and Stripe |
+| Event runner | 2024 | The table's stream, MediaConvert, Transcribe, Translate, SES, EventBridge, Scheduler and Stripe |
 | Local OIDC server | 9400 | Cognito |
+
+Emails the system sends are not delivered. Read them in the local inbox at `http://localhost:2024/inbox`.
 
 ## Sign in
 
@@ -48,12 +51,22 @@ Open the student portal at `http://localhost:4201`. It sends you to a local sign
 
 "Someone else" on that page signs you in with any claims you type, such as other groups.
 
+The instructor portal is at `http://localhost:4200` and the admin portal at `http://localhost:4202`.
+
+## Add sample courses
+
+A new installation has an empty catalogue. With `pnpm dev` running, this publishes a few courses as Alice, with categories, tags and levels:
+
+```sh
+pnpm nx run @discava/e2e:seed-local-courses
+```
+
 ## Try a paid course
 
 No Stripe account is needed: the event runner stands in for Stripe.
 
-1. As Carol, open **Payments** in the admin portal (`http://localhost:4202`), paste `sk_test_local` and choose **Connect Stripe**.
-2. As Alice, set a price in a published course's settings.
+1. As Carol, open **Payments** in the admin portal, paste `sk_test_local` and choose **Connect Stripe**.
+2. As Alice, open a published course in the instructor portal, set a price in its **Price** section and choose **Save price**.
 3. As Bob, open the course and choose **Buy now**. The local payment page offers **Pay**, **Decline card** and **Cancel**.
 
 <Link path="guides/payments">Paid courses and payments</Link> explains each step.
@@ -68,7 +81,7 @@ pnpm nx run @discava/tooling-local-dev:reset-local-data
 
 ## What only runs on AWS
 
-A few things have no local equivalent and are checked on a deployed stage: Cognito's Managed Login and sign-up, CloudFront's signed cookies, MediaConvert's exact encoding, real Transcribe captions, and Stripe's own checkout page, card checks and webhook deliveries.
+A few things have no local equivalent and are checked on a deployed stage: Cognito's Managed Login and sign-up, CloudFront's signed cookies, MediaConvert's exact encoding, real Transcribe captions and Translate translations, and Stripe's own checkout page, card checks and webhook deliveries.
 
 ## Next
 

@@ -40,49 +40,53 @@ const setup = () => {
 // Synthesizing a stack can pass Vitest's 5s default when CI runs every
 // project's tests in parallel.
 describe('bindSettings', { timeout: 30_000 }, () => {
-  it('CoreTable gives DISCAVA_DYNAMODB_CORE_TABLE with the table name', () => {
+  it('CoreTable gives DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME', () => {
     const { stack, fn, variables } = setup();
     new CoreTable(stack, 'Table').bindSettings(fn);
-    expect(JSON.stringify(variables().DISCAVA_DYNAMODB_CORE_TABLE)).toContain(
-      '\\"tableName\\"',
+    expect(Object.keys(variables())).toContain(
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
     );
   });
 
-  it('LessonMediaBucket gives DISCAVA_S3_LESSON_MEDIA_BUCKET with the published fields', () => {
+  it('LessonMediaBucket gives one variable per published field', () => {
     const { stack, fn, variables } = setup();
     new LessonMediaBucket(stack, 'Media', { enableWaf: false }).bindSettings(
       fn,
     );
-    const value = JSON.stringify(variables().DISCAVA_S3_LESSON_MEDIA_BUCKET);
     for (const field of [
-      'bucketName',
-      'cloudFrontDomainName',
-      'cloudFrontKeyPairId',
-      'cloudFrontPrivateKeySecretArn',
+      'BUCKET_NAME',
+      'CLOUD_FRONT_DOMAIN_NAME',
+      'CLOUD_FRONT_KEY_PAIR_ID',
+      'CLOUD_FRONT_PRIVATE_KEY_SECRET_ARN',
     ]) {
-      expect(value).toContain(field);
+      expect(Object.keys(variables())).toContain(
+        `DISCAVA_S3_LESSON_MEDIA_BUCKET_${field}`,
+      );
     }
   });
 
-  it('LessonMediaUploadBucket gives DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET', () => {
+  it('LessonMediaUploadBucket gives DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET_BUCKET_NAME', () => {
     const { stack, fn, variables } = setup();
     new LessonMediaUploadBucket(stack, 'Upload').bindSettings(fn);
-    expect(
-      JSON.stringify(variables().DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET),
-    ).toContain('\\"bucketName\\"');
+    expect(Object.keys(variables())).toContain(
+      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET_BUCKET_NAME',
+    );
   });
 
-  it('PublicMediaBucket gives DISCAVA_S3_PUBLIC_MEDIA_BUCKET and exposes its base URL', () => {
+  it('PublicMediaBucket gives its variables and exposes its base URL', () => {
     const { stack, fn, variables } = setup();
     const bucket = new PublicMediaBucket(stack, 'Public', { enableWaf: false });
     bucket.bindSettings(fn);
-    const value = JSON.stringify(variables().DISCAVA_S3_PUBLIC_MEDIA_BUCKET);
-    expect(value).toContain('\\"bucketName\\"');
-    expect(value).toContain('\\"cloudFrontDomainName\\"');
+    expect(Object.keys(variables())).toEqual(
+      expect.arrayContaining([
+        'DISCAVA_S3_PUBLIC_MEDIA_BUCKET_BUCKET_NAME',
+        'DISCAVA_S3_PUBLIC_MEDIA_BUCKET_CLOUD_FRONT_DOMAIN_NAME',
+      ]),
+    );
     expect(JSON.stringify(stack.resolve(bucket.baseUrl))).toContain('https://');
   });
 
-  it('OpenSearchCollection gives DISCAVA_OPENSEARCH_SEARCH with the endpoint', () => {
+  it('OpenSearchCollection gives DISCAVA_OPENSEARCH_SEARCH_ENDPOINT', () => {
     const { stack, fn, variables } = setup();
     new TestCollection(stack, 'Collection', {
       collectionName: 'discava-test',
@@ -91,21 +95,22 @@ describe('bindSettings', { timeout: 30_000 }, () => {
       manifestHash: 'hash',
       indexSyncHandlerCode: Code.fromInline('exports.handler = () => {}'),
     }).bindSettings(fn);
-    expect(JSON.stringify(variables().DISCAVA_OPENSEARCH_SEARCH)).toContain(
-      '\\"endpoint\\"',
+    expect(Object.keys(variables())).toContain(
+      'DISCAVA_OPENSEARCH_SEARCH_ENDPOINT',
     );
   });
 
-  it('VideoTranscodePipeline gives DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE', () => {
+  it('VideoTranscodePipeline gives its role and job template variables', () => {
     const { stack, fn, variables } = setup();
     new VideoTranscodePipeline(stack, 'Pipeline', {
       uploadBucket: new LessonMediaUploadBucket(stack, 'Upload'),
       mediaBucket: new LessonMediaBucket(stack, 'Media', { enableWaf: false }),
     }).bindSettings(fn);
-    const value = JSON.stringify(
-      variables().DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE,
+    expect(Object.keys(variables())).toEqual(
+      expect.arrayContaining([
+        'DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE_ROLE_ARN',
+        'DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE_JOB_TEMPLATE_ARN',
+      ]),
     );
-    expect(value).toContain('\\"roleArn\\"');
-    expect(value).toContain('\\"jobTemplateArn\\"');
   });
 });

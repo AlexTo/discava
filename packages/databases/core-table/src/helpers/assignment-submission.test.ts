@@ -47,7 +47,7 @@ interface TransactItem {
 const requestFor = (input: AssignmentSubmissionWrite): TransactItem[] =>
   coreTable.transaction
     .write((entities) => assignmentSubmissionWrites(entities, input))
-    .params().TransactItems;
+    .params().TransactItems as unknown as TransactItem[];
 
 const conditionOf = (item: TransactItem) => {
   const request = (item.ConditionCheck ??

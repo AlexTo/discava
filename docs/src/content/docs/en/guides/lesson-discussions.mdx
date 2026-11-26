@@ -5,18 +5,22 @@ sidebar:
   order: 4
 ---
 
+import Link from '@components/link.astro';
+
 Every lesson has a **Questions** section where the students enrolled in the course ask questions and answer each other, and where the course's instructors step in.
 
 ## For students
 
 In a lesson, under the content, the **Questions** section lists the lesson's questions, newest first.
 
-- **Ask** with a title (up to 120 characters) and details.
-- **Reply** to a question from its thread. A thread holds up to 500 replies.
-- **Upvote** a question or reply written by someone else. Press the button again to take the upvote back.
-- **Accept** an answer: the person who asked can **Mark as answer** on any reply. It shows pinned above the other replies as **Accepted answer**, and the question counts as answered. **Remove answer** takes it back.
+- **Ask**: fill in **Question title** (up to 120 characters) and **Details**, then choose **Post question**.
+- **Reply**: choose **Open question**, write your reply and choose **Post reply**. A thread holds up to 500 replies.
+- **Upvote** a question or reply written by someone else. **Remove upvote** takes it back.
+- **Accept** an answer: the person who asked can choose **Mark as answer** on any reply. It shows pinned above the other replies as **Accepted answer**, and the question shows as **Answered**. **Remove answer** takes it back.
 - **Report** a post by someone else that breaks the rules. Instructors see it in their Reported list.
-- **Delete** your own question or reply. Deleting your question also deletes its accepted answer.
+- **Delete** your own question or reply, after confirming. Deleting your question also deletes its accepted answer. This can't be undone.
+
+In an archived course the questions can be read but nothing new can be posted.
 
 ### The first-lesson prompt
 
@@ -29,21 +33,23 @@ When you enrol, you land in the course's first lesson, and its **Questions** sec
 
 It appears only in the first lesson shown to students, and doesn't take keyboard focus when the lesson opens.
 
-You are told through the bell when someone replies to your question and when your reply is accepted. See the notifications guide.
+The bell tells you when someone replies to your post, when an answer to your question is marked, and when your reply is marked as the answer. The first two also send an email unless you switch it off. See <Link path="guides/notifications">Notifications</Link>.
 
 ## For instructors
 
-The course's **Questions** page in the instructor portal has three views:
+Open the course from **My Courses** and choose **Questions** at the top of its page. The page has three tabs:
 
-- **Unanswered**: questions with no instructor reply and no accepted answer, oldest first. Replying as an instructor (shown with an **Instructor** badge) takes the question off the list. You don't need to be enrolled.
+- **Unanswered**: questions with no instructor reply and no accepted answer, oldest first. **Open** a question to reply. Your reply shows an **Instructor** badge and takes the question off the list. You don't need to be enrolled.
 - **Reported**: posts students reported, with the number of reports. **Hide** a post, **Delete** it or **Dismiss reports**.
-- **By lesson**: every thread in a chosen lesson.
+- **By lesson**: choose a lesson to see every thread in it, and **Open thread** to read one.
 
-Instructors can also mark an answer in any thread.
+In an open thread you can also **Mark as answer** on any reply, and **Hide** or **Delete** any post.
+
+You can't reply in an archived course, or on a lesson students can't open because it is hidden or archived.
 
 ### The first-lesson prompt
 
-In the course's settings you can replace the prompt's text (plain text, 1 to 200 characters). Clearing it brings back the default. Changing it doesn't show the prompt again to learners who already answered or dismissed it.
+On the course's page, the **First-lesson prompt** section lets you replace the prompt's text (plain text, up to 200 characters). Clearing it brings back the default. Changing it doesn't show the prompt again to learners who already answered or dismissed it.
 
 Answers to the prompt are not in **Unanswered**, because they aren't questions waiting for an instructor. Read them under **By lesson**, in the course's first lesson. You can reply to, hide or delete them like any post, and a reported one shows in **Reported**.
 

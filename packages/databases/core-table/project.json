@@ -17,6 +17,7 @@
       "dependsOn": [
         "lint",
         "compile",
+        "typecheck",
         "test",
         {
           "projects": ["@discava/source"],

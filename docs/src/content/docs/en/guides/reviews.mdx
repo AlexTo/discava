@@ -11,13 +11,18 @@ A student can rate a course from 1 to 5 stars and add a written review. Ratings 
 
 Open the course page and find the **Reviews** section. If you are enrolled, you can:
 
-- **Post** a review: pick a star rating (required) and optionally write up to 2,000 characters.
-- **Edit** your review. It shows an "edited" mark, and it still counts once.
-- **Delete** your review, after confirming. The course goes back to the summary it had without it, and you can post a new one.
+- **Post** a review: pick a star rating (required), optionally write up to 2,000 characters, and choose **Post review**.
+- **Edit** your review, then **Save changes**. It shows an "edited" mark, and it still counts once.
+- **Delete review**, after confirming. The course goes back to the summary it had without it, and you can post a new one.
 
-Each student has one review per course. Posting twice at once, for example by double clicking, makes one review. You need to be enrolled, and a student who dropped the course can't post a new review. You can still edit or delete a review you already wrote, whatever the course's status. A course that is not published takes no new reviews.
+The rules:
 
-Visitors who are signed out see the summary and the reviews, with a prompt to sign in and enrol. Signed-in students who are not enrolled are asked to enrol.
+- Each student has one review per course. Posting twice at once, for example by double clicking, makes one review.
+- You need to be enrolled. A student who left the course can't post a new review.
+- A course that is not published takes no new reviews.
+- You can still edit or delete a review you already wrote, whatever the course's status.
+
+Visitors who are signed out see the summary and the reviews, with the link **Sign in and enrol to review**. Signed-in students who are not enrolled see "Enrol in this course to review it".
 
 ## How ratings appear
 
@@ -27,19 +32,37 @@ The course page shows the average to one decimal (for example 4.6), the number o
 
 Search can sort by **Relevance**, **Highest rated** or **Newest**, and filter by a minimum rating (4.5, 4.0, 3.5 or 3.0 and up). The minimum filter uses the plain average, and courses with no ratings never match it.
 
-Ordering by rating and the small lift ratings give in relevance don't use the plain average, so a single 5-star rating can't beat a course with many good ones. Search treats every course as if it had five extra ratings of 3.5 stars:
+Ordering by rating, and the small effect ratings have on relevance, don't use the plain average, so a single 5-star rating can't beat a course with many good ones. Search treats every course as if it had five extra ratings of 3.5 stars:
 
 > weighted rating = (number of ratings × average + 5 × 3.5) ÷ (number of ratings + 5)
 
-One 5-star rating gives 3.75. Twenty ratings averaging 4.5 give 4.3, so that course ranks higher. Under **Highest rated**, unrated courses come last. Under **Relevance**, the text match still dominates: the weighted rating only nudges the score by a few percent, and unrated courses get no change. A rating change reaches search within seconds.
+One 5-star rating gives 3.75. Twenty ratings averaging 4.5 give 4.3, so that course ranks higher.
+
+- Under **Highest rated**, unrated courses come last.
+- Under **Relevance**, the text match still dominates. A weighted rating above 3.5 raises the score and one below 3.5 lowers it, by 15% at the very most. Unrated courses get no change.
+- A rating change reaches search within seconds.
 
 ## Instructor responses
 
-On a course's page in the instructor portal, **Reviews** shows the average, the breakdown and each review. An instructor of the course can **Respond** to a review (up to 1,000 characters), edit the response or delete it. Any instructor of the course can change another's response. The response is shown under the review on the course page, with the instructor's name, and doesn't change the rating or mark the review edited. A removed review takes no response.
+Open the course from **My Courses** and choose **Reviews** at the top of its page. The page shows the average, the breakdown and each review.
+
+- **Respond** to a review with up to 1,000 characters, then **Save response**. **Edit response** and **Delete response** change it afterwards.
+- Any instructor of the course can change another's response.
+- The response is shown under the review on the course page, with the instructor's name. It doesn't change the rating or mark the review edited.
+- A removed review takes no response.
+
+A new review shows in your bell. To get an email as well, switch on **Course reviews** in **Notification settings**: it is off by default.
 
 ## Admin removal
 
-An admin can remove a review that breaks the rules, from **Reviews** in the admin portal: pick the course, then **Remove** and give a reason (up to 200 characters). A removed review leaves the course page, cards, the average and search. Instructors of the course can't remove reviews.
+An admin can remove a review that breaks the rules:
+
+1. Open **Reviews** in the admin portal.
+2. Choose the course under **Course**. Published and archived courses are listed.
+3. Choose **Remove** on the review.
+4. Enter a **Reason** (required, up to 200 characters) and choose **Remove review**.
+
+A removed review leaves the course page, cards, the average and search. It can't be undone. Instructors of the course can't remove reviews.
 
 The author sees "Your review was removed by a moderator" with the reason, and no form: they can't post another review for that course.
 

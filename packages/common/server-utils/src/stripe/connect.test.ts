@@ -131,7 +131,7 @@ describe('verifyKey', () => {
 });
 
 describe('registerEndpoint', () => {
-  it('sends exactly the three events, the stage and the pinned version, and returns the id and secret', async () => {
+  it('sends exactly the five events, the stage and the pinned version, and returns the id and secret', async () => {
     stripe.webhookEndpoints.create.mockResolvedValue({
       id: 'we_1',
       secret: 'whsec_x',
@@ -148,6 +148,8 @@ describe('registerEndpoint', () => {
         'checkout.session.completed',
         'checkout.session.expired',
         'charge.refunded',
+        'refund.failed',
+        'charge.refund.updated',
       ],
       api_version: '2026-10-28.endive',
       metadata: { app: 'discava', stage: 'dev' },

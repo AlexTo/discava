@@ -20,7 +20,7 @@ import {
   LEVEL_LABELS,
 } from '@discava/common-web-utils/catalogue-labels';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import {
   Check,
   ChevronDown,
@@ -28,7 +28,7 @@ import {
   FileText,
   Search,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCoreApi } from '../../../../api';
 import { CourseThumbnail } from '../../../../components/course-thumbnail';
 import { PageBreadcrumbs } from '../../../../components/page-breadcrumbs';
@@ -72,6 +72,32 @@ export function CoursePage({ courseId }: { courseId: string }) {
   );
   const [expandedModuleId, setExpandedModuleId] = useState<string>();
   usePageTitle(courseQuery.data?.title ?? 'Course');
+
+  // Opened at a section's address (a new tab, a copied link): the sections
+  // only exist once the course has loaded, after the browser and the router
+  // have looked for the fragment, so go to the section here, once per load so
+  // a later scroll by the reader isn't undone.
+  const hash = useLocation({ select: (location) => location.hash });
+  const loaded = !!courseQuery.data;
+  const scrolledTo = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!loaded || !hash || scrolledTo.current === hash) {
+      return;
+    }
+    const target = document.getElementById(hash);
+    if (!target) {
+      return;
+    }
+    scrolledTo.current = hash;
+    const reduceMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
+    target.scrollIntoView({
+      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: 'start',
+    });
+    target.focus({ preventScroll: true });
+  }, [loaded, hash]);
 
   if (courseQuery.isLoading) {
     return (
@@ -247,7 +273,8 @@ export function CoursePage({ courseId }: { courseId: string }) {
             <section
               id="outcomes"
               aria-labelledby="outcomes-heading"
-              className="scroll-mt-32"
+              tabIndex={-1}
+              className="focus:outline-none scroll-mt-32"
             >
               <h2 id="outcomes-heading" className="text-xl font-semibold">
                 What you'll learn
@@ -273,7 +300,8 @@ export function CoursePage({ courseId }: { courseId: string }) {
           <section
             id="about"
             aria-labelledby="about-heading"
-            className="scroll-mt-32"
+            tabIndex={-1}
+            className="focus:outline-none scroll-mt-32"
           >
             <h2 id="about-heading" className="text-xl font-semibold">
               About this course
@@ -288,7 +316,8 @@ export function CoursePage({ courseId }: { courseId: string }) {
             <section
               id="requirements"
               aria-labelledby="requirements-heading"
-              className="scroll-mt-32"
+              tabIndex={-1}
+              className="focus:outline-none scroll-mt-32"
             >
               <h2 id="requirements-heading" className="text-xl font-semibold">
                 Requirements
@@ -305,7 +334,8 @@ export function CoursePage({ courseId }: { courseId: string }) {
           <section
             id="modules"
             aria-labelledby="modules-heading"
-            className="scroll-mt-32 space-y-4"
+            tabIndex={-1}
+            className="focus:outline-none scroll-mt-32 space-y-4"
           >
             <h2 id="modules-heading" className="text-xl font-semibold">
               {modules.length === 1
@@ -418,7 +448,8 @@ export function CoursePage({ courseId }: { courseId: string }) {
             <section
               id="instructors"
               aria-labelledby="instructors-heading"
-              className="scroll-mt-32 space-y-4"
+              tabIndex={-1}
+              className="focus:outline-none scroll-mt-32 space-y-4"
             >
               <h2 id="instructors-heading" className="text-xl font-semibold">
                 Instructors

@@ -16,7 +16,7 @@ const service = useCoreTable();
 
 type Request = Record<string, any>;
 // What a transaction item asks of DynamoDB.
-const part = (item: unknown) => {
+const part = (item: unknown): Request & { kind: string } => {
   const [kind, request] = Object.entries(item as object)[0] as [
     string,
     Request,

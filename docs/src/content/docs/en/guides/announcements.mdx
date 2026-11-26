@@ -5,24 +5,33 @@ sidebar:
   order: 2
 ---
 
+import Link from '@components/link.astro';
+
 An announcement is a short message from an instructor to the students enrolled in a course. It has a title (up to 120 characters) and formatted text.
 
 ## For instructors
 
-On a course's page in the instructor portal, the **Announcements** section, after the course content, lets you:
+Open the course from **My Courses** and go to its **Announcements** section, near the bottom of the page.
 
-- **Post** an announcement with a title and formatted text. Only a published course can take a new one.
-- **Edit** the title or text. Students see the new text with an "edited" mark.
-- **Delete** an announcement. It disappears from the course home.
+- **Post**: enter a title and the text, then choose **Post announcement**. Only a published course takes new announcements. A draft course shows "Publish the course to post announcements."
+- **Edit**: choose **Edit** on an announcement, change the title or text, then **Save changes**. Students see the new text with an "edited" mark.
+- **Delete**: choose **Delete** and confirm. The announcement disappears from the course home. This can't be undone.
 
-Posting notifies the students enrolled in the course, once each, through the bell and, by their preferences, email. Editing sends nothing. Deleting doesn't take back the notification students already received. Posting the same announcement twice, for example by double clicking, still posts it once.
+What students are told:
+
+- Posting notifies each enrolled student once, in the bell and, unless they switched it off, by email.
+- Editing sends nothing.
+- Deleting doesn't take back the notification students already received.
+- Posting the same announcement twice, for example by double clicking, still posts it once.
 
 In an archived course you can still edit and delete announcements, but not post new ones.
 
 ## Who can read them
 
-Students enrolled in the course read announcements in the course home, newest first, including after the course is archived. A student who dropped the course, a student of another course and visitors can't. The instructors teaching the course read them in the instructor portal.
+- Students enrolled in the course read announcements in the course home, newest first. This still works after the course is archived.
+- A student who left the course, a student of another course and visitors can't read them.
+- The instructors teaching the course read them in the instructor portal.
 
 ## For developers
 
-Announcements add no delivery of their own: posting writes the announcement and a request to notify the course's students in one transaction, through the notifications producer contract (`notifyCourseStudents`, the type `announcement.posted`), which the notification fan-out then delivers. See the notifications producer documentation for how that works.
+Announcements add no delivery of their own. Posting writes the announcement and a request to notify the course's students in one transaction, through the notifications producer contract (`notifyCourseStudents`, the type `announcement.posted`). The notification fan-out then delivers it. See <Link path="guides/notifications">Notifications</Link> for how that works.

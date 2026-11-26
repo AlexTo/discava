@@ -48,6 +48,7 @@ async: "Background work" {
 email: "SES"
 stripe: "Stripe"
 pay: "Stripe webhook API"
+renderer: "Page renderer"
 
 users -> edge
 users -> identity: "sign in"
@@ -64,6 +65,8 @@ users -> data.lesson: "watch"
 apis.core -> stripe: "start checkout"
 stripe -> pay: "signed confirmation"
 pay -> data.table
+edge.student -> renderer: "public pages"
+renderer -> data.table: "read"
 ```
 
 ## The components
@@ -72,11 +75,15 @@ pay -> data.table
 
 | Portal | For | Talks to |
 | --- | --- | --- |
-| **Student portal** | Browsing the catalogue, buying and taking courses, quizzes, discussions | core-api |
-| **Instructor portal** | Building and pricing courses, analytics, earnings, answering students | core-api, instructor-api |
-| **Admin portal** | Categories, review moderation and the Stripe connection | core-api, admin-api |
+| **Student portal** | Browsing the catalogue, buying and taking courses, quizzes, assignments, discussions, certificates | core-api |
+| **Instructor portal** | Building and pricing courses, coupons, grading, analytics, earnings, answering students | core-api, instructor-api |
+| **Admin portal** | Categories, review moderation, certificates, branding and the Stripe connection | core-api, admin-api |
 
 Each is a React single-page application: static files in a private S3 bucket, served by CloudFront. A portal learns where its APIs and sign-in page are from a `runtime-config.json` file deployed beside it, so the same build works on every stage.
+
+### Public pages
+
+A single-page application is an empty shell to a crawler or a link preview. So the student portal's CloudFront distribution sends a few public addresses to a Lambda function, the **page renderer**, which answers with real HTML: course landing pages (`/learn/*`), instructor profiles (`/instructors/*`), certificate link previews (`/certificates/*`), `sitemap.xml` and `robots.txt`. <Link path="design/public-pages">Public pages</Link> has the design.
 
 ### One identity provider
 
@@ -88,27 +95,32 @@ Each API is an API Gateway REST API in front of Lambda functions, speaking [tRPC
 
 | API | Who may call it | Examples |
 | --- | --- | --- |
-| **core-api** | Any signed-in user, plus a few public procedures | Catalogue, enrolment, checkout, lesson content, quizzes, discussions, search |
-| **instructor-api** | Members of `instructor` | Creating, editing and pricing courses, uploading media, analytics, earnings and payouts |
-| **admin-api** | Members of `admin` | Category taxonomy, review moderation, the Stripe connection |
+| **core-api** | Any signed-in user, plus a few public procedures | Catalogue, enrolment, checkout, lesson content, quizzes, assignments, discussions, certificates, search |
+| **instructor-api** | Members of `instructor` | Creating, editing and pricing courses, coupons, uploading media, grading, analytics, earnings and payouts |
+| **admin-api** | Members of `admin` | Category taxonomy, review moderation, certificates, branding, the Stripe connection |
 
-Splitting by audience means each API has its own function, permissions, request limits and firewall. An instructor-only bug can't be reached with a student's token, and a flood of student traffic can't starve the instructor API.
+Splitting by audience means each API has its own functions, permissions, request limits and firewall. An instructor-only bug can't be reached with a student's token, and a flood of student traffic can't starve the instructor API.
 
 ### One table
 
-All application data is in a single DynamoDB table, the **core table**: courses, modules, lessons, enrolments, progress, quiz attempts, discussions, reviews, notifications, orders and instructor earnings. Related records share a partition, so a whole course's curriculum is one query.
+All application data is in a single DynamoDB table, the **core table**: courses, modules, lessons, enrolments, progress, quiz attempts, discussions, reviews, certificates, notifications, coupons, orders, and instructor earnings and payouts. Related records share a partition, so a whole course's curriculum is one query.
 
 ### Search
 
-Published courses are copied into an OpenSearch Serverless collection, which answers the catalogue's search and filters. The table is the source of truth: the index is rebuilt from it and never written to directly by an API.
+An OpenSearch Serverless collection holds two indices:
+
+- **Courses**: every published course. It answers the catalogue's search, suggestions and filters.
+- **Transcripts**: the caption text of lesson videos. It lets an enrolled student find the moment in a course where a phrase was said.
+
+The table is the source of truth. The indices are filled from its change stream, can be rebuilt from it, and are never written to by an API.
 
 ### Media
 
 | Store | Holds | Access |
 | --- | --- | --- |
-| **Lesson media** | Lesson videos, captions and files | Private. Served by CloudFront only to requests carrying a signature the API issued to an enrolled student |
+| **Lesson media** | Lesson videos, captions, files and assignment submissions | Private. Served by CloudFront only to requests carrying a signature an API issued after checking access, such as enrolment |
 | **Upload bucket** | Files on their way in | Write-only by presigned URL, read by the processing job, short-lived |
-| **Public media** | Course images on catalogue cards | Readable by anyone through CloudFront |
+| **Public media** | Course images, instructor profile photos and the platform's brand (logo, icon, name and colour) | Readable by anyone through CloudFront |
 
 ### Payments
 
@@ -118,8 +130,8 @@ Paid courses are bought on Stripe's hosted checkout page, with a Stripe account 
 
 Three things happen outside a request:
 
-- **Reacting to data changes.** The table's change stream has one reader, the **stream router**, which hands each change to the queue of every feature that wants it: progress recalculation, search indexing, analytics, notification delivery and recording instructor earnings.
-- **Processing video.** An uploaded video is transcoded into adaptive streaming renditions by MediaConvert, then captioned by Transcribe.
+- **Reacting to data changes.** The table's change stream has one reader, the **stream router**, which hands each change to the queue of every feature that wants it. There are eight: progress recalculation (which also issues certificates), course search indexing, transcript indexing, analytics, notification delivery, recording instructor earnings, caption translation and publishing the brand.
+- **Processing video.** An uploaded video is transcoded into adaptive streaming renditions by MediaConvert, then captioned by Transcribe. Amazon Translate turns the captions into the course's other caption languages.
 - **Paying instructors.** A daily run sends each instructor the earnings that are due, as a Stripe transfer. See <Link path="design/instructor-payouts">Instructor payouts</Link>.
 
 ## Design principles
@@ -127,7 +139,7 @@ Three things happen outside a request:
 - **Serverless only.** Every component bills by use and scales to zero.
 - **One way to do it.** One cloud, one deployment tool, one table. Fewer options to configure, document and test.
 - **Secure by default.** Every protection is on unless a stage turns it off.
-- **Runs locally.** Every AWS service has a local stand-in, so development needs no AWS account.
+- **Runs locally.** Every AWS service Discava uses has a local stand-in, so development needs no AWS account.
 
 ## Read on
 

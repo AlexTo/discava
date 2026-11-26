@@ -13,12 +13,13 @@ A course is free unless its instructor gives it a price. Payments are taken by S
 
 Nothing about Stripe is set when Discava is deployed. Until an administrator connects an account, every course is free and no price can be set.
 
-Open **Payments** in the admin portal and paste a Stripe secret key:
+1. In the Stripe dashboard, open Developers, then API keys, and copy one of:
+   - A **secret key** (it starts `sk_`).
+   - A **restricted key** (it starts `rk_`) with write access to Checkout Sessions, Refunds and Webhook Endpoints, and read access to Accounts, Events and PaymentIntents. Without Refunds and PaymentIntents, payments that can't be delivered aren't refunded and refunds made in the dashboard aren't recorded.
+2. Open **Payments** in the admin portal.
+3. Paste the key into **Stripe secret key** and choose **Connect Stripe**.
 
-- A **secret key** (it starts `sk_`), from Developers, then API keys, in the Stripe dashboard.
-- Or a **restricted key** (it starts `rk_`) with write access to Checkout Sessions, Refunds and Webhook Endpoints, and read access to Accounts, Events and PaymentIntents. Without Refunds and PaymentIntents, payments that can't be delivered aren't refunded and refunds made in the dashboard aren't recorded.
-
-Choose **Connect Stripe**. Discava checks the key, registers its own confirmation address (a webhook endpoint) in your Stripe account, and stores the key. You never create a webhook or copy a signing secret by hand.
+Discava checks the key, registers its own confirmation address (a webhook endpoint) in your Stripe account, and stores the key. You never create a webhook or copy a signing secret by hand.
 
 The page then shows **Connected**, the account's name, the last four characters of the key, and **Test mode** or **Live mode**. The mode comes from the key. In test mode students pay with Stripe's test cards and are enrolled without real money moving, so use a live key before real students arrive.
 
@@ -26,7 +27,7 @@ To pay instructors, the Stripe account also needs **Connect** enabled. See <Link
 
 ### Replacing the key
 
-**Replace key** takes a new key.
+Choose **Replace key**, paste the new key and choose **Save key**. Confirm with **Replace the key**.
 
 - **A new key for the same account** is a rotation. Payments carry on, and checkouts already open still complete.
 - **A key for another account, or the other mode,** is a switch: payments go to that account from now on. A switch waits until no checkout is open. A checkout lasts up to an hour, and the page tells you when the last one ends. Before switching, check the old account's webhook deliveries in the Stripe dashboard: a confirmation Stripe hasn't delivered yet can't be accepted afterwards.
@@ -35,11 +36,11 @@ A switch also affects instructors' unpaid earnings. Read <Link path="guides/earn
 
 ### Disconnecting
 
-**Disconnect** stops new purchases: students see "Payments are unavailable right now" and instructors can't set a price. Prices already set remain, and students who paid keep their access. Like a switch, it waits for open checkouts.
+Choose **Disconnect** and confirm with **Disconnect Stripe**. This stops new purchases: students see "Payments are unavailable right now" and instructors can't set a price. Prices already set remain, and students who paid keep their access. Like a switch, it waits for open checkouts.
 
 ### The change history
 
-The page lists the latest changes: who made each one, when, and how it ended. It never shows a key.
+**Recent changes** lists the latest changes: when, who, what happened (connected, key replaced, switched account, disconnected, or failed with the reason) and the mode. Of a key it shows only the last four characters.
 
 "Confirmation address changed" means the stage's webhook address is no longer the one registered with Stripe, for example after adding a custom domain. Save the key again to register the new one.
 
@@ -47,14 +48,17 @@ The page lists the latest changes: who made each one, when, and how it ended. It
 
 Refund the payment in the Stripe dashboard.
 
-- **A full refund** ends the student's enrolment within seconds and tells them, in the portal and by email. Their progress is kept.
+- **A full refund** ends the student's enrolment within seconds and tells them, in the bell and by email. Their progress is kept.
 - **A partial refund** leaves their access as it is.
 
 A student whose payment can't be delivered is refunded automatically: the course was unpublished while they were paying, or they were already enrolled. They get no refund notification.
 
 ## For instructors: pricing a course
 
-In the course's settings (My Courses, then the course), enter a price and pick a currency: USD, EUR, GBP, AUD or CAD. Enter `0` for free, or an amount from 1.00 to 10,000.00.
+1. Open the course from **My Courses** and go to its **Price** section.
+2. Enter a **Price**: `0` for free, or an amount from 1.00 to 10,000.00.
+3. Pick a **Currency**: USD, EUR, GBP, AUD or CAD.
+4. Choose **Save price**.
 
 - You can change the price whenever you like. The new price applies to new purchases.
 - Students who are already enrolled keep their access, whether they paid a different price or enrolled while the course was free.
@@ -64,13 +68,13 @@ The price shows on the course's public page and on its catalogue card, or "Free"
 
 ## For students: buying a course
 
-A priced course shows its price and **Buy now** in place of the enrol button. If you aren't signed in, it asks you to sign in first.
+A priced course shows its price and **Buy now** in place of **Enrol now**. If you aren't signed in, the button reads **Sign in to buy** and takes you to sign in first.
 
 1. **Buy now** takes you to Stripe's payment page, which shows the course and the amount.
 2. After you pay, you return to the course. It says "Confirming your payment", then you are enrolled, usually within seconds, and the first lesson you haven't completed opens with the line "You're enrolled in" with the course name after it. If the course has no lessons shown to students yet, the course page opens instead.
 3. If you cancel, you return to the course with "Payment cancelled" and nothing is charged. Choosing Buy now again within the hour reopens the same payment.
 
-Enrolling in a free course opens the same lesson, with no payment step.
+Enrolling in a free course opens the same lesson, with no payment step. See <Link path="guides/finding-and-taking-courses">Finding and taking courses</Link>.
 
 You are charged once however many times you click.
 
@@ -78,7 +82,24 @@ If your payment is refunded in full, your enrolment ends and the course page off
 
 ### Asking for a refund
 
-The course page states the refund terms beside the price: a refund within 14 days of paying, while you've completed less than half of the course, and one refund per course. While you qualify, it shows **Request a refund** and the date you can ask until. Confirm in the dialog and the page says "Refund requested". Stripe then refunds the full amount, your enrolment ends and the course page offers **Buy now** again. You also get a notification, and an email unless you have switched it off. Once you have completed half of the course, or after the 14 days, the button is not offered. If you were refunded for a course at your own request, the page warns you beside **Buy now**, and a second purchase of that course can't be refunded. A refund made by an operator in Stripe, or automatically for a payment that couldn't be delivered, doesn't count against you. Your progress and any certificate are kept.
+The course page states the refund terms beside the price. You can have a refund:
+
+- within 14 days of paying,
+- while you've completed less than half of the course,
+- once per course.
+
+While you qualify, the course page shows **Request a refund** and the date you can ask until.
+
+1. Choose **Request a refund**.
+2. Confirm with **Request refund**. The page says "Refund requested" with the date, and that your access ends when it is confirmed.
+3. Stripe refunds the full amount. Your enrolment ends and the course page offers **Buy now** again.
+4. You get a notification in the bell and an email. This email can't be switched off.
+
+Once you no longer qualify, the button is replaced by the reason: the refund period has ended, you've completed half of the course, or you were refunded for this course before.
+
+If you were refunded for a course at your own request, the page warns you beside **Buy now**, and a second purchase of that course can't be refunded. A refund made by an operator in Stripe, or automatically for a payment that couldn't be delivered, doesn't count against you.
+
+Your progress and any certificate are kept.
 
 ### Leaving a course
 
@@ -88,12 +109,14 @@ For a course you enrolled in without paying, the course page shows **Leave cours
 
 ### For instructors: making codes
 
-Open a paid course and choose **Coupons**. A free course has nothing to discount, so it asks you to set a price first. Choose **Create code** and give it:
+Open a paid course from **My Courses** and choose **Coupons** at the top of its page. A free course has nothing to discount, so the page asks you to set a price first. Choose **Create code** and give it:
 
-- **A code**, 4 to 24 letters, digits or dashes, which is not case sensitive. Leave it empty and Discava makes one like `K7QD-2MXP`.
-- **A type and value**: a percentage from 1 to 100, or a fixed amount in the course's currency, no higher than the price.
+- **A code**, 4 to 24 letters, digits or dashes, which is not case sensitive. Leave it empty, or choose **Generate**, and Discava makes one like `K7QD-2MXP`.
+- **A type and value**: **Percent off**, a whole number from 1 to 100, or **Fixed amount** in the course's currency, from 1.00 up to the price.
 - **An expiry date** (optional). The code works until the end of that day, UTC.
 - **A maximum number of redemptions** (optional).
+
+Then choose **Create**. Each code shows as **Active**, **Disabled**, **Expired** or **Used up**.
 
 Each code belongs to one course. There are no codes that cover several courses or the whole site, and no bulk import.
 
@@ -103,10 +126,14 @@ A refund does not give a redemption back.
 
 ### For students: using a code
 
-On a paid course, choose **Have a code?**, enter the code and choose **Apply**. The page shows the list price, the discount and the total. **Remove code** goes back to the list price. Nothing is used up until you pay.
+1. On a paid course, choose **Have a code?**.
+2. Enter the code and choose **Apply**. The page shows the list price, the discount and the total, and the buy button reads **Pay** with the total.
+3. Pay as usual.
+
+**Remove code** goes back to the list price. Nothing is used up until you pay.
 
 - Each student can use a code once.
-- A code that can't be used says why: turned off, expired, used the maximum number of times, or already used by you. A code that doesn't exist and a code for another course give the same message.
+- A code that can't be used says why: turned off, expired, used the maximum number of times, already used by you, or leaving a price too low to pay for. A code that doesn't exist and a code for another course give the same message.
 - If a code takes the whole price, the button says **Enrol for free**: you are enrolled at once, with no payment page.
 
 ## Limitations

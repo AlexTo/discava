@@ -26,11 +26,6 @@ pnpm nx build @discava/docs
 在 `astro.config.mjs` 的 `locales` 块中添加一个条目，并在 `src/content/docs/<locale>/` 下创建匹配的
 目录。Starlight 将自动识别新语言。
 
-:::note[保持翻译配置同步]
-当您添加新语言时，还需要将其代码添加到 `scripts/translate.config.json` 中的 `targetLanguages`，
-以便 `translate` 任务保持其更新。
-:::
-
 ## 语言感知链接
 
 当您想要链接到文档**内部**的另一个页面时，请使用生成的 `Link` 组件——它会自动解析当前语言，

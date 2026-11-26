@@ -33,16 +33,11 @@ const getMediaConvertClient = (): MediaConvertClient => {
   return _client;
 };
 
-type VideoTranscodePipelineConfig = {
-  roleArn: string;
-  jobTemplateArn: string;
-};
-
-const resolveVideoTranscodePipelineConfig = (): VideoTranscodePipelineConfig =>
-  readSetting<VideoTranscodePipelineConfig>(
-    'mediaConvert',
-    'VideoTranscodePipeline',
-  );
+const resolveVideoTranscodePipelineConfig = () =>
+  readSetting('mediaConvert', 'VideoTranscodePipeline', [
+    'roleArn',
+    'jobTemplateArn',
+  ]);
 
 /**
  * What to transcode: a lesson's content item (`target` omitted) or a course's

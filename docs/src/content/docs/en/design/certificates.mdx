@@ -28,11 +28,12 @@ Completion itself is unchanged by the criteria: an enrolment still becomes `comp
 A second criterion, `minUploadScorePercent` (a whole number from 1 to 100, absent when not required), sits in the same map and is set through the same `setCertificateCriteria`, which removes it when given `null`.
 
 - **The rule**: with it set, every effectively visible assignment is assessed. One is met when the student's submission is `returned` and `floor(points / pointsOutOf * 100)` is at least the minimum, where `pointsOutOf` is what the work was graded out of (the assignment's `maxPoints` when there is no grade to read it from). A submission that is missing is "not submitted", one not yet returned is "waiting to be graded", and one returned with fewer points is "below the score". A course with no visible assignment has nothing to meet.
-- **Regrading**: a submission's `status`, `points` or `returnedAt` changing recalculates that student, so a grade amended upwards issues the certificate, and a resubmission (which changes none of them) does nothing. A returned submission that an instructor reopens is waiting again and doesn't count until it is returned.
+- **Regrading**: a submission's `status`, `points` or `returnedAt` changing recalculates that student, so a grade amended upwards issues the certificate, and a resubmission (which changes none of them) does nothing.
 - **What is recorded**: the certificate's `assessment` keeps `minUploadScorePercent`, `assessedUploadCount` and one `upload` entry per assignment in the internal list; the band is over quizzes and uploads together. The statement gains "Graded assignments returned with at least 60%: 2."
 - Submissions are read only when the criterion is set.
 
 ## What the certificate records
+
 The certificate copies the criteria it was issued under, with their `version`, into a read-only `assessment`, so what it describes never drifts when the course changes:
 
 - the two settings, the number of visible items, the number of assessed items, the lowest and highest pass mark, the course length in hours and a **score band** (the ten-point band of the mean of the best scores, from 0–9% up to 90–100%). Each is shown on the public page and in the PDF as the same lines of text (`assessmentStatement`).
@@ -48,7 +49,7 @@ The recalculation (see <Link path="design/progress-and-completion">Progress and 
 - a quiz's pass mark changing (including to or from 0, which changes whether it is assessed): every enrolled student who hasn't dropped;
 - the item completions and visibility changes that already triggered it.
 
-This replaces the "no backfill" limitation: turning certificates on now issues to everyone who already qualifies.
+So turning certificates on, or loosening the criteria, issues to everyone who already qualifies.
 
 ## How it is issued
 
@@ -74,6 +75,7 @@ A **revoked** certificate shows "This certificate has been revoked and is no lon
 ## Revoking and restoring
 
 - **Who**: an instructor of the course lists its certificates (Certificates section of the course) and revokes one with the reason `academic-integrity`, `issued-in-error` or `other` (with a note). An administrator looks up any certificate by ID and may also use `refunded`.
+- **The procedures**: instructor-api's `certificate.list`, `history`, `revoke` and `restore`, and admin-api's `certificate.get`, `revoke` and `restore`.
 - **Restore**: an administrator always; an instructor only a revocation made by an instructor. An instructor sees "Revoked by an administrator" and no Restore on the other kind.
 - **The record**: the certificate carries its current state (`revokedAt`, `revocationReason`, `revokedByRole`), and every change also appends a `certificateEvent` (`revoked` or `restored`, actor, role, reason, note, time) in the same transaction. `revokeCertificate` and `restoreCertificate` in `core-table` are the only writers of both. The history is kept for an audit; a revoke, restore and second revoke leave three events.
 - **Races**: the write is conditioned on the state it expects, so two simultaneous revokes leave one revocation and one event, and both requests are answered.
@@ -84,7 +86,7 @@ A **revoked** certificate shows "This certificate has been revoked and is no lon
 
 ## Invariants
 
-The invariant checks (see the spec's research R-10) hold that: a certificate's `assessment` is well formed and its counts, pass marks and band follow from the listed items; every listed quiz was passed by the student no later than the issue time, at or above its pass mark, and every listed upload scored at least the recorded minimum and still has a submission, even one reopened since (`certificate-met-criteria`); a certificate is revoked exactly when its latest event is `revoked` (`certificate-status-matches-history`); every course has well-formed criteria; and a certificate still needs a completed (or dropped-after-completion) enrolment, revoked or not. Not violations: a completed enrolment with no certificate, a certificate that differs from the course's current criteria, and a listed quiz since hidden or given a higher pass mark.
+The invariant checks (see the spec's research R-10) hold that: a certificate's `assessment` is well formed and its counts, pass marks and band follow from the listed items; every listed quiz was passed by the student no later than the issue time, at or above its pass mark, and every listed upload scored at least the recorded minimum and still has a submission (`certificate-met-criteria`); a certificate is revoked exactly when its latest event is `revoked` (`certificate-status-matches-history`); every course has well-formed criteria; and a certificate still needs a completed (or dropped-after-completion) enrolment, revoked or not. Further checks cover the LinkedIn click's shape, that no reminder was sent after a click, and that certificates and their notifications match. Not violations: a completed enrolment with no certificate, a certificate that differs from the course's current criteria, and a listed quiz since hidden or given a higher pass mark.
 
 ## Sharing and verifying
 
@@ -113,7 +115,7 @@ The student portal builds the link in the learner's browser (`lib/linkedin-add-t
 - **The notification** `certificate.issued` is written in the same transaction as the certificate by `issueCertificate`, with the certificate ID as its dedupe key, so there is never a certificate without its notification, and a retry doesn't make a second one.
 - **The email** has two links: the certificate's page, and **Add to LinkedIn profile** (the notification's optional `action`, which the bell ignores).
 - **The setting**: one switch, **Certificates**, in Notification settings governs both the issue email and the reminder. `certificate.reminder` has no setting of its own (`emailPreferenceType` points at `certificate.issued`), and unsubscribing from the first email also stops the reminder.
-- **The reminder**: three days after issue, a one-time EventBridge Scheduler schedule (`cert-reminder-<ID>`) invokes the `certificate-reminder` Lambda. It stops if the email type is off. Otherwise it claims the reminder with a conditional write of `reminderSentAt` that only succeeds when no click has been recorded and no reminder was sent, then publishes `certificate.reminder` with the stored time. A click and a send are safe against each other: whichever write lands first decides. A later recalculation repairs a certificate that was issued but never scheduled (research R-4 to R-7).
+- **The reminder**: three days after issue, a one-time EventBridge Scheduler schedule (`cert-reminder-<ID>`) invokes the `certificate-reminder` Lambda. It stops if the email type is off. Otherwise it claims the reminder with a conditional write of `reminderSentAt` that only succeeds when no click has been recorded and no reminder was sent, then publishes `certificate.reminder` with the stored time. A click and a send are safe against each other: whichever write lands first decides. A later recalculation repairs a certificate that was issued but never scheduled, unless the reminder is already past due: a reminder is never sent late (research R-4 to R-7).
 
 ## The link preview
 

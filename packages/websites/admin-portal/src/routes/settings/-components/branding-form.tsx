@@ -35,7 +35,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useSetBrand } from '@discava/common-web-utils/brand';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useAdminApi } from '../../../api';
 import { BrandPreview } from './brand-preview';
 import { ImageField } from './image-field';
@@ -112,6 +112,27 @@ export function BrandingForm({
     icon?: string;
     shareImage?: string;
   }>({});
+  // Which images are being uploaded; Save waits until none are.
+  const [uploading, setUploading] = useState({
+    logo: false,
+    icon: false,
+    shareImage: false,
+  });
+  const uploadingLogo = useCallback(
+    (on: boolean) => setUploading((current) => ({ ...current, logo: on })),
+    [],
+  );
+  const uploadingIcon = useCallback(
+    (on: boolean) => setUploading((current) => ({ ...current, icon: on })),
+    [],
+  );
+  const uploadingShareImage = useCallback(
+    (on: boolean) =>
+      setUploading((current) => ({ ...current, shareImage: on })),
+    [],
+  );
+  const uploadRunning =
+    uploading.logo || uploading.icon || uploading.shareImage;
   // What is typed in the hex field, which may not be a colour yet.
   const [colourText, setColourText] = useState(saved.brand.colour ?? '');
   const colourId = useId();
@@ -153,7 +174,7 @@ export function BrandingForm({
   const nameLength = nameText.trim().length;
   const nameInvalid = nameLength < 1 || nameLength > BRAND_NAME_MAX_LENGTH;
 
-  const leaveGuard = useUnsavedChangesGuard(dirty);
+  const leaveGuard = useUnsavedChangesGuard(dirty || uploadRunning);
   useEffect(() => {
     if (dirty) {
       // An edit makes "Nothing to save" untrue, so it goes.
@@ -192,6 +213,9 @@ export function BrandingForm({
   };
 
   const submit = async () => {
+    if (uploadRunning) {
+      return;
+    }
     if (nameInvalid || colourInvalid) {
       (nameInvalid ? nameField : colourField).current?.focus();
       return;
@@ -300,6 +324,7 @@ export function BrandingForm({
         previewClassName="h-10 w-auto max-w-40 rounded border bg-background object-contain"
         serverError={serverField === 'logo' ? serverError : undefined}
         onChoose={() => setServerError(undefined)}
+        onUploadingChange={uploadingLogo}
         onUploaded={(key, preview) => {
           setForm((current) => ({ ...current, logoKey: key }));
           setPreviews((current) => ({ ...current, logo: preview }));
@@ -318,6 +343,7 @@ export function BrandingForm({
         previewClassName="size-12 rounded border bg-background object-contain"
         serverError={serverField === 'icon' ? serverError : undefined}
         onChoose={() => setServerError(undefined)}
+        onUploadingChange={uploadingIcon}
         onUploaded={(key, preview) => {
           setForm((current) => ({ ...current, iconKey: key }));
           setPreviews((current) => ({ ...current, icon: preview }));
@@ -337,6 +363,7 @@ export function BrandingForm({
         previewClassName="aspect-[1.91/1] w-60 rounded border bg-background object-cover"
         serverError={serverField === 'share-image' ? serverError : undefined}
         onChoose={() => setServerError(undefined)}
+        onUploadingChange={uploadingShareImage}
         onUploaded={(key, preview) => {
           setForm((current) => ({ ...current, shareImageKey: key }));
           setPreviews((current) => ({ ...current, shareImage: preview }));
@@ -462,8 +489,10 @@ export function BrandingForm({
           </Button>
           <PendingButton
             type="submit"
-            pending={save.isPending}
-            pendingLabel="Saving…"
+            pending={save.isPending || uploadRunning}
+            pendingLabel={
+              save.isPending ? 'Saving…' : 'Wait for the upload to finish…'
+            }
           >
             Save
           </PendingButton>

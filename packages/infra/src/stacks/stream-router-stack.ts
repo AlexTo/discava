@@ -159,7 +159,7 @@ export class StreamRouterStack extends Stack {
     reminder: {
       scheduleGroup: ScheduleGroup;
       schedulerRole: Role;
-      settings: object;
+      settings: Record<string, string>;
     },
   ) {
     const recalculation = new EventsProgressRecalculation(

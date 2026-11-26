@@ -45,13 +45,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   isLocalDev.mockReturnValue(false);
   vi.stubEnv(
-    'DISCAVA_CERTIFICATES_REMINDER',
-    JSON.stringify({
-      lambdaArn: 'arn:aws:lambda:ap-southeast-2:1:function:reminder',
-      schedulerRoleArn: 'arn:aws:iam::1:role/scheduler',
-      scheduleGroupName: 'reminders',
-    }),
+    'DISCAVA_CERTIFICATES_REMINDER_LAMBDA_ARN',
+    'arn:aws:lambda:ap-southeast-2:1:function:reminder',
   );
+  vi.stubEnv(
+    'DISCAVA_CERTIFICATES_REMINDER_SCHEDULER_ROLE_ARN',
+    'arn:aws:iam::1:role/scheduler',
+  );
+  vi.stubEnv('DISCAVA_CERTIFICATES_REMINDER_SCHEDULE_GROUP_NAME', 'reminders');
   schedulerSend.mockResolvedValue({});
 });
 
@@ -82,10 +83,10 @@ describe('scheduleCertificateReminder', () => {
   });
 
   it('throws naming the setting when it is not set', async () => {
-    vi.stubEnv('DISCAVA_CERTIFICATES_REMINDER', '');
+    vi.stubEnv('DISCAVA_CERTIFICATES_REMINDER_LAMBDA_ARN', '');
 
     await expect(scheduleCertificateReminder(params)).rejects.toThrow(
-      'Missing deploy-time setting DISCAVA_CERTIFICATES_REMINDER',
+      'Missing deploy-time setting DISCAVA_CERTIFICATES_REMINDER_LAMBDA_ARN',
     );
     expect(schedulerSend).not.toHaveBeenCalled();
   });

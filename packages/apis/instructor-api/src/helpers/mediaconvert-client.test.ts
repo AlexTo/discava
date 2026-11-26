@@ -67,16 +67,24 @@ const SCHEDULE_GROUP_NAME = 'discava-transcode-cleanup';
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv(
-    'DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE',
-    JSON.stringify({ roleArn: ROLE_ARN, jobTemplateArn: JOB_TEMPLATE_ARN }),
+    'DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE_ROLE_ARN',
+    ROLE_ARN,
   );
   vi.stubEnv(
-    'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
-    JSON.stringify({
-      lambdaArn: CLEANUP_LAMBDA_ARN,
-      schedulerRoleArn: SCHEDULER_ROLE_ARN,
-      scheduleGroupName: SCHEDULE_GROUP_NAME,
-    }),
+    'DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE_JOB_TEMPLATE_ARN',
+    JOB_TEMPLATE_ARN,
+  );
+  vi.stubEnv(
+    'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP_LAMBDA_ARN',
+    CLEANUP_LAMBDA_ARN,
+  );
+  vi.stubEnv(
+    'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP_SCHEDULER_ROLE_ARN',
+    SCHEDULER_ROLE_ARN,
+  );
+  vi.stubEnv(
+    'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP_SCHEDULE_GROUP_NAME',
+    SCHEDULE_GROUP_NAME,
   );
   resolveLessonMediaUploadBucketName.mockResolvedValue(UPLOAD_BUCKET_NAME);
   resolveLessonMediaBucketName.mockResolvedValue(MEDIA_BUCKET_NAME);
@@ -280,7 +288,7 @@ describe('submitTranscodeJob', () => {
   });
 
   it('propagates a missing pipeline setting', async () => {
-    vi.stubEnv('DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE', '');
+    vi.stubEnv('DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE_ROLE_ARN', '');
 
     await expect(
       submitTranscodeJob({
@@ -292,7 +300,7 @@ describe('submitTranscodeJob', () => {
         submissionNonce: SUBMISSION_NONCE,
       }),
     ).rejects.toThrow(
-      'Missing deploy-time setting DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE',
+      'Missing deploy-time setting DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE_ROLE_ARN',
     );
     expect(mediaConvertSend).not.toHaveBeenCalled();
   });

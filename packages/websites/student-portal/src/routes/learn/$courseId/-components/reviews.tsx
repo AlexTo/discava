@@ -187,7 +187,8 @@ export function CourseReviews({ courseId }: { courseId: string }) {
     <section
       id="reviews"
       aria-labelledby="reviews-heading"
-      className="scroll-mt-32 space-y-6"
+      tabIndex={-1}
+      className="focus:outline-none scroll-mt-32 space-y-6"
     >
       <h2 id="reviews-heading" className="text-xl font-semibold">
         Reviews

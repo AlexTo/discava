@@ -27,23 +27,36 @@ pnpm dev
 | --- | --- | --- |
 | Student / instructor / admin portal | 4201 / 4200 / 4202 | CloudFront |
 | core-api / instructor-api / admin-api | 2022 / 2023 / 2025 | API Gateway and Lambda |
-| Page renderer | 2026 | The core-api Lambda behind the student portal's CloudFront distribution that answers crawlers with HTML (landing pages, profiles, site map, robots) |
+| Page renderer | 2026 | The core-api Lambda behind the student portal's CloudFront distribution that serves public pages as HTML (course landing pages, instructor profiles, certificate pages, site map, robots) |
 | DynamoDB local | 8001 | DynamoDB |
 | S3Mock | 9090 | S3 (uploads, lesson media, course images) |
 | ElasticMQ | 9324 | SQS (the stream router's queues and failure queues) |
 | OpenSearch | 9200 | OpenSearch (the course search and transcript search indices; started by `packages/databases/search`'s `dev` target, which also syncs the local indices) |
-| Event runner | 2024 | MediaConvert (ffmpeg in Docker), Amazon Transcribe (writes a placeholder track), Amazon Translate (prefixes each caption with its target language), SES (sent emails are kept in `tmp/local-dev/emails/`; inbox at `http://localhost:2024/inbox`), EventBridge, Scheduler, the table's stream and its consumers (the stream router and each feature's queue, such as notification delivery), and Cognito's pre token generation trigger (which keeps user records in step), and Stripe (a stand-in for its API, hosted checkout page and signed webhook deliveries to `/stripe/webhook`; the saved key lives in `tmp/local-dev/secrets/`) |
+| Event runner | 2024 | Everything event-driven; see the list below |
 | Local OIDC server | 9400 | Cognito |
+
+The event runner (`packages/events/src/local`) stands in for:
+
+- **The table's stream and its consumers**: the stream router and each feature's queue, such as notification delivery.
+- **MediaConvert**: ffmpeg in Docker.
+- **Amazon Transcribe**: writes a placeholder caption track.
+- **Amazon Translate**: prefixes each caption with its target language.
+- **SES**: sent emails are kept in `tmp/local-dev/emails/`, with an inbox at `http://localhost:2024/inbox`.
+- **EventBridge and Scheduler**.
+- **Cognito's pre token generation trigger**, which keeps user records in step.
+- **Stripe**: its API, hosted checkout page and signed webhook deliveries to `/stripe/webhook`. The saved key lives in `tmp/local-dev/secrets/`.
 
 **Signing in.** The portals send you to a local sign-in page: pick **Alice** (instructor and student), **Bob** (student), **Dan** (a second student, e.g. one who isn't enrolled) or **Carol** (admin). There are no passwords. Under "Someone else" you can sign in with any claims, such as other groups. Cognito itself (Managed Login, sign-up, the post-confirmation trigger) is tested on the deployed `discava-development` stage.
 
 **Lesson videos** transcode on your machine with ffmpeg: a few minutes for a long lecture. `LOCAL_TRANSCODE_RENDITIONS=360p pnpm dev` makes only the 360p rendition, for speed. Jobs work in the git-ignored `tmp/local-dev/transcode/`, and a failed job keeps its files and an `error.log` there. Each finished video also gets a placeholder caption track, written by the local Transcribe stand-in and handled by the same completion code as the real event, so the captions menu can be tried without Transcribe. Caption translation is a stand-in too: it prefixes each caption with the target language (`[es-ES] …`), and a caption containing `[[fail-translation]]` or `[[fail-translation:es-ES]]` makes that language fail. Course progress updates a few seconds after a change, as when deployed.
 
+**Sample data.** With `pnpm dev` running, `pnpm nx run @discava/e2e:seed-local-courses` publishes a few courses as Alice, with categories, tags and levels, and `pnpm nx run @discava/tooling-deploy:seed-categories` adds the starting categories (Science, Technology, Mathematics, Communication, Business), skipping any that exist.
+
 **Notifications.** `pnpm nx run @discava/tooling-local-dev:notify-local -- --user <sub> --type <id> [--param k=v]... [--key <dedupeKey>]` publishes a notification to a local user (`--course <courseId>` notifies every student enrolled in a course), with canned params for the type; the email it sends shows up in the inbox above.
 
-**Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `DISCAVA_DYNAMODB_CORE_TABLE` is set (`{"tableName":"<table>"}`, the `CoreTableName` output of `<stage>-Data`) and AWS credentials are present.
+**Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME` is set (to the `CoreTableName` output of `<stage>-Data`) and AWS credentials are present.
 
-**Search indices.** On a deployed stage, `pnpm nx run @discava/tooling-deploy:reindex-search <stage>` re-indexes every published course, and `pnpm nx run @discava/tooling-deploy:reindex-transcripts -- --stage=<stage> [--course=<courseId>]` rebuilds the transcripts index, for one course or all of them. With no `--stage`, `reindex-transcripts` runs against the local stack.
+**Search indices.** On a deployed stage, `pnpm nx run @discava/tooling-deploy:reindex-search --stage=<stage>` re-indexes every published course, and `pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=<stage> [--course=<courseId>]` rebuilds the transcripts index, for one course or all of them. With no `--stage`, `reindex-transcripts` runs against the local stack.
 
 **Payments.** No Stripe account is needed. As Carol, open Payments in the admin portal and connect the key `sk_test_local`; Alice can then price a course and Bob can buy it on the stand-in's payment page (Pay, Decline card, Cancel). `POST http://localhost:2024/stripe/test/refund`, `/replay` and `/expire` do what the Stripe dashboard or a redelivery would, and `POST http://localhost:2024/payout-run` runs the daily payout run once. The docs' [Payments](./docs/src/content/docs/en/design/payments.mdx) and [Instructor payouts](./docs/src/content/docs/en/design/instructor-payouts.mdx) design pages describe both.
 
@@ -73,7 +86,7 @@ Every API and event handler shares the core table, and some rules span records t
 
 Add a check for each such rule to `core-table`'s `helpers/invariants/` folder. The e2e suite runs those checks after every scenario (see [End-to-End Tests](#end-to-end-tests)).
 
-The folder has one file per topic (`curriculum.ts`, `student-activity.ts`, `media.ts`, `analytics.ts`, `certificates.ts`, `assignment-grading.ts`, `payments.ts`, `earnings.ts`, `notifications.ts`, `catalogue.ts`, `discussion.ts`, `reviews.ts`…), each exporting its checks as `[{ name, check }]`, and a `<topic>.test.ts` beside it. To add a check:
+The folder has one file per topic (`curriculum.ts`, `student-activity.ts`, `media.ts`, `analytics.ts`, `certificates.ts`, `assignment-grading.ts`, `payments.ts`, `coupons.ts`, `earnings.ts`, `notifications.ts`, `catalogue.ts`, `discussion.ts`, `reviews.ts`…), each exporting its checks as `[{ name, check }]`, and a `<topic>.test.ts` beside it. To add a check:
 
 1. Write `check<Name>(snapshot)` in the topic's file (or a new topic file) and add `{ name: '<invariant-name>', check }` to that file's list. A new topic file's list goes into `CHECKS` in `index.ts`, which derives `INVARIANTS` from the names.
 2. If it reads records of a new entity, add the entity to `TableSnapshot` and to `SNAPSHOT_ENTITIES` in `snapshot.ts`; that map drives `loadTableSnapshot` and `emptyTableSnapshot()`.
@@ -132,14 +145,11 @@ A change to a main user flow should come with an end-to-end scenario, or an exte
 
 ## Writing Documentation
 
-Docs live in `docs/` (Astro + Starlight, deployed to GitHub Pages). Please only author English content, under `docs/src/content/docs/en/`; other locales are generated from it, not hand-written.
+Docs live in `docs/` (Astro + Starlight, deployed to GitHub Pages). Write English content only, under `docs/src/content/docs/en/`. The other locales hold older translations and aren't kept in step.
 
-To translate your changes locally, with AWS credentials configured for Bedrock access:
+To preview the site while you write (it prints the local address):
 
 ```sh
-pnpm nx run @discava/docs:translate            # translate files changed vs main
-pnpm nx run @discava/docs:translate -- --all   # translate everything
-pnpm nx run @discava/docs:translate -- --dry-run
+pnpm nx start @discava/docs
 ```
 
-There is no CI workflow that runs this automatically yet. If your PR touches English docs, please run the translation locally and commit the result, or note in the PR that translations are pending.
