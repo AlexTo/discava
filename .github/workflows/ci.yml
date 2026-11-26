@@ -45,6 +45,10 @@ jobs:
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          # The Nx cache sits in the checkout (init-monorepo), and the
+          # uploader's search ignores .gitignore: without this it sends every
+          # cached run's lcov.info, whose stale line numbers count as misses.
+          exclude: .nx
 
       # The docs site is built for this repository's GitHub Pages address, so a
       # fork's docs link to the fork. Set the DOCS_SITE and DOCS_BASE_PATH
