@@ -30,7 +30,6 @@ const facts = {
 };
 const active = {
   status: 'active',
-  mode: 'test',
   ...facts,
   revision: 3,
 };

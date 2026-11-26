@@ -476,6 +476,7 @@ export interface TableSnapshot {
     | 'refundedAmount'
     | 'refundReason'
     | 'refundRequestedAt'
+    | 'refundFailedAt'
     | 'createdAt'
   >[];
   // At most one (a singleton); a list so a stray second one is seen.

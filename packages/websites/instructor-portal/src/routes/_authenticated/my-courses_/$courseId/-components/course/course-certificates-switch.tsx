@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { Switch } from '@discava/common-shadcn/components/ui/switch';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -50,25 +51,12 @@ export function CourseCertificatesSwitch({
   return (
     <div className="space-y-2">
       <div className="flex items-start gap-3" aria-busy={pending !== undefined}>
-        <button
-          type="button"
-          role="switch"
+        <Switch
           id={`certificates-${courseId}`}
-          aria-checked={checked}
-          onClick={change}
-          className={cn(
-            'mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors',
-            pending !== undefined && 'opacity-50',
-            checked ? 'bg-primary' : 'bg-input',
-          )}
-        >
-          <span
-            className={cn(
-              'block size-4 rounded-full bg-background shadow transition-transform',
-              checked ? 'translate-x-4' : 'translate-x-0.5',
-            )}
-          />
-        </button>
+          checked={checked}
+          onCheckedChange={change}
+          className={cn('mt-0.5', pending !== undefined && 'opacity-50')}
+        />
         <div className="text-sm">
           <label
             htmlFor={`certificates-${courseId}`}

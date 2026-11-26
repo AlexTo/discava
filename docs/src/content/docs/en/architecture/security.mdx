@@ -16,7 +16,7 @@ Access is decided in layers, and each layer assumes the one before it could fail
 | **Cognito groups** | A user's role: `student`, `instructor` or `admin` |
 | **Separate APIs** | Instructor and admin procedures are separate deployments. A student's token is rejected by instructor-api before any procedure runs |
 | **Procedure rules** | The specific rule: this instructor owns this course, this student is enrolled in it |
-| **Signed media** | A video is served only to a request signed for it, issued after the enrolment check |
+| **Signed media** | A video or file is served only to a request signed for it. The signature is issued after an access check, such as enrolment |
 
 A draft or archived course answers "not found" to anyone who shouldn't see it, so its existence isn't revealed.
 
@@ -41,10 +41,13 @@ On a development stage with WAF off, the request limits, function concurrency an
 ## Least privilege inside the system
 
 - Each Lambda function has its own role with only the permissions its job needs.
-- Sensitive capabilities are isolated in dedicated functions. The key that signs video requests is readable by one function, not by the function serving every other core-api procedure.
-- The Stripe key and webhook signing secret are in Secrets Manager. One admin-api function may write them, the checkout, webhook and payout functions read only what they need, and no response, log line or audit record carries either.
+- Sensitive capabilities are isolated in dedicated functions. The key that signs lesson media requests is readable by one function in core-api and one in instructor-api, not by the function serving every other procedure.
+- The Stripe key and webhook signing secret are in Secrets Manager. One admin-api function may write them. The checkout, webhook, payout-account and payout-run functions read only what they need, and no response, log line or audit record carries either.
 - The Stripe webhook accepts a message only if its signature verifies against the stored signing secret. A payment is never trusted from the browser.
-- No S3 bucket is public. Each is reachable only through its CloudFront distribution.
+- No S3 bucket is public. The portals and media are reachable only through their CloudFront distributions.
+- The page renderer serves public pages with read-only access to the table, and only the student portal's CloudFront distribution can invoke it.
+- Each API answers cross-origin requests only from the portals that call it: all three for core-api, the instructor portal for instructor-api, the admin portal for admin-api. The local development addresses are also allowed.
+- The search indices are written only by the indexing functions. The APIs can only read them.
 - Functions get resource names from deploy-time environment variables, and credentials never appear in code or environment files.
 
 ## Checks before code is deployed

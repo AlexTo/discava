@@ -13,7 +13,9 @@ sidebar:
 
 **"Unknown stage."** The stage isn't in `stages.config.ts`. Add it there first.
 
-**"The origin remote isn't a GitHub repository."** Set the repository yourself: `GITHUB_REPOSITORY=<you>/discava ./scripts/setup-stage.sh`.
+**"The origin remote isn't a GitHub repository."** Shown with `--yes`; without it, the script asks for the repository. Set it yourself: `GITHUB_REPOSITORY=<you>/discava ./scripts/setup-stage.sh`.
+
+**"stdin isn't a terminal."** The script can't prompt. Run it in a terminal, or pass `--yes` to accept the defaults.
 
 **"uses a custom OIDC subject claim template."** Your repository or organisation customises the OIDC token's subject. Set `GITHUB_OIDC_SUBJECT_PREFIX` to the part of the subject before `:environment:` and run the script again.
 
@@ -35,16 +37,20 @@ Run the setup script again from a clone of the repository that runs the workflow
 
 **"Credentials could not be loaded" or an empty role.** The environment has no `AWS_DEPLOY_ROLE_ARN` variable. Run the setup script, or create the variables it printed.
 
+**"Invalid value for `<STAGE>_INFRA_…`".** A configuration override has the wrong kind of value. Booleans are `true` or `false`, numbers are whole, and a log level is `DEBUG`, `INFO`, `WARN` or `ERROR`. Fix the variable on the GitHub environment and deploy again.
+
 **"SSM parameter /cdk-bootstrap/hnb659fds/version not found".** CDK isn't bootstrapped in a region the stage deploys to. Run the setup script again and accept the bootstrap, remembering `us-east-1` for stages with WAF.
 
-**Access denied while CloudFormation creates a resource.** CloudFormation runs as the execution role, `cfn-execution-<stage>`. That role may only do what Discava creates today, and only on resources whose names start with the stage name (`discava-development-…`, or `discavadevelopment…` for some kinds). Look at who the error names:
+**Access denied while CloudFormation creates a resource.** CloudFormation runs as the execution role, `cfn-execution-<stage>`. That role may only do what Discava creates, and only on resources whose names start with the stage name (`discava-development-…`, or `discavadevelopment…` for some kinds).
+
+If you just pulled a newer version of Discava, run the setup script again first: it updates the role's permissions to what that version needs. If the error remains, or you added a resource yourself, look at who the error names:
 
 - **`cfn-execution-<stage>` is refused.** Add the action to the execution role's policies in `scripts/setup-stage.sh`. If the resource's name doesn't start with the stage name, give it an explicit name that does instead: CDK's `Names.uniqueResourceName` builds one from the construct's path. Then run the script again.
 - **A function's role is refused when it runs.** Add the action to the permissions boundary in the same script, then run it again. Every role the stage creates carries that boundary. The execution role doesn't, so adding an action to the boundary never fixes a deploy.
 
 A deploy from your own machine uses CDK's default roles, which can do anything. So a stack that deploys locally can still fail in the Deploy workflow.
 
-**The Trivy step fails.** A dependency has a known critical vulnerability with a fix available, or a secret was committed. Update the dependency. A finding you have reviewed and accepted goes in `.trivyignore`.
+**The Trivy step fails.** A dependency has a known critical vulnerability with a fix available, or a secret was committed. Update the dependency. A finding you have reviewed and accepted goes in `.trivyignore`, one ID per line.
 
 **A stack is stuck in `ROLLBACK_COMPLETE`.** A stack that failed on its first creation can't be updated. Delete it in the CloudFormation console and deploy again.
 

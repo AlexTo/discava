@@ -46,6 +46,21 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
+      # The docs site is built for this repository's GitHub Pages address, so a
+      # fork's docs link to the fork. Set the DOCS_SITE and DOCS_BASE_PATH
+      # repository variables to override it, for example for a custom domain.
+      - name: Set the docs site address
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          SITE_OVERRIDE: ${{ vars.DOCS_SITE }}
+          BASE_OVERRIDE: ${{ vars.DOCS_BASE_PATH }}
+        run: |
+          owner="${OWNER,,}"
+          if [ "${REPO,,}" = "$owner.github.io" ]; then base=""; else base="/$REPO"; fi
+          echo "DOCS_SITE=${SITE_OVERRIDE:-https://$owner.github.io}" >> "$GITHUB_ENV"
+          echo "DOCS_BASE_PATH=${BASE_OVERRIDE:-$base}" >> "$GITHUB_ENV"
+
       - name: Build
         run: pnpm nx run-many --target build --all
 

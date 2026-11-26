@@ -131,7 +131,7 @@ function RouteComponent() {
   if (isPending) {
     return (
       <div className="space-y-4">
-        <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="[overflow-wrap:anywhere] text-balance text-2xl font-bold tracking-tight sm:text-3xl">
           Course
         </h1>
         <div className="py-12">
@@ -145,7 +145,7 @@ function RouteComponent() {
     const notFound = error.data?.code === 'NOT_FOUND';
     return (
       <div className="space-y-4">
-        <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="[overflow-wrap:anywhere] text-balance text-2xl font-bold tracking-tight sm:text-3xl">
           Course
         </h1>
         <ErrorAlert
@@ -192,7 +192,7 @@ function RouteComponent() {
               </div>
               <div className="min-w-0 flex-1">
                 <Badge className={courseStatusStyles[status]}>{status}</Badge>
-                <h1 className="text-balance mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+                <h1 className="[overflow-wrap:anywhere] text-balance mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
                   {course.title}
                 </h1>
                 {course.description && (

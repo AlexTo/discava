@@ -61,7 +61,7 @@ describe('the student portal page renderer', () => {
     expect(environment).not.toHaveProperty('RUNTIME_CONFIG_APP_ID');
   });
 
-  it('serves four paths from a function URL that only CloudFront can call', () => {
+  it('serves its page paths, bare and nested, from a function URL that only CloudFront can call', () => {
     const websites = synth({})('Websites');
     websites.hasResourceProperties('AWS::Lambda::Url', { AuthType: 'AWS_IAM' });
     const [distribution] = resources(
@@ -75,8 +75,11 @@ describe('the student portal page renderer', () => {
     }[];
     const behaviors = distribution.DistributionConfig.CacheBehaviors;
     expect(behaviors.map((b) => b.PathPattern).sort()).toEqual([
+      '/certificates',
       '/certificates/*',
+      '/instructors',
       '/instructors/*',
+      '/learn',
       '/learn/*',
       '/robots.txt',
       '/sitemap.xml',

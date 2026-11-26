@@ -219,6 +219,7 @@ describe('certificate-shape and certificate-has-completed-enrolment', () => {
       status: 'completed',
       progressPercent: 100,
       completedAt: COMPLETED,
+      createdAt: table.enrolments[0].createdAt,
     });
     table.certificates.push({
       ...table.certificates[0],
@@ -580,6 +581,13 @@ describe('certificate-reminder-not-after-click', () => {
       courseTitle: 'Intro',
       completedAt: ISSUED,
       issuedAt: ISSUED,
+      assessment: {
+        criteriaVersion: 1,
+        requireQuizPass: false,
+        itemCount: 4,
+        assessedItemCount: 0,
+        assessedItems: [],
+      },
     });
     return table.certificates[0];
   };
@@ -645,6 +653,13 @@ describe('certificate-notifications-match for reminders', () => {
       courseTitle: 'Intro',
       completedAt: ISSUED,
       issuedAt: ISSUED,
+      assessment: {
+        criteriaVersion: 1,
+        requireQuizPass: false,
+        itemCount: 4,
+        assessedItemCount: 0,
+        assessedItems: [],
+      },
       reminderSentAt: SENT,
     });
     table.notifications = [reminder('a1b2c3d4e5f60718')];

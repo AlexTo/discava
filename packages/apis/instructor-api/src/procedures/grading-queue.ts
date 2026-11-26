@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { defaultDisplayName } from '@discava/core-table';
+import { type CoreTable, defaultDisplayName } from '@discava/core-table';
 import { courseProcedure } from '../init.js';
 import {
   GradingQueueInputSchema,
@@ -16,6 +16,37 @@ import {
 const uniqueKeys = <T>(entries: T[], key: (entry: T) => string): T[] => [
   ...new Map(entries.map((entry) => [key(entry), entry] as const)).values(),
 ];
+
+const READ_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 50;
+
+// Reads the enrolments for `keys`, asking again, after a growing pause, for
+// the keys DynamoDB left unprocessed under throttling. A student whose
+// enrolment is missing counts as having left, so a short read must fail the
+// request rather than shorten the queue.
+const readEnrolments = async (
+  coreTable: CoreTable,
+  keys: { courseId: string; userId: string }[],
+) => {
+  const enrolments = [];
+  let pending = keys;
+  for (let attempt = 0; pending.length > 0; attempt++) {
+    if (attempt === READ_ATTEMPTS) {
+      throw new Error('Enrolments could not be read: throttled');
+    }
+    if (attempt > 0) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, RETRY_DELAY_MS * 2 ** (attempt - 1)),
+      );
+    }
+    const { data, unprocessed } = await coreTable.entities.enrolment
+      .get(pending)
+      .go();
+    enrolments.push(...data);
+    pending = unprocessed;
+  }
+  return enrolments;
+};
 
 // The work waiting for the caller across all their courses, oldest first
 // (specs/20261120-230057-assignment-grading/contracts/
@@ -53,14 +84,13 @@ export const listGradingQueue = courseProcedure
 
     // One key per student and course: a student can have several waiting
     // submissions in a course, and a batch get refuses duplicate keys.
-    const { data: enrolments } = await coreTable.entities.enrolment
-      .get(
-        uniqueKeys(
-          waiting,
-          ({ courseId, userId }) => `${courseId}#${userId}`,
-        ).map(({ courseId, userId }) => ({ courseId, userId })),
-      )
-      .go();
+    const enrolments = await readEnrolments(
+      coreTable,
+      uniqueKeys(
+        waiting,
+        ({ courseId, userId }) => `${courseId}#${userId}`,
+      ).map(({ courseId, userId }) => ({ courseId, userId })),
+    );
     const left = new Set(
       enrolments
         .filter(({ status }) => status === 'dropped')

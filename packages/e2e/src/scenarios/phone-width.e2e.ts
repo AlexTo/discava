@@ -665,6 +665,25 @@ test('the course editor fits a phone', async ({ page }) => {
     await screenshot(page, 'course editor at phone width', { fullPage: true });
   });
 
+  await test.step('the editor does not scroll sideways at 200% text zoom on a desktop', async () => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    // Scaling the root font size makes rem lengths follow, as text-only zoom
+    // does, but media queries still measure rem against the browser's default
+    // size, so `md:` rules keep matching here. Real zoom needs the browser's
+    // own font-size setting; this step guards the rem-sized layout only.
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+    });
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await screenshot(page, 'course editor at 200% text zoom');
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '';
+    });
+    await page.setViewportSize(PHONE);
+  });
+
   await test.step('the content comes first, and the section links lead to each section', async () => {
     await page.evaluate(() => window.scrollTo(0, 0));
     const headerBox = await page.locator('main section').first().boundingBox();

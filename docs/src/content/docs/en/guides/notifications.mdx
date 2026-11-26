@@ -1,13 +1,46 @@
 ---
 title: Notifications
-description: How a feature notifies people (the bell and email), the producer helpers, dedupe keys, preferences and unsubscribe, the local inbox and the stage config for email.
+description: What people are notified about in the bell and by email, how to switch emails off, and for developers the producer helpers, dedupe keys, the local inbox and the stage config for email.
 sidebar:
   order: 3
 ---
 
 import Link from '@components/link.astro';
 
-A notification is a short message for one person: it shows in the bell in every portal's header and, by their preferences, is sent as an email. Features publish notifications through helpers in `@discava/core-table`. Nothing else may write the notification records.
+A notification is a short message for one person. It shows in the bell in every portal's header and, by their preferences, is sent as an email.
+
+## What you are notified about
+
+| Notification | Sent when | Email |
+| --- | --- | --- |
+| **Course announcements** | An instructor posts an announcement to a course you are in | On |
+| **Discussion replies** | Someone replies to your post in a lesson discussion | On |
+| **Answered questions** | Someone marks an answer to your question | On |
+| **Accepted answers** | Your reply is marked as the answer | Off |
+| **Assignment returned** | An instructor returns your submission | On |
+| **Resubmission requested** | An instructor asks you to resubmit an assignment | On |
+| **Assignment grade updated** | An instructor changes the grade of a returned assignment | On |
+| **Certificates** | You earn a certificate, and one reminder to add it to your LinkedIn profile | On |
+| **Certificate revoked** | A certificate you earned is revoked | On |
+| **Certificate restored** | A revoked certificate is valid again | On |
+| **Refunds** | A full refund of a course you bought has gone through | Always |
+| **New assignment submissions** (instructors) | Students submit work to one of your assignments, at most once a day per assignment | Off |
+| **Course reviews** (instructors) | A student reviews one of your courses | Off |
+
+"On" and "Off" are the settings you start with. "Always" can't be switched off.
+
+## The bell
+
+The bell lists every notification, whatever your email settings. Choosing one opens the page it is about. **Mark all as read** clears the unread count.
+
+## Switching emails on or off
+
+1. Open the account menu in any portal and choose **Notification settings**.
+2. Use the switch beside a notification to choose whether it also reaches you by email.
+
+Every email also has an unsubscribe link. It opens a page in the student portal where **Stop these emails** switches that kind of email off, and nothing changes until you press it. **Turn them back on** undoes it.
+
+The rest of this page is for developers adding notifications to a feature. Features publish notifications through helpers in `@discava/core-table`. Nothing else may write the notification records.
 
 ## Add an event type
 
@@ -20,9 +53,9 @@ Each kind of notification is one entry in `NOTIFICATION_TYPES` (`packages/databa
 - `build(params)`: pure; returns the `title` (cut to 120 characters), `body` (cut to 500) and the `link` (`portal` and a `path` starting with `/`, with no secret in it). It may also return one optional `action` (`label` and `path`, in the same portal as the link): the email shows it as a second button and line, and the bell ignores it.
 - `emailPreferenceType` (optional): the id of another type whose email setting, unsubscribe token and settings label govern this one. The type has no setting of its own, `setNotificationPreference` refuses it and the settings page leaves it out. `isEmailEnabled` resolves it.
 
-Two types are for certificates: `certificate.issued` (its `link` is the certificate's page and its `action` is "Add to LinkedIn profile") and `certificate.reminder` (the same link and action, with `emailPreferenceType: 'certificate.issued'`). See <Link path="design/certificates">Certificates</Link>.
+Four types are for certificates: `certificate.issued` (its `link` is the certificate's page and its `action` is "Add to LinkedIn profile"), `certificate.reminder` (the same link and action, with `emailPreferenceType: 'certificate.issued'`), and `certificate.revoked` and `certificate.restored` (both link to My Learning). See <Link path="design/certificates">Certificates</Link>.
 
-`order.refunded` tells a student that a full refund of their purchase is complete (its `link` is the course page). It is sent for every full refund recorded from Stripe, whether the student requested it or an operator made it in the dashboard, and its dedupe key is the order ID, so a repeated delivery sends one. See <Link path="design/payments">Payments</Link>.
+`order.refunded` tells a student that a full refund of their purchase is complete (its `link` is the course page, and its email is `required`). It is sent for every full refund recorded from Stripe, whether the student requested it or an operator made it in the dashboard, and its dedupe key is the order ID, so a repeated delivery sends one. See <Link path="design/payments">Payments</Link>.
 
 Add a test for the entry in `notification-types.test.ts`. Nothing else changes: settings, the bell and the email pick it up.
 
@@ -46,7 +79,7 @@ The dedupe key names the event, for example `${contentItemId}:${version}`. A not
 
 ## Preferences and unsubscribe
 
-Someone can switch each type's email off in **Notification settings**, from the user menu in each portal. A `required` type has no switch, and a `never` type sends no email. The bell is unaffected by preferences.
+Someone can switch each type's email off in **Notification settings**, from the user menu in each portal. A `required` type's switch is on and can't be changed. A `never` type sends no email and isn't listed. The bell is unaffected by preferences.
 
 Every email carries an unsubscribe link, signed so it can't be changed, and the `List-Unsubscribe` headers for a mail client's one-click button. The link opens a page in the student portal that changes nothing until its button is pressed, and the page can switch the emails back on. The signing secret is generated per stage by the Data stack.
 

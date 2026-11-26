@@ -50,6 +50,8 @@ rc -> instr
 rc -> admin
 ```
 
+`PortalConfig` depends on every other stack. Only its arrows to the three APIs are drawn.
+
 They deploy in this order:
 
 ```
@@ -58,14 +60,14 @@ Websites → Data → Payments → MediaPipeline → CoreApi → StreamRouter �
 
 | Stack | Contains | Why it is separate |
 | --- | --- | --- |
-| **Websites** | The three portals: an S3 bucket and CloudFront distribution each | Depends on nothing. Others need the portals' addresses for CORS and sign-in redirects |
-| **Data** | Cognito user pool and its triggers, the core table, lesson media, upload and public media buckets with their CloudFront distributions, the search collection, the unsubscribe-link and Stripe secrets | Everything stateful. Changes rarely, and every other backend stack depends on it |
+| **Websites** | The three portals: an S3 bucket and CloudFront distribution each. The student portal also has the page renderer function | Depends on nothing. Others need the portals' addresses for CORS and sign-in redirects |
+| **Data** | Cognito user pool and its triggers, the core table, the lesson media and public media buckets with their CloudFront distributions, the upload bucket, the search collection and the function that creates its indices, the unsubscribe-link and Stripe secrets | Everything stateful. Changes rarely, and every other backend stack depends on it |
 | **Payments** | The Stripe webhook API: its API Gateway and function | Called by Stripe, not by signed-in users, so its firewall, request limits and domain are set apart from the other APIs |
 | **MediaPipeline** | MediaConvert pipeline, the functions reacting to finished transcodes and transcriptions, cleanup schedules, failure queues | Video processing, used by both core-api and instructor-api |
 | **CoreApi** | core-api's API Gateway and functions, the search re-index function, the email unsubscribe route | The API every user calls |
-| **StreamRouter** | The table stream's router function, one queue and failure queue per feature, the feature handlers | Background reactions to data changes, kept out of CoreApi's resource budget |
+| **StreamRouter** | The table stream's router function, one queue and failure queue per feature, the feature handlers, the certificate reminder function and the transcript re-index function | Background reactions to data changes, kept out of CoreApi's resource budget |
 | **Payouts** | The daily payout run and its schedule | Kept apart so no stack nears the resource limit. It reads the table and the Stripe key only |
-| **InstructorApi** | instructor-api's API Gateway and function, with its media and transcoding permissions | The instructors' API |
+| **InstructorApi** | instructor-api's API Gateway and functions, with their media and transcoding permissions | The instructors' API |
 | **AdminApi** | admin-api's API Gateway and functions, including the one that saves the Stripe key | The admins' API |
 | **PortalConfig** | Each portal's `runtime-config.json` | Reads values from every other stack, so it deploys last |
 
@@ -78,6 +80,7 @@ When a portal or media distribution has WAF on, its web ACL is an extra small st
 | Entry point | Service | Origin |
 | --- | --- | --- |
 | Each portal | CloudFront | A private S3 bucket of static files |
+| Public pages on the student portal (`/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml`, `/robots.txt`) | The student portal's CloudFront distribution | The page renderer function, through a function URL only CloudFront may call |
 | Lesson media | CloudFront, signed requests only | A private S3 bucket |
 | Public media | CloudFront | A private S3 bucket |
 | Each API | API Gateway (REST, regional) | Lambda |
@@ -89,36 +92,53 @@ No S3 bucket is public. CloudFront reaches each through Origin Access Control.
 
 All code runs in Lambda on Node.js 24.
 
-- **API functions.** core-api serves most procedures from one shared function, and gives a dedicated function to any procedure needing more access than the table, such as the one holding the key that signs video requests. That keeps powerful permissions off the function handling every other request. admin-api does the same for saving the Stripe key: one function may write the Stripe secrets, and no other can.
-- **Event functions.** One per job: the two Cognito triggers, the stream router and its feature handlers, the media pipeline's completion and cleanup handlers, the Stripe webhook and the daily payout run.
+- **API functions.** Each API serves most procedures from one shared function. A procedure that needs more than the baseline access (the table, plus reading search in core-api) runs in a dedicated function, which keeps powerful permissions off the function handling every other request:
+
+  | API | Dedicated functions |
+  | --- | --- |
+  | core-api | Signing media requests, assignment uploads, starting a checkout or refund (reads the Stripe key) |
+  | instructor-api | Signing media requests, writing lesson media and submitting transcodes, course images and profile photos, payout accounts (reads the Stripe key) |
+  | admin-api | Saving the Stripe secrets (the only writer), brand images |
+
+- **Event functions.** One per job: the two Cognito triggers, the stream router and its feature handlers, the media pipeline's completion, recovery and cleanup handlers, the certificate reminder, the Stripe webhook, the daily payout run, and the email unsubscribe link.
+- **The page renderer.** core-api's second handler, deployed with the student portal. It only reads the table.
+- **Operations functions.** Three have no trigger and run when a deploy or an operator invokes them: the one that creates or updates the search indices on each deploy, and the two that rebuild the courses and transcripts indices.
 
 ### Data
 
 | Resource | Service | Notes |
 | --- | --- | --- |
 | Core table | DynamoDB, on-demand with a throughput ceiling | A change stream feeds the stream router |
-| Search | OpenSearch Serverless | Can scale to zero on a development stage |
+| Search | OpenSearch Serverless | Two indices: courses and transcripts. Can scale to zero on a development stage |
 | Media | S3 | Three buckets: lesson media, uploads, public media |
 | Users | Cognito user pool | Groups: `student`, `instructor`, `admin` |
 | Configuration | Lambda environment variables | Resource names and addresses, set at deploy time and read by functions from their environment. The page renderer reads one Systems Manager parameter |
-| Secrets | Secrets Manager | The video signing key, the key that signs unsubscribe links, and the Stripe secret key and webhook signing secret an administrator saves |
+| Secrets | Secrets Manager | The key that signs lesson media requests, the key that signs unsubscribe links, and the Stripe secret key and webhook signing secret an administrator saves |
+
+### Media processing
+
+| Service | Used for |
+| --- | --- |
+| MediaConvert | Transcoding an uploaded video into HLS renditions |
+| Transcribe | Automatic captions for each video |
+| Translate | Translating captions into a course's other caption languages |
 
 ### Messaging and scheduling
 
 | Service | Used for |
 | --- | --- |
 | DynamoDB Streams | Every change to the core table |
-| SQS | One queue and one failure queue per stream feature, plus the media pipeline's failure queues |
+| SQS | One queue and one failure queue per stream feature, plus failure queues for the media pipeline and the certificate reminder |
 | EventBridge | Rules that fire when a MediaConvert or Transcribe job finishes, a schedule that finds stuck videos, and the daily schedule of the payout run |
-| EventBridge Scheduler | Delayed cleanups of temporary media |
+| EventBridge Scheduler | One-time schedules: delayed cleanups of retired media, and certificate reminders |
 | SES | Notification emails |
 
 ## Runtime configuration
 
 Deployed code never has resource names hardcoded.
 
-- **Backend functions** read table names, bucket names and endpoints from their own **environment variables** (`DISCAVA_*`), set when the stack is deployed. Nothing is fetched at runtime, and a function is given only the settings its code reads. The page renderer is the exception: it reads one Systems Manager parameter.
-- **Portals** fetch `runtime-config.json` from their own origin when they load. It carries the API addresses and Cognito ids.
+- **Backend functions** read table names, bucket names and endpoints from their own **environment variables** (`DISCAVA_*`), set when the stack is deployed. Nothing is fetched at runtime, and a function is given only the settings its code reads. The page renderer is the exception: it reads the table's name and the public media address from one Systems Manager parameter, because it deploys in `Websites`, before the `Data` stack that owns them.
+- **Portals** fetch `runtime-config.json` from their own origin when they load. It carries the API addresses, the Cognito ids and the other portals' addresses.
 
 The portals' file is written by the `PortalConfig` stack from values the other stacks export, which is why it deploys last.
 

@@ -9,12 +9,13 @@ import Link from '@components/link.astro';
 
 ## Where configuration lives
 
-Every stage is defined in one file: `packages/common/infra-config/src/stages.config.ts`. A stage lists settings per **component**:
+Every stage is defined in one file: `packages/common/infra-config/src/stages.config.ts`. A stage lists settings per **component**, under `infra`:
 
 | Component | What it is |
 | --- | --- |
 | `identity` | The Cognito user pool |
 | `coreApi`, `instructorApi`, `adminApi` | The three APIs |
+| `payments` | The Stripe webhook API |
 | `coreTable` | The DynamoDB table |
 | `streamRouter` | The queues that carry table changes to their handlers |
 | `studentPortal`, `instructorPortal`, `adminPortal` | The three websites |
@@ -35,13 +36,19 @@ Common settings:
 | `reservedConcurrency` | The most requests an API's function runs at once |
 | `maxReadRequestUnits`, `maxWriteRequestUnits` | The table's throughput ceiling |
 | `min…CapacityInOcu`, `max…CapacityInOcu` | Search capacity. A minimum of 0 scales to zero when idle |
+| `timeoutSeconds`, `logLevel`, `enableTracing` | An API's request timeout, lowest log level (`DEBUG`, `INFO`, `WARN`, `ERROR`) and X-Ray tracing |
+| `publicThrottle…`, `publicSuggestThrottle…` | The core API's separate limits for calls that need no sign-in, and for search suggestions |
 | `enableSelfSignUp`, `enableMfa` | Whether anyone can create an account, and whether MFA is required |
+| `studentPortal.allowSearchEngineIndexing` | Let search engines index the public pages. Off unless set; `discava-production` turns it on |
+| `studentPortal.linkedInOrganizationId` | Your LinkedIn organisation page ID, named on certificates that students add to LinkedIn |
+
+`packages/common/infra-config/src/stages.types.ts` documents every setting and its default.
 
 With WAF off, the throttles, concurrency and throughput limits are what bound the cost of a flood of requests. Raise them as real usage grows.
 
 ## Overriding without committing
 
-Values that are specific to your account, such as domains and certificate ARNs, shouldn't be committed to a public fork. Any setting can instead be given as a variable named:
+Values that are specific to your account, such as domains and certificate ARNs, shouldn't be committed to a public fork. Any component setting can instead be given as a variable named:
 
 ```
 <STAGE>_INFRA_<COMPONENT>_<FIELD>
@@ -56,7 +63,13 @@ gh variable set DISCAVA_DEVELOPMENT_INFRA_CORE_API_THROTTLE_RATE_LIMIT \
   --env discava-development --body 5
 ```
 
-The deploy role and region (`credentials`, `region`, `account`) can't be overridden this way.
+Values are plain text on one line: `true` or `false`, a whole number, or a comma-separated list for the `…_DOMAIN_NAMES` settings. A value of the wrong kind fails the deploy.
+
+Outside the components:
+
+- `<STAGE>_REGION` and `<STAGE>_ACCOUNT` override the stage's `region` and `account`
+- `<STAGE>_CAPTION_TRANSLATION_ENABLED` and `<STAGE>_CAPTION_TRANSLATION_MAX_LANGUAGES_PER_COURSE` override [caption translation](#caption-translation)
+- `credentials` and `payouts` can't be overridden. Change them in `stages.config.ts`
 
 ## Custom domains
 
@@ -80,7 +93,7 @@ Each API, portal and media distribution can have its own domain. You need, for e
 
 Each also takes a matching `…_CERTIFICATE_ARN`. A domain is only applied when its certificate is set too. Portals and media accept several comma-separated domains; an API takes one.
 
-**The easiest way to set these is to run the setup script again.** Give it a root domain and it serves each component from a fixed subdomain of it, finds the issued certificate for each in ACM and writes the variables. If any component has no certificate, it lists the missing ones and stops before changing anything. It doesn't cover the admin API or the payments API yet: set their variables yourself.
+**The easiest way to set these is to run the setup script again.** Give it a root domain and it serves each component from a fixed subdomain of it, finds the issued certificate for each in ACM and writes the variables. If any component has no certificate, it lists the missing ones and stops before changing anything. It doesn't cover the admin API or the payments API yet: set their variables yourself. On a later run, press Enter to keep the root domain it offers. Clearing it removes the domain variables the script set.
 
 ```sh
 ./scripts/setup-stage.sh discava-development
@@ -102,7 +115,7 @@ Three rules to know:
 
 - **Each API needs its own certificate naming exactly its domain.** Not a wildcard, and not one shared with another API. Otherwise a browser can reuse one connection for two APIs and get errors from the wrong one.
 - **Video playback needs a shared parent domain.** When lesson media has a custom domain, playback is authorised with cookies shared between the API and lesson media, so both must sit under one parent, given as `…_INFRA_LESSON_MEDIA_COOKIE_DOMAIN`. The setup script sets it to the root domain.
-- **DNS is yours to manage.** After the deploy, point each domain at its target: a CloudFront distribution for portals and media, the API Gateway custom domain for APIs. Until then the domains don't resolve, although the portals already use them.
+- **DNS is yours to manage.** After the deploy, point each domain at its target: a CloudFront distribution for portals and media (the `…DistributionDomainName` stack outputs), the API Gateway custom domain for APIs (the `…DomainNameAlias` output of the API's stack). Until then the domains don't resolve, although the portals already use them.
 
 Portal domains are picked up automatically as the APIs' allowed CORS origins and as Cognito's sign-in and sign-out addresses.
 
@@ -135,11 +148,22 @@ A stage's `payouts` entry in `stages.config.ts` sets what the platform keeps and
 | `holdDays` | Days a sale's earnings are held before they can be paid out, to cover refunds | `14` |
 | `minimumPayoutMinor` | The smallest payout sent, in the currency's smallest unit (1000 is 10.00). Smaller balances wait | `1000` |
 
-`discava-development` holds earnings for one day, so a tester sees them become payable quickly. A value that could produce wrong money, such as a fee above 10000, fails the build.
+`discava-development` holds earnings for one day, so a tester sees them become payable quickly. A value that could produce wrong money, such as a fee above 10000, fails the build. The payout run is daily.
+
+## Caption translation
+
+Video captions are machine translated with Amazon Translate, which bills per character. A stage's `captionTranslation` entry bounds that cost:
+
+| Setting | Meaning | Default |
+| --- | --- | --- |
+| `enabled` | Whether the stage translates captions at all | `true` |
+| `maxLanguagesPerCourse` | The most caption languages one course can choose, from 0 to 9 | `9` |
+
+`discava-development` allows three languages a course.
 
 ## Adding a stage
 
-1. Add an entry to `stages.config.ts` next to the existing two, with the settings it relaxes.
+1. Add an entry to `stages.config.ts` next to the existing two, with the settings it relaxes. Add `payouts` if the defaults don't suit.
 2. Commit and push it.
 3. Run `./scripts/setup-stage.sh <new-stage>` to create its roles and GitHub environment.
 4. Run the Deploy workflow with the new stage's name.

@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   LOCAL_PORTAL_ORIGINS,
   LOCAL_PORTAL_PORTS,
-  LOCAL_PORTAL_PREVIEW_ORIGINS,
+  LOCAL_PORTAL_PREVIEW_PORTS,
   type LocalPortal,
   localPortalOrigins,
 } from './local-portals.js';
@@ -32,7 +32,7 @@ describe('local portals', () => {
   it('gives every portal its own port', () => {
     const ports = [
       ...Object.values(LOCAL_PORTAL_PORTS),
-      ...Object.values(LOCAL_PORTAL_PREVIEW_ORIGINS),
+      ...Object.values(LOCAL_PORTAL_PREVIEW_PORTS),
     ];
     expect(new Set(ports).size).toBe(ports.length);
   });

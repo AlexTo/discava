@@ -14,7 +14,7 @@ import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useAdminApi } from '../../../api';
 import { measureImage } from './measure-image';
 
@@ -31,6 +31,8 @@ export interface ImageFieldProps {
   /** A message from the server about this image, shown beside the control. */
   serverError?: string;
   onUploaded: (key: string, previewUrl: string) => void;
+  /** Called when an upload starts or ends, so the form can wait for it. */
+  onUploadingChange?: (uploading: boolean) => void;
   /** Puts the default back in the form; the button shows only when this is set. */
   onReset?: () => void;
   /** The reset button's text, naming the image, e.g. "Reset the logo to default". */
@@ -52,6 +54,7 @@ export function ImageField({
   emptyText,
   serverError,
   onUploaded,
+  onUploadingChange,
   onReset,
   resetLabel = 'Reset to default',
   onChoose,
@@ -66,6 +69,11 @@ export function ImageField({
   const [error, setError] = useState<string>();
   const [uploading, setUploading] = useState(false);
   const rules = BRAND_IMAGE_RULES[kind];
+
+  useEffect(() => {
+    onUploadingChange?.(uploading);
+  }, [uploading, onUploadingChange]);
+  useEffect(() => () => onUploadingChange?.(false), [onUploadingChange]);
 
   const choose = async (file: File | undefined) => {
     if (!file) {
