@@ -91,7 +91,9 @@ describe('preTokenGeneration', () => {
     const { preTokenGeneration } = await load();
     createUserEntity
       .mockRejectedValueOnce(
-        new Error('Missing deploy-time setting DISCAVA_DYNAMODB_CORE_TABLE'),
+        new Error(
+          'Missing deploy-time setting DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+        ),
       )
       .mockResolvedValue(USER_ENTITY);
 

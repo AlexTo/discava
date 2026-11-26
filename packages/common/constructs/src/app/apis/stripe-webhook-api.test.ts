@@ -92,7 +92,7 @@ describe('StripeWebhookApi', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Environment: {
         Variables: Match.objectLike({
-          DISCAVA_DYNAMODB_CORE_TABLE: Match.anyValue(),
+          DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME: Match.anyValue(),
         }),
       },
     });

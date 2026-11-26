@@ -429,7 +429,7 @@ const readCoreTable = () => {
       // The renderer learns its table from the settings parameter, not its
       // environment, so core-table resolves it as every other function does.
       const { tableName } = await resolvePageRendererSettings();
-      process.env.DISCAVA_DYNAMODB_CORE_TABLE = JSON.stringify({ tableName });
+      process.env.DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME = tableName;
     }
     return createCoreTableService();
   })();

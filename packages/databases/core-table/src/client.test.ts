@@ -8,34 +8,25 @@ import { resolveTableName } from './client.js';
 describe('resolveTableName', () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it('reads the table name from DISCAVA_DYNAMODB_CORE_TABLE', async () => {
+  it('reads the table name from DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME', async () => {
     vi.stubEnv('LOCAL_DEV', '');
-    vi.stubEnv('DISCAVA_DYNAMODB_CORE_TABLE', '{"tableName":"core"}');
+    vi.stubEnv('DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME', 'core');
 
     await expect(resolveTableName()).resolves.toBe('core');
   });
 
   it('names the setting when it is absent', async () => {
     vi.stubEnv('LOCAL_DEV', '');
-    vi.stubEnv('DISCAVA_DYNAMODB_CORE_TABLE', '');
+    vi.stubEnv('DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME', '');
 
     await expect(resolveTableName()).rejects.toThrow(
-      'Missing deploy-time setting DISCAVA_DYNAMODB_CORE_TABLE',
-    );
-  });
-
-  it('names the setting when it has no table name', async () => {
-    vi.stubEnv('LOCAL_DEV', '');
-    vi.stubEnv('DISCAVA_DYNAMODB_CORE_TABLE', '{}');
-
-    await expect(resolveTableName()).rejects.toThrow(
-      'Could not resolve table name from DISCAVA_DYNAMODB_CORE_TABLE',
+      'Missing deploy-time setting DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
     );
   });
 
   it('does not read the setting in local dev', async () => {
     vi.stubEnv('LOCAL_DEV', 'true');
-    vi.stubEnv('DISCAVA_DYNAMODB_CORE_TABLE', '{"tableName":"ignored"}');
+    vi.stubEnv('DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME', 'ignored');
 
     await expect(resolveTableName()).resolves.not.toBe('ignored');
   });

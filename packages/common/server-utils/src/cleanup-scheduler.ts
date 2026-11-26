@@ -30,16 +30,14 @@ const getSchedulerClient = (): SchedulerClient => {
   return _schedulerClient;
 };
 
-type TranscodeCleanupConfig = {
-  lambdaArn: string;
-  schedulerRoleArn: string;
-  scheduleGroupName: string;
-};
-
 // Published once by the media pipeline alongside the transcode-cleanup
 // Lambda itself.
-const resolveTranscodeCleanupConfig = (): TranscodeCleanupConfig =>
-  readSetting<TranscodeCleanupConfig>('mediaConvert', 'TranscodeCleanup');
+const resolveTranscodeCleanupConfig = () =>
+  readSetting('mediaConvert', 'TranscodeCleanup', [
+    'lambdaArn',
+    'schedulerRoleArn',
+    'scheduleGroupName',
+  ]);
 
 // How long to wait before deleting a job's own S3 output. A canceled job's
 // must outlast MediaConvert's async write tail (writes were observed ~30s

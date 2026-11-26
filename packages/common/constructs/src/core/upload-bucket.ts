@@ -63,7 +63,7 @@ export interface UploadBucketProps {
 export class UploadBucket extends Construct {
   public readonly bucket: IBucket;
   private readonly runtimeConfigKey: string;
-  private readonly settings: Record<string, unknown>;
+  private readonly settings: Record<string, string | undefined>;
   private allowedOrigins: string[] = ['*'];
 
   constructor(

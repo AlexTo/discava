@@ -52,7 +52,7 @@ describe('the configured page renderer', () => {
     mocks.caller.mockReset();
     mocks.caller.mockReturnValue({});
     vi.stubEnv('LOCAL_DEV', '');
-    vi.stubEnv('DISCAVA_DYNAMODB_CORE_TABLE', '');
+    vi.stubEnv('DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME', '');
   });
   afterEach(() => vi.unstubAllEnvs());
 
@@ -62,7 +62,7 @@ describe('the configured page renderer', () => {
       publicMediaBaseUrl: 'https://media.example.com/',
     });
     mocks.createCoreTableService.mockImplementation(async () => ({
-      tableNameSeen: process.env.DISCAVA_DYNAMODB_CORE_TABLE,
+      tableNameSeen: process.env.DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME,
     }));
     const { createConfiguredPageRenderer } = await import('./handler.js');
     const render = createConfiguredPageRenderer();
@@ -72,9 +72,7 @@ describe('the configured page renderer', () => {
 
     expect(mocks.resolveSettings).toHaveBeenCalledTimes(1);
     expect(mocks.createCoreTableService).toHaveBeenCalledTimes(1);
-    expect(process.env.DISCAVA_DYNAMODB_CORE_TABLE).toBe(
-      '{"tableName":"core"}',
-    );
+    expect(process.env.DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME).toBe('core');
   });
 
   it('answers 503 when the parameter cannot be read, then retries', async () => {
@@ -105,7 +103,7 @@ describe('the configured page renderer', () => {
       },
       course: {
         publicView: async () => {
-          seen = process.env.DISCAVA_DYNAMODB_CORE_TABLE;
+          seen = process.env.DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME;
           throw new TRPCError({ code: 'NOT_FOUND' });
         },
       },
@@ -115,6 +113,6 @@ describe('the configured page renderer', () => {
     const response = await createConfiguredPageRenderer()(page('/learn/c1'));
 
     expect(response.statusCode).toBe(404);
-    expect(seen).toBe('{"tableName":"core"}');
+    expect(seen).toBe('core');
   });
 });
