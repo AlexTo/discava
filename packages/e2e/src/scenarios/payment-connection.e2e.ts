@@ -4,7 +4,11 @@
  */
 
 import type { Page } from '@playwright/test';
-import { apiUser, createPublishedCourseViaApi } from '../helpers/api.js';
+import {
+  apiUser,
+  createPublishedCourseViaApi,
+  forgetRegisteredEvents,
+} from '../helpers/api.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { openCourse } from '../helpers/student-portal.js';
@@ -142,6 +146,29 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
     // out-of-date-events warning is gone.
     await expect(admin.getByText('Payment events out of date')).toHaveCount(0);
     await screenshot(admin, 'payments-connected-events-current');
+  });
+
+  await test.step('a connection saved before the events were recorded asks for the key again', async () => {
+    await forgetRegisteredEvents();
+    await admin.reload();
+    const alert = admin.getByRole('alert').filter({
+      hasText: 'Payment events out of date',
+    });
+    await expect(alert).toBeVisible();
+    await screenshot(admin, 'payments-events-out-of-date');
+
+    await admin.getByRole('button', { name: 'Replace key' }).click();
+    await keyField.fill('sk_test_local');
+    await admin.getByRole('button', { name: 'Save key' }).click();
+    const confirm = admin.getByRole('dialog').getByRole('button', {
+      name: 'Replace the key',
+    });
+    if (await confirm.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await confirm.click();
+    }
+    await expect(keyField).toHaveCount(0);
+    await expect(alert).toHaveCount(0);
+    await screenshot(admin, 'payments-events-updated');
   });
 
   const student = await browser.newPage();
