@@ -16,6 +16,7 @@ import {
   expireOrder,
   expireOrderWrites,
   findOpenOrder,
+  markRefundFailed,
   markRefundRequested,
   type OrderConnection,
   type OrderCourse,
@@ -1623,5 +1624,36 @@ describe('startFreeOrder', () => {
       }),
     ).rejects.toThrow();
     expect(fake.rows('order')).toEqual([]);
+  });
+});
+
+describe('markRefundFailed', () => {
+  const paid = (over: Partial<OrderRecord> = {}) =>
+    order({ status: 'paid', paidAt: NOW, paymentIntentId: 'pi', ...over });
+  const mark = (fake: ReturnType<typeof setup>['fake'], now = LATER) =>
+    markRefundFailed({
+      coreTable: fake.coreTable,
+      order: { orderId: 'order-1' },
+      now,
+    });
+
+  it('sets refundFailedAt once on a requested refund, leaving the status', async () => {
+    const { fake } = setup();
+    fake.put('order', paid({ refundRequestedAt: NOW }));
+    await mark(fake);
+    await mark(fake, '2026-11-20T00:00:00.000Z');
+    expect(fake.row('order', { orderId: 'order-1' })).toMatchObject({
+      status: 'paid',
+      refundFailedAt: LATER,
+    });
+  });
+
+  it('is a no-op when no refund was requested', async () => {
+    const { fake } = setup();
+    fake.put('order', paid());
+    await expect(mark(fake)).resolves.toBeUndefined();
+    expect(
+      fake.row('order', { orderId: 'order-1' })?.refundFailedAt,
+    ).toBeUndefined();
   });
 });

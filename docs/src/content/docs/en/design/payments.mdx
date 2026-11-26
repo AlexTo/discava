@@ -66,8 +66,9 @@ Stripe posts to `POST /stripe/webhook`, an API Gateway API of its own in the `Pa
 | `checkout.session.completed` | The order is settled, or refunded if it can't be delivered. A session that isn't paid yet is ignored |
 | `checkout.session.expired` | A `pending` order becomes `expired`, and its coupon claim is released |
 | `charge.refunded` | The refund is recorded against the order |
+| `refund.failed`, `charge.refund.updated` (`status: failed`) | `refundFailedAt` is set on the order, which stays `paid` |
 
-These three are the only events registered with Stripe.
+These are the only events registered with Stripe.
 
 ### Delivering exactly once
 
@@ -159,6 +160,8 @@ core-api's `payment.requestRefund` lets a student refund their own purchase, and
 - it is within `REFUND_WINDOW_DAYS` (14) of payment.
 
 `requestRefund` asks Stripe to refund what's left of the amount, with an idempotency key built from the order ID, then sets `refundRequestedAt` on the order. It never moves the order or the enrolment itself: the `charge.refunded` that follows does. Stripe is called before the mark, so a crash between the two leaves a refund the notice still records, never a mark with no refund.
+
+If Stripe reports the refund as failed (`refund.failed`, or `charge.refund.updated` with `status: failed`), `markRefundFailed` sets `refundFailedAt` on the order. The order stays `paid` with `refundRequestedAt` kept, so no second request is offered; `payment.myOrder` returns `refundFailedAt` and the course page tells the student the refund failed and to contact support. The course page polls a pending refund for a limited time (2 minutes), then says it is still being processed and offers a button to check again.
 
 A dropped enrolment keeps its progress and completions. The student can come back:
 
