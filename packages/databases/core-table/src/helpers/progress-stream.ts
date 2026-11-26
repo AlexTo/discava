@@ -9,9 +9,9 @@ import { CURRICULUM_ENTITIES } from './curriculum.js';
  * or certificate, and so reach the progress recalculation: a new item
  * completion, an edit to or removal of a module, lesson or content item, a
  * quiz summary written (a pass is one of them), a graded submission, a course edit (its
- * certificate criteria) and an enrolment change (a dropped enrolment becoming
- * active again). Its own writes (progress, enrolment, certificate) are
- * discarded by the recalculation, which only acts on a re-activation, so it
+ * certificate criteria) and an enrolment change (a dropped enrolment being
+ * restored). Its own writes (progress, enrolment, certificate) are
+ * discarded by the recalculation, which only acts on a restore, so it
  * never triggers itself. ElectroDB
  * stores each record's entity name in `__edb_e__`; a filter can't compare the
  * old and new images, so the recalculation itself checks that a curriculum
@@ -35,7 +35,7 @@ export const PROGRESS_STREAM_FILTERS: readonly {
     image: 'NewImage',
     entities: ['quizSummary', 'course', 'assignmentSubmission'],
   },
-  // An enrolment change: only a drop followed by a re-activation matters
+  // An enrolment change: only a drop followed by a restore matters
   // (the recalculation skips a dropped enrolment), and the recalculation
   // checks for that itself.
   { eventName: 'MODIFY', image: 'NewImage', entities: ['enrolment'] },

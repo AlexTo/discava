@@ -180,8 +180,16 @@ describe('studentsToRecalculate', () => {
     expect(asLists(result)).toEqual({ 'course-1': ['s1'] });
   });
 
+  it('recalculates a student whose dropped, completed enrolment is restored as completed', async () => {
+    const result = await studentsToRecalculate(
+      [enrolmentChange('dropped', 'completed')],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({ 'course-1': ['s1'] });
+  });
+
   it.each([
-    ['dropped', 'completed'],
     ['active', 'completed'],
     ['active', 'dropped'],
     ['active', 'active'],

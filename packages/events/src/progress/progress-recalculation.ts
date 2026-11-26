@@ -107,13 +107,20 @@ const changesSubmissionGrade = (record: StreamRecord) => {
   );
 };
 
-// An enrolment that was dropped (refunded, or left) is active again, so the
-// progress it kept while dropped is stale. The recalculation's own enrolment
-// writes (progressPercent, completion) never change a dropped status.
-const reactivatesEnrolment = (record: StreamRecord) =>
-  record.eventName === 'MODIFY' &&
-  record.dynamodb.OldImage?.status === 'dropped' &&
-  record.dynamodb.NewImage?.status === 'active';
+// An enrolment that was dropped (refunded, or left) is restored, as 'active'
+// or, if it had been completed, as 'completed': the progress it kept while
+// dropped is stale, since curriculum edits skip a dropped enrolment. The
+// recalculation's own enrolment writes (progressPercent, completion) never
+// change a dropped status.
+const reactivatesEnrolment = (record: StreamRecord) => {
+  const after = record.dynamodb.NewImage?.status;
+  return (
+    record.eventName === 'MODIFY' &&
+    record.dynamodb.OldImage?.status === 'dropped' &&
+    typeof after === 'string' &&
+    after !== 'dropped'
+  );
+};
 
 // The certificate rules changed, or certificates were switched on or off.
 const changesCertificateRules = (record: StreamRecord) => {
