@@ -14,6 +14,7 @@ import {
   createCoreTableService,
   EARNINGS_STREAM_FILTERS,
   recordRefund,
+  recordRefundReversal,
   recordSale,
 } from '@discava/core-table';
 import middy from '@middy/core';
@@ -23,6 +24,7 @@ import {
   isSale,
   type OrderImage,
   refundInput,
+  refundReversalInput,
   saleInput,
 } from './earnings-from-order.js';
 
@@ -80,6 +82,10 @@ export interface EarningsWrites {
     refundedTotal: number;
     occurredAt: string;
   }) => Promise<boolean>;
+  recordRefundReversal: (input: {
+    orderId: string;
+    occurredAt: string;
+  }) => Promise<boolean>;
 }
 
 const isOrderChange = (record: {
@@ -94,7 +100,8 @@ const isOrderChange = (record: {
   );
 
 // Records the instructors' earnings from the order records the router sends:
-// a sale once, and each rise of its refunded total once.
+// a sale once, each rise of its refunded total once, and the taking back of a
+// refund that failed once.
 //
 // How it tolerates the router's at-least-once, unordered delivery, and so
 // duplicate and reordered records and redelivered batches: every image of a
@@ -151,6 +158,10 @@ export const earningsRecording = async (
       if (refund && (await writes.recordRefund(refund))) {
         refunds++;
       }
+      const reversal = refundReversalInput(order);
+      if (reversal) {
+        await writes.recordRefundReversal(reversal);
+      }
     } catch (error) {
       failures.push(error);
     }
@@ -181,6 +192,8 @@ const coreTableWrites = (coreTable: CoreTable): EarningsWrites => ({
   recordSale: ({ instructorIds, feeBasisPoints, holdDays, ...order }) =>
     recordSale({ coreTable, order, instructorIds, feeBasisPoints, holdDays }),
   recordRefund: (input) => recordRefund({ coreTable, ...input }),
+  recordRefundReversal: (input) =>
+    recordRefundReversal({ coreTable, ...input }),
 });
 
 let settings: EarningsSettings | undefined;

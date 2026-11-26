@@ -66,7 +66,7 @@ Stripe posts to `POST /stripe/webhook`, an API Gateway API of its own in the `Pa
 | `checkout.session.completed` | The order is settled, or refunded if it can't be delivered. A session that isn't paid yet is ignored |
 | `checkout.session.expired` | A `pending` order becomes `expired`, and its coupon claim is released |
 | `charge.refunded` | The refund is recorded against the order |
-| `refund.failed`, `charge.refund.updated` (`status: failed`) | `refundFailedAt` is set on the order, which stays `paid` |
+| `refund.failed`, `charge.refund.updated` (`status: failed`) | `refundFailedAt` is set on a `paid` order; an order `charge.refunded` already moved to `refunded` is put back to `paid` and the enrolment restored |
 
 These are the only events registered with Stripe. The list is recorded on the connection when the endpoint is registered. If it differs from this one (a connection saved before an event was added), the admin payments page asks for the key to be saved again, and that save updates the existing endpoint's events without changing its URL, ID or signing secret.
 
@@ -161,7 +161,13 @@ core-api's `payment.requestRefund` lets a student refund their own purchase, and
 
 `requestRefund` asks Stripe to refund what's left of the amount, with an idempotency key built from the order ID, then sets `refundRequestedAt` on the order. It never moves the order or the enrolment itself: the `charge.refunded` that follows does. Stripe is called before the mark, so a crash between the two leaves a refund the notice still records, never a mark with no refund.
 
-If Stripe reports the refund as failed (`refund.failed`, or `charge.refund.updated` with `status: failed`), `markRefundFailed` sets `refundFailedAt` on the order. The order stays `paid` with `refundRequestedAt` kept, so no second request is offered; `payment.myOrder` returns `refundFailedAt` and the course page tells the student the refund failed and to contact support. The course page polls a pending refund for a limited time (2 minutes), then says it is still being processed and offers a button to check again.
+Stripe sends `charge.refunded` as soon as a refund is created, even while it is still `pending`, and can fail the refund afterwards if the bank returns the money. So a failure usually arrives for an order that is already `refunded` and an enrolment already `dropped`. A refund that fails is undone, so the student doesn't lose both the money and the course. If Stripe reports the refund as failed (`refund.failed`, or `charge.refund.updated` with `status: failed`):
+
+- For an order that is `refunded` with reason `requested`, `reverseRefund` runs one transaction: the order goes back to `paid`, `refundedAt` and `refundedAmount` are removed, `refundFailedAt` is set and `refundRequestedAt` is kept; the enrolment goes from `dropped` back to `active` (`completed` if it has `completedAt`), but only while it still names this order, so a re-purchase isn't touched. It is conditioned on the order being `refunded`, so a repeated failure event changes nothing. `refundOrder` ignores a `charge.refunded` that Stripe created before the order's `refundFailedAt` (a redelivered or late notice of the refund that failed), so it can't end access a second time; a refund created after it is applied as a new one. The student gets an `order.refund_failed` notification ("Your refund failed; your access is back. Contact support about your refund"), deduplicated by the order ID. Certificates aren't touched: only an admin revokes one for a refund.
+- **Earnings:** the order change reaches the earnings recorder as a `paid` order with `refundFailedAt` and no `refundedAmount`, and `recordRefundReversal` books the refund taken back: a `refund` entry per instructor with the refund's figures negated (entry ID `refund-reversal-<orderId>-<total>`), dated at `refundFailedAt`, and `earningOrder.refundedMinor` back to 0, in one transaction. The original refund entries are never edited, so a refund a payout already took is given back by the next payout, and the sale's earnings are the same as before the refund request. The reversal's time is kept on `earningOrder.reversedAt`, even when the ledger held no refund yet, and `recordRefund` leaves out a refund dated at or before it. So a repeat, a refund image delivered after its reversal, or one delivered before it records nothing, while a later refund of the same order (support refunds again) is recorded as new and can be reversed in turn.
+- For an order still `paid`, `markRefundFailed` sets `refundFailedAt`.
+
+The order is `paid` with `refundRequestedAt` kept, so no second request is offered; `payment.myOrder` returns `refundFailedAt` and the course page tells the student the refund failed and to contact support, with no "Request a refund" button. The course page polls a pending refund for a limited time (2 minutes), then says it is still being processed and offers a button to check again.
 
 A dropped enrolment keeps its progress and completions. The student can come back:
 
@@ -210,7 +216,7 @@ Two files in core-table's `helpers/invariants/` check the rules that span record
 
 The event runner includes a Stripe stand-in (`packages/events/src/local/stripe-stand-in.ts`): Stripe's API, a hosted checkout page with **Pay**, **Decline card** and **Cancel**, and signed webhook deliveries to `/stripe/webhook` on port 2024. Connect it as Carol with the key `sk_test_local`. The key is kept in the git-ignored `tmp/local-dev/secrets/` in place of Secrets Manager.
 
-Controls under `/stripe/test/` drive what a real Stripe account would: `refund`, `refunds` (list a payment's refunds), `replay` (deliver a confirmation again), `expire`, `forge` (a wrongly signed message) and `endpoints`.
+Controls under `/stripe/test/` drive what a real Stripe account would: `refund`, `refunds` (list a payment's refunds), `fail-next-refund` (the next refund is announced with `charge.refunded`, then reported failed a moment later, and the charge is no longer refunded), `hold-next-refund` (announced with `charge.refunded`, never settled), `replay` (deliver a confirmation again), `expire`, `forge` (a wrongly signed message) and `endpoints`.
 
 `LOCAL_CHECKOUT_TTL_SECONDS` shortens a checkout's one-hour life, in local dev only.
 

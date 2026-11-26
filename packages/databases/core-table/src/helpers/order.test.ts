@@ -30,6 +30,7 @@ import {
   refundOrder,
   refundUndeliverable,
   restoreFreeEnrolment,
+  reverseRefund,
   settleOrderPaid,
   startFreeOrder,
   startOrder,
@@ -517,6 +518,38 @@ describe('refundOrder', () => {
       refundedTotal: total,
       now: LATER,
     });
+
+  it('ignores a notice created before the refund failed, and takes a later one', async () => {
+    const { fake } = setup();
+    fake.put(
+      'order',
+      paid({
+        refundRequestedAt: NOW,
+        refundFailedAt: '2026-11-19T00:05:00.000Z',
+      }),
+    );
+    fake.put('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+      status: 'active',
+      orderId: 'order-1',
+    });
+    const at = (eventAt: string) =>
+      refundOrder({
+        coreTable: fake.coreTable,
+        order: { orderId: 'order-1' },
+        refundedTotal: 1999,
+        now: LATER,
+        eventAt,
+      });
+    await at('2026-11-19T00:01:00.000Z');
+    expect(fake.row('order', { orderId: 'order-1' })?.status).toBe('paid');
+    expect(
+      fake.row('enrolment', { courseId: 'course-1', userId: 'user-1' })?.status,
+    ).toBe('active');
+    await at('2026-11-19T00:07:00.000Z');
+    expect(fake.row('order', { orderId: 'order-1' })?.status).toBe('refunded');
+  });
 
   it('refunds in full: the order and the enrolment end together', async () => {
     const { fake } = setup();
@@ -1655,5 +1688,102 @@ describe('markRefundFailed', () => {
     expect(
       fake.row('order', { orderId: 'order-1' })?.refundFailedAt,
     ).toBeUndefined();
+  });
+});
+
+describe('reverseRefund', () => {
+  const refunded = (over: Partial<OrderRecord> = {}) =>
+    order({
+      status: 'refunded',
+      paidAt: NOW,
+      paymentIntentId: 'pi',
+      refundReason: 'requested',
+      refundRequestedAt: NOW,
+      refundedAt: NOW,
+      refundedAmount: 1999,
+      ...over,
+    });
+  const reverse = (fake: ReturnType<typeof setup>['fake']) =>
+    reverseRefund({
+      coreTable: fake.coreTable,
+      order: { orderId: 'order-1' },
+      now: LATER,
+    });
+  const enrolment = (over: Record<string, unknown> = {}) => ({
+    courseId: 'course-1',
+    userId: 'user-1',
+    status: 'dropped',
+    orderId: 'order-1',
+    ...over,
+  });
+  const key = { courseId: 'course-1', userId: 'user-1' };
+
+  it('puts the order back to paid with refundFailedAt and restores the enrolment', async () => {
+    const { fake } = setup();
+    fake.put('order', refunded());
+    fake.put('enrolment', enrolment());
+    await expect(reverse(fake)).resolves.toBe(true);
+    const stored = fake.row('order', { orderId: 'order-1' });
+    expect(stored).toMatchObject({
+      status: 'paid',
+      refundRequestedAt: NOW,
+      refundFailedAt: LATER,
+    });
+    expect(stored?.refundedAt).toBeUndefined();
+    expect(stored?.refundedAmount).toBeUndefined();
+    expect(fake.row('enrolment', key)).toMatchObject({
+      status: 'active',
+      orderId: 'order-1',
+    });
+  });
+
+  it('restores a completed enrolment to completed', async () => {
+    const { fake } = setup();
+    fake.put('order', refunded());
+    fake.put('enrolment', enrolment({ completedAt: 'x' }));
+    await reverse(fake);
+    expect(fake.row('enrolment', key)).toMatchObject({ status: 'completed' });
+  });
+
+  it('is a no-op the second time', async () => {
+    const { fake } = setup();
+    fake.put('order', refunded());
+    fake.put('enrolment', enrolment());
+    await reverse(fake);
+    const before = structuredClone(fake.row('order', { orderId: 'order-1' }));
+    await expect(reverse(fake)).resolves.toBe(false);
+    expect(fake.row('order', { orderId: 'order-1' })).toEqual(before);
+  });
+
+  it('leaves an enrolment bought again after the refund alone', async () => {
+    const { fake } = setup();
+    fake.put('order', refunded());
+    fake.put('enrolment', enrolment({ status: 'active', orderId: 'order-2' }));
+    await expect(reverse(fake)).resolves.toBe(true);
+    expect(fake.row('enrolment', key)).toMatchObject({
+      status: 'active',
+      orderId: 'order-2',
+    });
+  });
+
+  it.each(['duplicate', 'unavailable', 'mismatch'] as const)(
+    'leaves an order refunded as %s alone',
+    async (reason) => {
+      const { fake } = setup();
+      fake.put('order', refunded({ refundReason: reason }));
+      await expect(reverse(fake)).resolves.toBe(false);
+      expect(fake.row('order', { orderId: 'order-1' })?.status).toBe(
+        'refunded',
+      );
+    },
+  );
+
+  it('leaves a paid order alone', async () => {
+    const { fake } = setup();
+    fake.put(
+      'order',
+      order({ status: 'paid', paidAt: NOW, paymentIntentId: 'pi' }),
+    );
+    await expect(reverse(fake)).resolves.toBe(false);
   });
 });

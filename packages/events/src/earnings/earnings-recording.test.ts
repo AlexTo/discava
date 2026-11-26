@@ -103,6 +103,11 @@ const memoryLedger = (
       );
       return true;
     }),
+    recordRefundReversal: vi.fn(async ({ orderId }) => {
+      if (!refundedMinor.get(orderId)) return false;
+      refundedMinor.set(orderId, 0);
+      return true;
+    }),
   };
   const sums = () => {
     const total: Record<string, number> = {};
@@ -118,6 +123,30 @@ const run = (event: Event, writes: EarningsWrites) =>
   earningsRecording(event, writes, SETTINGS);
 
 describe('earningsRecording', () => {
+  it('takes back a refund the order says failed, once, however often it is delivered', async () => {
+    const { writes, refundedMinor } = memoryLedger();
+    const failed = orderImage({
+      refundFailedAt: '2026-11-22T00:00:00.000Z',
+      updatedAt: '2026-11-22T00:00:00.000Z',
+    });
+
+    await run(batch(record(orderImage(), 'INSERT'), record(fully())), writes);
+    expect(refundedMinor.get('o1')).toBe(1001);
+    await run(batch(record(failed), record(failed)), writes);
+
+    expect(refundedMinor.get('o1')).toBe(0);
+    expect(writes.recordRefundReversal).toHaveBeenCalledWith({
+      orderId: 'o1',
+      occurredAt: '2026-11-22T00:00:00.000Z',
+    });
+  });
+
+  it('asks for no reversal for an order that never failed a refund', async () => {
+    const { writes } = memoryLedger();
+    await run(batch(record(orderImage(), 'INSERT'), record(fully())), writes);
+    expect(writes.recordRefundReversal).not.toHaveBeenCalled();
+  });
+
   it('records a paid order as a sale with the stage settings', async () => {
     const { writes } = memoryLedger();
 

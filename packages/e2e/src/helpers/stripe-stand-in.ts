@@ -70,13 +70,13 @@ export const expireSession = (sessionId: string) =>
 export const refundSession = (sessionId: string, amount?: number) =>
   control<{ amount_refunded: number }>('refund', { sessionId, amount });
 
-// The next refund asked for the session's payment is accepted, then reported
-// failed (`refund.failed`) a moment later.
+// The next refund asked for the session's payment is accepted and announced
+// (`charge.refunded`), then reported failed (`refund.failed`) a moment later.
 export const failNextRefund = (sessionId: string) =>
   control<{ nextRefund: string }>('fail-next-refund', { sessionId });
 
-// The next refund asked for the session's payment is accepted but never
-// settles: no notice arrives, so the page is left with a refund pending.
+// The next refund asked for the session's payment is accepted and announced
+// (`charge.refunded`), but never settles: no failure arrives either.
 export const holdNextRefund = (sessionId: string) =>
   control<{ nextRefund: string }>('hold-next-refund', { sessionId });
 

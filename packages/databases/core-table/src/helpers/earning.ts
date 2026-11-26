@@ -61,6 +61,7 @@ export interface EarningOrderRecord {
   feeBasisPoints: number;
   instructorIds: string[];
   refundedMinor: number;
+  reversedAt?: string;
 }
 
 export interface EarningDayRecord {
@@ -172,6 +173,24 @@ const refundEntry = (
   netMinor,
 });
 
+// A `refund` entry with every figure flipped: it gives back what the refund
+// took, so the entries still add up to the refunded total.
+const reversalEntry = (
+  context: EntryContext,
+  reversedTotal: number,
+  { instructorId, refundMinor, feeMinor, netMinor }: InstructorRefund,
+): EarningEntryRecord => ({
+  ...context,
+  instructorId,
+  entryId: `refund-reversal-${context.orderId}-${reversedTotal}`,
+  kind: 'refund',
+  grossMinor: 0,
+  discountMinor: 0,
+  refundMinor: 0 - refundMinor,
+  feeMinor: 0 - feeMinor,
+  netMinor: 0 - netMinor,
+});
+
 /**
  * Records a sale: the order's `earningOrder` and each instructor's sale
  * entry, each created on the condition that it does not exist, and the adds
@@ -276,6 +295,11 @@ export const recordRefund = async ({
     if (!data) return false;
     const earning = data as EarningOrderRecord;
     const recorded = earning.refundedMinor;
+    // An old notice of a refund that failed and was taken back, which may
+    // reach the ledger after its reversal.
+    if (earning.reversedAt !== undefined && occurredAt <= earning.reversedAt) {
+      return false;
+    }
     const total = Math.min(refundedTotal, earning.paidMinor);
     if (total <= recorded) return false;
 
@@ -310,8 +334,100 @@ export const recordRefund = async ({
       ])
       .go();
     if (!canceled) return true;
+    // A refund already recorded and then reversed leaves its entry in place,
+    // so an old image of it cannot be recorded again: nothing has changed.
+    const { data: after } = await coreTable.entities.earningOrder
+      .get({ orderId })
+      .go();
+    if (after?.refundedMinor === recorded) return false;
   }
   throw new Error(`Could not record the refund of order ${orderId}; try again`);
+};
+
+/**
+ * Takes back the refunded total the ledger holds for an order whose refund
+ * Stripe then failed: the reversal entries (the refund's amounts with their
+ * signs flipped), their adds to the day rows and `refundedMinor` back to 0,
+ * in one transaction conditioned on the total still being the one the shares
+ * were computed from. The reversal is its own entry, dated `occurredAt`, so a
+ * refund a payout already took is not edited: the next payout takes the
+ * reversal. An order with none refunded in the ledger yet only gets the
+ * reversal's time (`reversedAt`), so a refund notice dated before it, delivered
+ * later, is not recorded. An order with no earnings records nothing (false),
+ * and so does a reversal already recorded.
+ */
+export const recordRefundReversal = async ({
+  coreTable,
+  orderId,
+  occurredAt,
+}: {
+  coreTable: CoreTable;
+  orderId: string;
+  occurredAt: string;
+}): Promise<boolean> => {
+  for (let attempt = 0; attempt < REFUND_ATTEMPTS; attempt++) {
+    const { data } = await coreTable.entities.earningOrder
+      .get({ orderId })
+      .go();
+    if (!data) return false;
+    const earning = data as EarningOrderRecord;
+    const recorded = earning.refundedMinor;
+    if (earning.reversedAt !== undefined && earning.reversedAt >= occurredAt) {
+      return false;
+    }
+    if (recorded <= 0) {
+      // Nothing to take back yet: the refund's own image may still come, and
+      // this marks it as old so `recordRefund` leaves it out.
+      await coreTable.transaction
+        .write(({ earningOrder }) => [
+          earningOrder
+            .patch({ orderId })
+            .set({ reversedAt: occurredAt })
+            .where(
+              (attr, op) =>
+                `${op.notExists(attr.reversedAt)} OR ${op.lt(attr.reversedAt, occurredAt)}`,
+            )
+            .commit(),
+        ])
+        .go();
+      return false;
+    }
+
+    const shares = calculateRefund({
+      grossMinor: earning.grossMinor,
+      paidMinor: earning.paidMinor,
+      feeBasisPoints: earning.feeBasisPoints,
+      instructorIds: earning.instructorIds,
+      recordedRefundedMinor: 0,
+      refundedTotalMinor: recorded,
+    });
+    const context: EntryContext = {
+      courseId: earning.courseId,
+      orderId,
+      accountId: earning.accountId,
+      mode: earning.mode,
+      currency: earning.currency,
+      feeBasisPoints: earning.feeBasisPoints,
+      occurredAt,
+      releaseAt: occurredAt,
+    };
+    const { canceled } = await coreTable.transaction
+      .write((entities) => [
+        entities.earningOrder
+          .patch({ orderId })
+          .set({ refundedMinor: 0, reversedAt: occurredAt })
+          .where((attr, op) => op.eq(attr.refundedMinor, recorded))
+          .commit(),
+        ...shares.flatMap((share) =>
+          entryWrites(entities, reversalEntry(context, recorded, share), false),
+        ),
+      ])
+      .go();
+    if (!canceled) return true;
+  }
+  throw new Error(
+    `Could not reverse the refund of order ${orderId}; try again`,
+  );
 };
 
 /**

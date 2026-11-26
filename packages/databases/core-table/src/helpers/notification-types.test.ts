@@ -31,6 +31,7 @@ describe('NOTIFICATION_TYPES', () => {
       'discussion.accepted',
       'discussion.answered',
       'discussion.reply',
+      'order.refund_failed',
       'order.refunded',
       'review.received',
     ]);
@@ -59,6 +60,7 @@ describe('NOTIFICATION_TYPES', () => {
       'discussion.reply': 'default-on',
       'discussion.answered': 'default-on',
       'discussion.accepted': 'default-off',
+      'order.refund_failed': 'required',
       'order.refunded': 'required',
       'review.received': 'default-off',
     });

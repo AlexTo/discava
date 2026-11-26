@@ -42,10 +42,11 @@ vi.mock('@discava/core-table', () => ({
     state.enrolments.push(current.userId);
     return { result: 'fulfilled' };
   }),
-  refundOrder: vi.fn(async ({ order, refundedTotal, now }: any) => {
+  refundOrder: vi.fn(async ({ order, refundedTotal, now, eventAt }: any) => {
     const current = state.orders.get(order.orderId);
     if (!current) throw new Error('Not found');
     if (current.status !== 'paid') return;
+    if (current.refundFailedAt && eventAt <= current.refundFailedAt) return;
     if (refundedTotal >= current.amount) {
       Object.assign(current, {
         status: 'refunded',
@@ -68,6 +69,19 @@ vi.mock('@discava/core-table', () => ({
       return first;
     }
     return false;
+  }),
+  reverseRefund: vi.fn(async ({ order, now }: any) => {
+    const current = state.orders.get(order.orderId);
+    if (current.status !== 'refunded' || current.refundReason !== 'requested') {
+      return false;
+    }
+    Object.assign(current, { status: 'paid', refundFailedAt: now });
+    current.refundedAt = undefined;
+    current.refundedAmount = undefined;
+    if (state.enrolment?.orderId === current.orderId) {
+      state.enrolment.status = 'active';
+    }
+    return true;
   }),
   publishNotification: vi.fn(async (_: unknown, input: any) => {
     if (state.publishError) {
@@ -403,6 +417,19 @@ describe('charge.refunded', () => {
     };
   });
 
+  it('does not refund again from a notice created before the refund failed', async () => {
+    Object.assign(state.orders.get('o1'), {
+      refundRequestedAt: '2026-11-19T08:00:00.000Z',
+      refundFailedAt: '2026-11-19T09:00:00.000Z',
+    });
+    const body = JSON.parse(refundedEvent(4900));
+    body.created = Date.parse('2026-11-19T08:30:00.000Z') / 1000;
+    await send(JSON.stringify(body));
+    expect(state.orders.get('o1')?.status).toBe('paid');
+    expect(state.enrolment?.status).not.toBe('dropped');
+    expect(state.notifications.size).toBe(0);
+  });
+
   it('ends the order and the enrolment on a full refund, keeping progress', async () => {
     expect(await send(refundedEvent(4900))).toEqual({ status: 200 });
     expect(paymentIntents.retrieve).toHaveBeenCalledWith('pi_1');
@@ -578,6 +605,32 @@ describe('a failed refund', () => {
       (call) => call[0] === 'Refund failure recorded',
     );
     expect(recorded).toHaveLength(1);
+  });
+
+  it('undoes a refund that charge.refunded already applied, once', async () => {
+    const order = state.orders.get('o1');
+    Object.assign(order, {
+      status: 'refunded',
+      refundReason: 'requested',
+      refundedAt: '2026-11-19T08:00:01.000Z',
+      refundedAmount: 1000,
+    });
+    await send(failedEvent('refund.failed'));
+    await send(failedEvent('refund.failed'));
+    expect(state.orders.get('o1')).toMatchObject({
+      status: 'paid',
+      refundFailedAt: '2026-11-19T09:00:00.000Z',
+    });
+    expect(
+      logger.info.mock.calls.filter(
+        (call) => call[0] === 'Refund failure recorded',
+      ),
+    ).toHaveLength(1);
+    expect(state.notifications.size).toBe(1);
+    expect([...state.notifications.values()][0]).toMatchObject({
+      type: 'order.refund_failed',
+      dedupeKey: 'o1',
+    });
   });
 
   it('ignores a refund update that is not a failure', async () => {

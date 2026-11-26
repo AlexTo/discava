@@ -10,6 +10,7 @@ import {
   queryEarningDays,
   queryEarningLines,
   recordRefund,
+  recordRefundReversal,
   recordSale,
 } from './earning.js';
 import { createFakeCoreTable } from './payment-fake.test.js';
@@ -462,5 +463,152 @@ describe('queryEarningLines', () => {
       to: '2026-11-19',
     });
     expect(page.lines).toHaveLength(1);
+  });
+});
+
+describe('recordRefundReversal', () => {
+  const reverse = (
+    fake: ReturnType<typeof createFakeCoreTable>,
+    occurredAt = '2026-11-21T00:00:00.000Z',
+  ) =>
+    recordRefundReversal({
+      coreTable: fake.coreTable,
+      orderId: 'order-1',
+      occurredAt,
+    });
+
+  it('puts the earnings back to what they were before the refund, once', async () => {
+    const fake = createFakeCoreTable();
+    await sale(fake);
+    const netBefore = sum(entries(fake), 'netMinor');
+    await refund(fake, 800);
+    expect(sum(entries(fake), 'netMinor')).toBeLessThan(netBefore);
+
+    expect(await reverse(fake)).toBe(true);
+    for (const field of ['refundMinor', 'feeMinor', 'netMinor'] as const) {
+      expect(sum(entries(fake), field)).toBe(
+        sum(
+          entries(fake).filter((e) => e.kind === 'sale'),
+          field,
+        ),
+      );
+    }
+    expect(sum(entries(fake), 'netMinor')).toBe(netBefore);
+    expect(fake.rows('earningOrder')[0]).toMatchObject({ refundedMinor: 0 });
+    const days = fake.rows('earningDay');
+    expect(sum(days, 'netMinor')).toBe(netBefore);
+    expect(sum(days, 'refundMinor')).toBe(0);
+
+    const before = structuredClone(entries(fake));
+    expect(await reverse(fake)).toBe(false);
+    expect(entries(fake)).toEqual(before);
+  });
+
+  it('is a new open entry, so a refund a payout took is not edited', async () => {
+    const fake = createFakeCoreTable();
+    await sale(fake);
+    await refund(fake, 800);
+    const refundEntries = entries(fake).filter((e) => e.kind === 'refund');
+    await reverse(fake);
+    const after = entries(fake).filter((e) => e.kind === 'refund');
+    expect(after).toHaveLength(refundEntries.length * 2);
+    for (const original of refundEntries) {
+      expect(after).toContainEqual(original);
+    }
+    for (const entry of after.filter((e) =>
+      e.entryId.startsWith('refund-reversal-'),
+    )) {
+      expect(entry.payoutId).toBeUndefined();
+      expect(entry.occurredAt).toBe('2026-11-21T00:00:00.000Z');
+    }
+  });
+
+  it('reverses a partial refund by what was refunded', async () => {
+    const fake = createFakeCoreTable();
+    await sale(fake);
+    const netBefore = sum(entries(fake), 'netMinor');
+    await refund(fake, 400);
+    await reverse(fake);
+    expect(sum(entries(fake), 'netMinor')).toBe(netBefore);
+  });
+
+  it('records nothing when no refund is in the ledger or the order has no earnings', async () => {
+    const fake = createFakeCoreTable();
+    expect(await reverse(fake)).toBe(false);
+    await sale(fake);
+    expect(await reverse(fake)).toBe(false);
+    expect(entries(fake).filter((e) => e.kind === 'refund')).toEqual([]);
+  });
+
+  it('retries after losing the counter, and reverses what is recorded by then', async () => {
+    const fake = createFakeCoreTable();
+    await sale(fake, {}, ['a']);
+    await refund(fake, 300);
+    let injected = false;
+    fake.hooks.beforeTransaction = () => {
+      if (injected) return;
+      injected = true;
+      // Another refund raises the total to 800 just before our first write.
+      fake.put('earningOrder', {
+        ...fake.rows('earningOrder')[0],
+        refundedMinor: 800,
+      });
+    };
+    expect(await reverse(fake)).toBe(true);
+    expect(fake.log.cancelled).toBe(1);
+    expect(fake.rows('earningOrder')[0]).toMatchObject({ refundedMinor: 0 });
+  });
+
+  it('throws after 5 attempts that each lose the counter', async () => {
+    const fake = createFakeCoreTable();
+    await sale(fake, {}, ['a']);
+    await refund(fake, 300);
+    let raised = 300;
+    fake.hooks.beforeTransaction = () => {
+      raised += 1;
+      fake.put('earningOrder', {
+        ...fake.rows('earningOrder')[0],
+        refundedMinor: raised,
+      });
+    };
+    await expect(reverse(fake)).rejects.toThrow(/try again/);
+  });
+
+  it('leaves out a refund image delivered after its reversal, even the first one', async () => {
+    const fake = createFakeCoreTable();
+    await sale(fake);
+    // The failure image is processed before the refund image it undoes.
+    expect(await reverse(fake)).toBe(false);
+    expect(fake.rows('earningOrder')[0]).toMatchObject({
+      reversedAt: '2026-11-21T00:00:00.000Z',
+    });
+    expect(await refund(fake, 800)).toBe(false);
+    expect(entries(fake).filter((e) => e.kind === 'refund')).toEqual([]);
+    expect(fake.rows('earningOrder')[0]).toMatchObject({ refundedMinor: 0 });
+  });
+
+  it('records a second refund of the order after a failed one, and reverses it again', async () => {
+    const fake = createFakeCoreTable();
+    await sale(fake);
+    const netBefore = sum(entries(fake), 'netMinor');
+    await refund(fake, 800);
+    await reverse(fake);
+    // Support refunds again later: dated after the reversal, so it is new.
+    expect(await refund(fake, 800, '2026-11-25T00:00:00.000Z')).toBe(true);
+    expect(fake.rows('earningOrder')[0]).toMatchObject({ refundedMinor: 800 });
+    expect(await reverse(fake, '2026-11-26T00:00:00.000Z')).toBe(true);
+    expect(sum(entries(fake), 'netMinor')).toBe(netBefore);
+    expect(fake.rows('earningOrder')[0]).toMatchObject({ refundedMinor: 0 });
+  });
+
+  it('is not undone by the refund image delivered again afterwards', async () => {
+    const fake = createFakeCoreTable();
+    await sale(fake);
+    await refund(fake, 800);
+    await reverse(fake);
+    const before = structuredClone(entries(fake));
+    expect(await refund(fake, 800)).toBe(false);
+    expect(entries(fake)).toEqual(before);
+    expect(fake.rows('earningOrder')[0]).toMatchObject({ refundedMinor: 0 });
   });
 });

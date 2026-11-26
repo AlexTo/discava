@@ -69,11 +69,18 @@ export const createEarningOrderEntity = async () =>
         },
         // The refunded total already in the ledger: from 0 to `paidMinor`
         // (a rule ElectroDB can't see across attributes; `recordRefund`
-        // caps it and an invariant checks it), and it only increases.
+        // caps it and an invariant checks it). It rises with a refund and
+        // returns to 0 when `recordRefundReversal` takes the refund back.
         refundedMinor: {
           type: 'number',
           required: true,
           validate: (value: number) => Number.isInteger(value) && value >= 0,
+        },
+        // When `recordRefundReversal` last took a refund back, set even when
+        // the ledger held none yet. A refund dated at or before it is an old
+        // notice of the refund that failed, and `recordRefund` leaves it out.
+        reversedAt: {
+          type: 'string',
         },
         createdAt: {
           type: 'string',

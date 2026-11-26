@@ -49,6 +49,10 @@ export const handleChargeRefunded = async (
     order,
     refundedTotal: charge.amount_refunded,
     now: deps.now(),
+    eventAt:
+      typeof event.created === 'number'
+        ? new Date(event.created * 1000).toISOString()
+        : undefined,
   });
   await notifyStudent(order.orderId, coreTable);
   deps.logger.info('Refund recorded', {
