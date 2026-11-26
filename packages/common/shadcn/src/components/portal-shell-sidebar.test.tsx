@@ -36,14 +36,15 @@ vi.mock('./notification-bell-container', () => ({
 vi.mock('./user-menu', () => ({ UserMenu: () => null }));
 
 import { PortalShell } from './portal-shell';
+import { MAIN_CONTENT_ID } from './skip-link';
 
-const shell = () => (
+const shell = (page: React.ReactNode = <h1>Page</h1>) => (
   <PortalShell
     portal="admin"
     label="Admin"
     navItems={[{ label: 'Home', to: '/', icon: Home }]}
   >
-    <h1>Page</h1>
+    {page}
   </PortalShell>
 );
 
@@ -100,6 +101,19 @@ describe('PortalShell’s phone sidebar', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Page' })).toHaveFocus(),
+    );
+  });
+
+  it('focuses the main content after a navigation from the open sidebar to a page without an h1', async () => {
+    location.pathname = '/a';
+    const { rerender } = render(shell());
+    const dialog = await openSidebar();
+    within(dialog).getByRole('link', { name: 'Home' }).focus();
+    location.pathname = '/b';
+    rerender(shell(<p>No heading</p>));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(document.getElementById(MAIN_CONTENT_ID)).toHaveFocus(),
     );
   });
 });
