@@ -1755,11 +1755,14 @@ describe('reverseRefund', () => {
     expect(fake.row('order', { orderId: 'order-1' })).toEqual(before);
   });
 
-  it('leaves an enrolment bought again after the refund alone', async () => {
+  it('leaves an order bought again after the refund, and its enrolment, alone', async () => {
     const { fake } = setup();
     fake.put('order', refunded());
     fake.put('enrolment', enrolment({ status: 'active', orderId: 'order-2' }));
-    await expect(reverse(fake)).resolves.toBe(true);
+    const before = structuredClone(fake.row('order', { orderId: 'order-1' }));
+    await expect(reverse(fake)).resolves.toBe(false);
+    // A second paid order for the course would break "paid exactly once".
+    expect(fake.row('order', { orderId: 'order-1' })).toEqual(before);
     expect(fake.row('enrolment', key)).toMatchObject({
       status: 'active',
       orderId: 'order-2',
