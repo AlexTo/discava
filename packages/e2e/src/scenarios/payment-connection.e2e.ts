@@ -138,6 +138,10 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
     await expect(cardTitle.getByText('Test mode')).toBeVisible();
     await expect(keyField).toHaveCount(0);
     await screenshot(admin, 'payments-connected');
+    // A save registers (or updates) the endpoint for every event, so the
+    // out-of-date-events warning is gone.
+    await expect(admin.getByText('Payment events out of date')).toHaveCount(0);
+    await screenshot(admin, 'payments-connected-events-current');
   });
 
   const student = await browser.newPage();

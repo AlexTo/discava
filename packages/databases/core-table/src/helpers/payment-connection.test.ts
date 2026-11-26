@@ -15,6 +15,7 @@ import {
   OpenCheckoutError,
   recordChange,
   rotateKey,
+  setWebhookEvents,
 } from './payment-connection.js';
 import { createFakeCoreTable } from './payment-fake.test.js';
 
@@ -27,6 +28,7 @@ const facts = {
   keyLast4: 'wxyz',
   webhookEndpointId: 'we_1',
   webhookUrl: 'https://example.com/stripe/webhook',
+  webhookEvents: ['checkout.session.completed', 'charge.refunded'],
 };
 const active = {
   status: 'active',
@@ -267,6 +269,41 @@ describe('rotateKey', () => {
       }),
     ).rejects.toBeInstanceOf(ChangeInProgressError);
     expect((await getConnection(fake.coreTable))?.keyLast4).toBe('wxyz');
+  });
+});
+
+describe('setWebhookEvents', () => {
+  it('records the events and bumps the revision', async () => {
+    const fake = createFakeCoreTable();
+    fake.put('paymentConnection', { ...active });
+    const done = await setWebhookEvents({
+      coreTable: fake.coreTable,
+      connection: { revision: 3 },
+      webhookEvents: ['refund.failed'],
+      by,
+      now: NOW,
+    });
+    expect(done).toMatchObject({
+      webhookEvents: ['refund.failed'],
+      revision: 4,
+      changedAt: NOW,
+    });
+  });
+
+  it('loses to a concurrent switch on revision', async () => {
+    const fake = createFakeCoreTable();
+    fake.put('paymentConnection', { ...active });
+    const read = await getConnection(fake.coreTable);
+    await begin(fake);
+    await expect(
+      setWebhookEvents({
+        coreTable: fake.coreTable,
+        connection: read!,
+        webhookEvents: ['refund.failed'],
+        by,
+        now: NOW,
+      }),
+    ).rejects.toBeInstanceOf(ChangeInProgressError);
   });
 });
 

@@ -127,6 +127,26 @@ describe('webhook endpoints', () => {
     expect(standIn.endpointsOf('acct_local_2')).toEqual([]);
   });
 
+  it('updates an endpoint’s events, keeping its id, url and secret', async () => {
+    const stripe = stripeFor('sk_test_local');
+    const created = await stripe.webhookEndpoints.create({
+      url: WEBHOOK_URL,
+      enabled_events: ['charge.refunded'],
+    });
+    const updated = await stripe.webhookEndpoints.update(created.id, {
+      enabled_events: [...EVENTS],
+    });
+    expect(updated.id).toBe(created.id);
+    expect(updated.url).toBe(WEBHOOK_URL);
+    expect(updated.enabled_events).toEqual([...EVENTS]);
+    expect(standIn.endpointsOf('acct_local')[0]?.secret).toBe(created.secret);
+
+    const error = await stripeFor('sk_test_local_2')
+      .webhookEndpoints.update(created.id, { enabled_events: [...EVENTS] })
+      .catch((e) => e);
+    expect(error.statusCode).toBe(404);
+  });
+
   it('deletes an endpoint, and answers 404 for one it does not have', async () => {
     const stripe = stripeFor('sk_test_local');
     const created = await create(stripe);
