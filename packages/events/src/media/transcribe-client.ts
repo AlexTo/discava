@@ -23,9 +23,7 @@ import {
   isLocalDev,
   type LocalTranscriptionJobRequest,
 } from '@discava/common-server-utils/local-dev';
-
-// The language automatic captions are made in, until a course can choose.
-const CAPTION_LANGUAGE = 'en-US';
+import { DEFAULT_CAPTION_LANGUAGE } from './caption-language.js';
 
 let _client: TranscribeClient | undefined;
 const getTranscribeClient = (): TranscribeClient => {
@@ -108,7 +106,7 @@ export const startCaptionJob = async (
   await getTranscribeClient().send(
     new StartTranscriptionJobCommand({
       TranscriptionJobName: jobName,
-      LanguageCode: CAPTION_LANGUAGE as never,
+      LanguageCode: DEFAULT_CAPTION_LANGUAGE as never,
       Media: {
         MediaFileUri: `s3://${uploadBucket}/${transcribeInputKey(nonce)}`,
       },
@@ -125,6 +123,8 @@ export type CaptionJob = CaptionJobTarget & {
   status: string;
   /** The WebVTT's key in the lesson media bucket, if Transcribe wrote one. */
   vttKey?: string;
+  /** The language the job ran in. */
+  languageCode: string;
 };
 
 // Transcribe reports file locations as https://s3.<region>.amazonaws.com/
@@ -152,11 +152,19 @@ export const getCaptionJob = async (jobName: string): Promise<CaptionJob> => {
   const uri = job?.Subtitles?.SubtitleFileUris?.[0];
   const status = job?.TranscriptionJobStatus ?? 'UNKNOWN';
   const vttKey = uri ? keyFromS3Uri(uri) : undefined;
+  const languageCode = job?.LanguageCode ?? DEFAULT_CAPTION_LANGUAGE;
   if (tags.target === 'coursePreview') {
     if (!courseId || !nonce) {
       throw new Error(`Caption job ${jobName} is missing its tags`);
     }
-    return { target: 'coursePreview', status, courseId, nonce, vttKey };
+    return {
+      target: 'coursePreview',
+      status,
+      courseId,
+      nonce,
+      vttKey,
+      languageCode,
+    };
   }
   if (!courseId || !moduleId || !lessonId || !contentItemId || !nonce) {
     throw new Error(`Caption job ${jobName} is missing its tags`);
@@ -169,5 +177,6 @@ export const getCaptionJob = async (jobName: string): Promise<CaptionJob> => {
     contentItemId,
     nonce,
     vttKey,
+    languageCode,
   };
 };

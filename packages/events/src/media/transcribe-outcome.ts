@@ -31,13 +31,11 @@ import {
   writeCaptionsReady,
   writeCaptionTracks,
 } from '@discava/core-table';
+import { DEFAULT_CAPTION_LANGUAGE } from './caption-language.js';
 import { getCoreTable } from './transcode-outcome.js';
 
 // S3Mock in local dev (#137).
 const s3Client = new S3Client(s3ClientConfig());
-
-// The language automatic captions are made in (the job's LanguageCode default).
-const AUTO_CAPTION_LANGUAGE = 'en-US';
 
 interface OutcomeBase {
   jobName: string;
@@ -48,6 +46,8 @@ interface OutcomeBase {
   nonce: string;
   // The WebVTT Transcribe wrote, in the version's scratch folder.
   vttKey?: string;
+  // The language the job ran in; the default when not given.
+  languageCode?: string;
 }
 
 /**
@@ -117,6 +117,7 @@ export const applyTranscribeOutcome = async (
   outcome: TranscribeOutcome,
 ): Promise<void> => {
   const { jobName, nonce } = outcome;
+  const language = outcome.languageCode ?? DEFAULT_CAPTION_LANGUAGE;
   const isPreview = outcome.target === 'coursePreview';
   const ref: CaptionTargetKey =
     outcome.target === 'coursePreview'
@@ -192,8 +193,8 @@ export const applyTranscribeOutcome = async (
           track: {
             trackId,
             nonce,
-            language: AUTO_CAPTION_LANGUAGE,
-            label: captionLabel(AUTO_CAPTION_LANGUAGE),
+            language,
+            label: captionLabel(language),
             source: 'auto',
             key,
           },

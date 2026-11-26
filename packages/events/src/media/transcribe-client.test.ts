@@ -126,6 +126,12 @@ describe('getCaptionJob', () => {
     },
   });
 
+  it("returns the job's language", async () => {
+    send.mockResolvedValue(found({ LanguageCode: 'fr-FR' }));
+
+    expect((await getCaptionJob('captions-i1-n1')).languageCode).toBe('fr-FR');
+  });
+
   it('returns the tags, status and the VTT key', async () => {
     send.mockResolvedValue(found());
 
@@ -133,6 +139,7 @@ describe('getCaptionJob', () => {
       status: 'COMPLETED',
       ...TARGET,
       vttKey: `${OUTPUT_KEY}captions-i1-n1.vtt`,
+      languageCode: 'en-US',
     });
     expect(send.mock.calls[0][0]).toEqual({
       type: 'get',
@@ -148,6 +155,12 @@ describe('getCaptionJob', () => {
 
   it('throws for a job missing its tags', async () => {
     send.mockResolvedValue(found({ Tags: [] }));
+
+    await expect(getCaptionJob('x')).rejects.toThrow('missing its tags');
+  });
+
+  it('throws for a response without a job', async () => {
+    send.mockResolvedValue({});
 
     await expect(getCaptionJob('x')).rejects.toThrow('missing its tags');
   });
@@ -205,6 +218,7 @@ describe('for a course preview', () => {
       ...PREVIEW,
       status: 'COMPLETED',
       vttKey: undefined,
+      languageCode: 'en-US',
     });
   });
 });
