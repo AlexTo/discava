@@ -231,6 +231,33 @@ describe('the Branding page', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
+  it('holds Save while an image uploads, then saves with the image', async () => {
+    let finish!: (response: Response) => void;
+    put.mockImplementation(
+      () => new Promise<Response>((resolve) => (finish = resolve)),
+    );
+    const { calls, user } = open({ 'branding.save': () => none });
+    await screen.findByLabelText('Upload logo');
+    choose('Upload logo', file('logo.png', 'image/png'));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    await user.type(screen.getByLabelText('Name'), 'Acme');
+
+    const waiting = await screen.findByRole('button', {
+      name: 'Wait for the upload to finish…',
+    });
+    expect(waiting).toHaveAttribute('aria-disabled', 'true');
+    await user.click(waiting);
+    expect(calls.some((c) => c.path === 'branding.save')).toBe(false);
+
+    finish(new Response(null, { status: 200 }));
+    await user.click(await screen.findByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(
+        calls.find((c) => c.path === 'branding.save')?.input,
+      ).toMatchObject({ logoKey: `brand/logo/${NONCE}.png` }),
+    );
+  });
+
   it('refuses a blank or 51-character name, with its message, and focuses it on Save', async () => {
     const { user } = open();
     const input = await screen.findByLabelText('Name');

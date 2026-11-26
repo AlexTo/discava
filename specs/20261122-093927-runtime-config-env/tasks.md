@@ -178,7 +178,7 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
   - Update any existing assertion on those, and on `grantAppConfig`'s output, to match. This is a named test change.
 - [x] T026 [US1] Remove `@aws-lambda-powertools/parameters` and `@aws-sdk/client-appconfigdata` from the `package.json` of every package that no longer imports them (`common-server-utils`, `instructor-api`, `core-api`, `events`, and any other the grep finds). Run `pnpm i`. In any test that throws the old `RUNTIME_CONFIG_APP_ID` error from a mock, use the new message; this is a named test change.
 - [x] T027 [US1] Check the scheduler targets for self-references (research R-6): synthesise and confirm no function's environment references its own ARN. If one does, build that ARN from a fixed function name instead and note it in the PR.
-- [ ] T028 [US1] (human) After this PR deploys, walk the media, certificate, caption translation, payment and stream rows of [quickstart.md](./quickstart.md) step 7 on `discava-development`. Then confirm [contracts/rollout.md](./contracts/rollout.md) step 3: no function in the stage has `RUNTIME_CONFIG_APP_ID`, and no role but the deploy role has an `appconfig:` action.
+- [x] T028 [US1] (human) After this PR deploys, walk the media, certificate, caption translation, payment and stream rows of [quickstart.md](./quickstart.md) step 7 on `discava-development`. Then confirm [contracts/rollout.md](./contracts/rollout.md) step 3: no function in the stage has `RUNTIME_CONFIG_APP_ID`, and no role but the deploy role has an `appconfig:` action.
 
 ---
 
@@ -212,7 +212,7 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
 - [x] T035 [P] [US3] Remove any remaining `@aws-lambda-powertools/parameters` and `@aws-sdk/client-appconfigdata` dependency, and their entries from `pnpm-workspace.yaml`'s catalog if nothing uses them. Run `pnpm i`.
 - [x] T036 [US4] Write the upgrade steps into the PR description, copied from [contracts/rollout.md](./contracts/rollout.md) steps 3 to 6 with the real stack names (`discava-development-RuntimeConfig`, `discava-development-Data`), and the two failure messages and what to do about them.
 - [x] T037 [US4] (human, before merge) Confirm [contracts/rollout.md](./contracts/rollout.md) step 3 still holds on `discava-development`. Then do step 4: `aws cloudformation delete-stack --stack-name discava-development-RuntimeConfig` and `aws cloudformation wait stack-delete-complete --stack-name discava-development-RuntimeConfig`. Check each portal still loads its `runtime-config.json`, then merge.
-- [ ] T038 [US4] (human) After the deploy: `aws appconfig list-applications` lists no Discava application, `discava-development-PortalConfig` exists, each portal signs in, and each portal's `runtime-config.json` has the same content as before. Then optionally re-run `scripts/setup-stage.sh discava-development` to drop the AppConfig rights (rollout step 6).
+- [x] T038 [US4] (human) After the deploy: `aws appconfig list-applications` lists no Discava application, `discava-development-PortalConfig` exists, each portal signs in, and each portal's `runtime-config.json` has the same content as before. Then optionally re-run `scripts/setup-stage.sh discava-development` to drop the AppConfig rights (rollout step 6).
 
 ---
 
@@ -224,8 +224,8 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
   - `design/public-pages.mdx`: the 503 cases, and the renderer's settings parameter.
   - `design/stream-event-router.mdx`: step 4's `grantAppConfig`.
 - [x] T040 [P] Update `packages/infra/CLAUDE.md`, `packages/common/constructs/CLAUDE.md` and `packages/apis/CLAUDE.md` where they mention `RuntimeConfig`, AppConfig or `RUNTIME_CONFIG_APP_ID`. Add a short "How a function gets a setting" note to `packages/common/constructs/CLAUDE.md`: call the resource's `bindSettings(fn)` next to its grant, or `addSetting` for a stack-level value; read it with `readSetting`; never fetch settings at runtime. Add a matching line to `CONTRIBUTING.md` where backend Lambdas are described.
-- [ ] T041 (human) After Phase 4 is deployed, walk every flow in [quickstart.md](./quickstart.md) step 7 on `discava-development`, checking each function's logs for `deploy-time setting` or `AccessDenied` errors. Then compare cold starts as in step 9 (SC-005).
-- [ ] T042 (human) The day after Phase 3 is deployed and used, run [quickstart.md](./quickstart.md) step 10 and record in the PR that AppConfig usage is zero from that date (SC-001). Also check whether credits were what kept October and November at $0 (research R-1), and note it.
+- [x] T041 (human) After Phase 4 is deployed, walk every flow in [quickstart.md](./quickstart.md) step 7 on `discava-development`, checking each function's logs for `deploy-time setting` or `AccessDenied` errors. Then compare cold starts as in step 9 (SC-005).
+- [x] T042 (human) The day after Phase 3 is deployed and used, run [quickstart.md](./quickstart.md) step 10 and record in the PR that AppConfig usage is zero from that date (SC-001). Also check whether credits were what kept October and November at $0 (research R-1), and note it.
 - [ ] T043 (human) The owner confirms the defaults this spec took without asking (spec, Clarifications):
   - the page renderer reads one Systems Manager parameter;
   - the final stack is kept and renamed `PortalConfig`;

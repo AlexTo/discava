@@ -61,6 +61,11 @@ interface PaymentIntent {
   refunded: number;
   /** Each refund made, so a test can count them. */
   refunds: { id: string; amount: number }[];
+  /**
+   * How the next refund asked for ends: reported failed (`fail`), or left
+   * pending with no notice (`hold`), instead of made.
+   */
+  nextRefund?: 'fail' | 'hold';
 }
 
 interface StripeEvent {
@@ -168,6 +173,9 @@ const id = (prefix: string) => `${prefix}_${randomBytes(12).toString('hex')}`;
 const DELIVERY_ATTEMPTS = 3;
 // The longest delay setTimeout accepts.
 const MAX_TIMER_MS = 2 ** 31 - 1;
+
+// How long after a refund it is accepted that a failing one is reported.
+const REFUND_FAILURE_DELAY_MS = 1_000;
 
 const DEFAULT_CONNECT_STATE_FILE = new URL(
   '../../../../tmp/local-dev/stripe-connect.json',
@@ -480,7 +488,9 @@ export const createStripeStandIn = ({
   ): Promise<boolean> => {
     if (request.method !== 'POST') return false;
     const control =
-      /^\/stripe\/test\/(replay|forge|expire|refund|refunds)$/.exec(path);
+      /^\/stripe\/test\/(replay|forge|expire|refund|refunds|fail-next-refund|hold-next-refund)$/.exec(
+        path,
+      );
     if (!control) return false;
     const input = JSON.parse((await readBody(request)) || '{}') as {
       sessionId?: string;
@@ -502,6 +512,27 @@ export const createStripeStandIn = ({
         return true;
       }
       send(response, 200, { refunds: intent.refunds });
+      return true;
+    }
+    if (
+      control[1] === 'fail-next-refund' ||
+      control[1] === 'hold-next-refund'
+    ) {
+      // The next refund asked for this payment is accepted, then reported
+      // failed (as Stripe does when a bank returns the money) or never
+      // settled, so the page is left with a refund still pending.
+      const intent = session ? intents.get(session.paymentIntentId) : undefined;
+      if (!intent) {
+        error(
+          response,
+          404,
+          'invalid_request_error',
+          'No payment for that session',
+        );
+        return true;
+      }
+      intent.nextRefund = control[1] === 'fail-next-refund' ? 'fail' : 'hold';
+      send(response, 200, { nextRefund: intent.nextRefund });
       return true;
     }
     if (control[1] === 'refund') {
@@ -1108,16 +1139,34 @@ export const createStripeStandIn = ({
         );
         return true;
       }
+      const outcome = intent.nextRefund;
+      intent.nextRefund = undefined;
       const refund = {
         id: id('re'),
         object: 'refund',
         payment_intent: intent.id,
         amount: amount ?? intent.amount - intent.refunded,
         currency: intent.currency,
-        status: 'succeeded',
+        status: outcome ? 'pending' : 'succeeded',
       };
       if (slot) idempotent.set(slot, refund);
       send(response, 200, refund);
+      if (outcome === 'hold') return true;
+      if (outcome === 'fail') {
+        // Later than the answer, as at Stripe: the request is on record by
+        // the time the failure arrives.
+        setTimeout(() => {
+          deliver(
+            intent.accountId,
+            newEvent('refund.failed', {
+              ...refund,
+              status: 'failed',
+              failure_reason: 'unknown',
+            }),
+          ).catch(() => {});
+        }, REFUND_FAILURE_DELAY_MS).unref();
+        return true;
+      }
       await refundIntent(intent, refund.amount, refund.id);
       return true;
     }
