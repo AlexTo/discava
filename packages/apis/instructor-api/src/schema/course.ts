@@ -12,7 +12,7 @@ import { ModuleSchema } from './module.js';
 export const CourseStatusSchema = z.enum(['draft', 'published', 'archived']);
 
 export const CreateCourseInputSchema = z.object({
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
   description: z.string().max(2000).optional(),
 });
 

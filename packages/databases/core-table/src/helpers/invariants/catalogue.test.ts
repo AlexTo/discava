@@ -10,7 +10,7 @@ let table: TableSnapshot;
 beforeEach(() => {
   table = consistentTable();
 });
-const { item, broken, expectOnly } = testHelpers(() => table);
+const { broken, expectOnly } = testHelpers(() => table);
 
 describe('course-landing-shape', () => {
   it('accepts lists of ten trimmed items', () => {

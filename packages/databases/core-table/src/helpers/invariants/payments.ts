@@ -126,6 +126,13 @@ export const checkOrderShape = (snapshot: TableSnapshot): Violation[] => {
         problems.push(`refund requested, but the order is ${order.status}`);
       }
     }
+    if (order.refundFailedAt !== undefined) {
+      if (order.refundRequestedAt === undefined) {
+        problems.push('refund failed, but no refund was requested');
+      } else if (order.refundFailedAt < order.refundRequestedAt) {
+        problems.push('refundFailedAt is before refundRequestedAt');
+      }
+    }
     if (
       (order.status === 'pending' || order.status === 'expired') &&
       order.paidAt !== undefined

@@ -6,6 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   CERTIFICATE_REMINDER_DELAY_DAYS,
+  type Certificate,
   certificateReminderDueAt,
   claimCertificateReminder,
   formatCertificateId,
@@ -724,7 +725,7 @@ describe('revokeCertificate and restoreCertificate', () => {
     return { ...fake, certificate };
   };
   const stored = (rows: ReturnType<typeof table>['rows']) =>
-    [...rows.certificate!.values()][0]!;
+    [...rows.certificate!.values()][0]! as unknown as Certificate;
   const events = (rows: ReturnType<typeof table>['rows']) =>
     [...rows.certificateEvent!.values()].sort((a, b) =>
       a.occurredAt < b.occurredAt ? -1 : 1,

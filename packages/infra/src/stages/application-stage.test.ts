@@ -459,7 +459,7 @@ describe('notification delivery', () => {
         'ADMIN_PORTAL_URL',
         'CORE_API_URL',
         'INSTRUCTOR_PORTAL_URL',
-        'DISCAVA_DYNAMODB_CORE_TABLE',
+        'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
         'NOTIFICATIONS_FROM_ADDRESS',
         'STUDENT_PORTAL_URL',
         'UNSUBSCRIBE_SECRET_ARN',

@@ -46,10 +46,15 @@ export type StudentPortalProps = Omit<
   readonly pageRenderer?: PageRendererProps;
 };
 
-// The paths the renderer answers; every other path is the static site.
+// The paths the renderer answers; every other path is the static site. A
+// `/x/*` pattern doesn't match the bare `/x`, so each prefix is listed twice:
+// the bare path gets the renderer's `noindex` 404 rather than the SPA's 200.
 const PAGE_RENDERER_PATHS = [
+  '/learn',
   '/learn/*',
+  '/instructors',
   '/instructors/*',
+  '/certificates',
   '/certificates/*',
   '/sitemap.xml',
   '/robots.txt',

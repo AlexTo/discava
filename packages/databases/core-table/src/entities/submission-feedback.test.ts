@@ -40,7 +40,7 @@ describe('submissionFeedback', () => {
     expect(Item.sk).toContain(round.feedbackId.toLowerCase());
   });
 
-  it.each(['resubmission_requested', 'returned', 'amended'])(
+  it.each(['resubmission_requested', 'returned', 'amended'] as const)(
     'accepts the %s kind',
     (kind) => {
       expect(() => feedback.create({ ...round, kind }).params()).not.toThrow();

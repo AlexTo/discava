@@ -68,7 +68,8 @@ interface TransactItem {
 }
 
 const requestFor = (items: unknown[]): TransactItem[] =>
-  coreTable.transaction.write(() => items as never).params().TransactItems;
+  coreTable.transaction.write(() => items as never).params()
+    .TransactItems as unknown as TransactItem[];
 
 const conditionOf = (item: TransactItem) => {
   const call = (item.ConditionCheck ?? item.Update ?? item.Put) as Conditional;

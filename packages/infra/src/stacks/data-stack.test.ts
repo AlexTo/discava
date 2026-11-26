@@ -124,7 +124,9 @@ describe('the user record trigger (#230)', () => {
       data.findResources('AWS::Lambda::Function', {
         Properties: {
           Environment: {
-            Variables: { DISCAVA_DYNAMODB_CORE_TABLE: Match.anyValue() },
+            Variables: {
+              DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME: Match.anyValue(),
+            },
           },
         },
       }),
@@ -180,7 +182,7 @@ describe('search collection (#53)', () => {
     ) as { Environment: { Variables: Record<string, unknown> } }[];
 
     expect(handler.Environment.Variables).toHaveProperty(
-      'DISCAVA_OPENSEARCH_SEARCH',
+      'DISCAVA_OPENSEARCH_SEARCH_ENDPOINT',
     );
     expect(handler.Environment.Variables).not.toHaveProperty(
       'RUNTIME_CONFIG_APP_ID',
@@ -333,8 +335,8 @@ describe('deploy-time settings per function', () => {
   const template = synth({})('Data');
   // Function logical-ID prefix to the settings its code reads.
   const required = {
-    PreTokenGeneration: ['DISCAVA_DYNAMODB_CORE_TABLE'],
-    SearchCollectionIndexSyncHandler: ['DISCAVA_OPENSEARCH_SEARCH'],
+    PreTokenGeneration: ['DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME'],
+    SearchCollectionIndexSyncHandler: ['DISCAVA_OPENSEARCH_SEARCH_ENDPOINT'],
   };
 
   it('gives each function the settings its code reads', () => {

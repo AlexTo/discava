@@ -1,6 +1,6 @@
 ---
 title: Quizzes
-description: The quiz content item — data model, grading, attempts, edits mid-attempt, and the student and instructor experience.
+description: "The quiz content item: data model, grading, attempts, edits mid-attempt, and the student and instructor experience."
 sidebar:
   order: 3
 ---
@@ -9,13 +9,15 @@ import Link from '@components/link.astro';
 
 **Spec:** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/) (questions in videos)
 
-A quiz is a content item (`type: 'quiz'`) placed in a lesson's sequence alongside video and text. It has one or more questions, each **single choice** or **multiple choice**.
+A quiz is a content item (`type: 'quiz'`) placed in a lesson's sequence alongside video, text and file items. It has one or more questions, each **single choice** or **multiple choice**.
+
+A quiz can also be the one item of an assignment lesson (a lesson of `kind: 'assignment'`). It is created with `lesson.createQuizAssignment`, and is then edited and attempted like any other quiz. Short questions asked inside a video reuse the quiz question shape; see [Questions in videos](#questions-in-videos).
 
 ## Data model
 
 ### Quiz content item
 
-Quiz-specific `contentItem` attributes. As with video and text, which attributes a type requires is enforced by the zod schemas, not by ElectroDB.
+Quiz-specific `contentItem` attributes. As with the other types, which attributes a type requires is enforced by instructor-api's zod schemas (`schema/quiz.ts`), not by ElectroDB.
 
 | Attribute | Shape |
 |---|---|
@@ -23,9 +25,9 @@ Quiz-specific `contentItem` attributes. As with video and text, which attributes
 | `answerKey` | `{ [questionId]: { correctOptionIds: string[], explanation? } }`. `explanation` is Tiptap JSON. **Never read by core-api except when grading** |
 | `settings` | `{ passMarkPercent, attemptsAllowed /* null = unlimited */, shuffleOptions, revealAnswers: 'after_each_attempt' \| 'after_final_attempt' \| 'never' }` |
 | `quizVersion` | Number, incremented on every save. A save names the version the editor loaded, and is refused if the quiz has moved on (see [Saving a quiz](#saving-a-quiz)) |
-| `questionsHash` | Hash of `questions` only (not `settings`), recomputed on every save |
+| `questionsHash` | Hash of `questions` only (not the key or `settings`), recomputed on every save (`hashQuizQuestions`) |
 
-`questions` and `answerKey` are separate attributes so that passing a content item through to students can't leak the answers. Course reads (`course.view`, `course.publicView`) list a quiz by its title and position only; they never include `questions` or `answerKey`.
+`questions` and `answerKey` are separate attributes so that passing a content item through to students can't leak the answers. Course reads (`course.view`, `course.publicView`) list a quiz by its title and position only. They never include `questions` or `answerKey`.
 
 `questionId` and `optionId` are supplied by the client and must stay the same across saves, because the answer key, student answers and the reconcile step below all refer to them.
 
@@ -38,27 +40,46 @@ Quiz-specific `contentItem` attributes. As with video and text, which attributes
 ### Per-user quiz summary (`quizSummary`)
 
 - pk `userId`, sk `courseId / contentItemId`. Holds `attemptsUsed`, `bestScore`, `bestAttemptId`, `passedAt`, plus `moduleId` and `lessonId`.
-- Written in the same transaction as each attempt. The first attempt creates it; each later one is conditioned on the `attemptsUsed` it read, after checking that against `attemptsAllowed`. So the attempt limit holds even when two submissions race: the loser re-reads and is refused.
+- Written in the same transaction as each attempt. The first attempt creates it. Each later one is conditioned on the `attemptsUsed` it read, so the attempt limit holds even when two submissions race: the loser re-reads and is refused.
 - `bestScore` only increases. `passedAt` is set by the first passing attempt and never cleared.
 - Creating a student's summary increments the quiz's `studentActivityCount` (see <Link path="design/live-course-editing">Live course editing</Link>).
 - The attempt that passes, or that uses the last attempt, also records the quiz's `itemCompletion` in the same transaction, unless there already is one (see <Link path="design/progress-and-completion">Progress and completion</Link>).
+- The `quiz-summary-matches-attempts` invariant (`core-table/src/helpers/invariants/student-activity.ts`) checks that every summary agrees with its attempts and every attempt has a summary.
 
 ## Grading
 
 - Server-side only, in core-api. The client never receives `answerKey` before submitting.
 - Each question is all-or-nothing: the selected options must exactly equal `correctOptionIds`.
-- Score is the percentage of questions correct, rounded down to a whole number; `passed` is `score >= passMarkPercent`. Rounding down means a student is never shown more than they scored, and the comparison is exact.
+- Score is the percentage of questions correct, rounded down to a whole number, so a student is never shown more than they scored. `passed` is `score >= passMarkPercent`.
 - The **best** score across all attempts, and across quiz versions, is the one that counts.
 - A recorded pass is permanent, even if the pass mark is later raised or the quiz is edited.
 - Past attempts are never regraded automatically.
 
 ## Student API
 
-core-api has three procedures, each taking the quiz's `courseId`, `moduleId`, `lessonId` and `contentItemId`. All three require an enrolment that isn't `dropped` (`FORBIDDEN` without one in a published course, `NOT_FOUND` otherwise), and a quiz that is effectively visible: the quiz, its lesson and its module visible and not archived. Otherwise they return `NOT_FOUND` "This quiz is no longer available".
+core-api has three procedures (`procedures/quiz.ts`), each taking the quiz's `courseId`, `moduleId`, `lessonId` and `contentItemId`. All three require:
 
-- `quiz.view`: the questions, settings, `quizVersion` and `questionsHash`. Never the answer key. Still works in an archived course, like the rest of the course.
-- `quiz.submitAttempt`: takes `answers` and the `questionsHash` the student answered. Grades on the server and writes the attempt and the summary in one transaction, which also checks that the course is still published, the module, lesson and quiz are still visible and not archived, the quiz is still the `quizVersion` it was graded against, and the enrolment still isn't dropped. The first attempt also increments the quiz's `studentActivityCount` there. If anything changed in between, nothing is written and the submission is read and graded again, up to three times, before `CONFLICT`. Refused with `PRECONDITION_FAILED` in an archived course or with no attempts remaining, and with `BAD_REQUEST` for an answer naming an unknown question or option, a repeated option, or more than one option to a single choice question.
-- `quiz.myAttempts`: the student's summary (or `null`) and their attempts, latest first, a page at a time (`cursor` and `limit`, 10 by default and at most 100). The history is paged because with unlimited attempts it has no bound.
+- an enrolment that isn't `dropped` (`FORBIDDEN` without one in a published course, `NOT_FOUND` otherwise);
+- a quiz that is effectively visible: the quiz, its lesson and its module visible and not archived. Otherwise `NOT_FOUND` "This quiz is no longer available".
+
+**`quiz.view`** returns the questions, settings, `quizVersion` and `questionsHash`, never the answer key. It still works in an archived course, like the rest of the course.
+
+**`quiz.submitAttempt`** takes `answers` and the `questionsHash` the student answered. It grades on the server and writes the attempt and the summary in one transaction. The same transaction checks that:
+
+- the course is still published;
+- the module, lesson and quiz are still visible and not archived;
+- the quiz is still the `quizVersion` it was graded against;
+- the enrolment still isn't dropped.
+
+If anything changed in between, nothing is written and the submission is read and graded again, up to three times, before `CONFLICT`.
+
+| Refusal | When |
+|---|---|
+| `PRECONDITION_FAILED` | The course is archived, or no attempts remain |
+| `CONFLICT` | The questions changed since the student loaded them (see [below](#quiz-edited-mid-attempt)), or three tries lost a race |
+| `BAD_REQUEST` | An answer names an unknown question or option, repeats an option, or gives more than one option to a single choice question |
+
+**`quiz.myAttempts`** returns the student's summary (or `null`) and their attempts, latest first, a page at a time (`cursor` and `limit`, 10 by default and at most 100). The history is paged because with unlimited attempts it has no bound.
 
 Each attempt's result shows which questions were right. The correct options and explanations (`reveal`) come back from `submitAttempt` and `myAttempts` only when `revealAnswers` allows:
 
@@ -97,40 +118,26 @@ The client compares the old and new `questions` by `questionId`:
 - **New:** starts unanswered, marked **New**.
 - **Changed prompt, options or kind:** answers pointing at options that still exist are kept (for a question switched to single choice, only if exactly one remains), and the question is marked **Updated**.
 
-The student lands on the review screen with "This quiz was updated. Check the marked questions before submitting." The quiz query also refetches when the review screen opens and on window focus, so the banner usually appears before they press Submit; the `CONFLICT` is the guarantee.
+`reconcile` in `@discava/common-web-utils/quiz` does this. The student lands on the review screen with "This quiz was updated. Check the marked questions before submitting." The quiz query also refetches when the review screen opens and on window focus, so the banner usually appears before they press Submit. The `CONFLICT` is the guarantee.
 
 ## Student experience
 
-The lesson is one scrolling page with items in `order`. A step bar at the top shows each item's state (✓ done, ⚠ finished but not passed, ○ not attempted) and jumps to it. **A failed quiz never blocks moving on.**
+The lesson is one scrolling page with items in `order`. A step bar at the top shows each item's state (✓ done, ⚠ a quiz finished without passing, otherwise the item type's icon) and scrolls to it. **A failed quiz never blocks moving on.**
 
-The quiz is a card in the lesson flow:
+The quiz is a card in the lesson flow (`QuizCard` in `common/shadcn`, shared with the instructor's preview). It moves through four screens:
 
-```
-┌ Quiz: Module 3 check ─────────────────────┐
-│ 5 questions · Pass 80% · 1 of 3 attempts  │
-│ Best score: 60%              [Retake quiz]│
-└───────────────────────────────────────────┘
-        ↓ start
-┌ Question 2 of 5        ● ● ○ ○ ○          ┐
-│ Which are AWS serverless compute?         │
-│ Select all that apply                     │  ← multiple choice only
-│ ☐ Lambda   ☐ EC2   ☐ Fargate              │  ← checkboxes vs radios
-│                     [Back]  [Next]        │
-└───────────────────────────────────────────┘
-        ↓ review screen (unanswered flagged) → Submit
-┌ Best: 80% · Passed ✓ ─────────────────────┐
-│ This attempt: 60%                         │
-│ Per-question ✓/✗ + explanation            │  ← per revealAnswers
-│            [Retake quiz]  [Continue →]    │  ← equal weight
-└───────────────────────────────────────────┘
-```
+| Screen | Shows | Buttons |
+|---|---|---|
+| Overview | "5 questions · Pass 80% · 1 of 3 attempts used", the best score and a Passed badge | **Start quiz**, **Resume quiz** (a saved draft) or **Retake quiz**. "No attempts remaining" when none are left |
+| Question | One question, with "Select all that apply" and checkboxes for multiple choice, radios for single | **Back**, **Next**, and **Review answers** on the last question |
+| Review | Every answer, with unanswered questions flagged | **Back**, **Submit answers** |
+| Result | "This attempt: 60% · Not passed", each question right or wrong, and the correct options and explanations when `revealAnswers` allows | **Done**, **Retake quiz** |
 
-- One question per screen inside the card, with a dot navigator and a review step before submitting.
-- Multiple choice is visually distinct: square checkboxes and "Select all that apply".
-- Feedback only after submitting, never per question, so the key can't be probed one option at a time.
-- In-progress answers are saved to localStorage per quiz. The attempt is created on the server only on submit.
+- **Question navigator.** A quiz with more than one question shows a row of numbered buttons above the options. Each jumps to its question, is filled once answered, and names its state to a screen reader ("Question 2, answered").
+- Feedback comes only after submitting, never per question, so the key can't be probed one option at a time.
+- In-progress answers are saved to localStorage per quiz (`readQuizDraft`, `writeQuizDraft`). The attempt is created on the server only on submit.
 - A lower retake shows "Your best score of 80% still counts."
-- Accessibility: a `fieldset`/`legend` per question, right and wrong shown with an icon and text (not colour alone), full keyboard support.
+- Accessibility: a `fieldset` per question labelled by its number and prompt, right and wrong shown with an icon and text (not colour alone), full keyboard support.
 - Prompts and explanations use a read-only Tiptap renderer, shared from `common/shadcn`.
 
 ## Saving a quiz
@@ -172,7 +179,7 @@ landed -> done: no
 
 ## Instructor experience
 
-- A **Quiz** button sits next to the **Video** and **Text** buttons in the lesson's content row. It opens the builder for a new quiz, which is created on its first save; later saves update it.
+- A **Quiz** button sits with the **Video**, **Text** and **File** buttons in the lesson's content row. It opens the builder for a new quiz, which is created on its first save; later saves update it.
 - The builder opens in a large dialog, for a new quiz and for a quiz's **Edit** button, like the Text and Video dialogs. Closing it with unsaved changes asks first:
   - Settings: title, description, pass mark, attempts allowed, shuffle options, when to reveal answers.
   - A card per question: Tiptap prompt (the editor is mounted only for the expanded card), Single/Multiple toggle, option rows with a correct marker (radio for single, checkbox for multiple), add/remove/reorder options, optional explanation.
@@ -190,6 +197,8 @@ landed -> done: no
   - Questions and answer key together are at most 300 KB, well under DynamoDB's 400 KB item limit.
   - Switching Multiple → Single with more than one correct asks which to keep.
 - Editing a quiz that has attempts warns "N students have attempted this quiz".
+
+Quiz statistics for instructors (score spread, per-question results) are built from the attempts by the `analytics-update` stream feature; see <Link path="design/course-analytics">Course analytics</Link>.
 
 ## Questions in videos
 

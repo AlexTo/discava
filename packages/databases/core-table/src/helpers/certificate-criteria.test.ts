@@ -6,12 +6,17 @@
 import { describe, expect, it } from 'vitest';
 import type { CoreTable } from '../service.js';
 import {
+  type CertificateRequirement,
   DEFAULT_CERTIFICATE_CRITERIA,
   evaluateCertificateCriteria,
   scoreBand,
   setCertificateCriteria,
 } from './certificate-criteria.js';
 import { VersionConflictError } from './errors.js';
+
+const quizzesOf = (requirement: CertificateRequirement | undefined) =>
+  (requirement as Extract<CertificateRequirement, { kind: 'pass-quizzes' }>)
+    .quizzes;
 
 const shown = { visibility: 'visible' as const };
 const quiz = (
@@ -181,7 +186,7 @@ describe('evaluateCertificateCriteria', () => {
       quizSummaries: [summary('q1', 60, true)],
     });
     expect(met).toBe(false);
-    expect(requirements[0].quizzes).toEqual([
+    expect(quizzesOf(requirements[0])).toEqual([
       { contentItemId: 'q1', state: 'not-passed' },
     ]);
   });
@@ -221,7 +226,7 @@ describe('evaluateCertificateCriteria', () => {
         summary('failed', 10, false, 5),
       ],
     });
-    expect(requirements[0].quizzes.map((q) => q.state)).toEqual([
+    expect(quizzesOf(requirements[0]).map((q) => q.state)).toEqual([
       'passed',
       'not-attempted',
       'no-attempts-left',
@@ -277,7 +282,7 @@ const fakeCourseTable = (
               if (state.course?.certificateCriteria.version !== expected) {
                 throw conflict;
               }
-              state.course = { ...state.course, ...values };
+              state.course = { ...state.course, ...values } as typeof stored;
               return { data: structuredClone(state.course) };
             },
           };

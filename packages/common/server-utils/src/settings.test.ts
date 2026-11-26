@@ -3,78 +3,87 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  readOptionalSetting,
-  readSetting,
-  settingEnvName,
-} from './settings.js';
+import { readSetting, settingEnvName } from './settings.js';
 
 describe('settingEnvName', () => {
   it.each([
-    ['dynamodb', 'CoreTable', 'DISCAVA_DYNAMODB_CORE_TABLE'],
-    ['opensearch', 'Search', 'DISCAVA_OPENSEARCH_SEARCH'],
-    ['s3', 'LessonMediaBucket', 'DISCAVA_S3_LESSON_MEDIA_BUCKET'],
-    ['s3', 'LessonMediaUploadBucket', 'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET'],
-    ['s3', 'PublicMediaBucket', 'DISCAVA_S3_PUBLIC_MEDIA_BUCKET'],
     [
-      'mediaConvert',
-      'VideoTranscodePipeline',
-      'DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE',
+      'dynamodb',
+      'CoreTable',
+      'tableName',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+    ],
+    ['opensearch', 'Search', 'endpoint', 'DISCAVA_OPENSEARCH_SEARCH_ENDPOINT'],
+    [
+      's3',
+      'LessonMediaBucket',
+      'cloudFrontPrivateKeySecretArn',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET_CLOUD_FRONT_PRIVATE_KEY_SECRET_ARN',
     ],
     [
       'mediaConvert',
       'TranscodeCleanup',
-      'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
+      'scheduleGroupName',
+      'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP_SCHEDULE_GROUP_NAME',
     ],
     [
-      'mediaConvert',
-      'CaptionLanguageCode',
-      'DISCAVA_MEDIA_CONVERT_CAPTION_LANGUAGE_CODE',
+      'captionTranslation',
+      'Settings',
+      'maxLanguagesPerCourse',
+      'DISCAVA_CAPTION_TRANSLATION_SETTINGS_MAX_LANGUAGES_PER_COURSE',
     ],
-    ['certificates', 'Reminder', 'DISCAVA_CERTIFICATES_REMINDER'],
-    ['captionTranslation', 'Settings', 'DISCAVA_CAPTION_TRANSLATION_SETTINGS'],
-  ])('names (%s, %s) %s', (namespace, key, expected) => {
-    expect(settingEnvName(namespace, key)).toBe(expected);
+  ])('names (%s, %s, %s) %s', (namespace, key, field, expected) => {
+    expect(settingEnvName(namespace, key, field)).toBe(expected);
+  });
+
+  it('names a setting without a field', () => {
+    expect(settingEnvName('s3', 'LessonMediaBucket')).toBe(
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+    );
   });
 });
 
-describe('reading settings', () => {
-  const NAME = 'DISCAVA_DYNAMODB_CORE_TABLE';
+describe('readSetting', () => {
+  const TABLE = 'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME';
+  const OTHER = 'DISCAVA_DYNAMODB_CORE_TABLE_OTHER';
   afterEach(() => vi.unstubAllEnvs());
 
-  it('parses a present setting', () => {
-    vi.stubEnv(NAME, '{"tableName":"t"}');
-    expect(readSetting('dynamodb', 'CoreTable')).toEqual({ tableName: 't' });
-    expect(readOptionalSetting('dynamodb', 'CoreTable')).toEqual({
-      tableName: 't',
-    });
+  it('reads each field from its own variable, unparsed', () => {
+    vi.stubEnv(TABLE, 'core');
+    vi.stubEnv(OTHER, '{"a":1}');
+    expect(
+      readSetting('dynamodb', 'CoreTable', ['tableName', 'other']),
+    ).toEqual({ tableName: 'core', other: '{"a":1}' });
   });
 
-  it('parses a string value', () => {
-    vi.stubEnv(NAME, '"en-US"');
-    expect(readSetting('dynamodb', 'CoreTable')).toBe('en-US');
+  it.each([undefined, ''])(
+    'treats %j as missing, naming the variable',
+    (value) => {
+      if (value === undefined) delete process.env[TABLE];
+      else vi.stubEnv(TABLE, value);
+      expect(() => readSetting('dynamodb', 'CoreTable', ['tableName'])).toThrow(
+        `Missing deploy-time setting ${TABLE}`,
+      );
+    },
+  );
+
+  it('names the first missing field', () => {
+    vi.stubEnv(TABLE, 'core');
+    delete process.env[OTHER];
+    expect(() =>
+      readSetting('dynamodb', 'CoreTable', ['tableName', 'other']),
+    ).toThrow(`Missing deploy-time setting ${OTHER}`);
   });
 
-  it.each([undefined, ''])('treats %j as absent', (value) => {
-    if (value === undefined) delete process.env[NAME];
-    else vi.stubEnv(NAME, value);
-    expect(() => readSetting('dynamodb', 'CoreTable')).toThrow(
-      `Missing deploy-time setting ${NAME}`,
-    );
-    expect(readOptionalSetting('dynamodb', 'CoreTable')).toBeUndefined();
-  });
-
-  it('rejects invalid JSON without echoing the value', () => {
-    vi.stubEnv(NAME, 'secret-not-json');
-    for (const read of [readSetting, readOptionalSetting]) {
-      let message = '';
-      try {
-        read('dynamodb', 'CoreTable');
-      } catch (error) {
-        message = (error as Error).message;
-      }
-      expect(message).toBe(`Invalid deploy-time setting ${NAME}`);
-      expect(message).not.toContain('secret');
-    }
+  it('leaves out an optional field that is unset', () => {
+    vi.stubEnv(TABLE, 'core');
+    delete process.env[OTHER];
+    expect(
+      readSetting('dynamodb', 'CoreTable', ['tableName'], ['other']),
+    ).toEqual({ tableName: 'core' });
+    vi.stubEnv(OTHER, 'x');
+    expect(
+      readSetting('dynamodb', 'CoreTable', ['tableName'], ['other']),
+    ).toEqual({ tableName: 'core', other: 'x' });
   });
 });

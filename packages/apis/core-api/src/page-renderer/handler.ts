@@ -303,7 +303,9 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
 
       const [first, id, ...rest] = segments;
       if (first === 'learn') {
-        if (!id || rest.length > 0) {
+        // Bare `/learn` is no page at all.
+        if (!id) return await notFound();
+        if (rest.length > 0) {
           // The learning routes: signed-in, never indexed.
           return shell();
         }
@@ -427,7 +429,7 @@ const readCoreTable = () => {
       // The renderer learns its table from the settings parameter, not its
       // environment, so core-table resolves it as every other function does.
       const { tableName } = await resolvePageRendererSettings();
-      process.env.DISCAVA_DYNAMODB_CORE_TABLE = JSON.stringify({ tableName });
+      process.env.DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME = tableName;
     }
     return createCoreTableService();
   })();

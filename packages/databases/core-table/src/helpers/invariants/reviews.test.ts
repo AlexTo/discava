@@ -10,7 +10,7 @@ let table: TableSnapshot;
 beforeEach(() => {
   table = consistentTable();
 });
-const { item, broken, expectOnly } = testHelpers(() => table);
+const { broken, expectOnly } = testHelpers(() => table);
 
 describe('review-shape, review-has-enrolment and course-rating-matches-reviews', () => {
   const REVIEWED = '2026-11-18T10:00:00.000Z';

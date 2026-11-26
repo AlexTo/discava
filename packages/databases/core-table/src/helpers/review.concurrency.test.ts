@@ -12,7 +12,12 @@ import {
   checkTableInvariants,
   emptyTableSnapshot,
 } from './invariants/index.js';
-import { type ReviewWrite, reviewerName, reviewWrites } from './review.js';
+import {
+  type ReviewRespond,
+  type ReviewWrite,
+  reviewerName,
+  reviewWrites,
+} from './review.js';
 
 // The fake transaction (test-support/fake-transaction.ts) over the entities
 // reviewWrites builds its transaction from; a table is a Map of its rows.
@@ -430,7 +435,7 @@ describe('concurrent review writes', () => {
   });
 
   describe('instructor responses', () => {
-    const respond = (text = 'Thank you'): ReviewWrite => ({
+    const respond = (text = 'Thank you'): ReviewRespond => ({
       action: 'respond',
       courseId: 'c1',
       userId: 'a',

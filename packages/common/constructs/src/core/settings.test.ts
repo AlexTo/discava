@@ -18,26 +18,45 @@ const lambda = (stack: Stack) =>
   });
 
 describe('addSetting', { timeout: 30_000 }, () => {
-  it('stores a plain object as its JSON', () => {
+  it('stores each field in its own plain variable', () => {
     const stack = new Stack(new App(), 'Stack');
-    const fn = lambda(stack);
-    addSetting(fn, 'dynamodb', 'CoreTable', { tableName: 't' });
+    addSetting(lambda(stack), 'dynamodb', 'CoreTable', { tableName: 't' });
     Template.fromStack(stack).hasResourceProperties('AWS::Lambda::Function', {
       Environment: {
-        Variables: { DISCAVA_DYNAMODB_CORE_TABLE: '{"tableName":"t"}' },
+        Variables: { DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME: 't' },
       },
     });
   });
 
-  it('stores a string as a JSON string', () => {
+  it('writes strings unquoted and numbers and booleans as text', () => {
     const stack = new Stack(new App(), 'Stack');
-    addSetting(lambda(stack), 'mediaConvert', 'CaptionLanguageCode', 'en-US');
+    addSetting(lambda(stack), 'captionTranslation', 'Settings', {
+      enabled: true,
+      maxLanguagesPerCourse: 9,
+      label: 'en-US',
+    });
     Template.fromStack(stack).hasResourceProperties('AWS::Lambda::Function', {
       Environment: {
         Variables: {
-          DISCAVA_MEDIA_CONVERT_CAPTION_LANGUAGE_CODE: '"en-US"',
+          DISCAVA_CAPTION_TRANSLATION_SETTINGS_ENABLED: 'true',
+          DISCAVA_CAPTION_TRANSLATION_SETTINGS_MAX_LANGUAGES_PER_COURSE: '9',
+          DISCAVA_CAPTION_TRANSLATION_SETTINGS_LABEL: 'en-US',
         },
       },
+    });
+  });
+
+  it('sets no variable for an undefined field', () => {
+    const stack = new Stack(new App(), 'Stack');
+    addSetting(lambda(stack), 's3', 'LessonMediaBucket', {
+      bucketName: 'b',
+      cookieDomain: undefined,
+    });
+    const variables = Object.values(
+      Template.fromStack(stack).findResources('AWS::Lambda::Function'),
+    )[0].Properties.Environment.Variables;
+    expect(variables).toEqual({
+      DISCAVA_S3_LESSON_MEDIA_BUCKET_BUCKET_NAME: 'b',
     });
   });
 

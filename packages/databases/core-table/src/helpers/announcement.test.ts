@@ -46,7 +46,7 @@ const create = (over: Record<string, unknown> = {}) => ({
 });
 
 // The items as DynamoDB would receive them.
-const part = (item: unknown) => {
+const part = (item: unknown): Record<string, any> & { kind: string } => {
   const [kind, request] = Object.entries(item as object)[0] as [
     string,
     Record<string, any>,
