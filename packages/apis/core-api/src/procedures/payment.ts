@@ -709,6 +709,7 @@ export const myOrder = courseProcedure
       ...(order.refundRequestedAt
         ? { refundRequestedAt: order.refundRequestedAt }
         : {}),
+      ...(order.refundFailedAt ? { refundFailedAt: order.refundFailedAt } : {}),
       ...(order.refundedAt ? { refundedAt: order.refundedAt } : {}),
     };
   });

@@ -72,6 +72,7 @@ export const MyOrderOutputSchema = z
       .optional(),
     refundProgressLimitPercent: z.number(),
     refundRequestedAt: z.string().optional(),
+    refundFailedAt: z.string().optional(),
     refundedAt: z.string().optional(),
   })
   .nullable();
