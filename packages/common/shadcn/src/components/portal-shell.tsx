@@ -51,6 +51,7 @@ export const getBreadcrumbs = (
   defaultBreadcrumb: string,
   overrides: Record<string, string>,
   segmentLabels: Record<string, string> = {},
+  fallbackLabels: Record<string, string> = {},
 ): Crumb[] => {
   const segments = [
     defaultBreadcrumb,
@@ -68,7 +69,11 @@ export const getBreadcrumbs = (
 
     return {
       href: routeExists(href) ? href : undefined,
-      text: overrides[href] ?? segmentLabels[segment] ?? segment,
+      text:
+        overrides[href] ??
+        segmentLabels[segment] ??
+        fallbackLabels[segment] ??
+        segment,
     };
   });
 };
@@ -92,6 +97,13 @@ export interface PortalShellProps {
    * same between renders (a module constant).
    */
   segmentLabels?: Record<string, string>;
+  /**
+   * Neutral labels for path parameters (param name -> label, e.g. courseId ->
+   * 'Course'), shown for a crumb whose title is not available (still loading
+   * or failed) so a raw ID never reaches the breadcrumb. Keep the object the
+   * same between renders (a module constant).
+   */
+  paramLabels?: Record<string, string>;
   /** Shown in the header before the notification bell. */
   headerActions?: React.ReactNode;
   /** Links only this portal has in the user menu. A module constant. */
@@ -160,6 +172,7 @@ export const PortalShell = ({
   label,
   navItems,
   segmentLabels,
+  paramLabels,
   headerActions,
   userMenuItems,
   children,
@@ -214,15 +227,28 @@ export const PortalShell = ({
         depth(route.fullPath) === depth(href)
       );
     };
+    const matches = router.matchRoutes(pathname);
+    const params = (matches[matches.length - 1]?.params ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const fallbackLabels: Record<string, string> = {};
+    for (const [name, value] of Object.entries(params)) {
+      const fallback = paramLabels?.[name];
+      if (fallback && typeof value === 'string') {
+        fallbackLabels[value] = fallback;
+      }
+    }
     const breadcrumbs = getBreadcrumbs(
       routeExists,
       pathname,
       'Home',
       overrides,
       segmentLabels,
+      fallbackLabels,
     );
     setActiveBreadcrumbs(breadcrumbs);
-  }, [router, pathname, overrides, segmentLabels]);
+  }, [router, pathname, overrides, segmentLabels, paramLabels]);
 
   return (
     <BreadcrumbOverrideContext.Provider value={breadcrumbOverrideContextValue}>
@@ -251,7 +277,7 @@ export const PortalShell = ({
           </SidebarContent>
         </ShellSidebar>
         <SidebarInset>
-          <header className="supports-backdrop-blur:bg-background/60 sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
+          <header className="supports-backdrop-blur:bg-background/60 sticky top-0 z-10 flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 border-b py-2 bg-background/80 px-4 backdrop-blur">
             <div className="flex min-w-0 items-center gap-3">
               <SidebarTrigger ref={triggerRef} className="-ml-1" />
               <Separator orientation="vertical" className="h-6" />
@@ -269,7 +295,7 @@ export const PortalShell = ({
                 )}
               </div>
             </div>
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
               {headerActions}
               <NotificationBell portal={portal} />
               <UserMenu items={userMenuItems} />
@@ -278,7 +304,7 @@ export const PortalShell = ({
           <div
             id={MAIN_CONTENT_ID}
             tabIndex={-1}
-            className="flex flex-1 flex-col gap-6 p-6 pt-4 focus-visible:outline-none"
+            className="flex min-w-0 flex-1 flex-col gap-6 p-6 pt-4 focus-visible:outline-none"
           >
             <Breadcrumb>
               <BreadcrumbList className="break-words">

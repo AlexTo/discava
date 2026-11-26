@@ -15,19 +15,24 @@ import Link from '@components/link.astro';
 
 **Spec:** [`specs/20261120-154712-caption-translation/spec.md`](https://github.com/AlexTo/discava/blob/main/specs/20261120-154712-caption-translation/spec.md) (translated captions)
 
-Both portals play lesson videos with the same player, with its own control bar in place of the browser's.
+Both portals play lesson videos with the same player, `HlsVideo` in `packages/common/shadcn`. Its control bar (`VideoControls`) replaces the browser's: play, seek, volume, mute, speed, captions, transcript, picture-in-picture and fullscreen. The non-UI rules (speeds, key mapping, saved preferences, when to report a position) are in `@discava/common-web-utils/video-player`.
 
 ## Resume
 
-The player saves the student's position about every 10 seconds while playing, and when they pause, seek, or leave the page. Next time they open the video it jumps to that point, stays paused, and shows "Resumed at m:ss" with a **Start over** button. The instructor's preview does not save a position.
+The player saves the student's position about every 10 seconds while playing, and when they pause, finish a seek, or leave the page. Next time they open the video it jumps to that point, stays paused, and shows "Resumed at m:ss" with a **Start over** button until it plays or 8 seconds pass.
+
+- `contentItem.saveVideoPosition` (core-api) writes one `videoPosition` record per student per video, overwritten by each save. `contentItem.videoUrl` returns it as the place to resume.
+- A position belongs to one version of the video. After the video is replaced, the old position is ignored.
+- A position is not a completion, student activity or progress.
+- The instructor's preview does not save a position.
 
 ## Speed, volume and preferences
 
-Speed runs from 0.5x to 2x (0.5, 0.75, 1, 1.25, 1.5, 1.75, 2). Speed, volume, mute and the captions choice are remembered in the browser; if storage is unavailable, the defaults apply silently.
+Speed runs from 0.5x to 2x (0.5, 0.75, 1, 1.25, 1.5, 1.75, 2). Speed, volume, mute, the captions choice and whether the transcript is open are remembered in the browser's localStorage. If storage is unavailable, the defaults apply silently.
 
 ## Keyboard shortcuts
 
-They work while the player has focus, and are ignored in text fields and with Ctrl, Alt or Meta held.
+They work while focus is anywhere in the player. They are ignored in text fields and with Ctrl, Alt or Meta held, and a key the focused control already uses (Space on a button, arrows on a slider) is left to it.
 
 | Key | Action |
 |-----|--------|
@@ -46,8 +51,9 @@ They work while the player has focus, and are ignored in text fields and with Ct
 When a video has caption tracks, the player shows a captions menu: **Off**, then each track by language, with the default marked. A track that fails to load is skipped with a short notice and the video keeps playing.
 
 - **Auto-generated:** when a video finishes transcoding, Amazon Transcribe generates a track in the background. This never delays the video becoming ready.
-- **Uploaded by an instructor:** an instructor can attach a WebVTT (`.vtt`) file to a ready video. Uploading for a language that already has a track replaces it and keeps its default status, so an upload that replaces the auto-generated track becomes the default. A later Transcribe result never overwrites an uploaded track.
-- **Limits:** a file can be at most 1 MB, a video has at most 10 tracks, and there is one track per language.
+- **Uploaded by an instructor:** an instructor can attach a WebVTT (`.vtt`) file to a ready video (`contentItem.captionUploadUrl`, then `attachCaption`; `removeCaption` removes a track). Uploading for a language that already has a track replaces it and keeps its default status, so an upload that replaces the auto-generated track becomes the default. A later Transcribe result never overwrites an uploaded track.
+- **Limits:** a file can be at most 1 MB, a video has at most 10 tracks, and there is one track per language, from a list of ten languages (`CAPTION_LANGUAGES`).
+- **Where tracks live:** on the video's `contentItem`, in `captionTracks`. Every writer computes the new list with `applyCaptionChange` (`core-table/src/helpers/caption-tracks.ts`) and writes it conditioned on `captionTracksRev`, so two writers can't overwrite each other.
 
 ### Caption status
 
@@ -61,15 +67,22 @@ The [transcript panel](#transcript) (#590), a related feature, shows whichever t
 
 ### Timings
 
-Timings are never sent to the service. The source WebVTT is parsed into cues, only each cue's words are translated, and the new file copies every identifier and timing line from the source unchanged, in the same order. Cue tags are removed before translation and the text is escaped again after it, so translated text can't form a tag or the `-->` arrow. Before writing, the handler checks that the cue count and every timing line match, and records a failure for that language if not. Each cue is translated on its own, so a sentence spread over several cues can read less smoothly than a sentence-level translation.
+Timings are never sent to the service:
+
+1. The source WebVTT is parsed into cues, and only each cue's words are translated.
+2. The new file copies every identifier and timing line from the source unchanged, in the same order.
+3. Cue tags are removed before translation and the text is escaped again after it, so translated text can't form a tag or the `-->` arrow.
+4. Before writing, the handler checks that the cue count and every timing line match. If not, it records a failure for that language.
+
+Each cue is translated on its own, so a sentence spread over several cues can read less smoothly than a sentence-level translation.
 
 ### What starts a translation
 
-The `caption-translation` feature of the core table's stream router runs when a translation input changes, and for nothing else (a title edit, student activity and the handler's own writes route nothing):
+The `caption-translation` feature of the <Link path="design/stream-event-router">stream router</Link> (`packages/events/src/media/caption-translation.ts`) runs when a translation input changes, and for nothing else. A title edit, student activity and the handler's own writes route nothing.
 
 | Trigger | Change that reaches the handler |
 |---------|---------------------------------|
-| New or replaced video | the video's non-translated tracks change |
+| New or replaced video | the video's (or the course preview's) non-translated tracks change |
 | Source captions replaced or removed, or an uploaded track removed | the same |
 | Caption languages, or the course's teaching language, changed | the course record; the handler marks each video of the course (and its preview) for translation, one queue message each |
 | **Translate again** | `captionTranslationRequestedAt` is set on the video, or on every video of the course |
@@ -92,13 +105,27 @@ All the rules are in `applyCaptionChange` and `planCaptionTranslations`, in the 
 
 ### Failure and "Translate again"
 
-A failure is recorded on the video (`captionTranslation`), never on `status`, `captionsStatus` or any track, and playback never waits for translation. The reason is `failed` or `too-long` (a source over 300,000 characters). Errors a retry can't fix are recorded without failing the queue message, so they don't fill the failure queue. Messages that do fail retry up to five times and then reach the feature's failure queue and alarm.
+A failure is recorded on the video (`captionTranslation`), never on `status`, `captionsStatus` or any track, and playback never waits for translation.
 
-The Captions dialog shows each language's state: translated, uploaded, translating, failed, too long, no room, or not translated with the reason. **Translate again** clears the recorded outcome and asks for the video again; **Translate missing captions again** in the course's settings does it for every video. A message lost before the handler runs leaves "Translating" showing, and **Translate again** is the remedy.
+- The reason is `failed` or `too-long` (a source over 300,000 characters).
+- Errors a retry can't fix are recorded without failing the queue message, so they don't fill the failure queue.
+- Messages that do fail are received up to five times and then reach the feature's failure queue and alarm.
+
+The Captions dialog shows each language's state: translated, uploaded, translating, failed, too long, no room, or not translated with the reason.
+
+- **Translate again** (`contentItem.retryCaptionTranslation`) clears the recorded outcome and asks for the video again.
+- **Translate missing captions again** in the course's settings (`course.retryCaptionTranslations`) does it for every video.
+- A message lost before the handler runs leaves "Translating" showing, and **Translate again** is the remedy.
 
 ### Local development
 
-With `LOCAL_DEV=true`, the Translate client calls `translateLocally` instead of the SDK. Each text comes back as `[<target tag>] <text>`, for example `[es-ES] Hello`, so it is clear which track is showing. A source containing `[[fail-translation]]`, or `[[fail-translation:es-ES]]` for one language, makes that request fail as a refused language pair, which is recorded as failed without a retry. Everything else (stream router, queue, handler, track rules, S3Mock) is the real code. Amazon Translate's real output, its line-break behaviour, throttling and metrics only run on a deployed stage.
+With `LOCAL_DEV=true`, the Translate client calls `translateLocally` (`packages/events/src/local/translator.ts`) instead of the SDK.
+
+- Each text comes back as `[<target tag>] <text>`, for example `[es-ES] Hello`, so it is clear which track is showing.
+- A source containing `[[fail-translation]]`, or `[[fail-translation:es-ES]]` for one language, makes that request fail as a refused language pair, which is recorded as failed without a retry.
+- Everything else (stream router, queue, handler, track rules, S3Mock) is the real code.
+
+Amazon Translate's real output, its line-break behaviour, throttling and metrics only run on a deployed stage.
 
 ### Cost
 
@@ -111,7 +138,12 @@ Amazon Translate charges per character sent, white space included. A video's cos
 
 ## Transcript
 
-A **Transcript** button in the control bar opens a panel with every line of the video's captions, each with its time. It is only in the student lesson player, and only when the video has at least one caption track. The preview and the instructor portal don't show it. The panel sits below the player at every width, at most 20rem or half the viewport high: beside it, the panel would leave the video too narrow for its control bar. Nothing scrolls sideways at phone width.
+A **Transcript** button in the control bar opens a panel (`TranscriptPanel`) with every line of the video's captions, each with its time.
+
+- It is only in the student lesson player, and only when the video has at least one caption track. The preview and the instructor portal don't show it.
+- The panel sits below the player at every width, at most 20rem or half the viewport high. Beside the player, it would leave the video too narrow for its control bar.
+- It is hidden while the player is fullscreen.
+- Nothing scrolls sideways at phone width.
 
 - **Which track:** the one the captions menu has chosen. Choosing another language changes the lines and the panel's name, "Transcript (language)". With captions **Off**, the panel still shows the remembered track, or the default. If no track's file loads, the panel says "This transcript couldn't be loaded." and the video keeps playing.
 - **Choosing a line:** clicking or tapping a line seeks to its start and plays.
@@ -132,15 +164,28 @@ The panel is outside the player's shortcut container, so the shortcuts above don
 
 ### Built in the browser
 
-There is no transcript API. The player already fetches each track's WebVTT file for the captions overlay; the panel parses the same text once (`parseWebVtt`, in `@discava/common-web-utils/webvtt`) into cues, so it makes no extra request and has exactly the access the captions have. Cue text is reduced to plain text (cue settings, `<v>`, `<c>`, `<i>` and timestamp tags dropped, the five WebVTT entities decoded) and rendered as text nodes. The whole transcript is rendered, with no virtual list, so find-in-page and a screen reader's reading commands work on it. The indexer for <Link path="design/search">transcript search</Link> uses the same parser, so the panel and the index agree on what a line is.
+There is no transcript API. The player already fetches each track's WebVTT file for the captions overlay. The panel parses the same text once (`parseWebVtt`, in `@discava/common-web-utils/webvtt`) into cues, so it makes no extra request and has exactly the access the captions have.
+
+- Cue text is reduced to plain text (cue settings, `<v>`, `<c>`, `<i>` and timestamp tags dropped, the five WebVTT entities decoded) and rendered as text nodes.
+- The whole transcript is rendered, with no virtual list, so find-in-page and a screen reader's reading commands work on it.
+- The indexer for <Link path="design/search">transcript search</Link> uses the same parser, so the panel and the index agree on what a line is.
+
+### Searching a course's transcripts
+
+The course player has a search box, "Search what was said". Submitting at least 2 characters opens the course's results page (`/learn/<courseId>/search`), which calls `transcript.search` with the learner's remembered caption language. Each result names the module, lesson and video, shows the matching words in a snippet, and links to the lesson at that moment (below). How the index is built and how access is enforced are in <Link path="design/search">Search</Link>.
 
 ### Opening a lesson at a moment
 
-A lesson's address takes two optional parameters: `?item=<contentItemId>&t=<seconds>`. With `item` naming a video in the lesson, the lesson scrolls to it, moves focus to its player, seeks to `t`, stays paused, and shows "Starting at m:ss" with no **Start over** button. `t` takes the place of the saved position for that visit, and the seek saves nothing. Anything else in the parameters is ignored and the lesson opens as usual. The parameters grant nothing: the lesson still loads through the usual enrolment and visibility checks. A transcript search result links this way.
+A lesson's address takes two optional parameters: `?item=<contentItemId>&t=<seconds>`. A transcript search result links this way.
+
+- With `item` naming a video in the lesson, the lesson scrolls to it, moves focus to its player, seeks to `t`, stays paused, and shows "Starting at m:ss" with no **Start over** button.
+- `t` takes the place of the saved position for that visit, and the seek saves nothing.
+- Anything else in the parameters is ignored and the lesson opens as usual.
+- The parameters grant nothing: the lesson still loads through the usual enrolment and visibility checks.
 
 ## Questions
 
-An instructor can put questions on a video (see <Link path="design/quizzes">Quizzes</Link> for how they are stored and saved). A video without questions plays exactly as above and makes no question request.
+An instructor can put questions on a video (see <Link path="design/quizzes">Quizzes</Link> for how they are stored and saved). The player reads them with `videoQuestion.view` and records an answer with `videoQuestion.answer` (core-api); the question card is `VideoQuestionCard`, driven by the `useVideoQuestions` hook. A video without questions plays exactly as above and makes no question request.
 
 - **When a question is asked:** when normal playback reaches the moment of a question the learner hasn't answered or skipped on this visit, the video pauses and the question appears over it inside the player, so fullscreen is kept. Keyboard focus moves to the question and its heading is announced. Several questions at one moment are asked one after another, in the instructor's order. A question at 0:00 is asked when playback starts.
 - **Answering:** the learner chooses an option and presses **Submit answer**, then sees whether it was right (an icon and words, not colour alone), the correct options and the explanation when there is one, announced when it arrives. **Continue** resumes the video from where it stopped, playing again if it was playing. **Skip** (or Escape) closes the question, records nothing and doesn't ask it again on this visit. A multiple choice question says "Select all that apply" and is graded all-or-nothing. If saving fails, the question stays open with the choice kept and **Skip** still works.

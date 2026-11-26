@@ -258,6 +258,20 @@ test('search results come first on a phone, with the filters collapsed', async (
     await screenshot(page, 'course catalogue at phone width');
   });
 
+  await test.step('the category chips on /courses stay in one scrolling row', async () => {
+    await page.goto(`${PORTALS.student}/courses`);
+    const chips = page
+      .getByRole('group', { name: 'Course categories' })
+      .getByRole('link');
+    await expect(chips.first()).toBeVisible();
+    const tops = await chips.evaluateAll((els) =>
+      els.map((el) => Math.round(el.getBoundingClientRect().top)),
+    );
+    expect(new Set(tops).size).toBe(1);
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'category chips in one row at phone width');
+  });
+
   await test.step('the filters open on request', async () => {
     await page.goto(
       `${PORTALS.student}/search?query=${encodeURIComponent(title)}`,
@@ -651,6 +665,25 @@ test('the course editor fits a phone', async ({ page }) => {
     await screenshot(page, 'course editor at phone width', { fullPage: true });
   });
 
+  await test.step('the editor does not scroll sideways at 200% text zoom on a desktop', async () => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    // Scaling the root font size makes rem lengths follow, as text-only zoom
+    // does, but media queries still measure rem against the browser's default
+    // size, so `md:` rules keep matching here. Real zoom needs the browser's
+    // own font-size setting; this step guards the rem-sized layout only.
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+    });
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await screenshot(page, 'course editor at 200% text zoom');
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '';
+    });
+    await page.setViewportSize(PHONE);
+  });
+
   await test.step('the content comes first, and the section links lead to each section', async () => {
     await page.evaluate(() => window.scrollTo(0, 0));
     const headerBox = await page.locator('main section').first().boundingBox();
@@ -698,6 +731,20 @@ test('the course editor fits a phone', async ({ page }) => {
     await content.getByRole('button', { name: `Edit ${quizTitle}` }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
+    for (const radio of await dialog
+      .getByRole('radio', { name: /^Option \d is correct$/ })
+      .all()) {
+      await expectTargetAtLeast24(radio);
+    }
+    await expectTargetAtLeast24(
+      dialog.getByRole('checkbox', { name: 'Unlimited' }),
+    );
+    await expectTargetAtLeast24(
+      dialog.getByRole('checkbox', {
+        name: 'Shuffle the options for each student',
+      }),
+    );
+    await screenshot(page, 'quiz builder radios and checkboxes');
     await dialog.getByRole('button', { name: 'Collapse Question 1' }).click();
     await expectDialogFits(dialog);
     await expectOnScreen(dialog.getByRole('button', { name: 'Save quiz' }));

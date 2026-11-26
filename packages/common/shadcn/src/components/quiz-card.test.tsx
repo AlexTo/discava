@@ -405,6 +405,19 @@ describe('QuizCard', () => {
       ).toBeNull();
     });
 
+    it('tabs from the question line to the navigator, then the options', async () => {
+      const { user } = show();
+      await user.click(button('Start quiz'));
+      expect(document.activeElement).toHaveTextContent('Question 1 of 2');
+
+      await user.tab();
+      expect(document.activeElement).toBe(button('Question 1'));
+      await user.tab();
+      expect(document.activeElement).toBe(button('Question 2'));
+      await user.tab();
+      expect(document.activeElement?.closest('fieldset')).not.toBeNull();
+    });
+
     it('says which attempt submitting uses, when attempts are limited', async () => {
       const { user } = show({ summary: summary({ attemptsUsed: 1 }) });
       await user.click(button('Retake quiz'));

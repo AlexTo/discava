@@ -361,13 +361,15 @@ export class MediaPipelineStack extends Stack {
       }),
     );
     // Reads the WebVTT from the scratch prefix, deletes what Transcribe wrote
-    // there and writes the track under the version's captions folder.
+    // there and writes the track under the version's captions folder, where it
+    // also deletes its own copy when it loses the race to write the tracks.
     lessonMediaBucket.grantRead(transcribeComplete, TRANSCRIBE_OUTPUT_PATTERN);
     lessonMediaBucket.grantDelete(
       transcribeComplete,
       TRANSCRIBE_OUTPUT_PATTERN,
     );
     lessonMediaBucket.grantPut(transcribeComplete, CAPTIONS_PATTERN);
+    lessonMediaBucket.grantDelete(transcribeComplete, CAPTIONS_PATTERN);
 
     const failures = this.failureQueue('TranscribeCompleteFailures');
     transcribeComplete.configureAsyncInvoke({

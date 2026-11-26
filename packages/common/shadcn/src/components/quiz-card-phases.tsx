@@ -55,26 +55,6 @@ export function QuestionPhase({
   const last = index === questions.length - 1;
   return (
     <div className="space-y-5">
-      {questions.length > 1 ? (
-        <nav aria-label="Questions" className="flex flex-wrap gap-1.5">
-          {questions.map((q, i) => (
-            <button
-              key={q.questionId}
-              type="button"
-              onClick={() => setPhase({ name: 'question', index: i })}
-              aria-current={i === index ? 'step' : undefined}
-              aria-label={`Question ${i + 1}${isAnswered(answers, q.questionId) ? ', answered' : ''}${markers[q.questionId] ? `, ${markers[q.questionId]}` : ''}`}
-              className={cn(
-                'size-6 rounded-full border border-primary/40 text-xs font-medium tabular-nums transition-colors',
-                isAnswered(answers, q.questionId) && 'bg-primary/60',
-                i === index && 'ring-2 ring-primary ring-offset-2',
-              )}
-            >
-              {i + 1}
-            </button>
-          ))}
-        </nav>
-      ) : null}
       <QuestionScreen
         question={question}
         options={options}
@@ -82,6 +62,28 @@ export function QuestionPhase({
         total={questions.length}
         answer={answers[question.questionId] ?? []}
         marker={markers[question.questionId]}
+        navigator={
+          questions.length > 1 ? (
+            <nav aria-label="Questions" className="flex flex-wrap gap-1.5">
+              {questions.map((q, i) => (
+                <button
+                  key={q.questionId}
+                  type="button"
+                  onClick={() => setPhase({ name: 'question', index: i })}
+                  aria-current={i === index ? 'step' : undefined}
+                  aria-label={`Question ${i + 1}${isAnswered(answers, q.questionId) ? ', answered' : ''}${markers[q.questionId] ? `, ${markers[q.questionId]}` : ''}`}
+                  className={cn(
+                    'size-6 rounded-full border border-primary/40 text-xs font-medium tabular-nums transition-colors',
+                    isAnswered(answers, q.questionId) && 'bg-primary/60',
+                    i === index && 'ring-2 ring-primary ring-offset-2',
+                  )}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </nav>
+          ) : undefined
+        }
         onAnswer={onAnswer}
       />
       <div className="flex justify-between gap-3">

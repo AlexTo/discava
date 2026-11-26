@@ -83,4 +83,21 @@ test('every instructor page has a title, one h1 and one main', async ({
     await expect(page).toHaveTitle('Course · Discava');
     await screenshot(page, 'course editor load error');
   });
+
+  await test.step('a title that cannot load leaves a neutral crumb, never the id', async () => {
+    const trail = page.getByRole('navigation', { name: 'breadcrumb' });
+
+    await page.goto(`${PORTALS.instructor}/my-courses/${courseId}`);
+    await expect(page.getByText("Couldn't load this course")).toBeVisible();
+    await expect(trail.getByText('Course', { exact: true })).toBeVisible();
+    await expect(trail).not.toContainText(courseId);
+    await screenshot(page, 'course editor breadcrumb without its title');
+
+    await page.route('**/analytics.courseSummaries*', (route) => route.abort());
+    await page.goto(`${PORTALS.instructor}/dashboard/${courseId}`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(trail.getByText('Course', { exact: true })).toBeVisible();
+    await expect(trail).not.toContainText(courseId);
+    await screenshot(page, 'course analytics breadcrumb without its title');
+  });
 });

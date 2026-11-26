@@ -16,8 +16,13 @@ const DateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .refine(
-    (value) =>
-      new Date(`${value}T00:00:00.000Z`).toISOString().startsWith(value),
+    (value) => {
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+      return (
+        !Number.isNaN(parsed.getTime()) &&
+        parsed.toISOString().startsWith(value)
+      );
+    },
     {
       message: 'Enter a real date as YYYY-MM-DD',
     },

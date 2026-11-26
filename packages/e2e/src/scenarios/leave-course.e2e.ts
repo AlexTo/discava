@@ -37,6 +37,16 @@ test('a student leaves a free course and enrols again', async ({ browser }) => {
     await screenshot(student, 'leave-offered-on-the-course-page');
   });
 
+  await test.step("a course page opened at a section's address starts there", async () => {
+    const fresh = await browser.newPage();
+    await fresh.goto(`${student.url().split('#')[0]}#modules`);
+    const modules = fresh.locator('#modules');
+    await expect(modules).toBeFocused();
+    await expect(modules).toBeInViewport();
+    await screenshot(fresh, 'course-page-opened-at-modules');
+    await fresh.close();
+  });
+
   await test.step('leaving asks first, then ends the enrolment', async () => {
     await student.getByRole('button', { name: 'Leave course' }).click();
     const dialog = student.getByRole('dialog', { name: 'Leave course' });

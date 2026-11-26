@@ -1,10 +1,13 @@
-name: Set up Playwright's Chromium
-description: Restore Chromium from the cache, keyed by the Playwright version, and download it on a miss.
+name: Set up Playwright's browsers
+description: Restore Chromium and Firefox from the cache, keyed by the Playwright version, and download it on a miss.
 
 # Run after init-monorepo, which installs the dependencies the version lookup
 # needs. A PR's run can only restore caches saved on its own ref or on main,
 # and PR Checks never runs on main, so ci.yml's playwright-cache job saves the
 # cache under this same key, from this same action.
+
+# Firefox is there for text-zoom.e2e.ts: only it can set the default font size
+# that real text-only zoom changes.
 
 # Chromium's system libraries aren't installed: the runner image already has
 # them all, and `playwright install-deps` only added nine font packages (CJK,
@@ -21,12 +24,12 @@ runs:
 
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       id: playwright-cache
-      name: Cache Chromium for Playwright
+      name: Cache the browsers for Playwright
       with:
         path: ~/.cache/ms-playwright
-        key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+        key: playwright-chromium-firefox-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
-    - name: Download Chromium
+    - name: Download the browsers
       if: steps.playwright-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: pnpm --filter @discava/e2e exec playwright install chromium
+      run: pnpm --filter @discava/e2e exec playwright install chromium firefox

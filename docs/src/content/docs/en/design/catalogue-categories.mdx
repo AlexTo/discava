@@ -16,22 +16,34 @@ Courses can be organised by a **category** (one per course, from a taxonomy admi
 | Field | Rule |
 |---|---|
 | `categoryId` | An existing, **active** category when set or changed |
-| `tags` | At most 8, each 1 to 30 characters, normalised, no duplicates |
+| `tags` | At most 8, each 1 to 30 characters. Stored trimmed and lower-cased, with duplicates removed |
 | `level` | `beginner`, `intermediate` or `advanced` |
 | `language` | A code from a fixed list |
 | `durationHours` | A whole number from 1 to 500 |
 
-All five are optional, so existing courses stay valid. Instructors set them from the instructor portal, through instructor-api's course procedures.
+All five are optional. Instructors set them from the instructor portal with instructor-api's `course.updateCatalogue`, and pick the category from `category.listActive`. `courseCatalogueWrites` in core-table's `helpers/course-catalogue.ts` is the only writer of the five fields, so every writer validates them the same way.
 
 ## The category taxonomy
 
-A category has a `name` (1 to 60 characters, unique ignoring case and spacing), an immutable URL-safe `slug` derived from the name at creation, and a `status` of `active` or `archived`. The whole taxonomy lives in one core-table partition, so listing it is one query. Categories are never deleted: archiving hides one from the choices for new assignments while courses that already use it keep it.
+A category has:
 
-Uniqueness is enforced by `categoryClaim` records written in the same transaction as the category, one for the slug and one for the normalised name. A rename moves the name claim and leaves the slug, so a category's landing page URL never changes.
+- a `name`: 1 to 60 characters, unique ignoring case and spacing;
+- a `slug`: URL-safe, derived from the name at creation and never changed. If the slug is taken, a number is added (`design`, `design-2`);
+- a `status`: `active` or `archived`.
+
+The whole taxonomy lives in one core-table partition, so listing it is one query. Categories are never deleted: archiving hides one from the choices for new assignments while courses that already use it keep it.
+
+Uniqueness is enforced by `categoryClaim` records written in the same transaction as the category, one for the slug and one for the normalised name. A rename moves the name claim and leaves the slug, so a category's landing page URL never changes. `helpers/category.ts` in core-table is the only writer of both records.
+
+The invariant checks `course-category-exists` and `category-claims-consistent` hold that a course only points at a category that exists, and that every category has exactly its two claims.
 
 ## The admin portal and `admin-api`
 
-Admins (the `admin` Cognito group) manage categories in the admin portal, which calls **`admin-api`**: a separate tRPC API with its own Lambda and API Gateway, built like instructor-api, so only admins can reach its procedures. Students and visitors read categories through core-api's public catalogue procedures, including the category landing pages.
+Admins (the `admin` Cognito group) manage categories in the admin portal, which calls **`admin-api`**: a separate tRPC API with its own Lambda and API Gateway, built like instructor-api, so only admins can reach its procedures. The procedures are `category.list`, `create`, `rename` and `archive`.
+
+Students and visitors read categories through core-api's public `category.list` and `category.bySlug`, which the category landing pages use.
+
+A new stage has no categories. `pnpm nx run @discava/tooling-deploy:seed-categories` writes a starting set and skips any that exist.
 
 ## Search facets
 

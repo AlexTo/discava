@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { checkTableInvariants, INVARIANTS, violationId } from './index.js';
+import { checkTableInvariants, violationId } from './index.js';
 import { emptyTableSnapshot, type TableSnapshot } from './snapshot.js';
 import {
   checkTableInvariants as checkConsistent,

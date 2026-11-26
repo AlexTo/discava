@@ -1,40 +1,104 @@
 ---
 title: Instructor guide
-description: What an instructor sets up for the public side of a course, how it shows to visitors who aren't signed in, and where to read about pricing and earnings.
+description: What an instructor can do in the instructor portal, from building and publishing a course to its public page, captions, free previews, pricing and earnings, with links to the detailed guides.
 sidebar:
   order: 0
 ---
 
 import Link from '@components/link.astro';
 
+This page is the overview of the instructor portal. To use the portal your account must be an instructor: if it says you aren't one, ask an administrator.
+
+## Finding your way around
+
+The sidebar has four pages:
+
+| Page | What it is for |
+| --- | --- |
+| **Home** | Your course count, **Waiting for grading** (assignment submissions to grade) and your latest courses |
+| **Dashboard** | Enrolments, activity and completion for each course |
+| **My Courses** | Every course you teach. **Open course** opens its page, where you build and manage it |
+| **Earnings** | What your courses earned and what has been paid out |
+
+The account menu has **Public profile**, **Notification settings** and **Sign out**.
+
+A course's page is one long page. The links at the top jump to its sections: **Content**, **Landing page**, **Catalogue**, **Captions**, **Certificates**, **First-lesson prompt**, **Price** and **Announcements**. Beside the course title, **Reviews**, **Questions** and **Coupons** open pages of their own.
+
+## Building a course
+
+1. Choose **Create a course**, on Home or My Courses. Give it a **Course title** and a **Course summary**. The course starts as a draft.
+2. In **Course content**, add a module with **New module**.
+3. In the module, add lessons with **New lesson**, or an assignment with **New assignment**.
+4. In a lesson, add its content: **Video**, **Text**, **Quiz** or **File**.
+5. Drag modules, lessons and content by the grip to reorder them.
+6. In **Catalogue details**, set the category, level, language, duration and up to 8 tags. Students filter the catalogue and search by these.
+7. Add a course image.
+
+Captions are added to every video automatically. <Link path="guides/building-a-course">Building a course</Link> walks through each step.
+
+What else you can add:
+
+- **Quizzes**: single choice and multiple choice questions, a pass mark, a number of attempts or unlimited, and when the correct answers are shown. **Preview as student** tries the quiz without saving anything. See <Link path="guides/quizzes-and-assignments">Quizzes and assignments</Link>.
+- **Assignments**: students upload a file and you grade it, or a quiz graded automatically. An upload assignment has instructions, maximum points and an optional due date. Its **Submissions** link lists the work, and Home lists what is **Waiting for grading**. You **Return** work with points and feedback, or choose **Request resubmission**. See <Link path="guides/quizzes-and-assignments">Quizzes and assignments</Link>.
+- **Questions in a video**: the **Questions** dialog on a video adds up to 20 questions, each at a time in the video or at the end. Answers never count towards progress or certificates. See <Link path="guides/video-lessons">Video lessons</Link>.
+- **Certificates**: in the **Certificates** section, switch on **Issue a certificate on completion**, and optionally require passing every quiz or a minimum grade on assignments. The same section lists the certificates issued, with **Revoke** and **Restore**. See <Link path="guides/certificates">Certificates</Link>.
+
+## Publishing and changing a course
+
+**Publish** on the course's page makes a draft course visible to students. After that:
+
+- New modules, lessons and content stay hidden until you choose **Publish** on each. **Hide** takes one back out of students' view.
+- Removing a module, lesson or content item archives it instead of deleting it. The **Archived** section lists them, with **Restore** and **Delete permanently**. Something students have used can't be deleted permanently.
+- An archived course can't be edited until you choose **Restore**.
+
+<Link path="guides/building-a-course">Building a course</Link> has the details, and <Link path="design/live-course-editing">Live course editing</Link> describes what students see when you change a published course.
+
 ## Your landing page and profile
 
 A published course's page, `/learn/<courseId>`, is public: visitors who aren't signed in see it, and search engines and link previews can read it.
 
-**On the course** (My Courses, then the course's settings), the **Landing page** card has:
+**On the course's page**, the **Landing page** section has:
 
-- **Outcomes** ("What you'll learn") and **requirements**: up to 10 of each, up to 160 characters each. You can reorder them with the "Move up" and "Move down" buttons.
-- A **preview video**: one short video, at most 5 minutes (1 to 2 minutes works best), uploaded as its own file, not one of your lessons. Captions are added automatically. Replacing it keeps the old one playing until the new one is ready, and Remove goes back to the course image. Anyone can watch it, but no lesson video becomes public.
+- **What students will learn** and **Requirements**: up to 10 of each, up to 160 characters each. You can reorder them with the "Move up" and "Move down" buttons. Choose **Save landing page** when you are done.
+- A **preview video**: one short video, at most 5 minutes (1 to 2 minutes works best), uploaded as its own file, not one of your lessons. Captions are added automatically. **Replace** keeps the old one playing until the new one is ready, and **Remove video** goes back to the course image. Anyone can watch it, but no lesson video becomes public.
 
-A **Landing page checklist** shows what is missing: outcomes, requirements, a preview, a course image and your profile. It never stops you publishing. **View public page** opens the page once the course is published.
+The **Landing page checklist** above it shows what is missing: learning outcomes, requirements, a preview video, a course image and your profile's headline and photo. It never stops you publishing. **View public page** opens the page once the course is published.
 
-**Your public profile** (Public profile in the account menu) has your display name, a handle (your address is `/instructors/<handle>`), a headline, a bio and a photo. It is created with your first course, and it is public while you teach at least one published course. Every instructor of a published course is shown on its page, and you can't opt out.
+**Your public profile** (**Public profile** in the account menu) has:
+
+| Field | Limit |
+| --- | --- |
+| Display name | Up to 60 characters |
+| Handle | 3 to 30 characters. Your address is `/instructors/<handle>` |
+| Headline | Up to 100 characters |
+| Bio | Up to 2,000 characters |
+| Photo | Added after the profile is first saved |
+
+The profile is created with your first course, and it is public while you teach at least one published course. Every instructor of a published course is shown on its page, and you can't opt out.
 
 Changes reach search engines and link previews within 5 minutes. An archived course, or a profile with no published course left, stops being found at the same pace. See <Link path="design/public-pages">Public pages</Link> for how it works.
 
 ## Caption languages
 
-Captions are added to every video automatically. On the course's settings, the **Caption languages** card lets you choose other languages to have them translated into. Videos you already have and videos you add later both follow your choice, previews included. Translating a video takes a few minutes after its captions are ready.
+Captions are added to every video automatically. On the course's page, the **Caption languages** section lets you choose other languages to have them translated into. Videos you already have and videos you add later both follow your choice, previews included. Translating a video takes a few minutes after its captions are ready.
+
+The section is missing when captions are switched off for the site, and it says so when caption translation isn't available.
 
 - **Your own captions always win.** If you upload captions for a language, that upload is kept and never replaced by a translation. To correct a translation, upload your own captions for that language in the video's Captions dialog.
 - **Replacing the video's main captions** removes its translated tracks, and they are translated again from the new captions.
 - **Removing a language** removes its translated tracks from every video. Captions you uploaded stay.
-- **The Captions dialog** shows each language's state: translating, translated, uploaded, failed, too long, no room (a video has at most 10 tracks) or not translated, with the reason. Automatic captions that aren't in your course's language aren't translated: upload captions in the video's language instead. **Translate again** asks for the missing translations once more, for one video; **Translate missing captions again** on the card does it for the whole course.
+- **The Captions dialog** shows each language's state: translating, translated, uploaded, failed, too long, no room (a video has at most 10 tracks) or not translated, with the reason. Automatic captions that aren't in your course's language aren't translated: upload captions in the video's language instead.
+- **Translate again** in the dialog asks for one video's missing translations once more. **Translate missing captions again** in the section does it for the whole course.
 - **Machine translation can be wrong.** Students see translated tracks marked "(auto-translated)". Each caption line is translated on its own, so check the languages you can read before relying on them.
 
 ## Free preview lessons
 
-A free preview lets anyone watch a lesson before they enrol, which is the quickest way to show what your course is like. In the course's curriculum, choose **Make free preview** on a lesson and confirm. The lesson shows a "Free preview" badge, and its title links to the preview from your landing page. The badge reads "not public yet" until the course is published.
+A free preview lets anyone watch a lesson before they enrol, which is the quickest way to show what your course is like.
+
+1. In **Course content**, choose **Make free preview** on a lesson.
+2. Confirm with **Make free preview**.
+
+The lesson shows a "Free preview" badge, and its title links to the preview from your landing page. The badge reads "not public yet" until the lesson, its module and the course are published.
 
 - Visitors see the lesson's videos, text and files without signing in or paying. Nothing is saved for them: no progress, no video position, no discussion.
 - **Quizzes stay locked.** A visitor sees the quiz's title and number of questions, but not the questions, and has to enrol to take it.
@@ -43,4 +107,18 @@ A free preview lets anyone watch a lesson before they enrol, which is the quicke
 
 ## Charging for a course
 
-A course is free until you give it a price in its settings. <Link path="guides/payments">Paid courses and payments</Link> covers pricing and what students see, and <Link path="guides/earnings-and-payouts">Earnings and payouts</Link> covers your share of each sale and how you are paid.
+A course is free until you give it a price in its **Price** section. An administrator must connect Stripe first.
+
+- <Link path="guides/payments">Paid courses and payments</Link> covers pricing, discount codes (**Coupons**) and what students see.
+- <Link path="guides/earnings-and-payouts">Earnings and payouts</Link> covers your share of each sale and how you are paid.
+
+## Talking to students
+
+- <Link path="guides/announcements">Announcements</Link>: post a message to everyone enrolled, from the course's **Announcements** section.
+- <Link path="guides/lesson-discussions">Lesson discussions</Link>: answer students' questions and moderate posts, from the course's **Questions** page. The **First-lesson prompt** section sets the question new students are asked in the first lesson.
+- <Link path="guides/reviews">Ratings and reviews</Link>: read reviews and respond to them, from the course's **Reviews** page.
+- <Link path="guides/notifications">Notifications</Link>: what you and your students are told, in the bell and by email.
+
+## Seeing how a course is doing
+
+**Dashboard** shows each course's enrolments, learners active this week and completion rate. Open a course to see the last 30 or 90 days: new enrolments and active learners per day, where learners stop (lesson drop-off), how many started after enrolling, and results for each quiz and for questions in videos. See <Link path="guides/course-analytics">Course analytics</Link>.

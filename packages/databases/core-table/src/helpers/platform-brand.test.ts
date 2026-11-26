@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
+import type { BrandFields } from '@discava/common-branding/brand';
 import { describe, expect, it } from 'vitest';
 import { createFakeCoreTable } from './payment-fake.test.js';
 import {
@@ -26,11 +27,11 @@ const brand = {
 const save = (
   fake: ReturnType<typeof createFakeCoreTable>,
   expectedRevision: number,
-  changes: Partial<typeof brand> = {},
+  changes: Record<string, string | boolean | null> = {},
 ) =>
   saveBrand(fake.coreTable, {
     expectedRevision,
-    changes: { ...brand, ...changes },
+    changes: { ...brand, ...changes } as BrandFields,
     changedBy: 'admin-1',
     changedByName: 'Carol',
     now: NOW,
