@@ -1125,6 +1125,26 @@ describe('EnrolmentActions: a discount code', () => {
     expect(screen.getByRole('button', { name: 'Have a code?' })).toBeVisible();
   });
 
+  it('changing the code during a checkout keeps the pay button pending', async () => {
+    const { user, calls } = renderPriced({
+      'coupon.preview': () => preview,
+      'payment.checkout': () => new Promise(() => {}),
+    });
+    await apply(user);
+    await user.click(await screen.findByRole('button', { name: 'Pay $16.00' }));
+    await screen.findByRole('button', { name: 'Starting payment…' });
+
+    await user.click(screen.getByRole('button', { name: 'Remove code' }));
+
+    expect(
+      screen.getByRole('button', { name: 'Starting payment…' }),
+    ).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Buy now' })).toBeNull();
+    expect(
+      calls.filter(({ path }) => path === 'payment.checkout'),
+    ).toHaveLength(1);
+  });
+
   it('the pay button passes the code and the browser goes to the checkout', async () => {
     const assign = vi.fn();
     vi.stubGlobal('location', { ...window.location, assign });

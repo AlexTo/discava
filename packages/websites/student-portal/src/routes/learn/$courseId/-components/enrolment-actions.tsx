@@ -272,7 +272,7 @@ export function EnrolmentActions({
   );
   // An error from an earlier code doesn't describe the newly applied one.
   const changeCoupon = (next: AppliedCoupon | null) => {
-    checkout.reset();
+    if (checkout.isError) checkout.reset();
     setCoupon(next);
   };
   const paymentsUnavailable =
