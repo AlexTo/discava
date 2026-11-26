@@ -165,6 +165,16 @@ describe('progress-matches-completions', () => {
     expectOnly('progress-matches-completions', /50, but should be 100/);
   });
 
+  it('reports a re-activated enrolment that kept its stale progress', () => {
+    // Dropped at 0%, then active again with the completions still stored.
+    table.enrolments[0] = {
+      ...table.enrolments[0],
+      status: 'active',
+      progressPercent: 0,
+    };
+    expectOnly('progress-matches-completions', /0, but should be 50/);
+  });
+
   it('leaves dropped enrolments alone', () => {
     table.enrolments[0] = {
       ...table.enrolments[0],

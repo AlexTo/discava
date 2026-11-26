@@ -153,6 +153,17 @@ describe('applyTranscribeOutcome on COMPLETED', () => {
     expect(patchRemove).toHaveBeenCalledWith(['captionsPendingSince']);
   });
 
+  it("labels the track with the job's language", async () => {
+    await applyTranscribeOutcome(logger, {
+      ...outcome('COMPLETED'),
+      languageCode: 'fr-FR',
+    });
+
+    expect(patchSet.mock.calls[0][0].captionTracks).toMatchObject([
+      { language: 'fr-FR', label: 'French', source: 'auto' },
+    ]);
+  });
+
   it('writes with the revision and version condition', async () => {
     await applyTranscribeOutcome(logger, outcome('COMPLETED'));
 
