@@ -79,7 +79,8 @@ export const checkEarningIdentity = (snapshot: TableSnapshot): Violation[] =>
         if (entry.grossMinor !== 0 || entry.discountMinor !== 0) {
           problems.push('a refund, but gross or discount is not 0');
         }
-        if (entry.feeMinor > 0) {
+        // A reversal of a failed refund gives the fee back, so it is positive.
+        if (entry.feeMinor > 0 && entry.refundMinor >= 0) {
           problems.push(`a refund, but feeMinor ${entry.feeMinor} takes fee`);
         }
       }

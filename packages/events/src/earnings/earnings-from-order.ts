@@ -21,6 +21,11 @@ export interface SaleInput {
   paidAt: string;
 }
 
+export interface RefundReversalInput {
+  orderId: string;
+  occurredAt: string;
+}
+
 export interface RefundInput {
   orderId: string;
   refundedTotal: number;
@@ -67,4 +72,25 @@ export const refundInput = (order: OrderImage): RefundInput | undefined => {
       ? order.refundedAt
       : (order.updatedAt as string);
   return { orderId: order.orderId as string, refundedTotal, occurredAt };
+};
+
+/**
+ * Whether the order says a refund it once had was taken back: `paid` again
+ * with `refundFailedAt` set and nothing refunded. The ledger decides whether
+ * it still holds a refund to reverse.
+ */
+export const refundReversalInput = (
+  order: OrderImage,
+): RefundReversalInput | undefined => {
+  if (
+    order.status !== 'paid' ||
+    typeof order.refundFailedAt !== 'string' ||
+    amountOf(order.refundedAmount) > 0
+  ) {
+    return undefined;
+  }
+  return {
+    orderId: order.orderId as string,
+    occurredAt: order.refundFailedAt,
+  };
 };

@@ -217,9 +217,12 @@ test('refund limits: half the course, once per course', async ({ browser }) => {
   });
 });
 
-// Stripe can accept a refund and report later that it failed. The order stays
-// paid, the enrolment stays, and the page says so instead of waiting.
-test('a failed refund is shown to the student', async ({ browser }) => {
+// Stripe sends `charge.refunded` as soon as a refund is created, and can report
+// later that it failed. Access ends, then comes back with the order paid, and
+// the page says the refund failed.
+test('a failed refund gives the access back and is shown to the student', async ({
+  browser,
+}) => {
   const title = uniqueName('E2E failed refund course');
   await connectLocalStripe();
 
@@ -260,7 +263,7 @@ test('a failed refund is shown to the student', async ({ browser }) => {
     );
   });
 
-  await test.step('the refund fails, and the page says so and keeps the access', async () => {
+  await test.step('the refund fails, and the page says so and the access is back', async () => {
     await failNextRefund(sessionId);
     await openCourse(student, title);
     await student.getByRole('button', { name: 'Request a refund' }).click();
@@ -273,6 +276,9 @@ test('a failed refund is shown to the student', async ({ browser }) => {
     });
     await expect(student.getByText(/contact support/)).toBeVisible();
     await expect(student.getByText(/Refund requested on/)).toHaveCount(0);
+    await expect(student.getByText(/Your enrolment has ended\./)).toHaveCount(
+      0,
+    );
     await expect(
       student.getByRole('button', { name: 'Request a refund' }),
     ).toHaveCount(0);
@@ -280,12 +286,9 @@ test('a failed refund is shown to the student', async ({ browser }) => {
   });
 });
 
-// A refund that Stripe never settles must not poll for ever: after the limit
-// the page says it is still being processed and offers to check again. The
-// browser's clock is faked so the two minutes pass at once.
-test('a pending refund stops polling and offers to check again', async ({
-  browser,
-}) => {
+// A refund Stripe still has pending is announced with `charge.refunded`, so
+// access ends at once, as it does for a refund that has settled.
+test('a pending refund ends the enrolment', async ({ browser }) => {
   const title = uniqueName('E2E pending refund course');
   await connectLocalStripe();
 
@@ -326,36 +329,17 @@ test('a pending refund stops polling and offers to check again', async ({
     );
   });
 
-  await test.step('the refund stays pending, then the page stops waiting', async () => {
+  await test.step('the refund stays pending, and the enrolment ends', async () => {
     await holdNextRefund(sessionId);
-    // Installed before the course page loads, so its timers are the fake ones;
-    // time still runs until the clock is moved.
-    await student.clock.install();
     await openCourse(student, title);
     await student.getByRole('button', { name: 'Request a refund' }).click();
     await student
       .getByRole('dialog', { name: 'Request a refund' })
       .getByRole('button', { name: 'Request refund' })
       .click();
-    await expect(student.getByText(/Refund requested on/)).toBeVisible();
-    await expect(
-      student.getByText('Still being processed', { exact: true }),
-    ).toHaveCount(0);
-    await student.clock.fastForward(125_000);
-    await expect(
-      student.getByText('Still being processed', { exact: true }),
-    ).toBeVisible();
-    await expect(
-      student.getByRole('button', { name: 'Check again' }),
-    ).toBeVisible();
-    await screenshot(student, 'refund-still-being-processed');
-  });
-
-  await test.step('checking again polls for another round', async () => {
-    await student.getByRole('button', { name: 'Check again' }).click();
-    await expect(
-      student.getByText('Still being processed', { exact: true }),
-    ).toHaveCount(0);
-    await expect(student.getByText(/Refund requested on/)).toBeVisible();
+    await expect(student.getByText(/Your enrolment has ended\./)).toBeVisible({
+      timeout: 30_000,
+    });
+    await screenshot(student, 'refund-pending-enrolment-ended');
   });
 });

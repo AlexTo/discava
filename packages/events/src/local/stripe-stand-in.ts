@@ -62,8 +62,8 @@ interface PaymentIntent {
   /** Each refund made, so a test can count them. */
   refunds: { id: string; amount: number }[];
   /**
-   * How the next refund asked for ends: reported failed (`fail`), or left
-   * pending with no notice (`hold`), instead of made.
+   * How the next refund asked for ends: announced with `charge.refunded`,
+   * then reported failed (`fail`), or left pending (`hold`), instead of made.
    */
   nextRefund?: 'fail' | 'hold';
 }
@@ -518,9 +518,10 @@ export const createStripeStandIn = ({
       control[1] === 'fail-next-refund' ||
       control[1] === 'hold-next-refund'
     ) {
-      // The next refund asked for this payment is accepted, then reported
-      // failed (as Stripe does when a bank returns the money) or never
-      // settled, so the page is left with a refund still pending.
+      // The next refund asked for this payment is accepted and announced with
+      // `charge.refunded`, then reported failed (as Stripe does when a bank
+      // returns the money) or never settled, so the page is left with a refund
+      // still pending.
       const intent = session ? intents.get(session.paymentIntentId) : undefined;
       if (!intent) {
         error(
@@ -1151,11 +1152,15 @@ export const createStripeStandIn = ({
       };
       if (slot) idempotent.set(slot, refund);
       send(response, 200, refund);
-      if (outcome === 'hold') return true;
+      // Stripe sends `charge.refunded` as soon as the refund is created, even
+      // while it is still pending.
+      await refundIntent(intent, refund.amount, refund.id);
       if (outcome === 'fail') {
         // Later than the answer, as at Stripe: the request is on record by
-        // the time the failure arrives.
+        // the time the failure arrives, and the charge is no longer refunded.
         setTimeout(() => {
+          intent.refunded -= refund.amount;
+          intent.refunds = intent.refunds.filter(({ id }) => id !== refund.id);
           deliver(
             intent.accountId,
             newEvent('refund.failed', {
@@ -1165,9 +1170,7 @@ export const createStripeStandIn = ({
             }),
           ).catch(() => {});
         }, REFUND_FAILURE_DELAY_MS).unref();
-        return true;
       }
-      await refundIntent(intent, refund.amount, refund.id);
       return true;
     }
 

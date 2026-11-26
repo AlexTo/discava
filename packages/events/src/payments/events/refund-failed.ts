@@ -2,17 +2,23 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { markRefundFailed } from '@discava/core-table';
+import {
+  markRefundFailed,
+  publishNotification,
+  reverseRefund,
+} from '@discava/core-table';
 import type Stripe from 'stripe';
 import type { WebhookDeps } from '../webhook-deps.js';
 
 /**
  * `refund.failed`, or `charge.refund.updated` with `status: failed`: records
- * on the order its payment intent names that the refund failed, so the student
- * is told. The order stays `paid`. `markRefundFailed` leaves an order that was
- * refunded meanwhile, or never had a request, alone. An unknown order is
- * logged and answered 200; a failure is thrown, so the answer is 500 and
- * Stripe retries.
+ * on the order its payment intent names that the refund failed. An order still
+ * `paid` only gets `refundFailedAt` (`markRefundFailed`, which leaves an order
+ * with no request alone). An order `charge.refunded` already moved to
+ * `refunded` is undone by `reverseRefund`: it is `paid` again and the
+ * enrolment is restored, and the student is told (the notification's key is
+ * the order, so a repeat is a duplicate). An unknown order is logged and
+ * answered 200; a failure is thrown, so the answer is 500 and Stripe retries.
  */
 export const handleRefundFailed = async (
   event: Stripe.RefundFailedEvent | Stripe.ChargeRefundUpdatedEvent,
@@ -49,12 +55,22 @@ export const handleRefundFailed = async (
     });
     return;
   }
-  const recorded = await markRefundFailed({
-    coreTable,
-    order,
-    now: deps.now(),
-  });
+  const now = deps.now();
+  const reversing = order.status === 'refunded';
+  const recorded = reversing
+    ? await reverseRefund({ coreTable, order, now })
+    : await markRefundFailed({ coreTable, order, now });
   if (!recorded) return;
+  if (reversing) {
+    // A publish error is not caught: the delivery fails and Stripe redelivers.
+    await publishNotification(coreTable, {
+      type: 'order.refund_failed',
+      userId: order.userId,
+      params: { courseTitle: order.courseTitle, courseId: order.courseId },
+      dedupeKey: orderId,
+      occurredAt: now,
+    });
+  }
   deps.logger.info('Refund failure recorded', {
     eventId: event.id,
     type: event.type,

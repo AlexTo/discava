@@ -126,6 +126,13 @@ export const checkOrderShape = (snapshot: TableSnapshot): Violation[] => {
         problems.push(`refund requested, but the order is ${order.status}`);
       }
     }
+    if (
+      order.status === 'paid' &&
+      order.refundFailedAt !== undefined &&
+      order.refundedAt !== undefined
+    ) {
+      problems.push('paid with refundFailedAt, but refundedAt is set');
+    }
     if (order.refundFailedAt !== undefined) {
       if (order.refundRequestedAt === undefined) {
         problems.push('refund failed, but no refund was requested');

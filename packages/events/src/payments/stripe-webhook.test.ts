@@ -69,6 +69,19 @@ vi.mock('@discava/core-table', () => ({
     }
     return false;
   }),
+  reverseRefund: vi.fn(async ({ order, now }: any) => {
+    const current = state.orders.get(order.orderId);
+    if (current.status !== 'refunded' || current.refundReason !== 'requested') {
+      return false;
+    }
+    Object.assign(current, { status: 'paid', refundFailedAt: now });
+    current.refundedAt = undefined;
+    current.refundedAmount = undefined;
+    if (state.enrolment?.orderId === current.orderId) {
+      state.enrolment.status = 'active';
+    }
+    return true;
+  }),
   publishNotification: vi.fn(async (_: unknown, input: any) => {
     if (state.publishError) {
       state.publishError = false;
@@ -578,6 +591,32 @@ describe('a failed refund', () => {
       (call) => call[0] === 'Refund failure recorded',
     );
     expect(recorded).toHaveLength(1);
+  });
+
+  it('undoes a refund that charge.refunded already applied, once', async () => {
+    const order = state.orders.get('o1');
+    Object.assign(order, {
+      status: 'refunded',
+      refundReason: 'requested',
+      refundedAt: '2026-11-19T08:00:01.000Z',
+      refundedAmount: 1000,
+    });
+    await send(failedEvent('refund.failed'));
+    await send(failedEvent('refund.failed'));
+    expect(state.orders.get('o1')).toMatchObject({
+      status: 'paid',
+      refundFailedAt: '2026-11-19T09:00:00.000Z',
+    });
+    expect(
+      logger.info.mock.calls.filter(
+        (call) => call[0] === 'Refund failure recorded',
+      ),
+    ).toHaveLength(1);
+    expect(state.notifications.size).toBe(1);
+    expect([...state.notifications.values()][0]).toMatchObject({
+      type: 'order.refund_failed',
+      dedupeKey: 'o1',
+    });
   });
 
   it('ignores a refund update that is not a failure', async () => {

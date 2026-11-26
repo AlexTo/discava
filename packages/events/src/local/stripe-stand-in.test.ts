@@ -706,7 +706,7 @@ describe('refund control', () => {
 });
 
 describe('fail-next-refund control', () => {
-  it('accepts the next refund, then reports it failed, and refunds nothing', async () => {
+  it('accepts the next refund, announces it, then reports it failed and refunds nothing', async () => {
     const hook = await receiver();
     const { secret, stripe, session } = await paid(hook.url);
     hook.deliveries.length = 0;
@@ -719,17 +719,24 @@ describe('fail-next-refund control', () => {
       payment_intent: session.payment_intent as string,
     });
     expect(refund.status).toBe('pending');
-    await vi.waitFor(() => expect(hook.deliveries).toHaveLength(1), {
+    await vi.waitFor(() => expect(hook.deliveries).toHaveLength(2), {
       timeout: 5_000,
     });
-    const [delivery] = hook.deliveries as [{ body: string; signature: string }];
-    const event = Stripe.webhooks.constructEvent(
-      delivery.body,
-      delivery.signature,
-      secret,
+    const events = (
+      hook.deliveries as { body: string; signature: string }[]
+    ).map((delivery) =>
+      Stripe.webhooks.constructEvent(delivery.body, delivery.signature, secret),
     );
-    expect(event.type).toBe('refund.failed');
-    expect(event.data.object).toMatchObject({
+    // As at Stripe, `charge.refunded` comes first, then the failure.
+    expect(events.map((event) => event.type)).toEqual([
+      'charge.refunded',
+      'refund.failed',
+    ]);
+    expect(events[0].data.object).toMatchObject({
+      payment_intent: session.payment_intent,
+      amount_refunded: session.amount_total,
+    });
+    expect(events[1].data.object).toMatchObject({
       payment_intent: session.payment_intent,
       status: 'failed',
     });
@@ -749,9 +756,9 @@ describe('fail-next-refund control', () => {
     );
   });
 
-  it('holds the next refund: accepted, pending, no notice, nothing refunded', async () => {
+  it('holds the next refund: accepted and announced, pending, never settled', async () => {
     const hook = await receiver();
-    const { stripe, session } = await paid(hook.url);
+    const { secret, stripe, session } = await paid(hook.url);
     hook.deliveries.length = 0;
     await request('/stripe/test/hold-next-refund', {
       method: 'POST',
@@ -762,12 +769,22 @@ describe('fail-next-refund control', () => {
     });
     expect(refund.status).toBe('pending');
     await new Promise((resolve) => setTimeout(resolve, 1_500));
-    expect(hook.deliveries).toEqual([]);
+    const [delivery, ...rest] = hook.deliveries as {
+      body: string;
+      signature: string;
+    }[];
+    expect(rest).toEqual([]);
+    expect(
+      Stripe.webhooks.constructEvent(delivery.body, delivery.signature, secret)
+        .type,
+    ).toBe('charge.refunded');
     const listed = await request('/stripe/test/refunds', {
       method: 'POST',
       body: JSON.stringify({ sessionId: session.id }),
     });
-    expect(listed.body.refunds).toEqual([]);
+    expect(listed.body.refunds).toEqual([
+      { id: refund.id, amount: session.amount_total },
+    ]);
   });
 
   it('answers 404 for a session with no payment', async () => {

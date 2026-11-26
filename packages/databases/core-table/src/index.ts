@@ -301,6 +301,7 @@ export {
   queryEarningDays,
   queryEarningLines,
   recordRefund,
+  recordRefundReversal,
   recordSale,
 } from './helpers/earning.js';
 export {
@@ -430,6 +431,7 @@ export {
   refundOrder,
   refundUndeliverable,
   restoreFreeEnrolment,
+  reverseRefund,
   type SettleResult,
   settleOrderPaid,
   startFreeOrder,

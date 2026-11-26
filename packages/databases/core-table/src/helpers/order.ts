@@ -20,7 +20,7 @@ type TransactionEntities = Parameters<TransactionWrites>[0];
 type TransactionItems = ReturnType<TransactionWrites>;
 
 // The only writer of `order`, and of `enrolment.orderId` and the paid-restore,
-// free-restore and refund-end enrolment writes. Every move is a conditional
+// free-restore, refund-end and refund-reversal enrolment writes. Every move is a conditional
 // write on the status it comes from, so a repeated or racing call changes
 // nothing. None of it calls Stripe: the caller does that before or after.
 
@@ -621,6 +621,69 @@ export const refundOrder = async ({
     }
   }
   throw new Error('Could not record the refund; try again');
+};
+
+/**
+ * Undoes a refund Stripe reports as failed after `charge.refunded` ended
+ * access. One transaction moves a `refunded` order that was refunded on
+ * request back to `paid`, removing `refundedAt` and `refundedAmount` and
+ * setting `refundFailedAt` (`refundRequestedAt` stays), and restores the
+ * enrolment `dropped` to `completed` (if it has `completedAt`) or `active`,
+ * only while it still names this order, so a re-purchase is not touched. It
+ * is conditioned on the order being `refunded`, so a repeated or retried
+ * failure changes nothing. Returns whether it made the move.
+ */
+export const reverseRefund = async ({
+  coreTable,
+  order: named,
+  now,
+}: {
+  coreTable: CoreTable;
+  order: Pick<OrderRecord, 'orderId'>;
+  now: string;
+}): Promise<boolean> => {
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    const order = await get(coreTable, named.orderId);
+    if (!order) throw new NotFoundError();
+    if (order.status !== 'refunded' || order.refundReason !== 'requested') {
+      return false;
+    }
+    const { data: enrolment } = await coreTable.entities.enrolment
+      .get({ courseId: order.courseId, userId: order.userId })
+      .go();
+    const restore =
+      enrolment?.orderId === order.orderId && enrolment.status === 'dropped';
+    const { canceled } = await coreTable.transaction
+      .write(({ order: orders, enrolment: enrolments }) => [
+        orders
+          .patch({ orderId: order.orderId })
+          .set({ status: 'paid', refundFailedAt: now })
+          .remove(['refundedAt', 'refundedAmount'])
+          .where(
+            (attr, op) =>
+              `${op.eq(attr.status, 'refunded')} AND ${op.eq(attr.refundReason, 'requested')}`,
+          )
+          .commit(),
+        // A re-purchase, or an enrolment that is not `dropped`, is left alone.
+        ...(restore
+          ? [
+              enrolments
+                .patch({ courseId: order.courseId, userId: order.userId })
+                .set({
+                  status: enrolment?.completedAt ? 'completed' : 'active',
+                })
+                .where(
+                  (attr, op) =>
+                    `${op.eq(attr.orderId, order.orderId)} AND ${op.eq(attr.status, 'dropped')}`,
+                )
+                .commit(),
+            ]
+          : []),
+      ])
+      .go();
+    if (!canceled) return true;
+  }
+  throw new Error('Could not reverse the refund; try again');
 };
 
 export type RestoreResult = 'restored' | 'course-unavailable' | 'not-dropped';

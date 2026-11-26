@@ -4,7 +4,12 @@
  */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { isSale, refundInput, saleInput } from './earnings-from-order.js';
+import {
+  isSale,
+  refundInput,
+  refundReversalInput,
+  saleInput,
+} from './earnings-from-order.js';
 
 const order = (overrides: Record<string, unknown> = {}) => ({
   __edb_e__: 'order',
@@ -69,6 +74,38 @@ describe('saleInput', () => {
     expect(
       JSON.stringify(refundInput(order({ refundedAmount: 5 }))),
     ).not.toContain('buyer-1');
+  });
+});
+
+describe('refundReversalInput', () => {
+  it('gives a paid order with refundFailedAt and nothing refunded, at that time', () => {
+    expect(
+      refundReversalInput(
+        order({ refundFailedAt: '2026-11-21T00:00:00.000Z' }),
+      ),
+    ).toEqual({ orderId: 'o1', occurredAt: '2026-11-21T00:00:00.000Z' });
+  });
+
+  it('gives nothing for an order refunded, never failed, or still partly refunded', () => {
+    expect(refundReversalInput(order())).toBeUndefined();
+    expect(
+      refundReversalInput(
+        order({
+          status: 'refunded',
+          refundReason: 'requested',
+          refundedAmount: 800,
+          refundFailedAt: '2026-11-21T00:00:00.000Z',
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      refundReversalInput(
+        order({
+          refundedAmount: 300,
+          refundFailedAt: '2026-11-21T00:00:00.000Z',
+        }),
+      ),
+    ).toBeUndefined();
   });
 });
 

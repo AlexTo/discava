@@ -255,6 +255,20 @@ describe('payments: price, orders and the connection', () => {
       expect(violationsOf('order-shape')).toEqual([]);
     });
 
+    it('reports a paid order with refundFailedAt that still has refundedAt', () => {
+      paidTable();
+      Object.assign(table.orders[0], {
+        refundRequestedAt: LATER,
+        refundFailedAt: LATER,
+        refundedAt: LATER,
+      });
+      expect(violationsOf('order-shape').map((v) => v.message)).toContainEqual(
+        expect.stringMatching(
+          /paid with refundFailedAt, but refundedAt is set/,
+        ),
+      );
+    });
+
     it('accepts a failed refund at or after its request', () => {
       paidTable();
       table.orders[0].refundRequestedAt = LATER;
