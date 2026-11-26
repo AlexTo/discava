@@ -1235,6 +1235,32 @@ export const createStripeStandIn = ({
     }
 
     const one = /^\/v1\/webhook_endpoints\/([^/]+)$/.exec(path);
+    if (one && request.method === 'POST') {
+      const endpoint = endpoints.get(decodeURIComponent(one[1] as string));
+      if (who.restricted || !endpoint || endpoint.accountId !== who.accountId) {
+        who.restricted
+          ? error(
+              response,
+              403,
+              'invalid_request_error',
+              'The provided key does not have the required permissions for this endpoint.',
+              'permission_denied',
+            )
+          : error(
+              response,
+              404,
+              'invalid_request_error',
+              `No such webhook endpoint: '${one[1]}'`,
+              'resource_missing',
+            );
+        return true;
+      }
+      const events = list(parseForm(await readBody(request)).enabled_events);
+      if (events.length > 0) endpoint.enabled_events = events;
+      log(`stripe: ${who.accountId} updated ${endpoint.id}`);
+      send(response, 200, publicEndpoint(endpoint, false));
+      return true;
+    }
     if (one && request.method === 'DELETE') {
       const endpoint = endpoints.get(decodeURIComponent(one[1] as string));
       if (who.restricted || !endpoint || endpoint.accountId !== who.accountId) {

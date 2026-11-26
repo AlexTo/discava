@@ -112,8 +112,20 @@ export const verifyKey = async (secretKey: string): Promise<VerifiedKey> => {
 const METADATA_APP = 'discava';
 
 /**
- * Registers `url` as a webhook endpoint of the key's account, for exactly the
- * three events and the API version the SDK is pinned to. Returns the
+ * Whether an endpoint registered for `registered` misses or adds to the events
+ * the webhook handles now. An absent list (a connection saved before it was
+ * recorded) counts as changed.
+ */
+export const webhookEventsChanged = (
+  registered: readonly string[] | undefined,
+): boolean =>
+  !registered ||
+  registered.length !== WEBHOOK_EVENTS.length ||
+  WEBHOOK_EVENTS.some((event) => !registered.includes(event));
+
+/**
+ * Registers `url` as a webhook endpoint of the key's account, for exactly
+ * `WEBHOOK_EVENTS` and the API version the SDK is pinned to. Returns the
  * endpoint's ID and signing secret, which Stripe reveals only now.
  */
 export const registerEndpoint = async ({
@@ -134,6 +146,40 @@ export const registerEndpoint = async ({
     });
     if (!endpoint.secret) throw new Error('no secret');
     return { id: endpoint.id, secret: endpoint.secret };
+  } catch (error) {
+    if (error instanceof Stripe.errors.StripePermissionError) {
+      throw new ConnectError(
+        CONNECT_MESSAGES.noPermission,
+        'BAD_REQUEST',
+        'registration',
+      );
+    }
+    if (error instanceof Stripe.errors.StripeAuthenticationError) {
+      throw new ConnectError(CONNECT_MESSAGES.rejected, 'BAD_REQUEST', 'key');
+    }
+    throw new ConnectError(
+      CONNECT_MESSAGES.registration,
+      'INTERNAL_SERVER_ERROR',
+      'registration',
+    );
+  }
+};
+
+/**
+ * Sets an existing endpoint's events to exactly `WEBHOOK_EVENTS`, leaving its
+ * URL, ID and signing secret as they are.
+ */
+export const updateEndpointEvents = async ({
+  secretKey,
+  endpointId,
+}: {
+  secretKey: string;
+  endpointId: string;
+}): Promise<void> => {
+  try {
+    await createStripe(secretKey).webhookEndpoints.update(endpointId, {
+      enabled_events: [...WEBHOOK_EVENTS],
+    });
   } catch (error) {
     if (error instanceof Stripe.errors.StripePermissionError) {
       throw new ConnectError(

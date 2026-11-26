@@ -156,6 +156,17 @@ export const connectLocalPayments = async (
   }
 };
 
+// Puts the connection in the state every one saved before `webhookEvents` was
+// recorded is in: active, with no list of the events its endpoint was
+// registered for. The endpoint itself is untouched.
+export const forgetRegisteredEvents = async () => {
+  const coreTable = await createCoreTableService();
+  await coreTable.entities.paymentConnection
+    .patch({})
+    .remove(['webhookEvents'])
+    .go();
+};
+
 // Connects payments for real against the local Stripe stand-in, the state a
 // purchase needs: registers a webhook endpoint with it (as admin-api's connect
 // does), saves the key and the endpoint's signing secret where the local

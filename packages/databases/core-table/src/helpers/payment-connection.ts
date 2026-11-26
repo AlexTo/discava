@@ -36,6 +36,7 @@ export interface PaymentConnectionRecord {
   keyLast4?: string;
   webhookEndpointId?: string;
   webhookUrl?: string;
+  webhookEvents?: string[];
   latestCheckoutExpiresAt?: string;
   leaseUntil?: string;
   previousStatus?: PaymentConnectionStatus;
@@ -218,6 +219,7 @@ export interface ConnectionFacts {
   keyLast4: string;
   webhookEndpointId: string;
   webhookUrl: string;
+  webhookEvents: string[];
 }
 
 /** Writes the account facts and makes the record `active`, ending the lease. */
@@ -282,6 +284,43 @@ export const rotateKey = async ({
           .patch({})
           .set({
             keyLast4: keyLast4.slice(-4),
+            revision: connection.revision + 1,
+            changedBy: by.userId,
+            changedByName: by.name,
+            changedAt: now,
+          })
+          .where(
+            (attr, op) =>
+              `${op.eq(attr.status, 'active')} AND ${op.eq(attr.revision, connection.revision)}`,
+          )
+          .go(ALL_NEW)
+      ).data as PaymentConnectionRecord,
+  );
+
+/**
+ * Records the events the existing endpoint now sends, after it was updated at
+ * Stripe. Conditioned on `revision` and `active`, so it loses to a switch.
+ */
+export const setWebhookEvents = async ({
+  coreTable,
+  connection,
+  webhookEvents,
+  by,
+  now,
+}: {
+  coreTable: CoreTable;
+  connection: Pick<PaymentConnectionRecord, 'revision'>;
+  webhookEvents: string[];
+  by: Actor;
+  now: string;
+}): Promise<PaymentConnectionRecord> =>
+  guarded(
+    async () =>
+      (
+        await coreTable.entities.paymentConnection
+          .patch({})
+          .set({
+            webhookEvents,
             revision: connection.revision + 1,
             changedBy: by.userId,
             changedByName: by.name,

@@ -37,6 +37,9 @@ export const PaymentStatusOutputSchema = z.object({
   // The confirmation address registered with Stripe is no longer the current
   // one: save the key again to register the new address.
   addressChanged: z.boolean().optional(),
+  // The endpoint at Stripe was registered for a different list of events than
+  // the webhook handles now: save the key again to update it.
+  eventsChanged: z.boolean().optional(),
   changes: z.array(PaymentChangeSchema),
 });
 

@@ -79,7 +79,7 @@ New, in `certificates.ts`, each with a breaking test:
 | Name | Rule |
 |------|------|
 | `certificate-linkedin-click-shape` | `linkedInClickSource` is present exactly when `linkedInClickedAt` is, is one of the four sources, and `linkedInClickedAt` isn't before `issuedAt` |
-| `certificate-reminder-not-after-click` | When both are present, `reminderSentAt` isn't after `linkedInClickedAt`. `reminderSentAt` isn't before `issuedAt` |
+| `certificate-reminder-not-after-click` | When both are present, `reminderSentAt` isn't after `linkedInClickedAt` by more than 5 s (the two writes stamp their time before writing, on separate clocks). `reminderSentAt` isn't before `issuedAt` |
 | `certificate-notifications-match` | Every notification of type `certificate.issued` or `certificate.reminder` has a `link.path` of `/certificates/<ID>` naming a certificate of the same user. A certificate has at most one of each type. A `certificate.reminder` notification's certificate has `reminderSentAt` equal to the notification's `occurredAt` |
 
 Extended, in `notifications.ts`:

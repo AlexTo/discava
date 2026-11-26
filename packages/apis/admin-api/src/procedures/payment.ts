@@ -3,11 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  CONNECT_MESSAGES,
   ConnectError,
   registerEndpoint,
   removeEndpoint,
   removeLeftoverEndpoints,
+  updateEndpointEvents,
   verifyKey,
+  WEBHOOK_EVENTS,
+  webhookEventsChanged,
 } from '@discava/common-server-utils/stripe/connect';
 import {
   clearStripeSecrets,
@@ -30,6 +34,7 @@ import {
   type PaymentConnectionRecord,
   recordChange,
   rotateKey,
+  setWebhookEvents,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { adminProcedure } from '../init.js';
@@ -113,6 +118,9 @@ const statusOf = async (
       current !== undefined && {
         addressChanged: connection.webhookUrl !== current,
       }),
+    ...(connection.status === 'active' && {
+      eventsChanged: webhookEventsChanged(connection.webhookEvents),
+    }),
     changes,
   };
 };
@@ -222,13 +230,30 @@ export const connectPayment = adminProcedure
         current.accountId === verified.accountId &&
         current.mode === verified.mode;
 
-      // The same account with the address unchanged is a rotation: the
-      // registration and signing secret stay valid, so only the key changes.
+      // The same account with the address unchanged keeps its registration
+      // and signing secret, so only the key changes: a rotation. If the
+      // events it was registered for are out of date, the existing endpoint
+      // is updated first (same URL, ID and secret), then the new list is
+      // recorded with the key.
       // The record moves first, conditioned on its revision, so a rotation
       // that lost to a switch writes no secret; if the secret write then
       // fails, the record is put back so it never shows a key that isn't
       // stored.
       if (current && sameAccount && current.webhookUrl === url) {
+        const eventsStale = webhookEventsChanged(current.webhookEvents);
+        if (eventsStale) {
+          if (!current.webhookEndpointId) {
+            throw new ConnectError(
+              CONNECT_MESSAGES.registration,
+              'INTERNAL_SERVER_ERROR',
+              'registration',
+            );
+          }
+          await updateEndpointEvents({
+            secretKey,
+            endpointId: current.webhookEndpointId,
+          });
+        }
         const rotated = await rotateKey({
           coreTable,
           connection: current,
@@ -236,12 +261,35 @@ export const connectPayment = adminProcedure
           by,
           now,
         });
+        const recorded = eventsStale
+          ? await setWebhookEvents({
+              coreTable,
+              connection: rotated,
+              webhookEvents: [...WEBHOOK_EVENTS],
+              by,
+              now,
+            }).catch(async (error) => {
+              await rotateKey({
+                coreTable,
+                connection: rotated,
+                keyLast4: current.keyLast4 ?? verified.keyLast4,
+                by: {
+                  userId: current.changedBy ?? by.userId,
+                  name: current.changedByName ?? by.name,
+                },
+                now: current.changedAt ?? now,
+              }).catch(() => undefined);
+              throw error;
+            })
+          : rotated;
         try {
           await writeStripeSecrets({ apiKey: secretKey });
         } catch (error) {
+          // Only the key is put back; the endpoint keeps its new events, and
+          // the record keeps listing them.
           await rotateKey({
             coreTable,
-            connection: rotated,
+            connection: recorded,
             keyLast4: current.keyLast4 ?? verified.keyLast4,
             by: {
               userId: current.changedBy ?? by.userId,
@@ -303,6 +351,7 @@ export const connectPayment = adminProcedure
             keyLast4: verified.keyLast4,
             webhookEndpointId: registration.id,
             webhookUrl: url,
+            webhookEvents: [...WEBHOOK_EVENTS],
           },
           by,
           now,

@@ -164,6 +164,13 @@ export function PaymentsScreen() {
             </ErrorAlert>
           )}
 
+          {status.eventsChanged && (
+            <ErrorAlert header="Payment events out of date">
+              Stripe isn't set to send every event Discava handles. Save the key
+              again to update it.
+            </ErrorAlert>
+          )}
+
           {changing && (
             <ErrorAlert header="A change is in progress">
               This page refreshes every few seconds until it finishes.

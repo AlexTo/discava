@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   completeConnection: vi.fn(),
   completeDisconnect: vi.fn(),
   rotateKey: vi.fn(),
+  setWebhookEvents: vi.fn(),
+  updateEndpointEvents: vi.fn(),
   abandonChange: vi.fn(),
   recordChange: vi.fn(),
   listChanges: vi.fn(),
@@ -34,6 +36,7 @@ vi.mock('@discava/core-table', async (importActual) => ({
   completeConnection: mocks.completeConnection,
   completeDisconnect: mocks.completeDisconnect,
   rotateKey: mocks.rotateKey,
+  setWebhookEvents: mocks.setWebhookEvents,
   abandonChange: mocks.abandonChange,
   recordChange: mocks.recordChange,
   listChanges: mocks.listChanges,
@@ -51,6 +54,7 @@ vi.mock(
     registerEndpoint: mocks.registerEndpoint,
     removeLeftoverEndpoints: mocks.removeLeftoverEndpoints,
     removeEndpoint: mocks.removeEndpoint,
+    updateEndpointEvents: mocks.updateEndpointEvents,
   }),
 );
 vi.mock('@discava/common-server-utils/stripe/secrets-admin', () => ({
@@ -60,7 +64,10 @@ vi.mock('@discava/common-server-utils/stripe/secrets-admin', () => ({
   readStripeWebhookSecret: mocks.readStripeWebhookSecret,
 }));
 
-import { ConnectError } from '@discava/common-server-utils/stripe/connect';
+import {
+  ConnectError,
+  WEBHOOK_EVENTS,
+} from '@discava/common-server-utils/stripe/connect';
 import { ChangeInProgressError, OpenCheckoutError } from '@discava/core-table';
 
 const router = t.router({
@@ -89,6 +96,7 @@ const active = (over: Record<string, unknown> = {}) => ({
   keyLast4: '9999',
   webhookEndpointId: 'we_old',
   webhookUrl: URL,
+  webhookEvents: [...WEBHOOK_EVENTS],
   revision: 3,
   ...over,
 });
@@ -128,6 +136,8 @@ beforeEach(() => {
   mocks.completeConnection.mockResolvedValue({});
   mocks.completeDisconnect.mockResolvedValue({});
   mocks.rotateKey.mockResolvedValue({});
+  mocks.setWebhookEvents.mockResolvedValue({});
+  mocks.updateEndpointEvents.mockResolvedValue(undefined);
   mocks.recordChange.mockResolvedValue(undefined);
   mocks.abandonChange.mockResolvedValue(undefined);
   mocks.writeStripeSecrets.mockResolvedValue(undefined);
@@ -202,6 +212,7 @@ describe('payment.status', () => {
       changedAt: '2026-01-01T00:00:00.000Z',
       openCheckoutsUntil: future,
       addressChanged: true,
+      eventsChanged: false,
       changes: [
         {
           kind: 'connected',
@@ -256,7 +267,12 @@ describe('payment.connect: a first connection', () => {
     expect(mocks.completeConnection).toHaveBeenCalledWith(
       expect.objectContaining({
         connection: leased,
-        facts: { ...verified, webhookEndpointId: 'we_new', webhookUrl: URL },
+        facts: {
+          ...verified,
+          webhookEndpointId: 'we_new',
+          webhookUrl: URL,
+          webhookEvents: [...WEBHOOK_EVENTS],
+        },
       }),
     );
     expect(mocks.recordChange).toHaveBeenCalledWith(
@@ -375,7 +391,47 @@ describe('payment.connect: refusals write no secret', () => {
   });
 });
 
+describe('payment.status: events', () => {
+  it.each([
+    ['absent', undefined],
+    ['missing one', WEBHOOK_EVENTS.slice(1)],
+  ])('reports eventsChanged when the stored list is %s', async (_, events) => {
+    mocks.getConnection.mockResolvedValue(active({ webhookEvents: events }));
+    expect(await callAs().status()).toMatchObject({ eventsChanged: true });
+  });
+
+  it('reports no change when the list matches', async () => {
+    mocks.getConnection.mockResolvedValue(active());
+    expect(await callAs().status()).toMatchObject({ eventsChanged: false });
+  });
+});
+
 describe('payment.connect: a rotation', () => {
+  it('updates the existing endpoint first when its events changed', async () => {
+    mocks.getConnection.mockResolvedValue(
+      active({ webhookEvents: ['checkout.session.completed'] }),
+    );
+    await callAs().connect({ secretKey: KEY });
+
+    expect(mocks.updateEndpointEvents).toHaveBeenCalledWith({
+      secretKey: KEY,
+      endpointId: 'we_old',
+    });
+    expect(mocks.setWebhookEvents).toHaveBeenCalledWith(
+      expect.objectContaining({ webhookEvents: [...WEBHOOK_EVENTS] }),
+    );
+    expect(mocks.registerEndpoint).not.toHaveBeenCalled();
+    expect(mocks.beginChange).not.toHaveBeenCalled();
+    expect(mocks.writeStripeSecrets).toHaveBeenCalledWith({ apiKey: KEY });
+  });
+
+  it('leaves the endpoint alone when nothing changed', async () => {
+    mocks.getConnection.mockResolvedValue(active());
+    await callAs().connect({ secretKey: KEY });
+    expect(mocks.updateEndpointEvents).not.toHaveBeenCalled();
+    expect(mocks.setWebhookEvents).not.toHaveBeenCalled();
+  });
+
   it('writes one secret, registers nothing and records a replacement', async () => {
     mocks.getConnection.mockResolvedValue(active());
     await callAs().connect({ secretKey: KEY });

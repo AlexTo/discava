@@ -9,7 +9,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { stripe } = vi.hoisted(() => ({
   stripe: {
     accounts: { retrieveCurrent: vi.fn() },
-    webhookEndpoints: { create: vi.fn(), list: vi.fn(), del: vi.fn() },
+    webhookEndpoints: {
+      create: vi.fn(),
+      update: vi.fn(),
+      list: vi.fn(),
+      del: vi.fn(),
+    },
   },
 }));
 vi.mock('./client.js', () => ({
@@ -24,7 +29,10 @@ import {
   registerEndpoint,
   removeEndpoint,
   removeLeftoverEndpoints,
+  updateEndpointEvents,
   verifyKey,
+  WEBHOOK_EVENTS,
+  webhookEventsChanged,
 } from './connect.js';
 
 const KEY = 'sk_test_abcdefghij1234';
@@ -256,6 +264,38 @@ describe('removeEndpoint', () => {
     stripe.webhookEndpoints.del.mockRejectedValue(new Error(KEY));
     expect(await removeEndpoint({ secretKey: KEY, endpointId: 'we_1' })).toBe(
       false,
+    );
+  });
+});
+
+describe('updateEndpointEvents', () => {
+  it('sets exactly the current events on the endpoint', async () => {
+    stripe.webhookEndpoints.update.mockResolvedValue({});
+    await updateEndpointEvents({ secretKey: KEY, endpointId: 'we_1' });
+    expect(stripe.webhookEndpoints.update).toHaveBeenCalledWith('we_1', {
+      enabled_events: [...WEBHOOK_EVENTS],
+    });
+  });
+
+  it('maps failures to fixed messages without Stripe text', async () => {
+    stripe.webhookEndpoints.update.mockRejectedValue(permissionError());
+    await expect(
+      updateEndpointEvents({ secretKey: KEY, endpointId: 'we_1' }),
+    ).rejects.toMatchObject({ message: CONNECT_MESSAGES.noPermission });
+    stripe.webhookEndpoints.update.mockRejectedValue(new Error(KEY));
+    await expect(
+      updateEndpointEvents({ secretKey: KEY, endpointId: 'we_1' }),
+    ).rejects.toMatchObject({ message: CONNECT_MESSAGES.registration });
+  });
+});
+
+describe('webhookEventsChanged', () => {
+  it('is false only for exactly the current events, in any order', () => {
+    expect(webhookEventsChanged([...WEBHOOK_EVENTS].reverse())).toBe(false);
+    expect(webhookEventsChanged(undefined)).toBe(true);
+    expect(webhookEventsChanged(WEBHOOK_EVENTS.slice(1))).toBe(true);
+    expect(webhookEventsChanged([...WEBHOOK_EVENTS, 'charge.failed'])).toBe(
+      true,
     );
   });
 });

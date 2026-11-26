@@ -63,8 +63,11 @@ vi.mock('@discava/core-table', () => ({
   markRefundFailed: vi.fn(async ({ order, now }: any) => {
     const current = state.orders.get(order.orderId);
     if (current.status === 'paid' && current.refundRequestedAt) {
+      const first = !current.refundFailedAt;
       current.refundFailedAt ??= now;
+      return first;
     }
+    return false;
   }),
   publishNotification: vi.fn(async (_: unknown, input: any) => {
     if (state.publishError) {
@@ -567,6 +570,15 @@ describe('a failed refund', () => {
       });
     },
   );
+
+  it('logs the recorded failure once, not again after a no-op', async () => {
+    await send(failedEvent('refund.failed'));
+    await send(failedEvent('refund.failed'));
+    const recorded = logger.info.mock.calls.filter(
+      (call) => call[0] === 'Refund failure recorded',
+    );
+    expect(recorded).toHaveLength(1);
+  });
 
   it('ignores a refund update that is not a failure', async () => {
     await send(failedEvent('charge.refund.updated', 'succeeded'));

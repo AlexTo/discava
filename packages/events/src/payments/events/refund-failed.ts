@@ -49,7 +49,12 @@ export const handleRefundFailed = async (
     });
     return;
   }
-  await markRefundFailed({ coreTable, order, now: deps.now() });
+  const recorded = await markRefundFailed({
+    coreTable,
+    order,
+    now: deps.now(),
+  });
+  if (!recorded) return;
   deps.logger.info('Refund failure recorded', {
     eventId: event.id,
     type: event.type,
