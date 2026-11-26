@@ -540,6 +540,40 @@ describe('recordRefundReversal', () => {
     expect(entries(fake).filter((e) => e.kind === 'refund')).toEqual([]);
   });
 
+  it('retries after losing the counter, and reverses what is recorded by then', async () => {
+    const fake = createFakeCoreTable();
+    await sale(fake, {}, ['a']);
+    await refund(fake, 300);
+    let injected = false;
+    fake.hooks.beforeTransaction = () => {
+      if (injected) return;
+      injected = true;
+      // Another refund raises the total to 800 just before our first write.
+      fake.put('earningOrder', {
+        ...fake.rows('earningOrder')[0],
+        refundedMinor: 800,
+      });
+    };
+    expect(await reverse(fake)).toBe(true);
+    expect(fake.log.cancelled).toBe(1);
+    expect(fake.rows('earningOrder')[0]).toMatchObject({ refundedMinor: 0 });
+  });
+
+  it('throws after 5 attempts that each lose the counter', async () => {
+    const fake = createFakeCoreTable();
+    await sale(fake, {}, ['a']);
+    await refund(fake, 300);
+    let raised = 300;
+    fake.hooks.beforeTransaction = () => {
+      raised += 1;
+      fake.put('earningOrder', {
+        ...fake.rows('earningOrder')[0],
+        refundedMinor: raised,
+      });
+    };
+    await expect(reverse(fake)).rejects.toThrow(/try again/);
+  });
+
   it('is not undone by the refund image delivered again afterwards', async () => {
     const fake = createFakeCoreTable();
     await sale(fake);
