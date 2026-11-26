@@ -42,25 +42,40 @@ vi.mock('./user-menu', () => ({ UserMenu: () => null }));
 import { useBreadcrumbLabel, useBreadcrumbOptions } from './breadcrumb-label';
 import { PortalShell } from './portal-shell';
 
-const Page = () => {
+const Page = ({ href = base }: { href?: string }) => {
   useBreadcrumbLabel('Walk assignment', '/my-courses/c1/assignments/a1');
-  useBreadcrumbOptions('/my-courses/c1/assignments/a1', { href: base });
+  useBreadcrumbOptions('/my-courses/c1/assignments/a1', { href });
   useBreadcrumbOptions(base, { hidden: true });
   return <h1>Submission</h1>;
 };
 
+const shell = (child: React.ReactNode) => (
+  <PortalShell
+    portal="instructor"
+    label="Instructor"
+    navItems={[{ label: 'Home', to: '/', icon: Home }]}
+    segmentLabels={{ assignments: 'Assignments' }}
+  >
+    {child}
+  </PortalShell>
+);
+
 describe('PortalShell breadcrumb options', () => {
+  it('follows a changed link and drops the options with the page', async () => {
+    const { rerender } = render(shell(<Page />));
+    await screen.findByRole('link', { name: 'Walk assignment' });
+
+    rerender(shell(<Page href="/elsewhere" />));
+    expect(
+      await screen.findByRole('link', { name: 'Walk assignment' }),
+    ).toHaveAttribute('href', '/elsewhere');
+
+    rerender(shell(<h1>Other</h1>));
+    expect(screen.queryByRole('link', { name: 'Walk assignment' })).toBeNull();
+  });
+
   it('links a crumb elsewhere and hides a crumb a page asks to drop', async () => {
-    render(
-      <PortalShell
-        portal="instructor"
-        label="Instructor"
-        navItems={[{ label: 'Home', to: '/', icon: Home }]}
-        segmentLabels={{ assignments: 'Assignments' }}
-      >
-        <Page />
-      </PortalShell>,
-    );
+    render(shell(<Page />));
 
     const trail = await screen.findByRole('navigation', {
       name: 'breadcrumb',
