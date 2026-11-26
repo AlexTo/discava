@@ -14,8 +14,8 @@ const UPLOAD_BUCKET_NAME = 'lesson-media-upload-bucket';
 
 beforeEach(() => {
   vi.stubEnv(
-    'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
-    JSON.stringify({ bucketName: UPLOAD_BUCKET_NAME }),
+    'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET_BUCKET_NAME',
+    UPLOAD_BUCKET_NAME,
   );
 });
 
@@ -33,11 +33,11 @@ describe('resolveLessonMediaUploadBucketName', () => {
   });
 
   it('throws when the setting is not set', async () => {
-    vi.stubEnv('DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET', '');
+    vi.stubEnv('DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET_BUCKET_NAME', '');
     const { resolveLessonMediaUploadBucketName } = await importFreshModule();
 
     await expect(resolveLessonMediaUploadBucketName()).rejects.toThrow(
-      'Missing deploy-time setting DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
+      'Missing deploy-time setting DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET_BUCKET_NAME',
     );
   });
 });

@@ -58,10 +58,7 @@ describe('public media S3 helpers', () => {
 
   beforeEach(() => {
     send.mockReset();
-    vi.stubEnv(
-      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET',
-      JSON.stringify({ bucketName: 'public-media' }),
-    );
+    vi.stubEnv('DISCAVA_S3_PUBLIC_MEDIA_BUCKET_BUCKET_NAME', 'public-media');
     vi.spyOn(s3, 'getS3Client').mockReturnValue({ send } as never);
   });
 
