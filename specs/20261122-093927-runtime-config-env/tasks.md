@@ -226,12 +226,14 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
 - [x] T040 [P] Update `packages/infra/CLAUDE.md`, `packages/common/constructs/CLAUDE.md` and `packages/apis/CLAUDE.md` where they mention `RuntimeConfig`, AppConfig or `RUNTIME_CONFIG_APP_ID`. Add a short "How a function gets a setting" note to `packages/common/constructs/CLAUDE.md`: call the resource's `bindSettings(fn)` next to its grant, or `addSetting` for a stack-level value; read it with `readSetting`; never fetch settings at runtime. Add a matching line to `CONTRIBUTING.md` where backend Lambdas are described.
 - [x] T041 (human) After Phase 4 is deployed, walk every flow in [quickstart.md](./quickstart.md) step 7 on `discava-development`, checking each function's logs for `deploy-time setting` or `AccessDenied` errors. Then compare cold starts as in step 9 (SC-005).
 - [x] T042 (human) The day after Phase 3 is deployed and used, run [quickstart.md](./quickstart.md) step 10 and record in the PR that AppConfig usage is zero from that date (SC-001). Also check whether credits were what kept October and November at $0 (research R-1), and note it.
-- [ ] T043 (human) The owner confirms the defaults this spec took without asking (spec, Clarifications):
+- [x] T043 (human) The owner confirms the defaults this spec took without asking (spec, Clarifications):
   - the page renderer reads one Systems Manager parameter;
   - the final stack is kept and renamed `PortalConfig`;
   - the rollout is switch PRs, then deleting the old stack by hand, then the removal PR;
   - operator scripts take `DISCAVA_DYNAMODB_CORE_TABLE` from the `CoreTableName` output;
   - only the caption language and caption translation settings keep silent defaults.
+
+  Confirmed on 2026-11-26. The silent defaults in the last item are accepted for now; #1242 makes the caption translation setting required like the others, turns the caption language into a constant, and flattens the settings' JSON into one variable per field.
 
 ---
 
