@@ -47,6 +47,7 @@ export const transcribeComplete = async (
     status: detail.TranscriptionJobStatus,
     nonce: job.nonce,
     vttKey: job.vttKey,
+    languageCode: job.languageCode,
   };
   await applyTranscribeOutcome(
     logger,
