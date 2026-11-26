@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { Home } from 'lucide-react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -72,6 +72,26 @@ describe('PortalShell breadcrumb options', () => {
 
     rerender(shell(<h1>Other</h1>));
     expect(screen.queryByRole('link', { name: 'Walk assignment' })).toBeNull();
+  });
+
+  it('keeps one set of options when two pages set the same ones', async () => {
+    const Twice = () => {
+      useBreadcrumbOptions('/my-courses/c1/assignments/a1', { href: '/a' });
+      useBreadcrumbOptions('/my-courses/c1/assignments/a1', { href: '/a' });
+      return <h1>Submission</h1>;
+    };
+    const { rerender } = render(shell(<Twice />));
+    const trail = await screen.findByRole('navigation', {
+      name: 'breadcrumb',
+    });
+    // The assignment's own path has no page, so only its options link it.
+    const linked = () =>
+      [...trail.querySelectorAll('a')].find((a) => a.textContent === 'a1');
+    await waitFor(() => expect(linked()).toHaveAttribute('href', '/a'));
+
+    // Both clear on unmount; the second finds nothing left to clear.
+    rerender(shell(<h1>Other</h1>));
+    await waitFor(() => expect(linked()).toBeUndefined());
   });
 
   it('links a crumb elsewhere and hides a crumb a page asks to drop', async () => {
