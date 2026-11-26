@@ -76,6 +76,12 @@ export const createEarningOrderEntity = async () =>
           required: true,
           validate: (value: number) => Number.isInteger(value) && value >= 0,
         },
+        // When `recordRefundReversal` last took a refund back, set even when
+        // the ledger held none yet. A refund dated at or before it is an old
+        // notice of the refund that failed, and `recordRefund` leaves it out.
+        reversedAt: {
+          type: 'string',
+        },
         createdAt: {
           type: 'string',
           required: true,

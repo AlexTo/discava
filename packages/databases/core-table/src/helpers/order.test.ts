@@ -519,6 +519,38 @@ describe('refundOrder', () => {
       now: LATER,
     });
 
+  it('ignores a notice created before the refund failed, and takes a later one', async () => {
+    const { fake } = setup();
+    fake.put(
+      'order',
+      paid({
+        refundRequestedAt: NOW,
+        refundFailedAt: '2026-11-19T00:05:00.000Z',
+      }),
+    );
+    fake.put('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+      status: 'active',
+      orderId: 'order-1',
+    });
+    const at = (eventAt: string) =>
+      refundOrder({
+        coreTable: fake.coreTable,
+        order: { orderId: 'order-1' },
+        refundedTotal: 1999,
+        now: LATER,
+        eventAt,
+      });
+    await at('2026-11-19T00:01:00.000Z');
+    expect(fake.row('order', { orderId: 'order-1' })?.status).toBe('paid');
+    expect(
+      fake.row('enrolment', { courseId: 'course-1', userId: 'user-1' })?.status,
+    ).toBe('active');
+    await at('2026-11-19T00:07:00.000Z');
+    expect(fake.row('order', { orderId: 'order-1' })?.status).toBe('refunded');
+  });
+
   it('refunds in full: the order and the enrolment end together', async () => {
     const { fake } = setup();
     fake.put('order', paid());

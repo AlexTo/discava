@@ -61,6 +61,7 @@ export interface EarningOrderRecord {
   feeBasisPoints: number;
   instructorIds: string[];
   refundedMinor: number;
+  reversedAt?: string;
 }
 
 export interface EarningDayRecord {
@@ -294,6 +295,11 @@ export const recordRefund = async ({
     if (!data) return false;
     const earning = data as EarningOrderRecord;
     const recorded = earning.refundedMinor;
+    // An old notice of a refund that failed and was taken back, which may
+    // reach the ledger after its reversal.
+    if (earning.reversedAt !== undefined && occurredAt <= earning.reversedAt) {
+      return false;
+    }
     const total = Math.min(refundedTotal, earning.paidMinor);
     if (total <= recorded) return false;
 
@@ -345,8 +351,10 @@ export const recordRefund = async ({
  * in one transaction conditioned on the total still being the one the shares
  * were computed from. The reversal is its own entry, dated `occurredAt`, so a
  * refund a payout already took is not edited: the next payout takes the
- * reversal. An order with no earnings, or none refunded in the ledger, records
- * nothing (false), and so does a reversal already recorded.
+ * reversal. An order with none refunded in the ledger yet only gets the
+ * reversal's time (`reversedAt`), so a refund notice dated before it, delivered
+ * later, is not recorded. An order with no earnings records nothing (false),
+ * and so does a reversal already recorded.
  */
 export const recordRefundReversal = async ({
   coreTable,
@@ -364,7 +372,26 @@ export const recordRefundReversal = async ({
     if (!data) return false;
     const earning = data as EarningOrderRecord;
     const recorded = earning.refundedMinor;
-    if (recorded <= 0) return false;
+    if (earning.reversedAt !== undefined && earning.reversedAt >= occurredAt) {
+      return false;
+    }
+    if (recorded <= 0) {
+      // Nothing to take back yet: the refund's own image may still come, and
+      // this marks it as old so `recordRefund` leaves it out.
+      await coreTable.transaction
+        .write(({ earningOrder }) => [
+          earningOrder
+            .patch({ orderId })
+            .set({ reversedAt: occurredAt })
+            .where(
+              (attr, op) =>
+                `${op.notExists(attr.reversedAt)} OR ${op.lt(attr.reversedAt, occurredAt)}`,
+            )
+            .commit(),
+        ])
+        .go();
+      return false;
+    }
 
     const shares = calculateRefund({
       grossMinor: earning.grossMinor,
@@ -388,7 +415,7 @@ export const recordRefundReversal = async ({
       .write((entities) => [
         entities.earningOrder
           .patch({ orderId })
-          .set({ refundedMinor: 0 })
+          .set({ refundedMinor: 0, reversedAt: occurredAt })
           .where((attr, op) => op.eq(attr.refundedMinor, recorded))
           .commit(),
         ...shares.flatMap((share) =>

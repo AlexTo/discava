@@ -42,10 +42,11 @@ vi.mock('@discava/core-table', () => ({
     state.enrolments.push(current.userId);
     return { result: 'fulfilled' };
   }),
-  refundOrder: vi.fn(async ({ order, refundedTotal, now }: any) => {
+  refundOrder: vi.fn(async ({ order, refundedTotal, now, eventAt }: any) => {
     const current = state.orders.get(order.orderId);
     if (!current) throw new Error('Not found');
     if (current.status !== 'paid') return;
+    if (current.refundFailedAt && eventAt <= current.refundFailedAt) return;
     if (refundedTotal >= current.amount) {
       Object.assign(current, {
         status: 'refunded',
@@ -414,6 +415,19 @@ describe('charge.refunded', () => {
       completedAt: '2026-11-18T00:00:00.000Z',
       progressPercent: 100,
     };
+  });
+
+  it('does not refund again from a notice created before the refund failed', async () => {
+    Object.assign(state.orders.get('o1'), {
+      refundRequestedAt: '2026-11-19T08:00:00.000Z',
+      refundFailedAt: '2026-11-19T09:00:00.000Z',
+    });
+    const body = JSON.parse(refundedEvent(4900));
+    body.created = Date.parse('2026-11-19T08:30:00.000Z') / 1000;
+    await send(JSON.stringify(body));
+    expect(state.orders.get('o1')?.status).toBe('paid');
+    expect(state.enrolment?.status).not.toBe('dropped');
+    expect(state.notifications.size).toBe(0);
   });
 
   it('ends the order and the enrolment on a full refund, keeping progress', async () => {
