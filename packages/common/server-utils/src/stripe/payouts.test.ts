@@ -33,6 +33,9 @@ vi.mock('./connect.js', () => ({ verifyKey }));
 import { createStripe } from './client.js';
 import {
   classifyTransferError,
+  isConnectNotAllowed,
+  isInvalidRequest,
+  isResourceMissing,
   mapAccountStatus,
   PaymentAccountMismatchError,
   payoutStripe,
@@ -234,6 +237,57 @@ describe('payoutStripe', () => {
       transfer_group: 'po_1',
       limit: 100,
     });
+  });
+});
+
+describe('isConnectNotAllowed / isResourceMissing', () => {
+  const invalid = (message: string, code?: string) =>
+    new Stripe.errors.StripeInvalidRequestError({
+      message,
+      type: 'invalid_request_error',
+      code,
+    } as never);
+
+  it('matches a permission error and the Connect sign-up message', () => {
+    expect(
+      isConnectNotAllowed(
+        new Stripe.errors.StripePermissionError({ message: 'x' } as never),
+      ),
+    ).toBe(true);
+    expect(
+      isConnectNotAllowed(
+        invalid(
+          "You can only create new accounts if you've signed up for Connect",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not match other invalid requests', () => {
+    expect(
+      isConnectNotAllowed(invalid('No such account', 'resource_missing')),
+    ).toBe(false);
+    expect(isConnectNotAllowed(invalid('Not a valid URL', 'url_invalid'))).toBe(
+      false,
+    );
+    expect(isConnectNotAllowed(new Error('x'))).toBe(false);
+  });
+
+  it('finds any invalid request', () => {
+    expect(isInvalidRequest(invalid('Not a valid URL', 'url_invalid'))).toBe(
+      true,
+    );
+    expect(isInvalidRequest(new Error('x'))).toBe(false);
+  });
+
+  it('finds resource_missing only', () => {
+    expect(
+      isResourceMissing(invalid('No such account', 'resource_missing')),
+    ).toBe(true);
+    expect(isResourceMissing(invalid('Not a valid URL', 'url_invalid'))).toBe(
+      false,
+    );
+    expect(isResourceMissing(new Error('x'))).toBe(false);
   });
 });
 

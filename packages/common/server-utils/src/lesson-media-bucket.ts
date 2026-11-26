@@ -22,10 +22,6 @@ export const getS3Client = (): S3Client => {
   return _client;
 };
 
-type S3Config = {
-  bucketName: string;
-};
-
 // A bucket's name, from its setting key: the stack's bucket from its
 // deploy-time setting when deployed, or the S3Mock bucket standing in for it
 // in local dev (#137).
@@ -34,7 +30,7 @@ export const resolveBucketName = async (
 ): Promise<string> =>
   isLocalDev()
     ? localBucketName(runtimeConfigKey)
-    : readSetting<S3Config>('s3', runtimeConfigKey).bucketName;
+    : readSetting('s3', runtimeConfigKey, ['bucketName']).bucketName;
 
 export const resolveLessonMediaBucketName = (): Promise<string> =>
   resolveBucketName('LessonMediaBucket');

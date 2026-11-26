@@ -26,7 +26,9 @@ A sale counts on the day it was paid, and a refund on the day it was made, so a 
 
 ## The Earnings page
 
-**Earnings** in the instructor portal has four parts.
+**Earnings** in the instructor portal's sidebar has four parts.
+
+**Payout account**: its status and the one thing to do about it. See [Setting up payouts](#setting-up-payouts).
 
 **Balance**, per currency:
 
@@ -36,32 +38,44 @@ A sale counts on the day it was paid, and a refund on the day it was made, so a 
 | **Waiting for account setup** | Past the hold period, but you have no active payout account |
 | **Ready** | Will go out with the next payout |
 
-**Payout account**: its status and the one thing to do about it.
+**Report**: the current month to start with. Pick another month, or choose **Custom range** and set a From and To date up to 366 days apart.
 
-**Report**: pick a month, or a From and To date up to 366 days apart. For each course it shows the number of orders, gross, discounts, refunds, fee and net, with a total per currency. Days are counted in UTC. **Show orders** on a course lists each sale and refund with an order reference. It never shows who bought.
+- For each course it shows the number of orders, gross, discounts, refunds, platform fee and net, with a total per currency.
+- **Show orders** on a course lists each sale and refund with an order reference. It never shows who bought.
+- Days are counted in UTC.
 
 **Payouts**: each payout's date, amount and status.
 
 ## Setting up payouts
 
-Choose **Set up payouts**. Stripe asks for your identity and bank details on its own pages, then sends you back.
+1. Open **Earnings**.
+2. On the **Payout account** card, choose **Set up payouts**.
+3. Give Stripe your identity and bank details on its own pages. Stripe sends you back to Earnings when you finish.
+
+The card shows where you are:
 
 | Status | What to do |
 | --- | --- |
-| **Not set up** | Set up payouts |
-| **In progress** | Continue setup: Stripe's form isn't finished |
-| **Active** | Nothing. You can open your Stripe dashboard from here |
-| **Restricted** | Fix account: Stripe needs something more from you |
+| **Not set up** | **Set up payouts** |
+| **In progress** | **Continue setup**: Stripe's form isn't finished |
+| **Active** | Nothing. **Open Stripe dashboard** takes you to your Stripe account |
+| **Restricted** | **Fix account**: Stripe needs something more from you |
+
+If the card says "Payouts aren't available yet", the platform hasn't connected Stripe. Ask an administrator.
 
 Earnings are recorded whether or not you have set up payouts. They wait until you do.
 
 ## When you are paid
 
-- Each sale is **held** for a number of days set by the platform (14 unless it was changed), so a refund in that time never has to be taken back from you.
+- Each sale is **held** for a number of days set by the platform (14 on the production stage unless it was changed), so a refund in that time never has to be taken back from you.
 - A payout run happens **once a day**. It sends everything that is ready, one payout per currency.
 - A balance below the **minimum payout** (10.00 unless it was changed) waits for a later run.
 
-A payout shows as **Pending** while it is being sent, **Sent** once Stripe has accepted it, or **Failed** with a reason if Stripe refused it. A failed payout's earnings go back into your balance and are tried again.
+A payout's status is one of:
+
+- **Pending**: it is being sent.
+- **Sent**: Stripe has accepted it.
+- **Failed**: Stripe refused it, with the reason. Its earnings go back into your balance and are tried again.
 
 ## Refunds after you were paid
 
@@ -73,9 +87,9 @@ If the platform changes the Stripe account it takes payments with, earnings from
 
 ## For administrators
 
-- Payouts need **Connect** enabled on the platform's Stripe account. Without it, instructors are told payouts can't be set up.
+- Payouts need **Connect** enabled on the platform's Stripe account. Without it, an instructor who chooses **Set up payouts** is told "This platform can't set up payout accounts yet".
 - A restricted key also needs to manage connected accounts, account links, login links and transfers, in addition to what <Link path="guides/payments">taking payments</Link> needs.
-- The fee, the hold period and the minimum payout are set per stage. See <Link path="deploy/configuration">Stage configuration</Link>.
+- The fee, the hold period and the minimum payout are set per stage. The development stage holds sales for 1 day, not 14. See <Link path="deploy/configuration">Stage configuration</Link>.
 - Switching Stripe account or mode holds every instructor's unpaid earnings. Let the daily run pay what is ready first, and pay held earnings by hand.
 
 ## Limitations

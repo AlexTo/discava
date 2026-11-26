@@ -18,29 +18,32 @@ packages/
 │   ├── instructor-portal/
 │   └── admin-portal/
 ├── apis/
-│   ├── core-api/            tRPC, any signed-in user
+│   ├── core-api/            tRPC, any signed-in user; also the public page renderer
 │   ├── instructor-api/      tRPC, instructors only
 │   └── admin-api/           tRPC, admins only
 ├── databases/
 │   ├── core-table/          DynamoDB entities and write helpers (ElectroDB)
-│   └── search/              OpenSearch client and index definitions
+│   └── search/              OpenSearch client, index definitions and index sync
 ├── events/                  Lambda handlers for AWS-triggered events
 ├── infra/                   The CDK app: stages and stacks
 ├── common/
 │   ├── constructs/          CDK constructs, one per component
-│   ├── infra-config/        Per-stage deployment settings
+│   ├── infra-config/        Per-stage deployment settings, local ports and origins
+│   ├── branding/            Brand rules shared by portals and backend
 │   ├── server-utils/        Code shared by backend functions
 │   ├── web-utils/           Non-UI code shared by portals
-│   ├── shadcn/              UI components shared by portals
+│   ├── shadcn/              UI components and the shell shared by portals
 │   └── tiptap/              Rich-text document helpers
 ├── tooling/
 │   ├── local-dev/           The Docker services local development runs instead of AWS
 │   ├── deploy/              Deploy and operations scripts
 │   └── agent/               CI and pull request tooling
-└── e2e/                     Playwright end-to-end tests
+└── e2e/                     Playwright end-to-end tests against the local stack
 docs/                        This site
 scripts/setup-stage.sh       One-time AWS and GitHub setup per stage
 ```
+
+Each package is an Nx project named `@discava/<name>`. Packages under `common/` and `tooling/` carry the folder as a prefix: `@discava/common-web-utils`, `@discava/tooling-deploy`.
 
 ## From component to code
 
@@ -49,12 +52,16 @@ scripts/setup-stage.sh       One-time AWS and GitHub setup per stage
 | A portal | `packages/websites/<portal>` | `constructs/src/app/static-websites`, `WebsitesStack` |
 | An API | `packages/apis/<api>` | `constructs/src/app/apis`, `<Api>Stack` |
 | Core table | `packages/databases/core-table` | `constructs/src/app/dynamodb`, `DataStack` |
+| Page renderer | `packages/apis/core-api/src/page-renderer` | `constructs/src/app/static-websites/student-portal.ts`, `WebsitesStack` |
 | Search | `packages/databases/search` | `constructs/src/app/opensearch`, `DataStack` |
-| Stream router and feature handlers | `packages/events/src/router` and one folder per feature | `constructs/src/core/stream-router.ts`, `StreamRouterStack` |
+| Stream router and feature handlers | `packages/events/src/router`, and a folder per topic (`progress`, `search`, `analytics`, `notifications`, `earnings`, `media`, `branding`) | `constructs/src/core/stream-router.ts`, `StreamRouterStack` |
 | Media pipeline | `packages/events/src/media` | `constructs/src/app/media-convert`, `MediaPipelineStack` |
 | Stripe webhook | `packages/events/src/payments` | `constructs/src/app/apis/stripe-webhook-api.ts`, `PaymentsStack` |
 | Payout run | `packages/events/src/earnings` | `PayoutsStack` |
+| Certificate reminder | `packages/events/src/certificates` | `StreamRouterStack` |
 | Cognito triggers | `packages/events/src/identity` | `DataStack` |
+
+The stream features themselves are registered in one list, `STREAM_FEATURES` in `packages/databases/core-table/src/helpers/stream-features.ts`. The deployed stream router and the local event runner both read it.
 
 ## How an API is put together
 
@@ -67,6 +74,8 @@ Each API follows the same shape:
 | `src/procedures/` | The procedures, each beside its tests |
 | `src/handler.ts` | The Lambda entry point |
 | `src/local-server.ts` | The same router served locally |
+
+core-api has one more entry point, `src/page-renderer/`, with `src/local-page-renderer.ts` to serve it locally.
 
 The shared plumbing, such as authentication middleware and the Lambda adapter, lives once in `packages/common/server-utils`.
 
@@ -84,6 +93,7 @@ Every API and handler writes to the same table. A rule that more than one writer
 | --- | --- |
 | CloudFront + S3 website | Vite dev server |
 | API Gateway + Lambda | A local HTTP server per API |
+| The page renderer | A local HTTP server on port 2026 |
 | Cognito | A local OIDC server with preset users |
 | DynamoDB | DynamoDB local in Docker |
 | S3 | S3Mock in Docker |
@@ -92,9 +102,10 @@ Every API and handler writes to the same table. A rule that more than one writer
 | DynamoDB Streams, EventBridge, Scheduler | The event runner (`packages/events/src/local`) |
 | MediaConvert | ffmpeg in Docker |
 | Transcribe | A stand-in that writes a placeholder caption track |
+| Translate | A stand-in that prefixes each caption with its target language |
 | SES | Emails saved to a local inbox |
 | Stripe | A stand-in for its API, checkout page, webhook deliveries and Connect |
-| Secrets Manager (the Stripe key) | A git-ignored file under `tmp/local-dev/secrets/` |
+| Secrets Manager (the Stripe secrets) | Git-ignored files under `tmp/local-dev/secrets/` |
 
 The event runner triggers the same handlers AWS would, through the same registry of stream features, so background behaviour is the same in both places. <Link path="guides/getting-started">Run Discava locally</Link> has the commands.
 

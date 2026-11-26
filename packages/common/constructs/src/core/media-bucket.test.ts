@@ -197,7 +197,7 @@ describe('MediaBucket', { timeout: 30_000 }, () => {
     });
 
     expect(settingOf(stack, media)).toContain(
-      '\\"cloudFrontDomainName\\":\\"media.example.com\\"',
+      '"DISCAVA_S3_MEDIA_CLOUD_FRONT_DOMAIN_NAME":"media.example.com"',
     );
   });
 

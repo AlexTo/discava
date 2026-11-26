@@ -201,6 +201,14 @@ describe('payments: price, orders and the connection', () => {
         { status: 'expired', refundRequestedAt: LATER },
         /refund requested, but the order is expired/,
       ],
+      [{ refundFailedAt: LATER }, /refund failed, but no refund was requested/],
+      [
+        {
+          refundRequestedAt: LATER,
+          refundFailedAt: '2026-01-01T00:00:00.000Z',
+        },
+        /refundFailedAt is before refundRequestedAt/,
+      ],
     ])('reports %j', (change, message) => {
       paidTable();
       Object.assign(table.orders[0], change);
@@ -244,6 +252,15 @@ describe('payments: price, orders and the connection', () => {
         refundReason: 'requested',
       });
       table.enrolments[0].status = 'dropped';
+      expect(violationsOf('order-shape')).toEqual([]);
+    });
+
+    it('accepts a failed refund at or after its request', () => {
+      paidTable();
+      table.orders[0].refundRequestedAt = LATER;
+      table.orders[0].refundFailedAt = LATER;
+      expect(violationsOf('order-shape')).toEqual([]);
+      table.orders[0].refundFailedAt = '2026-01-07T00:00:00.000Z';
       expect(violationsOf('order-shape')).toEqual([]);
     });
 

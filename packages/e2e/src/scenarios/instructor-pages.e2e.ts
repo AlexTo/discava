@@ -6,6 +6,7 @@
 import { createPublishedCourseViaApi } from '../helpers/api.js';
 import { apiUserFor } from '../helpers/assignment.js';
 import { PORTALS } from '../helpers/portals.js';
+import { PHONE } from '../helpers/viewport.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
@@ -73,6 +74,24 @@ test('every instructor page has a title, one h1 and one main', async ({
     await expect(
       page.getByRole('heading', { level: 1, name: 'Earnings' }),
     ).toBeFocused();
+  });
+
+  await test.step('at phone width, a link from the open sidebar leaves focus on the new h1', async () => {
+    await page.setViewportSize(PHONE);
+    await page.goto(`${PORTALS.instructor}/`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await page.getByRole('button', { name: 'Toggle Sidebar' }).click();
+    const sidebar = page.getByRole('dialog');
+    await expect(sidebar).toBeVisible();
+    await sidebar.getByRole('link', { name: 'Earnings' }).focus();
+    await page.keyboard.press('Enter');
+    await page.waitForURL(/\/earnings$/);
+    await expect(sidebar).toBeHidden();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Earnings' }),
+    ).toBeFocused();
+    await screenshot(page, 'phone sidebar link leaves focus on the new h1');
+    await page.setViewportSize({ width: 1280, height: 720 });
   });
 
   await test.step('a course that fails to load still has one h1', async () => {

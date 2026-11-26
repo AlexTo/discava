@@ -22,7 +22,7 @@ export type IModule = z.output<typeof ModuleSchema>;
 
 export const CreateModuleInputSchema = z.object({
   courseId: z.string(),
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
   description: z.string().optional(),
 });
 
@@ -35,7 +35,7 @@ export type ICreateModuleOutput = z.output<typeof CreateModuleOutputSchema>;
 export const UpdateModuleInputSchema = z.object({
   courseId: z.string(),
   moduleId: z.string(),
-  title: z.string().min(1).max(200).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
   description: z.string().optional(),
 });
 

@@ -7,6 +7,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { account, dashboardLink, startOnboarding } from './payout.js';
 
+// Powertools writes through the global console in dev mode, which a test can spy on.
+vi.hoisted(() => {
+  process.env.POWERTOOLS_DEV = 'true';
+});
+
 const { getConnection, saveAccountStatus, payoutGet, payoutStripe, stripe } =
   vi.hoisted(() => ({
     getConnection: vi.fn(),
@@ -39,6 +44,11 @@ vi.mock(
     // The real check needs the stripe package, which only server-utils has.
     isConnectNotAllowed: (error: unknown) =>
       error instanceof Error && error.name === 'StripePermissionError',
+    isInvalidRequest: (error: unknown) =>
+      error instanceof Error && error.name === 'StripeInvalidRequestError',
+    isResourceMissing: (error: unknown) =>
+      error instanceof Error &&
+      (error as { code?: string }).code === 'resource_missing',
   }),
 );
 
@@ -273,6 +283,41 @@ describe('payout.startOnboarding', () => {
     const error = (await start().catch((e) => e)) as Error;
     expect(error).toMatchObject({ code: 'PRECONDITION_FAILED' });
     expect(JSON.stringify(error) + error.message).not.toContain(KEY);
+  });
+
+  it('says the account is missing, not "Connect not enabled", on resource_missing', async () => {
+    storedIs(stored());
+    const gone = Object.assign(new Error('No such account'), {
+      name: 'StripeInvalidRequestError',
+      code: 'resource_missing',
+    });
+    stripe.createAccountLink.mockRejectedValue(gone);
+    const error = (await start().catch((e) => e)) as Error;
+    expect(error).toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(error.message).toContain("can't find your payout account");
+    expect(error.message).not.toContain("can't set up payout accounts");
+  });
+
+  it('logs a rejected return URL with the Stripe code, not as "Connect not enabled"', async () => {
+    storedIs(stored());
+    const bad = Object.assign(new Error('Invalid URL'), {
+      name: 'StripeInvalidRequestError',
+      code: 'url_invalid',
+    });
+    stripe.createAccountLink.mockRejectedValue(bad);
+    const logged: string[] = [];
+    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map(
+      (level) =>
+        vi.spyOn(console, level).mockImplementation((...args) => {
+          logged.push(args.map((a) => JSON.stringify(a)).join(' '));
+        }),
+    );
+    const error = (await start().catch((e) => e)) as Error;
+    for (const spy of spies) spy.mockRestore();
+    expect(error.message).not.toContain("can't set up payout accounts");
+    expect(
+      logged.some((l) => l.includes('ERROR') && l.includes('url_invalid')),
+    ).toBe(true);
   });
 
   it('is PRECONDITION_FAILED when the saved key is missing', async () => {

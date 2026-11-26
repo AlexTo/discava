@@ -8,8 +8,6 @@ import type { TableSnapshot } from './snapshot.js';
 import {
   checkTableInvariants,
   consistentTable,
-  ids,
-  shown,
   testHelpers,
 } from './test-fixture.js';
 
@@ -495,7 +493,7 @@ describe('discussion', () => {
       table.courseStats[0].enrolments = 2;
       table.periodStats = table.periodStats.map((p) => ({
         ...p,
-        enrolments: p.enrolments + 1,
+        enrolments: (p.enrolments ?? 0) + 1,
       }));
       setState('answered');
       hold([answerOf('student', AID, { createdAt: AT2 })], []);
