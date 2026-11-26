@@ -238,6 +238,9 @@ export function EnrolmentActions({
   // The code the student applied, shown in the price summary and passed to
   // the checkout. The server validates and prices it again at checkout.
   const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
+  // Whether the last checkout attempt was a free enrolment, so a failure is
+  // worded for enrolling, not paying. The refused code is dropped on failure.
+  const [attemptWasFree, setAttemptWasFree] = useState(false);
   const checkout = useMutation(
     trpc.payment.checkout.mutationOptions({
       onSuccess: async (result) => {
@@ -267,6 +270,11 @@ export function EnrolmentActions({
       },
     }),
   );
+  // An error from an earlier code doesn't describe the newly applied one.
+  const changeCoupon = (next: AppliedCoupon | null) => {
+    if (checkout.isError) checkout.reset();
+    setCoupon(next);
+  };
   const paymentsUnavailable =
     availableQuery.data?.available === false ||
     isPaymentsUnavailable(checkout.error);
@@ -305,8 +313,8 @@ export function EnrolmentActions({
         <CouponField
           courseId={courseId}
           applied={coupon}
-          onApply={setCoupon}
-          onRemove={() => setCoupon(null)}
+          onApply={changeCoupon}
+          onRemove={() => changeCoupon(null)}
         />
         {coupon?.isFree ? (
           <p className="text-sm text-muted-foreground">No payment is needed.</p>
@@ -315,12 +323,13 @@ export function EnrolmentActions({
           className="w-full"
           size="lg"
           disabled={checkout.isPending || checkout.isSuccess}
-          onClick={() =>
+          onClick={() => {
+            setAttemptWasFree(coupon?.isFree === true);
             checkout.mutate({
               courseId,
               ...(coupon && { couponCode: coupon.code }),
-            })
-          }
+            });
+          }}
         >
           {checkout.isPending || checkout.isSuccess
             ? coupon?.isFree
@@ -583,7 +592,12 @@ export function EnrolmentActions({
         </ErrorAlert>
       ) : null}
       {checkout.isError && !isPaymentsUnavailable(checkout.error) ? (
-        <ErrorAlert type="error" header="Couldn't start payment">
+        <ErrorAlert
+          type="error"
+          header={
+            attemptWasFree ? "Couldn't enrol you" : "Couldn't start payment"
+          }
+        >
           {apiErrorMessage(checkout.error)}
         </ErrorAlert>
       ) : null}

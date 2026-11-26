@@ -2,7 +2,10 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useBreadcrumbLabel } from '@discava/common-shadcn/components/breadcrumb-label';
+import {
+  useBreadcrumbLabel,
+  useBreadcrumbOptions,
+} from '@discava/common-shadcn/components/breadcrumb-label';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
@@ -33,7 +36,18 @@ function RouteComponent() {
     }),
   );
   const data = query.data;
-  useBreadcrumbLabel('Course', `/my-courses/${courseId}`);
+  // Shares the course editor's cached answer.
+  const courseQuery = useQuery(trpc.course.view.queryOptions({ courseId }));
+  useBreadcrumbLabel(courseQuery.data?.title, `/my-courses/${courseId}`);
+  // The assignment crumb opens the submissions list in place of a separate
+  // "Submissions" crumb.
+  useBreadcrumbOptions(`/my-courses/${courseId}/assignments/${contentItemId}`, {
+    href: `/my-courses/${courseId}/assignments/${contentItemId}/submissions`,
+  });
+  useBreadcrumbOptions(
+    `/my-courses/${courseId}/assignments/${contentItemId}/submissions`,
+    { hidden: true },
+  );
   useBreadcrumbLabel(
     data?.assignment.title,
     `/my-courses/${courseId}/assignments/${contentItemId}`,

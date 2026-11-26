@@ -2,11 +2,14 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useBreadcrumbLabel } from '@discava/common-shadcn/components/breadcrumb-label';
+import {
+  useBreadcrumbLabel,
+  useBreadcrumbOptions,
+} from '@discava/common-shadcn/components/breadcrumb-label';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useInstructorApi } from '../../../../../../../api';
 import { SubmissionsTable } from './-components/submissions-table';
@@ -29,7 +32,18 @@ function RouteComponent() {
   );
   const first = query.data?.pages[0];
   const rows = query.data?.pages.flatMap((page) => page.rows) ?? [];
-  useBreadcrumbLabel('Course', `/my-courses/${courseId}`);
+  // Shares the course editor's cached answer.
+  const courseQuery = useQuery(trpc.course.view.queryOptions({ courseId }));
+  useBreadcrumbLabel(courseQuery.data?.title, `/my-courses/${courseId}`);
+  // The assignment crumb opens the submissions list in place of a separate
+  // "Submissions" crumb.
+  useBreadcrumbOptions(`/my-courses/${courseId}/assignments/${contentItemId}`, {
+    href: `/my-courses/${courseId}/assignments/${contentItemId}/submissions`,
+  });
+  useBreadcrumbOptions(
+    `/my-courses/${courseId}/assignments/${contentItemId}/submissions`,
+    { hidden: true },
+  );
   usePageTitle(first?.assignment.title, 'Submissions');
   useBreadcrumbLabel(
     first?.assignment.title,

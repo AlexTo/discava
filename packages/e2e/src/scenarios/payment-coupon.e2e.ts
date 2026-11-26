@@ -151,3 +151,70 @@ test('a code that makes the course free enrols the student directly', async ({
     courseId: course.courseId,
   });
 });
+
+// A code refused when the student pays leaves an alert that applying another
+// code clears. The alert is worded for the path that failed.
+test('a refused code leaves no alert once a working code is applied', async ({
+  browser,
+}) => {
+  const title = uniqueName('E2E refused-then-working course');
+  const instructor = await apiUser('Ines', ['instructor']);
+  const course = await createPricedCourseViaApi(instructor, title, 2000);
+  const { code: staleCode } = await instructor.instructor.coupon.create.mutate({
+    courseId: course.courseId,
+    type: 'percent',
+    value: 25,
+    maxRedemptions: 5,
+  });
+  const { code: freeCode } = await instructor.instructor.coupon.create.mutate({
+    courseId: course.courseId,
+    type: 'percent',
+    value: 100,
+    maxRedemptions: 5,
+  });
+  const page = await browser.newPage();
+  const user = newUser('Cleo', ['student']);
+
+  await test.step('a code turned off after it was applied is refused at the payment', async () => {
+    await openCourse(page, title);
+    await page.getByRole('button', { name: 'Sign in to buy' }).click();
+    await page
+      .getByRole('dialog', { name: 'Sign in to buy' })
+      .getByRole('link', { name: 'Continue to sign in' })
+      .click();
+    await signIn(page, user);
+    await page.getByRole('button', { name: 'Have a code?' }).click();
+    await page.getByLabel('Discount code').fill(staleCode);
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Pay $15.00' }),
+    ).toBeVisible();
+    await instructor.instructor.coupon.update.mutate({
+      courseId: course.courseId,
+      code: staleCode,
+      enabled: false,
+    });
+    await page.getByRole('button', { name: 'Pay $15.00' }).click();
+    await expect(page.getByRole('alert')).toContainText(
+      "Couldn't start payment",
+    );
+    await expect(
+      page.getByRole('alert').getByText('This code has been turned off'),
+    ).toBeVisible();
+    await screenshot(page, 'refused-code-alert');
+  });
+
+  await test.step('applying a working code clears the alert', async () => {
+    await page.getByLabel('Discount code').fill(freeCode);
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Enrol for free' }),
+    ).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await screenshot(page, 'alert-cleared-by-working-code');
+  });
+
+  await instructor.instructor.course.archive.mutate({
+    courseId: course.courseId,
+  });
+});

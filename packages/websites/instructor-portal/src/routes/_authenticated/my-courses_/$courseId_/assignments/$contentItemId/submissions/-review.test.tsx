@@ -10,8 +10,13 @@ import {
 } from '../../../../../../../test/render-with-instructor-api';
 
 // The breadcrumb needs the portal shell's router and context.
+const { useBreadcrumbLabel, useBreadcrumbOptions } = vi.hoisted(() => ({
+  useBreadcrumbLabel: vi.fn(),
+  useBreadcrumbOptions: vi.fn(),
+}));
 vi.mock('@discava/common-shadcn/components/breadcrumb-label', () => ({
-  useBreadcrumbLabel: () => {},
+  useBreadcrumbLabel,
+  useBreadcrumbOptions,
 }));
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const { mockRouter } = await import('@discava/common-web-utils/testing');
@@ -95,6 +100,32 @@ const render = (
   });
 
 describe('Review page', () => {
+  it('names the course by its title and sends the assignment crumb to the submissions list', async () => {
+    render(() => view(), {
+      'course.view': () => ({ title: 'Intro to Rust' }),
+    });
+
+    await screen.findByRole('heading', { name: 'Sam Student' });
+    await waitFor(() =>
+      expect(useBreadcrumbLabel).toHaveBeenCalledWith(
+        'Intro to Rust',
+        '/my-courses/c1',
+      ),
+    );
+    expect(useBreadcrumbLabel).not.toHaveBeenCalledWith(
+      'Course',
+      expect.anything(),
+    );
+    expect(useBreadcrumbOptions).toHaveBeenCalledWith(
+      '/my-courses/c1/assignments/i1',
+      { href: '/my-courses/c1/assignments/i1/submissions' },
+    );
+    expect(useBreadcrumbOptions).toHaveBeenCalledWith(
+      '/my-courses/c1/assignments/i1/submissions',
+      { hidden: true },
+    );
+  });
+
   it('shows the student, the preview, the details and the history', async () => {
     render(() =>
       view({
