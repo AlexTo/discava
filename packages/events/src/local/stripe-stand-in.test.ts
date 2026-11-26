@@ -168,6 +168,21 @@ describe('webhook endpoints', () => {
     expect(standIn.endpointsOf('acct_local')).toHaveLength(1);
   });
 
+  it('keeps the events when an update names none, and refuses a restricted key', async () => {
+    const created = await create(stripeFor('sk_test_local'));
+    const kept = await stripeFor('sk_test_local').webhookEndpoints.update(
+      created.id,
+      { description: 'unchanged events' },
+    );
+    expect(kept.enabled_events).toEqual([...EVENTS]);
+    const error = await stripeFor('rk_test_local_nowebhook')
+      .webhookEndpoints.update(created.id, {
+        enabled_events: ['charge.refunded'],
+      })
+      .catch((e) => e);
+    expect(error).toBeInstanceOf(Stripe.errors.StripePermissionError);
+  });
+
   it('refuses a missing url or events with a 400', async () => {
     const error = await stripeFor('sk_test_local')
       .webhookEndpoints.create({
