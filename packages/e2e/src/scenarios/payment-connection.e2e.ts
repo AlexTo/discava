@@ -151,7 +151,7 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
   await test.step('a connection saved before the events were recorded asks for the key again', async () => {
     await forgetRegisteredEvents();
     await admin.reload();
-    const alert = admin.getByRole('alert').filter({
+    const alert = admin.getByRole('status').filter({
       hasText: 'Payment events out of date',
     });
     await expect(alert).toBeVisible();
