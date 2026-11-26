@@ -46,13 +46,14 @@ const params = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP_LAMBDA_ARN', LAMBDA_ARN);
   vi.stubEnv(
-    'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
-    JSON.stringify({
-      lambdaArn: LAMBDA_ARN,
-      schedulerRoleArn: SCHEDULER_ROLE_ARN,
-      scheduleGroupName: SCHEDULE_GROUP_NAME,
-    }),
+    'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP_SCHEDULER_ROLE_ARN',
+    SCHEDULER_ROLE_ARN,
+  );
+  vi.stubEnv(
+    'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP_SCHEDULE_GROUP_NAME',
+    SCHEDULE_GROUP_NAME,
   );
   schedulerSend.mockResolvedValue({});
 });
@@ -63,10 +64,10 @@ afterEach(() => {
 
 describe('scheduleTranscodeCleanupOrThrow', () => {
   it('throws naming the setting when it is not set', async () => {
-    vi.stubEnv('DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP', '');
+    vi.stubEnv('DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP_LAMBDA_ARN', '');
 
     await expect(scheduleTranscodeCleanupOrThrow(params)).rejects.toThrow(
-      'Missing deploy-time setting DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
+      'Missing deploy-time setting DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP_LAMBDA_ARN',
     );
     expect(schedulerSend).not.toHaveBeenCalled();
   });

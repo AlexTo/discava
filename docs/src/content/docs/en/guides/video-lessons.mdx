@@ -1,0 +1,77 @@
+---
+title: Video lessons
+description: The video player's speeds and keyboard shortcuts, captions and auto-translated captions, the transcript, searching what was said in a course, and questions inside a video.
+---
+
+import Link from '@components/link.astro';
+
+## The player
+
+The player's controls set the playback speed, the captions, the volume and full screen, and open the transcript. Speeds run from 0.5 to 2 in steps of 0.25. The player remembers your speed, volume and caption choices for the next video.
+
+Keyboard shortcuts work while the player has focus and you aren't typing in a field:
+
+| Key | What it does |
+| --- | --- |
+| Space or K | Play or pause |
+| J | Back 10 seconds |
+| L | Forward 10 seconds |
+| Left arrow | Back 5 seconds |
+| Right arrow | Forward 5 seconds |
+| Up arrow, Down arrow | Volume up, volume down |
+| M | Mute or unmute |
+| C | Captions on or off |
+| F | Full screen |
+| `<` and `>` | Slower, faster |
+| 0 to 9 | Jump to that tenth of the video: 5 is halfway |
+
+## Captions and the transcript
+
+Captions are added to every video automatically. The captions menu lists the languages the video has, and **Off**.
+
+- A language marked "(auto-translated)" is a machine translation. It can be wrong.
+- **Transcript** opens the text of the video. **Jump to current line** brings it back to where the video is.
+
+Instructors choose which languages captions are translated into, and can upload their own captions. See the <Link path="guides/instructor-guide">Instructor guide</Link>.
+
+## Searching what was said
+
+You can search the captions of every video in a course you are enrolled in.
+
+1. In the course player, find **Search transcripts**.
+2. Type at least 2 characters in "Search what was said".
+3. Choose **Search**.
+4. Choose a result to open that lesson at that moment.
+
+The page lists the moments that match, up to the 20 best. If there are more, add a word to narrow the search. If nothing matches, check the spelling, or try the words in the captions' language.
+
+## Questions in a video
+
+An instructor can make a video stop and ask a question, at a moment in the video or at the end.
+
+### For students
+
+1. When the video stops, read the question. A multiple choice question says "Select all that apply".
+2. Pick your answer and choose **Submit answer**, or choose **Skip**.
+3. Read whether you were right ("Correct" or "Not quite"), the correct answer and the **Explanation**, if there is one.
+4. Choose **Continue** to carry on watching.
+
+- One answer per question is recorded. A multiple choice question is right only when every choice is right.
+- **Try again** is practice: "Practice: this answer isn't recorded".
+- Answers never count towards your progress, the course's quizzes or a certificate.
+- An archived course asks no questions.
+- If the instructor changed a question since you last saw it, it says "This question was updated. Check it before answering."
+
+### For instructors
+
+1. In **Course content**, open the **Questions** dialog on a video.
+2. Play or drag the video to the moment you want, and choose **Add a question here**. For a question after the video, choose **Add an end question**.
+3. Write the question, its options and which are correct.
+4. Adjust **Ask at** if needed: a time such as 1:30, or **At the end**.
+5. Save.
+
+- A video takes up to 20 questions.
+- **Preview as student** plays the video with its questions. Answers are checked and not recorded. **Stop previewing** goes back to editing.
+- You can change the questions after students have answered. Answers already recorded are kept and aren't regraded.
+
+The results show on the course's analytics page, under **Video questions**. See <Link path="guides/course-analytics">Course analytics</Link>.

@@ -17,6 +17,8 @@ export const WEBHOOK_EVENTS = [
   'checkout.session.completed',
   'checkout.session.expired',
   'charge.refunded',
+  'refund.failed',
+  'charge.refund.updated',
 ] as const;
 
 export const CONNECT_MESSAGES = {

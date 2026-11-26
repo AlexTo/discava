@@ -56,7 +56,7 @@ Rationale: compatibility code written now is dead weight at launch. Revisit this
 - Code that isn't an entity or a package's setup goes in a `helpers/` folder, one file per entity or topic. No catch-all `utils.ts`.
 - Buttons carry text labels only: no arrow icons. Icon-only controls and breadcrumb separators are fine.
 - A browser-tested change saves screenshots of its key steps (and any failure) to the git-ignored `tmp/screenshots/pr-<number>/`. A change to what a user sees also takes them in its e2e scenario with `screenshot()`, which PR CI posts on the pull request (the `UI Screenshots` check enforces it).
-- A change to English docs is translated locally and committed, or the PR notes that translations are pending.
+- Docs are written in English only, under `docs/src/content/docs/en/`. The other locales are not kept in step with it.
 - Runtime code shared by backend Lambdas goes in `common-server-utils`, and non-UI code shared by portals goes in `common-web-utils`. Code only one consumer uses stays beside it.
 
 ## Additional Constraints
@@ -77,4 +77,4 @@ Rationale: compatibility code written now is dead weight at launch. Revisit this
 
 This constitution supersedes other practices where they conflict. Amend it by pull request, with the rationale in the description. Versioning is semantic: MAJOR for removing or redefining a principle, MINOR for adding a principle or materially widening one, PATCH for clarifications. Reviewers MUST check that each PR complies.
 
-**Version**: 1.2.1 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-17
+**Version**: 1.2.2 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-26

@@ -185,14 +185,28 @@ export const classifyTransferError = (error: unknown): TransferOutcome => {
   return { kind: 'uncertain' };
 };
 
+// Stripe's message when the platform account hasn't signed up for Connect.
+const CONNECT_NOT_ENABLED_TEXT = /signed up for Connect/i;
+
 /**
  * Whether Stripe refused a Connect call for the platform's own reason: the
  * key lacks the permission, or the account hasn't enabled Connect. That is
- * for the operator to fix, not the instructor.
+ * for the operator to fix, not the instructor. Any other invalid request (a
+ * rejected URL, a missing account) is not this.
  */
 export const isConnectNotAllowed = (error: unknown): boolean =>
   error instanceof Stripe.errors.StripePermissionError ||
+  (error instanceof Stripe.errors.StripeInvalidRequestError &&
+    CONNECT_NOT_ENABLED_TEXT.test(error.message));
+
+/** Whether Stripe rejected the request itself (a bad parameter or resource). */
+export const isInvalidRequest = (error: unknown): boolean =>
   error instanceof Stripe.errors.StripeInvalidRequestError;
+
+/** Whether Stripe has no such resource, such as a deleted connected account. */
+export const isResourceMissing = (error: unknown): boolean =>
+  error instanceof Stripe.errors.StripeInvalidRequestError &&
+  error.code === 'resource_missing';
 
 /** Whether Stripe refused the saved key itself: no later call can succeed. */
 export const isAuthenticationError = (error: unknown): boolean =>

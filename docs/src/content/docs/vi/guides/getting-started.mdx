@@ -26,11 +26,6 @@ pnpm nx build @discava/docs
 Thêm một mục vào khối `locales` trong `astro.config.mjs` và tạo một thư mục
 tương ứng trong `src/content/docs/<locale>/`. Starlight sẽ tự động nhận diện locale mới.
 
-:::note[Giữ cấu hình dịch thuật đồng bộ]
-Khi bạn thêm một locale mới, cũng thêm mã của nó vào `targetLanguages` trong
-`scripts/translate.config.json` để tác vụ `translate` giữ nó được cập nhật.
-:::
-
 ## Liên kết nhận biết locale
 
 Sử dụng component `Link` được tạo ra bất cứ khi nào bạn muốn liên kết đến một trang khác

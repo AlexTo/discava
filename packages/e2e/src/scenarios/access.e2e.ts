@@ -11,6 +11,7 @@ import {
   publishCourse,
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
+import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
   openCourse,
@@ -82,6 +83,13 @@ test.describe('access', () => {
     browser,
   }) => {
     const student = await browser.newPage();
+    // branding.get is admin-only: asking for it would only collect 403s.
+    const brandingRequests: string[] = [];
+    student.on('request', (request) => {
+      if (request.url().includes('branding.get')) {
+        brandingRequests.push(request.url());
+      }
+    });
     await student.goto(PORTALS.admin);
     await signIn(student, testUser('Bob'));
     await expect(
@@ -89,6 +97,8 @@ test.describe('access', () => {
         name: 'The admin portal is for administrators',
       }),
     ).toBeVisible();
+    await screenshot(student, 'admin portal restricted page for a student');
+    expect(brandingRequests).toEqual([]);
     await expect(
       student.getByRole('link', { name: 'Go to the student portal' }),
     ).toHaveAttribute('href', PORTALS.student);

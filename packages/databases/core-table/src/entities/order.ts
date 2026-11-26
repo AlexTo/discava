@@ -178,6 +178,12 @@ export const createOrderEntity = async () =>
         refundRequestedAt: {
           type: 'string',
         },
+        // Set when Stripe reported that the refund asked for failed; the order
+        // stays `paid`, with `refundRequestedAt` kept. Cleared never: the
+        // student is told to contact support. Absent otherwise.
+        refundFailedAt: {
+          type: 'string',
+        },
         createdAt: {
           type: 'string',
           required: true,

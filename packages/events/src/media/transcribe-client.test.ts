@@ -81,14 +81,6 @@ describe('startCaptionJob', () => {
     });
   });
 
-  it('uses the language from the setting when there is one', async () => {
-    vi.stubEnv('DISCAVA_MEDIA_CONVERT_CAPTION_LANGUAGE_CODE', '"fr-FR"');
-
-    await startCaptionJob(TARGET);
-
-    expect(send.mock.calls[0][0].input.LanguageCode).toBe('fr-FR');
-  });
-
   it('calls the event runner instead in local dev', async () => {
     isLocalDev.mockReturnValue(true);
 

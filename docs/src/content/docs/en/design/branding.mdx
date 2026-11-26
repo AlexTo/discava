@@ -13,7 +13,11 @@ An administrator sets a logo, name, icon, share image and colour from the admin 
 
 The brand is one `platformBrand` record in the core table, with a constant key. It is absent until the first save, and absent means the default brand. `saveBrand` in `helpers/platform-brand.ts` is its only writer.
 
-Each save carries the whole brand and the `revision` the administrator loaded. A first save is conditioned on the record not existing, and later ones on `revision` still being the loaded value. A failed condition becomes `CONFLICT` ("Someone else changed the branding. Reload to see their changes."), so a stale save can never half-apply. The `changedBy` and `changedAt` fields say who saved last.
+Each save carries the whole brand and the `revision` the administrator loaded.
+
+- A first save is conditioned on the record not existing, and later ones on `revision` still being the loaded value.
+- A failed condition becomes `CONFLICT` ("Someone else changed the branding. Reload to see their changes."), so a stale save can never half-apply.
+- The `changedBy`, `changedByName` and `changedAt` fields say who saved last.
 
 ## Images and immutable keys
 
@@ -23,11 +27,11 @@ Images live in the public media bucket under `brand/<kind>/<nonce>.<ext>`, where
 
 ### SVG checks
 
-An SVG logo is parsed and refused unless every element and attribute is on an allow-list: no `script`, `foreignObject`, `iframe`, event-handler attributes, or references other than a same-document `#fragment`. Refusing rather than rewriting keeps the stored file exactly what was uploaded. Logos are shown through `<img>`, where browsers never run SVG scripts, and the distribution adds a `Content-Security-Policy` with `sandbox` for a file opened directly. The icon is PNG only, because iOS home-screen icons must be raster.
+An SVG logo is parsed (admin-api's `helpers/brand-image.ts`) and refused unless every element and attribute is on an allow-list: no `script`, `foreignObject`, `iframe`, event-handler attributes, or references other than a same-document `#fragment`. Refusing rather than rewriting keeps the stored file exactly what was uploaded. Logos are shown through `<img>`, where browsers never run SVG scripts, and the distribution adds a `Content-Security-Policy` with `sandbox` for a file opened directly. The icon is PNG only, because iOS home-screen icons must be raster.
 
 ## The published document
 
-Browsers do not read the table. The `brand-publishing` stream feature (see [the router](./stream-event-router/)) reads the current record, never the stream image, so a late delivery cannot publish an older revision. It puts `brand/brand.json` in the public media bucket with `Cache-Control: public, max-age=60, s-maxage=240` and CORS for `GET` and `HEAD`.
+Browsers do not read the table. The `brand-publishing` stream feature (see [the router](./stream-event-router/)) reads the current record, never the stream image, so a late delivery cannot publish an older revision. It puts `brand/brand.json` in the public media bucket with `Cache-Control: public, max-age=60, s-maxage=240`. The document leaves out who saved and when. The portals fetch it from another origin, so the distribution adds CORS headers for `GET` and `HEAD` to everything under `brand/`.
 
 That is the **cache budget**: a browser keeps the document for up to 60 seconds and CloudFront for up to 240, so a change reaches every new page load within 5 minutes. A missing, unreadable or invalid document means the default brand, so a failure never breaks a page.
 

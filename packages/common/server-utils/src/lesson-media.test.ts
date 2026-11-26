@@ -44,8 +44,20 @@ const LESSON_MEDIA_BUCKET = {
   cookieDomain: COOKIE_DOMAIN,
 };
 
-const stubBucketSetting = (value: unknown) =>
-  vi.stubEnv('DISCAVA_S3_LESSON_MEDIA_BUCKET', JSON.stringify(value));
+const BUCKET_SETTING = 'DISCAVA_S3_LESSON_MEDIA_BUCKET';
+const FIELDS: Record<string, string> = {
+  bucketName: 'BUCKET_NAME',
+  cloudFrontDomainName: 'CLOUD_FRONT_DOMAIN_NAME',
+  cloudFrontKeyPairId: 'CLOUD_FRONT_KEY_PAIR_ID',
+  cloudFrontPrivateKeySecretArn: 'CLOUD_FRONT_PRIVATE_KEY_SECRET_ARN',
+  cookieDomain: 'COOKIE_DOMAIN',
+};
+
+const stubBucketSetting = (value: Record<string, string>) => {
+  for (const [field, suffix] of Object.entries(FIELDS)) {
+    vi.stubEnv(`${BUCKET_SETTING}_${suffix}`, value[field] ?? '');
+  }
+};
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -169,20 +181,23 @@ describe('getSignedCloudFrontCookies', () => {
   });
 
   it('throws when the bucket setting is not set', async () => {
-    vi.stubEnv('DISCAVA_S3_LESSON_MEDIA_BUCKET', '');
+    stubBucketSetting({});
     const { getSignedCloudFrontCookies } = await importFreshModule();
 
     await expect(getSignedCloudFrontCookies(PREFIX_KEY)).rejects.toThrow(
-      'Missing deploy-time setting DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      'Missing deploy-time setting DISCAVA_S3_LESSON_MEDIA_BUCKET_CLOUD_FRONT_DOMAIN_NAME',
     );
   });
 
-  it('throws when the setting is missing CloudFront signing fields', async () => {
-    stubBucketSetting({ bucketName: 'lesson-media-bucket' });
+  it('throws naming the first missing CloudFront signing field', async () => {
+    stubBucketSetting({
+      bucketName: 'lesson-media-bucket',
+      cloudFrontDomainName: DOMAIN_NAME,
+    });
     const { getSignedCloudFrontCookies } = await importFreshModule();
 
     await expect(getSignedCloudFrontCookies(PREFIX_KEY)).rejects.toThrow(
-      'Could not resolve CloudFront signing config',
+      'Missing deploy-time setting DISCAVA_S3_LESSON_MEDIA_BUCKET_CLOUD_FRONT_KEY_PAIR_ID',
     );
   });
 
@@ -196,7 +211,7 @@ describe('getSignedCloudFrontCookies', () => {
     const { getSignedCloudFrontCookies } = await importFreshModule();
 
     await expect(getSignedCloudFrontCookies(PREFIX_KEY)).rejects.toThrow(
-      'Could not resolve CloudFront signing config',
+      'Missing deploy-time setting DISCAVA_S3_LESSON_MEDIA_BUCKET_COOKIE_DOMAIN',
     );
   });
 

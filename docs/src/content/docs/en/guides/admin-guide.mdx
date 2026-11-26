@@ -1,0 +1,77 @@
+---
+title: Admin guide
+description: What an administrator does in the admin portal, managing catalogue categories, looking up, revoking and restoring certificates, and where to read about review moderation, branding and payments.
+---
+
+import Link from '@components/link.astro';
+
+This page is the overview of the admin portal. Only accounts in the platform's `admin` group can use it.
+
+## Finding your way around
+
+The sidebar has five pages:
+
+| Page | What it is for |
+| --- | --- |
+| **Home** | A card for each area below |
+| **Categories** | The categories instructors file their courses under |
+| **Reviews** | Removing course reviews that break the rules |
+| **Certificates** | Looking up a certificate to revoke or restore it |
+| **Payments** | Connecting the Stripe account students pay into |
+
+The account menu has **Branding**, **Notification settings** and **Sign out**.
+
+## Categories
+
+Categories are the list instructors choose from in a course's **Catalogue details**. Students browse and filter the catalogue by them.
+
+**Add a category**
+
+1. Open **Categories**.
+2. Type the name in **New category name**.
+3. Choose **Add category**.
+
+A name that is already in use is refused.
+
+**Rename a category**
+
+1. Choose **Rename** on the category.
+2. Change the name.
+3. Choose **Save**. Escape or **Cancel** leaves it as it was.
+
+**Archive a category**
+
+1. Choose **Archive** on the category.
+2. Read the dialog: it says how many courses have the category.
+3. Confirm with **Archive**.
+
+An archived category is no longer offered to instructors. Courses that have it keep it. Its page in the student portal says the category is no longer available. The list shows each category as **Active** or **Archived**, and the admin portal has no way to bring an archived category back.
+
+## Certificates
+
+1. Open **Certificates**.
+2. Enter the **Certificate ID** and choose **Look up**. The ID is on the certificate's page and its PDF.
+3. The certificate shows as **Valid** or **Revoked**, with its history of who revoked or restored it and when.
+
+- **Revoke** takes a **Reason**: Academic integrity, Issued in error, Order refunded or Other. Other needs a **Note**. Confirm with **Revoke certificate**. The certificate's public page then says it has been revoked, and the student is told.
+- **Restore**, confirmed with **Restore certificate**, makes it valid again with the same ID, and the student is told.
+
+An administrator can restore any certificate. An instructor can't restore one an administrator revoked.
+
+<Link path="guides/certificates">Certificates</Link> covers the rest: what earns one, and what students and instructors see.
+
+## Reviews
+
+**Reviews** lists a course's reviews and lets you remove one that breaks the rules, with a reason. A removed review no longer counts towards the course's rating, and its author can't post another. See the admin removal section of <Link path="guides/reviews">Ratings and reviews</Link>.
+
+## Branding
+
+**Branding**, in the account menu, sets the platform's name, logo, icon, share image and colour for all three portals and the public pages. See <Link path="guides/branding">Branding</Link>.
+
+## Payments
+
+**Payments** connects the Stripe account that students pay into. Until it is connected, every course is free and instructors can't set a price. See <Link path="guides/payments">Paid courses and payments</Link> for connecting, replacing the key, disconnecting and refunds, and <Link path="guides/earnings-and-payouts">Earnings and payouts</Link> for what paying instructors needs.
+
+## Notifications
+
+**Notification settings**, in the account menu, chooses which notifications also reach you by email. See <Link path="guides/notifications">Notifications</Link>.

@@ -7,7 +7,9 @@ sidebar:
 
 **Spec:** [`specs/20261116-183449-stream-event-router/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-183449-stream-event-router/)
 
-The core table's DynamoDB stream has **one reader**: the stream router. It sends each change to the queue of every feature that wants it, and each feature's handler reads its own queue. A feature that reacts to table changes (progress recalculation, search indexing, transcript indexing, analytics update, earnings recording and notification delivery today) adds a registration, a handler and the handler's wiring (below), and no queue, alarm or stream mapping of its own.
+The core table's DynamoDB stream has **one reader**: the stream router. It sends each change to the queue of every feature that wants it, and each feature's handler reads its own queue.
+
+A feature that reacts to table changes adds a registration, a handler and the handler's wiring (below). It adds no queue, alarm or stream mapping of its own. Eight features are registered today; the [table below](#metrics-to-watch) lists them.
 
 ```d2 title="One stream reader, one queue and failure queue per feature"
 table: "Core table"
@@ -43,13 +45,17 @@ sq -> sf: "after maxReceiveCount"
 | `maxReceiveCount` | How many times a message is received before it goes to the failure queue |
 | `maxConcurrency` | Optional cap on concurrent handler runs (at least 2, an event source mapping minimum) |
 
-`featuresFor(record)` is the only matching logic, and both the router and the local runner call it, so they can't disagree. A record goes to every feature with a matching filter, as its own copy, and to no other; a record matching none produces nothing. Filters reuse the existing helpers (`matchesProgressStreamFilters`, `matchesSearchStreamFilters`). A test fails when a name repeats, a `handler` names no function, a filter names an entity the core table doesn't define, or a filter matches nothing in the sample records.
+`featuresFor(record)` is the only matching logic. The router and the local runner both call it, so they can't disagree. A record goes to every feature with a matching filter, as its own copy, and to no other. A record matching none produces nothing.
+
+Each feature's filters and matcher live in their own module beside the registry (`progress-stream.ts` with `PROGRESS_STREAM_FILTERS` and `matchesProgressStreamFilters`, `search-stream.ts`, and so on), and `featuresFor` calls those matchers.
+
+Tests fail when a name repeats, a filter names an entity the core table doesn't define, a filter matches nothing in the sample records (`stream-features.test.ts`), or a `handler` names no function (`handlers.test.ts` in `packages/events`).
 
 ## Adding a feature
 
 1. Add an entry to `STREAM_FEATURES`.
 2. Write the handler in `packages/events` and its `events-*` wrapper with `ts#lambda-function`. Read its records through `sqsToStreamRecords` (`src/router/sqs-stream-records.ts`), which unwraps the queue's messages into stream records.
-3. Add the handler to `HANDLERS` in `packages/events/src/router/handlers.ts`, which the local runner dispatches through. `handlers.test.ts` fails when a registration's `handler` is missing from it.
+3. Add the handler to `HANDLERS` in `packages/events/src/router/handlers.ts`, which the local runner dispatches through. `handlers.test.ts` fails when a registration's `handler` is missing from it, or when it holds a handler no feature uses.
 4. Build the handler's Lambda in `StreamRouterStack` (`packages/infra/src/stacks/stream-router-stack.ts`), the way `createProgressRecalculationLambda` and `createSearchIndexingLambda` do: create the `events-*` function, give it what it reads and writes (the core table, its deploy-time settings and so on), and add it to the `handlers` object passed to `StreamRouter`, keyed by the feature's name. Without it, `StreamRouter` throws `No handler given for stream feature '<name>'` at synth.
 5. With the handler passed in, the `StreamRouter` construct builds the queue, failure queue, alarm and event source mapping from the entry, and the local runner builds its equivalent.
 6. Write the handler's duplicate and reordered delivery tests (below).
@@ -58,11 +64,13 @@ sq -> sf: "after maxReceiveCount"
 ## What the construct builds per feature
 
 - A **queue**, with a visibility timeout of six times the handler's timeout.
-- A **failure queue**, which holds a message after `maxReceiveCount` receives, keeps it for 14 days, and is encrypted with a customer-managed KMS key with rotation (switchable per stage with `enableKmsEncryption`, like the core table). The messages hold whole table records, so treat them as table data.
+- A **failure queue**, which holds a message after `maxReceiveCount` receives and keeps it for 14 days.
 - An **alarm** that is in the alarm state whenever the failure queue holds any message. It has no notification target: it shows in the CloudWatch console.
-- An **event source mapping** from the queue to the handler, using the registration's batch settings.
+- An **event source mapping** from the queue to the handler, using the registration's `batch` and `maxConcurrency`.
 
-The router has a failure queue and alarm of its own (`StreamRouterFailures`) for a record it can never send: too large for the queue, or unroutable. It holds a description of the record (its identity, not its contents) so it can be found in the table. The stream mapping's own failed batches (shard and sequence numbers) go there too.
+All the queues share one customer-managed KMS key with rotation. A stage can switch to SQS-managed encryption with `enableKmsEncryption: false`, like the core table. The messages hold whole table records, so treat them as table data.
+
+The router has a failure queue and alarm of its own (`StreamRouterFailures`) for a record it can never send: too large for a message, or refused by the queue. It holds a description of the record (its event id, keys, entity, features, size and the reason; not its contents) so it can be found in the table. The stream mapping's own failed batches (shard and sequence numbers) go there too. A send that fails for a transient reason is retried by the stream mapping, for that record only.
 
 ## Handler obligations
 
@@ -105,7 +113,7 @@ The names are the construct's logical ids (the deployed queue names carry the st
 
 ## Local behaviour
 
-`pnpm dev` runs the same router in the event runner (`packages/events/src/local`), with ElasticMQ as the queue (SQS API compatible, in Docker, in memory) and one feature runner per registration. It uses the same `STREAM_FEATURES` and `featuresFor` as the deployed router, keeps each feature's batch size and window, retries by receive count, and moves a message to the feature's failure queue after `maxReceiveCount` receives, logging it. Nothing needs an AWS account.
+`pnpm dev` runs the same router in the event runner (`packages/events/src/local`), with ElasticMQ as the queue (SQS API compatible, in Docker, in memory) and one feature runner per registration. It uses the same `STREAM_FEATURES` and `featuresFor` as the deployed router and keeps each feature's batch size and window. A message received `maxReceiveCount` times moves to the feature's failure queue and is logged. Nothing needs an AWS account.
 
 The runner (port 2024) has routes to look at and replay local queues:
 
@@ -120,4 +128,4 @@ curl -X POST http://localhost:2024/router/redrive/search-indexing
 curl -X POST http://localhost:2024/router/fail/search-indexing -d '{"batches": 5}'
 ```
 
-The redrive is a small runner helper, not the queue service's redrive, which ElasticMQ doesn't document. `reset-local-data` and a restart clear the queues.
+The redrive is a small runner helper, not the queue service's redrive, which ElasticMQ doesn't document. The queues are in memory, so stopping `pnpm dev` empties them.

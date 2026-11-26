@@ -34,6 +34,8 @@ test('an instructor keeps typed work unless they say otherwise', async ({
 
     await page.getByRole('button', { name: 'Keep editing' }).click();
     await expect(title).toHaveValue('Half a thought');
+    await expect(title).toBeFocused();
+    await screenshot(page, 'keep editing returns focus to the title');
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toBeHidden();
   });

@@ -1,0 +1,74 @@
+---
+title: Course analytics
+description: The instructor Dashboard and each course's analytics page, what every figure means, the 30 and 90 day views, lesson drop-off, activation, and quiz and video question results.
+---
+
+import Link from '@components/link.astro';
+
+**Dashboard** in the instructor portal shows how your courses are doing. Only the instructors of a course can see its figures.
+
+## The Dashboard
+
+There is one card for each course you teach, whatever its status.
+
+| Figure | Meaning |
+| --- | --- |
+| **Enrolments** | Everyone who has enrolled |
+| **Active this week** | Learners who did something in the course this calendar week, Monday to Sunday in UTC |
+| **Completion rate** | Of the learners still enrolled, the share who completed the course, as a whole percent rounded down. "No data" until someone is enrolled |
+
+Each card also says when its figures last changed, or "No activity yet". Choose a course's title to open its analytics page.
+
+## A course's analytics page
+
+### Totals
+
+| Figure | Meaning |
+| --- | --- |
+| **Enrolments** | Everyone who has enrolled |
+| **Active** | Enrolled, and neither completed nor left |
+| **Completed** | Completed the course |
+| **Dropped** | Left the course, or had their enrolment ended |
+| **Completion rate** | As on the Dashboard |
+| **Active this week** | As on the Dashboard |
+
+### 30 or 90 days
+
+The two charts cover the last 90 days. Choose **30 days** or **90 days** at the top of the page to switch.
+
+- **New enrolments per day**
+- **Active learners per day**
+
+Days are UTC days. Until someone enrols the page says "No learners have enrolled yet".
+
+### Lesson drop-off
+
+For each lesson shown to learners: of the learners who started it, the share who completed it. The lesson with the lowest share is marked **Lowest completion**. A lesson nobody has started says so.
+
+Learners who left the course aren't counted.
+
+### Activation
+
+How many enrolled learners have started, as a number and a percentage. Started means they completed an item or submitted a quiz attempt. Recent learners may still start, so these are figures so far.
+
+The card also says how many learners answered the first-lesson prompt and how many dismissed it. See <Link path="guides/lesson-discussions">Lesson discussions</Link>.
+
+### Quizzes
+
+There is a panel for each quiz. **Show analysis** opens:
+
+- **Most-missed questions**: each question's attempts, misses and miss rate, the most missed first. A question with fewer than 5 attempts isn't ranked and shows "Not enough attempts".
+- **Best score per student**: a chart of how the best scores are spread.
+
+### Video questions
+
+The **Video questions** panel lists the videos that ask questions. **Show results** on a video opens each question's moment in the video, its answers, misses and miss rate. A question with too few answers shows "Not enough answers yet".
+
+See <Link path="guides/video-lessons">Video lessons</Link> for adding questions to a video.
+
+## Reading the figures
+
+- A learner counts once in a day or a week, however much they did.
+- If a course's page says "Course not found", the course doesn't exist or you don't teach it.
+
+<Link path="design/course-analytics">Course analytics</Link> describes how the figures are kept.

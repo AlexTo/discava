@@ -172,7 +172,7 @@ export const openSubmissionReview = async (page: Page, student: string) => {
 };
 
 const typeFeedback = async (page: Page, feedback: string) => {
-  const editor = page.getByLabel('Feedback', { exact: true });
+  const editor = page.getByRole('textbox', { name: 'Feedback', exact: true });
   await editor.click();
   await editor.pressSequentially(feedback);
 };

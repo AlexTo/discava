@@ -37,7 +37,7 @@ const call = () =>
   callerFor(router, { sub: 'instructor-1', groups: ['instructor'] });
 
 const resolves = (data: unknown) => ({
-  go: vi.fn().mockResolvedValue({ data }),
+  go: vi.fn().mockResolvedValue({ data, unprocessed: [] }),
 });
 
 const waiting = (
@@ -139,6 +139,37 @@ describe('gradingQueue.list', () => {
     const result = await call().list({});
     expect(result.total).toBe(2);
     expect(result.items.map(({ userId }) => userId)).toEqual(['u2', 'u3']);
+  });
+
+  it('asks again for enrolment keys that come back unprocessed', async () => {
+    type Key = { courseId: string; userId: string };
+    const active = (keys: Key[]) =>
+      keys.map((key) => ({ ...key, status: 'active' }));
+    enrolmentGet
+      .mockImplementationOnce((keys: Key[]) => ({
+        go: vi.fn().mockResolvedValue({
+          data: active(keys.slice(0, 1)),
+          unprocessed: keys.slice(1),
+        }),
+      }))
+      .mockImplementation((keys: Key[]) => resolves(active(keys)));
+    const result = await call().list({});
+    expect(result.total).toBe(3);
+    expect(result.items.map(({ userId }) => userId)).toEqual([
+      'u1',
+      'u2',
+      'u3',
+    ]);
+    expect(enrolmentGet).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails rather than shorten the queue when keys stay unprocessed', async () => {
+    enrolmentGet.mockImplementation(
+      (keys: { courseId: string; userId: string }[]) => ({
+        go: vi.fn().mockResolvedValue({ data: [], unprocessed: keys }),
+      }),
+    );
+    await expect(call().list({})).rejects.toThrow();
   });
 
   it('lists a student waiting on two assignments of one course', async () => {
