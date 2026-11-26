@@ -148,6 +148,38 @@ describe('RouteAnnouncer', () => {
     expect(screen.getByRole('heading', { name: 'B' })).toHaveFocus();
   });
 
+  it('focuses the heading after a bare click, as a screen reader sends', () => {
+    const { rerender } = render(
+      <Shell pathname="/a">
+        <a href="/b">B</a>
+      </Shell>,
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'B' }));
+    rerender(
+      <Shell pathname="/b">
+        <h1>B</h1>
+      </Shell>,
+    );
+    expect(screen.getByRole('heading', { name: 'B' })).toHaveFocus();
+  });
+
+  it('focuses the heading when the path changes after a pointer press and its click', () => {
+    const { rerender } = render(
+      <Shell pathname="/a">
+        <a href="/b">B</a>
+      </Shell>,
+    );
+    const link = screen.getByRole('link', { name: 'B' });
+    fireEvent.pointerDown(link);
+    fireEvent.click(link);
+    rerender(
+      <Shell pathname="/b">
+        <h1>B</h1>
+      </Shell>,
+    );
+    expect(screen.getByRole('heading', { name: 'B' })).toHaveFocus();
+  });
+
   it('focuses nothing when the path changes before any key or click', () => {
     const { rerender } = render(
       <Shell pathname="/a">
