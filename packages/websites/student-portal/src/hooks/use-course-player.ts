@@ -243,10 +243,22 @@ export function useCoursePlayer(courseId: string): CoursePlayer {
     };
   }, [course, completionsQuery.data, progressQuery.data]);
 
+  // A completions or progress query that failed before loading would leave
+  // the place never ready; a failed background refetch keeps its data and
+  // is not an error here.
+  const error =
+    courseQuery.error ??
+    (completionsQuery.data ? null : completionsQuery.error) ??
+    (progressQuery.data ? null : progressQuery.error);
+
   return {
     isPending: courseQuery.isPending,
-    error: courseQuery.error,
-    retry: () => void courseQuery.refetch(),
+    error,
+    retry: () => {
+      for (const query of [courseQuery, completionsQuery, progressQuery]) {
+        if (query.isError) void query.refetch();
+      }
+    },
     course,
     enrolment: enrolmentQuery.data,
     // An archived course is read-only: its items can't be completed.
