@@ -197,10 +197,16 @@ export const checkCertificateLinkedInClickShape = (
     );
   });
 
-// The reminder is never claimed after a LinkedIn use is recorded, and never
-// before the certificate was issued. A certificate with `reminderScheduledAt`
-// and no `reminderSentAt` isn't a violation (not due yet, clicked, or emails
-// off).
+// How far a reminder's claim may be stamped after a click it still won the
+// condition against. Both writes take their timestamp before they write, and
+// the reminder Lambda and the API have separate clocks, so a claim that landed
+// first can carry the later time by about the length of a request.
+const REMINDER_CLICK_TOLERANCE_MS = 5_000;
+
+// The reminder is never claimed after a LinkedIn use is recorded (allowing for
+// the clocks, above), and never before the certificate was issued. A
+// certificate with `reminderScheduledAt` and no `reminderSentAt` isn't a
+// violation (not due yet, clicked, or emails off).
 export const checkCertificateReminderNotAfterClick = (
   snapshot: TableSnapshot,
 ): Violation[] =>
@@ -210,7 +216,8 @@ export const checkCertificateReminderNotAfterClick = (
     if (
       reminderSentAt &&
       linkedInClickedAt &&
-      reminderSentAt > linkedInClickedAt
+      Date.parse(reminderSentAt) - Date.parse(linkedInClickedAt) >
+        REMINDER_CLICK_TOLERANCE_MS
     ) {
       problems.push('reminderSentAt is after linkedInClickedAt');
     }

@@ -612,6 +612,16 @@ describe('certificate-reminder-not-after-click', () => {
     expect(violationsOf()).toEqual([]);
   });
 
+  it('accepts a reminder stamped just after the click it won against', () => {
+    const certificate = setup();
+    certificate.linkedInClickedAt = '2026-01-06T00:00:00.000Z';
+    certificate.linkedInClickSource = 'my-learning';
+    certificate.reminderSentAt = '2026-01-06T00:00:05.000Z';
+    expect(violationsOf()).toEqual([]);
+    certificate.reminderSentAt = '2026-01-06T00:00:05.001Z';
+    expect(violationsOf()[0]?.message).toMatch(/after linkedInClickedAt/);
+  });
+
   it('reports a reminder after the click', () => {
     const certificate = setup();
     certificate.linkedInClickedAt = '2026-01-04T00:00:00.000Z';
