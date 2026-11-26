@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { type ReactNode, useCallback, useState } from 'react';
+import { type ReactNode, useCallback, useRef, useState } from 'react';
 import { DiscardChangesDialog } from '../components/discard-changes-dialog';
-import { useReturnFocus } from './use-return-focus';
 
 /**
  * Makes a dialog ask before it closes with unsaved changes. Spread
@@ -29,7 +28,18 @@ export function useDiscardGuard({
   confirmation: ReactNode;
 } {
   const [confirming, setConfirming] = useState(false);
-  const returnFocus = useReturnFocus(confirming);
+  // Read when the question is asked: by the time an effect could, the
+  // question's own dialog has already taken focus.
+  const previous = useRef<Element | null>(null);
+
+  const onCloseAutoFocus = useCallback((event: Event) => {
+    const element = previous.current;
+    previous.current = null;
+    if (element instanceof HTMLElement && element.isConnected) {
+      event.preventDefault();
+      element.focus();
+    }
+  }, []);
 
   const doDiscard = useCallback(() => {
     setConfirming(false);
@@ -38,6 +48,7 @@ export function useDiscardGuard({
 
   const requestClose = useCallback(() => {
     if (dirty) {
+      previous.current = document.activeElement;
       setConfirming(true);
     } else {
       doDiscard();
@@ -61,7 +72,7 @@ export function useDiscardGuard({
         open={confirming}
         onOpenChange={setConfirming}
         onDiscard={doDiscard}
-        onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+        onCloseAutoFocus={onCloseAutoFocus}
       />
     ),
   };

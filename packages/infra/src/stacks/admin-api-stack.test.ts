@@ -197,14 +197,16 @@ describe('the branding function (admin-api)', () => {
 
   it('has the table and the public media bucket settings', () => {
     const variables = environmentOf('AdminApiBrandingHandler');
-    expect(variables).toHaveProperty('DISCAVA_DYNAMODB_CORE_TABLE');
-    expect(variables).toHaveProperty('DISCAVA_S3_PUBLIC_MEDIA_BUCKET');
+    expect(variables).toHaveProperty('DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME');
+    expect(variables).toHaveProperty(
+      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET_BUCKET_NAME',
+    );
   });
 
   it('is not the shared router, which has neither the grant nor the setting', () => {
     expect(objectStatements('AdminApiRouterHandler')).toEqual([]);
     expect(environmentOf('AdminApiRouterHandler')).not.toHaveProperty(
-      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET',
+      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET_BUCKET_NAME',
     );
   });
 
@@ -296,11 +298,11 @@ describe('deploy-time settings per function', () => {
   const template = synth({})('AdminApi');
   // Function logical-ID prefix to the settings its code reads.
   const required = {
-    AdminApiRouterHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
-    AdminApiPaymentsConnectHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    AdminApiRouterHandler: ['DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME'],
+    AdminApiPaymentsConnectHandler: ['DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME'],
     AdminApiBrandingHandler: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET_BUCKET_NAME',
     ],
   };
 

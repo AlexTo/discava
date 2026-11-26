@@ -78,13 +78,10 @@ const pendingItem = (contentItemId: string, ext = 'mp4') => ({
 describe('bestEffortDeleteContentItemVideos', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('DISCAVA_S3_LESSON_MEDIA_BUCKET_BUCKET_NAME', MEDIA_BUCKET_NAME);
     vi.stubEnv(
-      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
-      JSON.stringify({ bucketName: MEDIA_BUCKET_NAME }),
-    );
-    vi.stubEnv(
-      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
-      JSON.stringify({ bucketName: UPLOAD_BUCKET_NAME }),
+      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET_BUCKET_NAME',
+      UPLOAD_BUCKET_NAME,
     );
     send.mockImplementation((command: any) => {
       if (command.__command === 'ListObjectsV2') {
@@ -426,8 +423,8 @@ describe('getVideoUploadETag', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv(
-      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
-      JSON.stringify({ bucketName: UPLOAD_BUCKET_NAME }),
+      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET_BUCKET_NAME',
+      UPLOAD_BUCKET_NAME,
     );
   });
 

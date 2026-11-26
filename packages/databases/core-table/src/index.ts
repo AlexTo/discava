@@ -411,6 +411,7 @@ export {
   expireOrder,
   expireOrderWrites,
   findOpenOrder,
+  markRefundFailed,
   markRefundRequested,
   type OrderConnection,
   type OrderCourse,

@@ -14,9 +14,6 @@
   ],
   "references": [
     {
-      "path": "../infra-config/tsconfig.lib.json"
-    },
-    {
       "path": "../../apis/instructor-api/tsconfig.lib.json"
     },
     {
@@ -26,7 +23,13 @@
       "path": "../server-utils/tsconfig.lib.json"
     },
     {
+      "path": "../infra-config/tsconfig.lib.json"
+    },
+    {
       "path": "../../apis/admin-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../../events/tsconfig.lib.json"
     }
   ],
   "exclude": [

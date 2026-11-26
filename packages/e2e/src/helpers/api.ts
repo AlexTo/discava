@@ -190,6 +190,8 @@ export const connectLocalStripe = async () => {
       'enabled_events[0]': 'checkout.session.completed',
       'enabled_events[1]': 'checkout.session.expired',
       'enabled_events[2]': 'charge.refunded',
+      'enabled_events[3]': 'refund.failed',
+      'enabled_events[4]': 'charge.refund.updated',
     }),
   });
   if (!response.ok) {

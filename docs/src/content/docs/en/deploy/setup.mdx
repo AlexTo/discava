@@ -48,8 +48,8 @@ Three settings in your fork, all under its **Settings** or **Actions** tab.
 
 </Steps>
 
-:::note[Renamed your fork?]
-The docs site is built for the path `/discava`. If your fork has another name, set `DOCS_BASE_PATH` (for example `/my-lms`) where the docs are built, or change the default in `docs/astro.config.mjs`.
+:::note[The docs site's address]
+CI builds the docs site for your fork's GitHub Pages address, `https://<owner>.github.io/<repository>`, so there is nothing to change. To publish it somewhere else, such as a custom domain, set the `DOCS_SITE` (for example `https://docs.example.com`) and `DOCS_BASE_PATH` (for example `/my-lms`, or `/` for the root of the domain) repository variables.
 :::
 
 ## 3. Run the setup script
@@ -64,16 +64,19 @@ It asks a series of questions, each with a detected default you accept with Ente
 
 ### What it asks
 
+In this order:
+
 | Prompt | What to answer |
 | --- | --- |
-| **Stage** | The stage to set up. Stages come from `stages.config.ts` |
+| **Stage** | The stage to set up. Stages come from `packages/common/infra-config/src/stages.config.ts` |
 | **GitHub** | Nothing to answer if `origin` is your fork. It prints the repository it will trust: check it is yours |
 | **AWS credentials** | The AWS CLI profile for the target account, or blank for your default credentials. It prints who you are signed in as |
 | **Region** | The stage's main region. Not asked if `stages.config.ts` sets one |
 | **CDK bootstrap** | Yes, for each region it reports as not bootstrapped |
-| **GitHub environment** | Yes, to create the environment named after the stage and set its variables |
-| **Deploy automatically?** | Yes to deploy this stage whenever CI passes on `main`. No to deploy only when you run the workflow. Only one stage can deploy automatically |
+| **GitHub environment** | Yes, to create the environment named after the stage and set its variables. Not asked without the GitHub CLI |
+| **Deploy automatically?** | Yes to deploy this stage whenever CI passes on `main`. No (the default) to deploy only when you run the workflow. Only one stage can deploy automatically |
 | **Root domain** | Leave blank for now. You can run the script again later to serve every component from a subdomain of it, using certificates it finds in ACM (see <Link path="deploy/configuration">Stage configuration</Link>) |
+| **Continue?** | Yes, once the summary shows your repository, account, region and stage |
 
 ### What it creates
 
@@ -83,10 +86,12 @@ In **AWS**:
 | --- | --- | --- |
 | OIDC provider | `token.actions.githubusercontent.com` | Lets GitHub Actions sign in to this account. Shared by every stage |
 | Deploy role | `github-deploy-<stage>` | Assumed by the Deploy workflow. Trusts only your repository's environment named `<stage>`. Can publish assets and manage the stage's CloudFormation stacks |
-| Execution role | `cfn-execution-<stage>` | Used by CloudFormation to create the stage's resources. Its permissions are in three managed policies: `-data`, `-edge` and `-compute` |
+| Execution role | `cfn-execution-<stage>` | Used by CloudFormation to create the stage's resources. Its permissions are in an inline policy and three managed policies: `cfn-execution-<stage>-data`, `-edge` and `-compute` |
 | Permissions boundary | `permissions-boundary-<stage>` | Every IAM role the stage creates must carry it, which caps what a deployed stack can grant itself |
-| Docker login role | `github-docker-login-<repo>` | Lets CI sign in to Amazon ECR Public, so image pulls aren't rate limited. Shared by every stage |
+| Docker login role | `github-docker-login-<repo>` | Lets workflows in your repository sign in to Amazon ECR Public, so image pulls aren't rate limited. Shared by every stage |
 | CDK bootstrap stack | `CDKToolkit` | The asset bucket and roles CDK needs, in each region you agreed to |
+
+A stage with WAF on its portals or media, such as `discava-production`, is also bootstrapped in `us-east-1`.
 
 On **GitHub**:
 
@@ -98,7 +103,7 @@ On **GitHub**:
 | Repository | `AWS_DOCKER_LOGIN_ROLE_ARN` | The Docker login role |
 | Repository | `AUTO_DEPLOY_STAGE` | The stage name, only if you chose automatic deploys |
 
-These are **variables, not secrets**. A role ARN isn't sensitive: the role can only be assumed by a workflow running in your repository's matching environment.
+These are **variables, not secrets**. A role ARN isn't sensitive: the deploy role can only be assumed by a workflow running in your repository's matching environment, and the Docker login role only by workflows in your repository.
 
 ### Without the GitHub CLI
 
@@ -110,7 +115,12 @@ If `gh` isn't installed or signed in, the script still creates everything in AWS
 AWS_PROFILE=my-profile AWS_REGION=eu-west-1 ./scripts/setup-stage.sh --yes discava-development
 ```
 
-`--yes` accepts every default. `./scripts/setup-stage.sh --help` lists the environment variables that preset each answer.
+`--yes` accepts every default, so it doesn't turn on automatic deploys. `./scripts/setup-stage.sh --help` lists the environment variables that preset each answer.
+
+### When to run it again
+
+- To add or change custom domains or the notification sender (see <Link path="deploy/configuration">Stage configuration</Link>)
+- After pulling a newer version of Discava, before deploying it. The script holds the permissions of the execution role and the boundary, and a version that uses a new kind of AWS resource extends them. Without the update, the deploy fails with an access-denied error
 
 ## 4. Protect production
 
@@ -126,6 +136,6 @@ gh variable list --env discava-development
 gh variable list
 ```
 
-The first should list the three `AWS_*` variables, the second `AWS_DOCKER_LOGIN_ROLE_ARN`.
+The first should list the three `AWS_*` variables. The second should list `AWS_DOCKER_LOGIN_ROLE_ARN`, and `AUTO_DEPLOY_STAGE` if you chose automatic deploys.
 
 Next: <Link path="deploy/first-deploy">your first deploy</Link>.

@@ -19,8 +19,8 @@ const localDev = () =>
 // The deploy-time setting the OpenSearchCollection construct binds to every
 // function that uses the collection (common-constructs' `bindSettings`), the
 // same way core-table gets its table name. The name is
-// `settingEnvName('opensearch', runtimeConfigKey)`.
-const SETTING = 'DISCAVA_OPENSEARCH_SEARCH';
+// `settingEnvName('opensearch', runtimeConfigKey, 'endpoint')`.
+const SETTING = 'DISCAVA_OPENSEARCH_SEARCH_ENDPOINT';
 
 export const resolveEndpoint = async (): Promise<string> => {
   if (process.env.LOCAL_DEV === 'true') {
@@ -28,20 +28,9 @@ export const resolveEndpoint = async (): Promise<string> => {
     // IPv4 explicitly, as common-server-utils' LOCAL_HOST explains.
     return `http://127.0.0.1:${port}`;
   }
-  const raw = process.env[SETTING];
-  if (!raw) {
-    throw new Error(`Missing deploy-time setting ${SETTING}`);
-  }
-  let endpoint: string | undefined;
-  try {
-    endpoint = (JSON.parse(raw) as { endpoint?: string }).endpoint;
-  } catch {
-    throw new Error(`Invalid deploy-time setting ${SETTING}`);
-  }
+  const endpoint = process.env[SETTING];
   if (!endpoint) {
-    throw new Error(
-      `Could not resolve the OpenSearch collection endpoint from ${SETTING}`,
-    );
+    throw new Error(`Missing deploy-time setting ${SETTING}`);
   }
   return endpoint;
 };

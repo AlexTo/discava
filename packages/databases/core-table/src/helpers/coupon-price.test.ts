@@ -13,8 +13,10 @@ import {
 
 const percent = (value: number) => ({ type: 'percent' as const, value });
 const fixed = (value: number) => ({ type: 'fixed' as const, value });
-const price = (listAmount: number, coupon: ReturnType<typeof percent>) =>
-  priceWithCoupon({ listAmount, coupon });
+const price = (
+  listAmount: number,
+  coupon: ReturnType<typeof percent> | ReturnType<typeof fixed>,
+) => priceWithCoupon({ listAmount, coupon });
 
 describe('priceWithCoupon', () => {
   it.each([
@@ -51,7 +53,7 @@ describe('priceWithCoupon', () => {
   );
 
   it('works in whole units for a zero-decimal currency', () => {
-    expect(price(3000, percent(33), 'jpy')).toEqual({
+    expect(price(3000, percent(33))).toEqual({
       listAmount: 3000,
       discountAmount: 990,
       totalAmount: 2010,

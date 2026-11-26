@@ -31,7 +31,11 @@ export const createCategory = async (name: string) => {
   return categoryWrites.create(service, { categoryId: uuidV7(), name });
 };
 
-/** The category with this name, created when there is none yet. */
+/**
+ * The active category with this name, created when there is none yet. An
+ * archived match is made active again: catalogue writes reject archived
+ * categories, and its name claim stops a new one taking the name.
+ */
 export const ensureCategory = async (name: string) => {
   const service = await createCoreTableService();
   const { data } = await service.entities.category.query
@@ -40,7 +44,17 @@ export const ensureCategory = async (name: string) => {
   const existing = data.find(
     (category) => category.name.toLowerCase() === name.toLowerCase(),
   );
-  return existing ?? createCategory(name);
+  if (!existing) {
+    return createCategory(name);
+  }
+  if (existing.status === 'archived') {
+    const { data: restored } = await service.entities.category
+      .patch({ categoryId: existing.categoryId })
+      .set({ status: 'active' })
+      .go({ response: 'all_new' });
+    return restored;
+  }
+  return existing;
 };
 
 /** Archives a category; its courses keep pointing at it. */

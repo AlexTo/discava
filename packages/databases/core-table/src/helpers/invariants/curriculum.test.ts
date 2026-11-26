@@ -35,14 +35,18 @@ describe('instructor-course-updated-at', () => {
   // course.setCertificates writes certificatesEnabled, which moves the
   // course's updatedAt; an instructor row left behind is a violation.
   it('reports a certificatesEnabled change that did not move courseUpdatedAt', () => {
-    const course = table.courses[0];
+    const course = table.courses[0] as (typeof table.courses)[number] & {
+      certificatesEnabled?: boolean;
+    };
     course.certificatesEnabled = !course.certificatesEnabled;
     course.updatedAt = '2025-06-01T00:00:00.000Z';
     expectOnly('instructor-course-updated-at');
   });
 
   it('accepts a certificatesEnabled change that moved courseUpdatedAt', () => {
-    const course = table.courses[0];
+    const course = table.courses[0] as (typeof table.courses)[number] & {
+      certificatesEnabled?: boolean;
+    };
     course.certificatesEnabled = !course.certificatesEnabled;
     course.updatedAt = '2025-06-01T00:00:00.000Z';
     for (const row of table.courseInstructors) {

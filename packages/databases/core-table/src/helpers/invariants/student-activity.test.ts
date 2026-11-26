@@ -79,12 +79,15 @@ describe('quiz-summary-matches-attempts', () => {
       status: 'active',
       progressPercent: 0,
       lastActivityAt: AT.a1,
+      createdAt: table.enrolments[0].createdAt,
     });
     table.quizAttempts.push({
       ...ids,
       userId: 'classmate',
       contentItemId: 'quiz',
       attemptId: 'a9',
+      answers: {},
+      correctQuestionIds: [],
       scorePercent: 10,
       passed: false,
       submittedAt: AT.a1,
@@ -219,6 +222,7 @@ describe('student-records-have-targets', () => {
       userId: 'student',
       status: 'active',
       progressPercent: 0,
+      createdAt: table.enrolments[0].createdAt,
     });
     expectOnly('student-records-have-targets', /enrolment/);
   });

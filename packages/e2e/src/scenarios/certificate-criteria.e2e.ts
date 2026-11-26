@@ -106,6 +106,34 @@ test('an instructor requires every quiz to be passed for a certificate', async (
       requireQuizPass: true,
     });
     await screenshot(instructor, 'certificate-criteria-setting');
+
+    // The switch has the shared hit area: a click 1.5px below the track flips
+    // it, and a second one flips it back.
+    const issue = instructor.getByRole('switch', {
+      name: 'Issue a certificate on completion',
+    });
+    await issue.scrollIntoViewIfNeeded();
+    const wasOn = (await issue.getAttribute('aria-checked')) === 'true';
+    const track = await issue.boundingBox();
+    expect(track).not.toBeNull();
+    for (const expected of [!wasOn, wasOn]) {
+      await instructor.mouse.click(
+        track!.x + track!.width / 2,
+        track!.y + track!.height + 1.5,
+      );
+      await expect(issue).toHaveAttribute('aria-checked', String(expected));
+      // Wait for the save to settle: a click while it is pending is ignored.
+      await expect(issue.locator('xpath=..')).not.toHaveAttribute(
+        'aria-busy',
+        'true',
+      );
+      if (expected !== wasOn) {
+        await screenshot(
+          instructor,
+          'certificates switch after clicking its edge',
+        );
+      }
+    }
   });
 
   await test.step('a student who fails the quiz completes the course without a certificate', async () => {

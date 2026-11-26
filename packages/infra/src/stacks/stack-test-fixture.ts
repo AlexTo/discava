@@ -109,8 +109,8 @@ export const functionsMissingSettings = (template: Template) => {
       );
       const usesSearch = actions.includes('aoss:APIAccessAll');
       return (
-        (usesTable && !variables.DISCAVA_DYNAMODB_CORE_TABLE) ||
-        (usesSearch && !variables.DISCAVA_OPENSEARCH_SEARCH)
+        (usesTable && !variables.DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME) ||
+        (usesSearch && !variables.DISCAVA_OPENSEARCH_SEARCH_ENDPOINT)
       );
     })
     .map(([id]) => id);

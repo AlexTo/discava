@@ -9,48 +9,32 @@ import {
   FILE_URL_LIFETIME_SECONDS,
   SIGNED_COOKIE_LIFETIME_SECONDS,
 } from './media-keys.js';
-import { readSetting } from './settings.js';
+import { readSetting, settingEnvName } from './settings.js';
 
 const runtimeConfigKey = 'LessonMediaBucket';
 
-type S3Config = {
-  bucketName: string;
+type CloudFrontConfig = {
   cloudFrontDomainName: string;
   cloudFrontKeyPairId: string;
   cloudFrontPrivateKeySecretArn: string;
-  cookieDomain: string;
+  cookieDomain?: string;
 };
-
-type CloudFrontConfig = Pick<
-  S3Config,
-  | 'cloudFrontDomainName'
-  | 'cloudFrontKeyPairId'
-  | 'cloudFrontPrivateKeySecretArn'
-  | 'cookieDomain'
->;
 
 let _config: CloudFrontConfig | undefined;
 let _privateKey: string | undefined;
 
 const resolveCloudFrontConfig = async (): Promise<CloudFrontConfig> => {
   if (_config === undefined) {
-    const entry = readSetting<Partial<S3Config>>('s3', runtimeConfigKey);
-    if (
-      !entry.cloudFrontDomainName ||
-      !entry.cloudFrontKeyPairId ||
-      !entry.cloudFrontPrivateKeySecretArn ||
-      !entry.cookieDomain
-    ) {
-      throw new Error(
-        'Could not resolve CloudFront signing config from deploy-time setting DISCAVA_S3_LESSON_MEDIA_BUCKET',
-      );
-    }
-    _config = {
-      cloudFrontDomainName: entry.cloudFrontDomainName,
-      cloudFrontKeyPairId: entry.cloudFrontKeyPairId,
-      cloudFrontPrivateKeySecretArn: entry.cloudFrontPrivateKeySecretArn,
-      cookieDomain: entry.cookieDomain,
-    };
+    _config = readSetting(
+      's3',
+      runtimeConfigKey,
+      [
+        'cloudFrontDomainName',
+        'cloudFrontKeyPairId',
+        'cloudFrontPrivateKeySecretArn',
+      ],
+      ['cookieDomain'],
+    );
   }
   return _config;
 };
@@ -97,6 +81,12 @@ export const getSignedCloudFrontCookies = async (
     cloudFrontPrivateKeySecretArn,
     cookieDomain,
   } = await resolveCloudFrontConfig();
+  // Only the cookies need it: a signed URL carries its own host.
+  if (!cookieDomain) {
+    throw new Error(
+      `Missing deploy-time setting ${settingEnvName('s3', runtimeConfigKey, 'cookieDomain')}`,
+    );
+  }
   const privateKey = await resolvePrivateKey(cloudFrontPrivateKeySecretArn);
   const expiresAt = Date.now() + lifetimeSeconds * 1000;
 

@@ -183,10 +183,22 @@ describe('earnings.report', () => {
     expect(queryEarningDays).toHaveBeenCalledTimes(2);
   });
 
-  it('refuses dates that are not real days', async () => {
+  it.each([
+    ['a day that does not exist', '2026-02-30'],
+    ['a month that does not exist', '2026-13-01'],
+  ])('refuses %s with the schema message', async (_name, bad) => {
     await expect(
-      callAs().report({ from: '2026-02-30', to: '2026-03-01' }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      callAs().report({ from: bad, to: '2026-03-01' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('Enter a real date as YYYY-MM-DD'),
+    });
+    await expect(
+      callAs().report({ from: '2026-01-01', to: bad }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.not.stringContaining('Invalid time value'),
+    });
   });
 
   it('never sums two currencies together', async () => {

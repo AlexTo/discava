@@ -13,7 +13,7 @@ This section takes you from nothing to a running Discava installation that GitHu
 ## What you end up with
 
 - A **fork** of Discava on GitHub that you control
-- A **stage** of Discava in your AWS account: three portals, three APIs, a database, video processing and search
+- A **stage** of Discava in your AWS account: three portals, three APIs, a database, video processing, search and payments
 - A **Deploy workflow** in your fork that deploys the stage, either when you run it or whenever CI passes on `main`
 - **No long-lived AWS keys** anywhere. GitHub signs in to AWS with short-lived tokens (OIDC)
 
@@ -59,7 +59,7 @@ Start with `discava-development`. The steps for production are the same.
 1. <Link path="deploy/prerequisites">Prerequisites</Link>: the AWS account, tools and access you need
 2. <Link path="deploy/setup">Fork and set up</Link>: fork the repository and run the setup script, which creates the AWS roles and the GitHub environment
 3. <Link path="deploy/first-deploy">First deploy</Link>: run the Deploy workflow, then create your first users
-4. <Link path="deploy/configuration">Stage configuration</Link>: custom domains, email, limits and new stages
+4. <Link path="deploy/configuration">Stage configuration</Link>: custom domains, email, payouts, limits and new stages
 5. <Link path="deploy/ci-cd">CI/CD reference</Link>: what each workflow does and every variable it reads
 
-Two more pages are there when you need them: <Link path="deploy/from-your-machine">deploying from your machine</Link> and <Link path="deploy/troubleshooting">troubleshooting</Link>.
+Two more pages are there when you need them: <Link path="deploy/from-your-machine">deploying from your machine</Link>, which also lists the maintenance scripts, and <Link path="deploy/troubleshooting">troubleshooting</Link>.

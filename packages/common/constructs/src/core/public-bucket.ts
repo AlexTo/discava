@@ -98,7 +98,7 @@ export class PublicBucket extends Construct {
   /** The bucket's origin, which every behavior of the distribution shares. */
   protected readonly origin: IOrigin;
   private readonly runtimeConfigKey: string;
-  private readonly settings: Record<string, unknown>;
+  private readonly settings: Record<string, string | undefined>;
   private allowedOrigins: string[] = ['*'];
 
   constructor(
