@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { errors as openSearchErrors } from '@opensearch-project/opensearch';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
@@ -51,6 +52,20 @@ beforeEach(() => {
 });
 
 describe('category.list', () => {
+  it('gives the count query its own timeout and answers a retriable TIMEOUT when the collection is waking (#1146)', async () => {
+    categoryQueryPrimary.mockReturnValue({ go: async () => ({ data: [] }) });
+    searchMock.mockRejectedValue(new openSearchErrors.TimeoutError('slow'));
+
+    await expect(callAnonymously().list()).rejects.toMatchObject({
+      code: 'TIMEOUT',
+    });
+    expect(searchMock).toHaveBeenCalledWith(expect.anything(), {
+      requestTimeout: 8_000,
+      // The client retries a timeout 3 times by default: ~32 s, past the Lambda.
+      maxRetries: 0,
+    });
+  });
+
   it('lists every active category with its course count, zero included, by name', async () => {
     const categories = Array.from({ length: 25 }, (_, i) => category(25 - i));
     categories.push(category(99, 'archived'));

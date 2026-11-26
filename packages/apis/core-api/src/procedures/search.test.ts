@@ -146,6 +146,7 @@ describe('course.publicSearch', () => {
 
     const [, options] = searchMock.mock.calls[0];
     expect(options.requestTimeout).toBeGreaterThan(0);
+    expect(options.maxRetries).toBe(0);
   });
 
   it('turns a cold-start timeout into a clear, retriable error', async () => {

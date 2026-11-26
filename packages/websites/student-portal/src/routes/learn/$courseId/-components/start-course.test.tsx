@@ -174,4 +174,30 @@ describe('StartCourse', () => {
 
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
   });
+
+  it.each(['course.myItemCompletions', 'course.myLessonProgress'])(
+    'offers to try again when %s failed to load',
+    async (procedure) => {
+      let calls = 0;
+      const { user } = render({
+        [procedure]: () => {
+          calls += 1;
+          if (calls === 1) {
+            throw new ApiError('INTERNAL_SERVER_ERROR', 'Unavailable');
+          }
+          return procedure === 'course.myItemCompletions'
+            ? { items: [] }
+            : { lessons: [] };
+        },
+      });
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Something went wrong on our side. Try again in a moment.',
+      );
+      expect(navigate).not.toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+    },
+  );
 });

@@ -26,8 +26,8 @@ const policy = (role: string, action: string) => ({
   },
 });
 
-const TABLE = { DISCAVA_DYNAMODB_CORE_TABLE: '{"tableName":"t"}' };
-const SEARCH = { DISCAVA_OPENSEARCH_SEARCH: '{"endpoint":"e"}' };
+const TABLE = { DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME: 't' };
+const SEARCH = { DISCAVA_OPENSEARCH_SEARCH_ENDPOINT: 'e' };
 
 describe('functionsMissingSettings', () => {
   const template = Template.fromJSON({

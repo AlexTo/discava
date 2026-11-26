@@ -63,14 +63,27 @@ describe('CourseFirstLessonPromptForm', () => {
     ).toBeInTheDocument();
   });
 
-  it('has Save prompt disabled while the text is unchanged', async () => {
+  it('has Save prompt unavailable while the text is unchanged', async () => {
     const { user } = renderForm(OWN_PROMPT);
 
-    expect(save()).toBeDisabled();
+    expect(save()).toHaveAttribute('aria-disabled', 'true');
     await user.type(field(), '?');
-    expect(save()).toBeEnabled();
+    expect(save()).not.toHaveAttribute('aria-disabled');
     await user.type(field(), '{Backspace}');
-    expect(save()).toBeDisabled();
+    expect(save()).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('keeps focus on Save prompt after a keyboard save', async () => {
+    const { user } = renderForm(undefined, {
+      'course.setFirstLessonPrompt': () => ({}),
+    });
+
+    await user.type(field(), OWN_PROMPT);
+    save().focus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
+    expect(save()).toHaveFocus();
   });
 
   it('sends the trimmed text', async () => {

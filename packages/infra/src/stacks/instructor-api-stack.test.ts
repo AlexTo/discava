@@ -120,26 +120,26 @@ describe('deploy-time settings per function', () => {
   // Function logical-ID prefix to the settings its code reads.
   const required = {
     InstructorApiRouterHandler: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_CAPTION_TRANSLATION_SETTINGS',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_CAPTION_TRANSLATION_SETTINGS_ENABLED',
     ],
     InstructorApiMediaUrlHandler: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
-      'DISCAVA_CAPTION_TRANSLATION_SETTINGS',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET_BUCKET_NAME',
+      'DISCAVA_CAPTION_TRANSLATION_SETTINGS_ENABLED',
     ],
     InstructorApiCourseImageHandler: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET_BUCKET_NAME',
     ],
     InstructorApiMediaHandler: [
-      'DISCAVA_DYNAMODB_CORE_TABLE',
-      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
-      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
-      'DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE',
-      'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
+      'DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET_BUCKET_NAME',
+      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET_BUCKET_NAME',
+      'DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE_ROLE_ARN',
+      'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP_LAMBDA_ARN',
     ],
-    InstructorApiPayoutsHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    InstructorApiPayoutsHandler: ['DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME'],
   };
 
   it('gives each function the settings its code reads', () => {
@@ -158,26 +158,24 @@ describe('caption languages (#755)', () => {
     'hands %s the stage settings it was given, and the defaults without any',
     (handler) => {
       const setting = (components: Parameters<typeof synth>[0]) =>
-        JSON.stringify(
-          Object.entries(
-            synth(components)('InstructorApi').findResources(
-              'AWS::Lambda::Function',
-            ),
-          )
-            .filter(([id]) => id.startsWith(handler))
-            .map(
-              ([, fn]) =>
-                fn.Properties.Environment.Variables
-                  .DISCAVA_CAPTION_TRANSLATION_SETTINGS,
-            ),
-        );
+        Object.entries(
+          synth(components)('InstructorApi').findResources(
+            'AWS::Lambda::Function',
+          ),
+        )
+          .filter(([id]) => id.startsWith(handler))
+          .map(([, fn]) => {
+            const variables = fn.Properties.Environment.Variables;
+            return `${variables.DISCAVA_CAPTION_TRANSLATION_SETTINGS_ENABLED}/${variables.DISCAVA_CAPTION_TRANSLATION_SETTINGS_MAX_LANGUAGES_PER_COURSE}`;
+          })
+          .filter((value, index, all) => all.indexOf(value) === index);
       expect(
         setting({ captionTranslation: { maxLanguagesPerCourse: 3 } }),
-      ).toMatch(/enabled[\s\S]*true[\s\S]*maxLanguagesPerCourse[\s\S]*3/);
-      expect(setting({ captionTranslation: { enabled: false } })).toMatch(
-        /enabled[\s\S]*false/,
-      );
-      expect(setting({})).toMatch(/maxLanguagesPerCourse[\s\S]*9/);
+      ).toEqual(['true/3']);
+      expect(setting({ captionTranslation: { enabled: false } })).toEqual([
+        'false/9',
+      ]);
+      expect(setting({})).toEqual(['true/9']);
     },
   );
 });

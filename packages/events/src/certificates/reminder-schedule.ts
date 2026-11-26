@@ -25,12 +25,6 @@ const getSchedulerClient = (): SchedulerClient => {
 
 // Set by the stream router stack alongside the certificate-reminder
 // Lambda itself.
-type CertificateReminderConfig = {
-  lambdaArn: string;
-  schedulerRoleArn: string;
-  scheduleGroupName: string;
-};
-
 export interface ScheduleCertificateReminderParams {
   userId: string;
   courseId: string;
@@ -61,8 +55,11 @@ export const scheduleCertificateReminder = async ({
     } satisfies LocalScheduleRequest);
     return;
   }
-  const { lambdaArn, schedulerRoleArn, scheduleGroupName } =
-    readSetting<CertificateReminderConfig>('certificates', 'Reminder');
+  const { lambdaArn, schedulerRoleArn, scheduleGroupName } = readSetting(
+    'certificates',
+    'Reminder',
+    ['lambdaArn', 'schedulerRoleArn', 'scheduleGroupName'],
+  );
   try {
     await getSchedulerClient().send(
       new CreateScheduleCommand({

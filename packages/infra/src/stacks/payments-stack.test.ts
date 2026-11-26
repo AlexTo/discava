@@ -26,7 +26,7 @@ describe('deploy-time settings per function', () => {
   const template = synth({})('Payments');
   // Function logical-ID prefix to the settings its code reads.
   const required = {
-    StripeWebhookApiHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    StripeWebhookApiHandler: ['DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME'],
   };
 
   it('gives each function the settings its code reads', () => {

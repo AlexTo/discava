@@ -101,7 +101,7 @@ export class MediaBucket extends Construct {
   private readonly signingKeyPairSecret: RsaKeyPairSecret;
   private allowedOrigins: string[] = ['*'];
   private readonly runtimeConfigKey: string;
-  private readonly settings: Record<string, unknown>;
+  private readonly settings: Record<string, string | undefined>;
 
   constructor(
     scope: Construct,

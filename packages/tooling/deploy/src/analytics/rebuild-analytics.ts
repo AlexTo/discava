@@ -13,9 +13,9 @@ import { parseCourseIds } from './args.js';
 // backfilling a course. Usage:
 //   pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> ...
 // Runs against local dev's table, or against the table
-// DISCAVA_DYNAMODB_CORE_TABLE names (`{"tableName":"..."}`) when that is set
+// DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME names when that is set
 // (with AWS credentials in the environment).
-if (!process.env.DISCAVA_DYNAMODB_CORE_TABLE) {
+if (!process.env.DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME) {
   process.env.LOCAL_DEV = 'true';
 }
 

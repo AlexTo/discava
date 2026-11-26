@@ -4,42 +4,62 @@
  */
 
 /**
- * Deploy-time settings: the CDK puts each setting's JSON in a Lambda
- * environment variable named by `settingEnvName`, and this module reads it.
- * Pure and synchronous, with no AWS SDK, so the constructs share it.
+ * Deploy-time settings: the CDK puts each field of a setting in its own plain
+ * Lambda environment variable named by `settingEnvName`, and this module reads
+ * them. Pure and synchronous, with no AWS SDK, so the constructs share it.
  */
 
 const words = (name: string): string[] =>
   name.split(/(?<=[a-z0-9])(?=[A-Z])/).map((word) => word.toUpperCase());
 
-/** `('s3', 'LessonMediaBucket')` gives `DISCAVA_S3_LESSON_MEDIA_BUCKET`. */
-export const settingEnvName = (namespace: string, key: string): string =>
-  ['DISCAVA', ...words(namespace), ...words(key)].join('_');
-
 /**
- * Parses the setting's JSON, or undefined when the variable is unset or empty.
- * Error messages name the variable and never include its value.
+ * `('s3', 'LessonMediaBucket', 'bucketName')` gives
+ * `DISCAVA_S3_LESSON_MEDIA_BUCKET_BUCKET_NAME`. Without a field, the name of a
+ * setting that is a single value.
  */
-export const readOptionalSetting = <T>(
+export const settingEnvName = (
   namespace: string,
   key: string,
-): T | undefined => {
-  const name = settingEnvName(namespace, key);
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') return undefined;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    throw new Error(`Invalid deploy-time setting ${name}`);
-  }
+  field?: string,
+): string =>
+  [
+    'DISCAVA',
+    ...words(namespace),
+    ...words(key),
+    ...(field === undefined ? [] : words(field)),
+  ].join('_');
+
+const readVariable = (name: string): string | undefined => {
+  const value = process.env[name];
+  return value === undefined || value === '' ? undefined : value;
 };
 
-export const readSetting = <T>(namespace: string, key: string): T => {
-  const value = readOptionalSetting<T>(namespace, key);
-  if (value === undefined) {
-    throw new Error(
-      `Missing deploy-time setting ${settingEnvName(namespace, key)}`,
-    );
+/**
+ * Reads the setting's fields, each from its own variable. Throws naming the
+ * first required field whose variable is unset or empty; an optional field
+ * that is unset is left out. Error messages never include a value.
+ */
+export const readSetting = <
+  Required extends string,
+  Optional extends string = never,
+>(
+  namespace: string,
+  key: string,
+  fields: readonly Required[],
+  optionalFields: readonly Optional[] = [],
+): Record<Required, string> & Partial<Record<Optional, string>> => {
+  const result: Record<string, string> = {};
+  for (const field of fields) {
+    const name = settingEnvName(namespace, key, field);
+    const value = readVariable(name);
+    if (value === undefined) {
+      throw new Error(`Missing deploy-time setting ${name}`);
+    }
+    result[field] = value;
   }
-  return value;
+  for (const field of optionalFields) {
+    const value = readVariable(settingEnvName(namespace, key, field));
+    if (value !== undefined) result[field] = value;
+  }
+  return result as Record<Required, string> & Partial<Record<Optional, string>>;
 };

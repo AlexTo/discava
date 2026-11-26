@@ -23,10 +23,9 @@ import {
   isLocalDev,
   type LocalTranscriptionJobRequest,
 } from '@discava/common-server-utils/local-dev';
-import { readOptionalSetting } from '@discava/common-server-utils/settings';
 
 // The language automatic captions are made in, until a course can choose.
-const DEFAULT_CAPTION_LANGUAGE = 'en-US';
+const CAPTION_LANGUAGE = 'en-US';
 
 let _client: TranscribeClient | undefined;
 const getTranscribeClient = (): TranscribeClient => {
@@ -56,12 +55,6 @@ export type CaptionJobTarget =
       /** The version's manifest nonce. */
       nonce: string;
     };
-
-// The optional `mediaConvert.CaptionLanguageCode` deploy-time setting; not
-// set means the default.
-const resolveCaptionLanguage = async (): Promise<string> =>
-  readOptionalSetting<string>('mediaConvert', 'CaptionLanguageCode') ??
-  DEFAULT_CAPTION_LANGUAGE;
 
 /**
  * Starts the automatic captions for a version whose transcode just finished:
@@ -115,7 +108,7 @@ export const startCaptionJob = async (
   await getTranscribeClient().send(
     new StartTranscriptionJobCommand({
       TranscriptionJobName: jobName,
-      LanguageCode: (await resolveCaptionLanguage()) as never,
+      LanguageCode: CAPTION_LANGUAGE as never,
       Media: {
         MediaFileUri: `s3://${uploadBucket}/${transcribeInputKey(nonce)}`,
       },

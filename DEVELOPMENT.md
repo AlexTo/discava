@@ -54,7 +54,7 @@ The event runner (`packages/events/src/local`) stands in for:
 
 **Notifications.** `pnpm nx run @discava/tooling-local-dev:notify-local -- --user <sub> --type <id> [--param k=v]... [--key <dedupeKey>]` publishes a notification to a local user (`--course <courseId>` notifies every student enrolled in a course), with canned params for the type; the email it sends shows up in the inbox above.
 
-**Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `DISCAVA_DYNAMODB_CORE_TABLE` is set (`{"tableName":"<table>"}`, the `CoreTableName` output of `<stage>-Data`) and AWS credentials are present.
+**Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME` is set (to the `CoreTableName` output of `<stage>-Data`) and AWS credentials are present.
 
 **Search indices.** On a deployed stage, `pnpm nx run @discava/tooling-deploy:reindex-search --stage=<stage>` re-indexes every published course, and `pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=<stage> [--course=<courseId>]` rebuilds the transcripts index, for one course or all of them. With no `--stage`, `reindex-transcripts` runs against the local stack.
 

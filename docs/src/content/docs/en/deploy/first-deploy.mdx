@@ -86,10 +86,10 @@ Courses are organised by categories that an admin manages. Either sign in to the
 TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
   --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
 
-DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}" pnpm nx run @discava/tooling-deploy:seed-categories
+DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE pnpm nx run @discava/tooling-deploy:seed-categories
 ```
 
-It uses the AWS credentials and region in your shell, which must be the stage's, and skips categories that already exist. Without `DISCAVA_DYNAMODB_CORE_TABLE` it writes to the local development table instead.
+It uses the AWS credentials and region in your shell, which must be the stage's, and skips categories that already exist. Without `DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME` it writes to the local development table instead.
 
 ## 5. Try it end to end
 

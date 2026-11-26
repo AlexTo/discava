@@ -240,6 +240,17 @@ describe('CoreApi free preview operations', () => {
     // Synthesising the Lambda assets is slow on a busy CI runner.
   }, 60_000);
 
+  it('gives the router function 512 MB (#1146)', () => {
+    const stack = new Stack(new App(), 'MemoryStack', {
+      env: { account: '111122223333', region: 'ap-southeast-2' },
+    });
+    const integrations = CoreApi.defaultIntegrations(stack).build();
+    const handler = integrations['course.publicSearch'].handler as {
+      node: { defaultChild: { memorySize?: number } };
+    };
+    expect(handler.node.defaultChild.memorySize).toBe(512);
+  }, 60_000);
+
   it.each(FREE_PREVIEW)('%s carries the public throttle', (operation) => {
     template.hasResourceProperties('AWS::ApiGateway::Stage', {
       MethodSettings: Match.arrayWith([
