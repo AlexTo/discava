@@ -61,6 +61,8 @@ describe('category.list', () => {
     });
     expect(searchMock).toHaveBeenCalledWith(expect.anything(), {
       requestTimeout: 8_000,
+      // The client retries a timeout 3 times by default: ~32 s, past the Lambda.
+      maxRetries: 0,
     });
   });
 

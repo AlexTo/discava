@@ -49,7 +49,7 @@ export const listCategories = publicSearchProcedure
             },
             // As course.publicSearch: stop waiting on a collection that is
             // waking up before the Lambda's own timeout turns it into a 502.
-            { requestTimeout: SEARCH_REQUEST_TIMEOUT_MS },
+            { requestTimeout: SEARCH_REQUEST_TIMEOUT_MS, maxRetries: 0 },
           )
           .catch(mapSearchError),
       ),

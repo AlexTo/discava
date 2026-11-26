@@ -130,7 +130,9 @@ export const publicSearchCourses = publicSearchProcedure
               // The client's request types don't model every aggregation shape.
               body: buildSearchRequest(input) as never,
             },
-            { requestTimeout: SEARCH_REQUEST_TIMEOUT_MS },
+            // No retries: the client retries a timeout up to 3 times by
+            // default, which would run to ~32 s, past the Lambda's 10 s.
+            { requestTimeout: SEARCH_REQUEST_TIMEOUT_MS, maxRetries: 0 },
           )
           .catch(mapSearchError),
       ),
