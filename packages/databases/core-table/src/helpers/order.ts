@@ -641,8 +641,10 @@ export const refundOrder = async ({
  * access. One transaction moves a `refunded` order that was refunded on
  * request back to `paid`, removing `refundedAt` and `refundedAmount` and
  * setting `refundFailedAt` (`refundRequestedAt` stays), and restores the
- * enrolment `dropped` to `completed` (if it has `completedAt`) or `active`,
- * only while it still names this order, so a re-purchase is not touched. It
+ * enrolment `dropped` to `completed` (if it has `completedAt`) or `active`.
+ * An order the student bought again after the refund (the enrolment names
+ * another order) is left alone, order and enrolment, so a re-purchase is not
+ * touched and the student keeps one paid order for the course. It
  * is conditioned on the order being `refunded`, so a repeated or retried
  * failure changes nothing. Returns whether it made the move.
  */
@@ -664,6 +666,11 @@ export const reverseRefund = async ({
     const { data: enrolment } = await coreTable.entities.enrolment
       .get({ courseId: order.courseId, userId: order.userId })
       .go();
+    // Bought again after the refund: the enrolment names the new order, and
+    // this one back at `paid` would be a second paid order for the course.
+    if (enrolment?.orderId && enrolment.orderId !== order.orderId) {
+      return false;
+    }
     const restore =
       enrolment?.orderId === order.orderId && enrolment.status === 'dropped';
     const { canceled } = await coreTable.transaction
