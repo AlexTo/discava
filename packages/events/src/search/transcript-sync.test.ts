@@ -187,6 +187,34 @@ describe('syncItemTranscripts', () => {
     });
   });
 
+  // A failed document fails the item's whole sync, so one track the schema
+  // refuses would leave the item's other tracks out of the index too.
+  it('indexes an auto, an uploaded and a translated track of one video', async () => {
+    const t = setup(
+      {
+        item: item({
+          captionTracks: [
+            track('t1', 'en'),
+            track('t2', 'es', { source: 'translated', sourceTrackId: 't1' }),
+            track('t3', 'fr', { source: 'uploaded' }),
+          ],
+        }),
+      },
+      FILES,
+    );
+
+    const result = await t.sync();
+
+    expect(result).toEqual({ indexed: 3, removed: 0 });
+    expect(
+      [...t.docs.values()].map(({ trackId, source }) => [trackId, source]),
+    ).toEqual([
+      ['t1', 'auto'],
+      ['t2', 'translated'],
+      ['t3', 'uploaded'],
+    ]);
+  });
+
   it.each([
     ['a hidden item', { item: item({ visibility: 'hidden' }) }],
     ['an archived item', { item: item({ archivedAt: '2026-01-01' }) }],
