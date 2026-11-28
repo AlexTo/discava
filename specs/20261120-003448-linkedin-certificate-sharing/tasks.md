@@ -224,7 +224,7 @@ Paths are relative to the repository root. Each PR says "Part of #592" and links
   - `docs/src/content/docs/en/design/public-pages.mdx`: `/certificates/*` among the renderer's paths, always `noindex`.
 - [ ] T035 **(human)** Run [quickstart.md](./quickstart.md) "By hand" steps 1 to 12 against `pnpm dev`, saving screenshots to `tmp/screenshots/pr-<number>/`. Confirm in the network panel that no request goes to LinkedIn before the click, and that the address opened carries only the parameters in [contracts/student-portal-ui.md](./contracts/student-portal-ui.md) (SC-004).
 - [ ] T036 **(human)** After deploying to `discava-development`, run quickstart's "On a deployed stage": the schedule exists three days out, an invoked reminder arrives once by email with a working one-click unsubscribe, and LinkedIn's Post Inspector shows the card for a certificate address.
-- [ ] T037 **(human)** Tell the #594 spec (completion criteria and certificate revocation) where a revoked certificate must stop being shareable (research R-10): `recordLinkedInClick`, `claimCertificateReminder`, `certificate.verify` and the certificate actions in My Learning. Whichever feature merges second adds those checks.
+- [x] T037 **(human)** Tell the #594 spec (completion criteria and certificate revocation) where a revoked certificate must stop being shareable (research R-10): `recordLinkedInClick`, `claimCertificateReminder`, `certificate.verify` and the certificate actions in My Learning. Whichever feature merges second adds those checks.
 
 ---
 
