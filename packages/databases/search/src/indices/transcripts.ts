@@ -18,7 +18,7 @@ export const TranscriptDocumentSchema = z
     versionId: nonEmpty,
     trackId: nonEmpty,
     language: nonEmpty,
-    source: z.enum(['auto', 'uploaded']),
+    source: z.enum(['auto', 'uploaded', 'translated']),
     isDefault: z.boolean(),
     // Every language that version has a track in (R-5).
     trackLanguages: z.array(nonEmpty),

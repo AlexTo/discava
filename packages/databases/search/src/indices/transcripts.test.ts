@@ -91,6 +91,13 @@ describe('TranscriptDocumentSchema', () => {
     ).toBe(false);
   });
 
+  it('accepts a machine-translated track', () => {
+    expect(
+      TranscriptDocumentSchema.safeParse({ ...valid, source: 'translated' })
+        .success,
+    ).toBe(true);
+  });
+
   it('accepts text of exactly 2,000 characters and an uploaded track', () => {
     expect(
       TranscriptDocumentSchema.safeParse({

@@ -17,7 +17,7 @@ Defined in `packages/databases/search/src/indices/transcripts.ts` with `createIn
 | `versionId` | `keyword` | The video version (manifest nonce) the track belongs to |
 | `trackId` | `keyword` | The caption track |
 | `language` | `keyword` | The track's BCP 47 tag, as on the track |
-| `source` | `keyword` | `auto` or `uploaded` |
+| `source` | `keyword` | `auto`, `uploaded` or `translated` (a machine-translated track) |
 | `isDefault` | `boolean` | Whether the track is its version's default |
 | `trackLanguages` | `keyword` (array) | Every language that version has a track in (R-5) |
 | `seq` | `integer` | The passage's position in the track, from 0 |
