@@ -1,0 +1,118 @@
+---
+title: Progresso e conclusão
+description: Como a conclusão de itens, aulas e cursos é registrada, e o recálculo no servidor que é seu único escritor.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+## A regra
+
+**O progresso e a conclusão de aulas e cursos só são gravados no servidor, por uma única Lambda.** Eles nunca dependem de o aluno recarregar uma página ou de qualquer outro gatilho do lado do cliente.
+
+A única coisa que parte do aluno é se um item individual está concluído (chegar ao fim de um vídeo, por exemplo), porque só o navegador pode observar isso. Mesmo assim, a core-api decide se conta, e tudo acima do item é derivado no servidor.
+
+## Registros
+
+| Registro | Chaves | Gravado por | Guarda |
+|---|---|---|---|
+| `itemCompletion` | pk `userId`, sk `courseId / lessonId / contentItemId` | core-api | `completedAt` |
+| `progress` (por aula) | pk `userId`, sk `courseId / lessonId` | Somente a Lambda de recálculo de progresso | `status`, `completedAt` |
+| `enrolment` | pk `courseId`, sk `userId` | Somente a Lambda de recálculo de progresso (para estes campos) | `progressPercent`, `status`, `completedAt` |
+
+A core-api grava registros `itemCompletion` e tentativas de quiz. Ela nunca grava `progress` nem os campos de progresso da matrícula.
+
+## Quando um item está concluído
+
+| Tipo de item | Concluído quando |
+|---|---|
+| Texto | O aluno pressiona **Mark as done** |
+| Vídeo | O aluno pressiona **Mark as done** |
+| Arquivo | O aluno pressiona **Mark as done** |
+| Quiz | Aprovado, ou todas as tentativas usadas |
+| Tarefa de envio de arquivo | O aluno envia um arquivo |
+
+Um quiz que se conclui por esgotar as tentativas está concluído para o progresso, mas não conta como aprovado para um certificado: onde o curso exige aprovação nos quizzes, o aluno tem um curso concluído e nenhum certificado até ser aprovado.
+
+Itens de texto, vídeo e arquivo nunca se concluem sozinhos: não há rastreamento de rolagem, tempo assistido ou download. O aluno decide quando terminou com um item, como na maioria das plataformas de aprendizagem.
+
+### Registrando uma conclusão
+
+- **Texto, vídeo e arquivo:** **Mark as done** no player de aulas chama `contentItem.complete` da core-api; a core-api decide se conta. Uma transação verifica que o curso está publicado, que o item, sua aula e seu módulo estão visíveis e não arquivados, e que o aluno está matriculado (não `dropped`). Depois cria o `itemCompletion` somente se não houver um.
+  - A conclusão é o primeiro registro do aluno sobre o item, então a mesma transação incrementa o `studentActivityCount` do item. Cada aluno é contado uma vez (veja <Link path="design/live-course-editing">Live course editing</Link>).
+  - Concluir de novo retorna a conclusão existente. Um curso arquivado é somente leitura, então nada nele pode ser concluído.
+- **Quiz:** conclui-se sozinho. A tentativa que aprova, ou que usa a última tentativa, registra a conclusão na mesma transação da tentativa (veja <Link path="design/quizzes">Quizzes</Link>). Ela não conta o aluno de novo: a primeira tentativa dele já contou.
+  - `contentItem.complete` também aceita um quiz, mas só quando ele foi aprovado ou não restam tentativas. Isso cobre um limite de tentativas reduzido abaixo do que um aluno já usou, quando nenhum novo envio é possível.
+- **Tarefa de envio de arquivo:** conclui-se sozinha. O primeiro envio do aluno registra a conclusão na mesma transação do `assignmentSubmission` e o conta uma vez em `studentActivityCount`. Reenviar substitui o arquivo e aumenta o `version` do envio; não o conta de novo. `contentItem.complete` retorna uma conclusão existente para uma tarefa, mas nunca cria uma: sem envio, falha com "Submit your work to complete it".
+- **Perguntas de vídeo:** responder a uma pergunta de um vídeo não é uma conclusão. Não cria `itemCompletion` e não muda o progresso de aula ou curso, não importa quantas perguntas sejam respondidas, erradas ou puladas; o vídeo continua sendo concluído somente por **Mark as done**. A resposta é registrada em seu próprio `videoAnswerSheet` (veja <Link path="design/quizzes">Quizzes</Link>). Ela conta como o primeiro registro do aluno sobre o vídeo para o `studentActivityCount` e define `lastActivityAt`, e **Mark as done** não conta o aluno uma segunda vez.
+- **Última atividade:** concluir um item, enviar uma tentativa de quiz ou uma tarefa, ou responder a uma pergunta de vídeo define o `lastActivityAt` da matrícula na mesma transação, e ele só avança. Ele ordena os cursos do aluno, o ativo mais recentemente primeiro, para que a home logada possa oferecer continuar de onde parou. O recálculo de progresso não mexe nele: a mudança de um instrutor não é atividade do aluno.
+
+### Lendo o progresso
+
+- **Conclusões:** `course.myItemCompletions` retorna as conclusões de um aluno em um curso, inclusive as de itens que depois foram ocultados ou arquivados. Quais ainda contam é decidido a partir do currículo atual.
+- **Progresso de aula:** `course.myLessonProgress` retorna os registros de progresso de aula de um aluno em um curso, como o recálculo de progresso os gravou por último; uma aula sem registro não foi iniciada. O resumo no nível do curso vem com a matrícula (`course.myEnrolment`).
+- **Entre cursos:** `course.myEnrolments` lista as matrículas de um aluno que não estão dropped, a ativa mais recentemente primeiro, cada uma com seu progresso, a próxima aula (a primeira aula efetivamente visível cujo progresso não é `completed`) e quantos itens são novos. Ela alimenta a home logada e My Learning.
+
+## Conclusão de aula e de curso
+
+- Uma aula está `completed` quando todo item **efetivamente visível** nela tem um `itemCompletion`.
+- `progressPercent` é a parcela dos itens efetivamente visíveis do curso que o aluno concluiu. É sempre **recalculado** a partir do currículo atual, nunca incrementado, então adicionar, remover ou ocultar conteúdo não pode deixá-lo errado.
+- Em 100%, a matrícula recebe `status: 'completed'` e `completedAt`.
+- **A conclusão é permanente**, para aulas e cursos. Adicionar conteúdo a algo que um aluno concluiu nunca o torna incompleto. `progressPercent` pode cair abaixo de 100 depois, mas o aluno vê **Completed ✓ · 2 new items**, e os itens novos recebem um selo **New**.
+
+A página do curso do aluno pode calcular o progresso na leitura para exibição imediata. Isso é só exibição e nunca grava.
+
+## Lambda de recálculo de progresso
+
+Uma Lambda em `packages/events` é a única escritora do `progress` de aula e do `progressPercent`, `status` e `completedAt` da matrícula.
+
+### Gatilho
+
+O stream da core table (imagens novas e antigas), pelo <Link path="design/stream-event-router">stream event router</Link>: os filtros do recurso `progress-recalculation` (`PROGRESS_STREAM_FILTERS`) casam pelo nome da entidade que o ElectroDB guarda em cada registro (`__edb_e__`), então a Lambda só roda para:
+
+| Evento do stream | Recalcula |
+|---|---|
+| `itemCompletion` inserido | Aquele aluno, naquele curso |
+| Módulo, aula ou item de conteúdo: `visibility` ou `archivedAt` mudou, ou registro removido | Todo aluno matriculado no curso que não desistiu |
+| `quizSummary` inserido ou modificado | Aquele aluno, quando `passedAt` aparece ou a melhor nota de um quiz já aprovado sobe; toda outra mudança é ignorada |
+| `assignmentSubmission` modificado | Aquele aluno, somente quando `status`, `points` ou `returnedAt` difere entre a imagem antiga e a nova; um reenvio não muda nenhum deles |
+| `course` modificado | Todo aluno matriculado que não desistiu, somente quando `certificateCriteria.version` ou `certificatesEnabled` difere entre a imagem antiga e a nova; qualquer outra edição do curso é ignorada |
+| Item de conteúdo quiz: `settings.passMarkPercent` mudou | Todo aluno matriculado que não desistiu. Uma aprovação só conta enquanto a melhor nota alcança a nota mínima atual, então baixar a nota mínima pode tornar um aluno elegível, e uma nota mínima que cruza 0 muda quem é avaliado |
+
+Um filtro não pode comparar as imagens antiga e nova de um registro, então toda mudança em um módulo, aula, item de conteúdo, resumo de quiz ou curso chega à Lambda. A Lambda então ignora as que deixam `visibility` e `archivedAt` como estavam (a nota mínima de um quiz é a exceção, veja acima): um novo título, uma ordem ou um `studentActivityCount`. As gravações da própria Lambda, em `progress`, `enrolment` e `certificate`, não casam com nenhum filtro, então ela nunca se dispara sozinha.
+
+### O que ela faz
+
+Para cada (aluno, curso) afetado:
+
+1. Carrega o currículo do curso uma vez (a collection `curriculum`, todas as páginas) e mantém os itens efetivamente visíveis com `filterEffectivelyVisible` de `@discava/core-table`, a mesma regra que as visões de curso da core-api usam.
+2. Lê os registros `itemCompletion` do aluno e o `progress` de aula do curso (pk `userId`, prefixo de sk `courseId`). Um aluno que não está matriculado, ou que desistiu, é deixado em paz.
+3. Grava o `progress` de cada aula, mas só onde mudou:
+   - Uma aula está `completed` quando todos os seus itens efetivamente visíveis estão, `in_progress` quando alguns estão, e `not_started` caso contrário.
+   - Uma aula sem itens efetivamente visíveis não tem progresso.
+   - Nenhum registro significa não iniciada, então uma aula intocada não é gravada.
+   - `completed` só é definido, nunca limpo: a gravação é condicionada a o registro ainda não estar `completed`.
+4. Grava o `progressPercent` da matrícula (arredondado para baixo, então só é 100 quando tudo está feito) se mudou. Em 100%, define `status: 'completed'` e `completedAt`, condicionado a a matrícula ainda estar `active`. Um curso sem nada visível nunca é concluído.
+5. Se a matrícula está `completed`, o aluno ainda não tem certificado e o curso emite certificados, verifica os critérios de certificado do curso (`evaluateCertificateCriteria`, veja <Link path="design/certificates">Certificates</Link>) e chama `issueCertificate` somente quando eles são atendidos. Os resumos de quiz e os envios corrigidos do aluno só são lidos quando os critérios precisam deles.
+6. Se o aluno tem um certificado, agenda seu único lembrete do LinkedIn, a menos que já tenha sido agendado ou enviado, um clique no LinkedIn tenha sido registrado, ou o prazo tenha passado.
+
+Os alunos são recalculados dez por vez, e o currículo de cada curso é carregado uma vez por lote.
+
+### Falhas
+
+Um lote que falha volta para a fila do recurso e é repetido. Uma mensagem que continua falhando após `maxReceiveCount` recebimentos vai para a fila de falhas do recurso, em vez de bloquear mudanças posteriores (veja <Link path="design/stream-event-router">Stream event router</Link>). Como toda execução recalcula do zero, a próxima mudança para os mesmos alunos também repara qualquer coisa que um lote com falha tenha perdido.
+
+As matrículas compartilham a chave de partição do curso, então listar os alunos a recalcular é uma consulta. Uma mudança no currículo custa uma consulta por aluno matriculado.
+
+### Idempotência
+
+Toda execução recalcula do zero, então um registro duplicado do stream ou uma rajada de edições do instrutor apenas produz o mesmo resultado de novo. A fila do recurso espera até cinco segundos para juntar um lote de no máximo 100 registros, e os registros de um lote são agrupados para que cada aluno em cada curso seja recalculado uma vez por lote, não importa quantos registros o nomeiem. Duas execuções para o mesmo aluno no mesmo momento (uma conclusão e uma mudança de currículo caem em shards diferentes do stream) recalculam ambas a partir do que leram. Nenhuma pode desfazer a conclusão da outra, porque as gravações de conclusão são condicionadas a ainda não estar concluído.
+
+### Consequências
+
+- Remover a última aula que um aluno não tinha terminado o marca como `completed` mesmo que ele nunca volte.
+- Listas de cursos e relatórios do instrutor leem valores armazenados, então nunca esperam um aluno voltar.
+- Os valores armazenados ficam atrás da gravação que os disparou pelo atraso do stream e pelo agrupamento em lotes da fila, tipicamente alguns segundos.
+
+Veja <Link path="design/live-course-editing">Live course editing</Link> para saber quais ações do instrutor disparam um recálculo.

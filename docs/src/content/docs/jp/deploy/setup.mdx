@@ -1,0 +1,141 @@
+---
+title: フォークとセットアップ
+description: Discava をフォークし、フォークの GitHub 設定を整えて、AWS アカウントに接続するセットアップスクリプトを実行します。
+sidebar:
+  order: 2
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+このページでは、Discava のフォークを AWS アカウントに接続します。終わった時点で、フォークには Deploy ワークフローに必要なものがすべて揃います。まだ何もデプロイされません。
+
+## 1. フォークしてクローンする
+
+<Steps>
+
+1. GitHub で [AlexTo/discava](https://github.com/AlexTo/discava) をフォークします。変更する理由がなければ、`discava` という名前のままにしてください。
+
+2. 元のリポジトリではなく、**自分のフォーク**をクローンします。セットアップスクリプトは、信頼するリポジトリを `origin` リモートから読み取ります。
+
+   ```sh
+   git clone https://github.com/<you>/discava.git
+   cd discava
+   ```
+
+3. 依存関係をインストールします。セットアップスクリプトがステージ一覧を読むために必要です。
+
+   ```sh
+   corepack enable
+   pnpm i
+   ```
+
+</Steps>
+
+## 2. GitHub でフォークを準備する
+
+フォークの **Settings** または **Actions** タブにある、3つの設定です。
+
+<Steps>
+
+1. **ワークフローを有効にします。** GitHub は新しいフォークのワークフローを無効にします。**Actions** タブを開き、**I understand my workflows, go ahead and enable them** を選びます。
+
+2. **GitHub Pages を有効にします。** **Settings → Pages** で **Source** を **GitHub Actions** にします。
+
+   CI ワークフローは、`main` へのプッシュごとに、このドキュメントサイトを Pages に公開します。Pages がオフだとそのジョブが失敗し、CI は失敗扱いになり、CI を待つ自動デプロイは始まりません。手動デプロイはどちらでも動きます。
+
+3. **任意: `CODECOV_TOKEN` を追加します。** CI はテストカバレッジを Codecov にアップロードします。フォークのカバレッジを見るには、Codecov のトークンを **Settings → Secrets and variables → Actions** でリポジトリのシークレットとして追加してください。
+
+</Steps>
+
+:::note[ドキュメントサイトのアドレス]
+CI は、フォークの GitHub Pages アドレス `https://<owner>.github.io/<repository>` 向けにドキュメントサイトをビルドするので、変更するものはありません。カスタムドメインなど別の場所に公開するには、リポジトリ変数 `DOCS_SITE`（例: `https://docs.example.com`）と `DOCS_BASE_PATH`（例: `/my-lms`。ドメインのルートなら `/`）を設定してください。
+:::
+
+## 3. セットアップスクリプトを実行する
+
+スクリプトは `scripts/setup-stage.sh` です。デプロイするステージごとに1回実行します。
+
+```sh
+./scripts/setup-stage.sh discava-development
+```
+
+いくつか質問されます。それぞれ検出された既定値があり、Enter で受け入れます。最後に概要を確認するまで、何も作成されません。再実行しても安全です。各手順は、足りないものを作成し、既存のものを更新します。
+
+### 質問内容
+
+質問は次の順です。
+
+| プロンプト | 答え方 |
+| --- | --- |
+| **Stage** | セットアップするステージ。ステージは `packages/common/infra-config/src/stages.config.ts` から取得されます |
+| **GitHub** | `origin` が自分のフォークなら答えは不要です。信頼するリポジトリが表示されるので、自分のものか確認してください |
+| **AWS credentials** | 対象アカウントの AWS CLI プロファイル。空欄なら既定の認証情報を使います。サインインしているユーザーが表示されます |
+| **Region** | ステージのメインリージョン。`stages.config.ts` で指定されている場合は聞かれません |
+| **CDK bootstrap** | ブートストラップされていないと報告された各リージョンについて、Yes と答えます |
+| **GitHub environment** | Yes にすると、ステージ名の environment を作成し、変数を設定します。GitHub CLI がない場合は聞かれません |
+| **Deploy automatically?** | Yes なら、`main` で CI が成功するたびにこのステージをデプロイします。No（既定）なら、ワークフローを実行したときだけデプロイします。自動デプロイできるステージは1つだけです |
+| **Root domain** | 今は空欄にします。後でスクリプトを再実行すると、ACM で見つけた証明書を使って、すべてのコンポーネントをそのサブドメインで提供できます（<Link path="deploy/configuration">ステージ設定</Link> を参照） |
+| **Continue?** | 概要にリポジトリ、アカウント、リージョン、ステージが正しく表示されたら Yes と答えます |
+
+### 作成されるもの
+
+**AWS** には次のものが作成されます。
+
+| リソース | 名前 | 目的 |
+| --- | --- | --- |
+| OIDC プロバイダー | `token.actions.githubusercontent.com` | GitHub Actions がこのアカウントにサインインできるようにします。全ステージで共有します |
+| デプロイロール | `github-deploy-<stage>` | Deploy ワークフローが引き受けます。信頼するのは、リポジトリの `<stage>` という environment だけです。アセットを公開し、ステージの CloudFormation スタックを管理できます |
+| 実行ロール | `cfn-execution-<stage>` | CloudFormation がステージのリソースを作成するときに使います。権限はインラインポリシー1つと、マネージドポリシー3つ（`cfn-execution-<stage>-data`、`-edge`、`-compute`）にあります |
+| Permissions boundary | `permissions-boundary-<stage>` | ステージが作成するすべての IAM ロールに付ける必要があり、デプロイされたスタックが自分に付与できる権限に上限を設けます |
+| Docker ログインロール | `github-docker-login-<repo>` | リポジトリのワークフローが Amazon ECR Public にサインインできるようにし、イメージ取得のレート制限を避けます。全ステージで共有します |
+| CDK ブートストラップスタック | `CDKToolkit` | CDK が必要とするアセットバケットとロール。同意した各リージョンに作成されます |
+
+ポータルやメディアに WAF を使うステージ（`discava-production` など）は、`us-east-1` でもブートストラップされます。
+
+**GitHub** には次のものが作成されます。
+
+| 場所 | 変数 | 値 |
+| --- | --- | --- |
+| Environment `<stage>` | `AWS_REGION` | ステージのリージョン |
+| Environment `<stage>` | `AWS_DEPLOY_ROLE_ARN` | デプロイロール |
+| Environment `<stage>` | `AWS_EXECUTION_ROLE_ARN` | 実行ロール |
+| リポジトリ | `AWS_DOCKER_LOGIN_ROLE_ARN` | Docker ログインロール |
+| リポジトリ | `AUTO_DEPLOY_STAGE` | ステージ名。自動デプロイを選んだ場合のみ |
+
+これらは**シークレットではなく変数**です。ロール ARN は機密ではありません。デプロイロールは、リポジトリの対応する environment で動くワークフローだけが引き受けられ、Docker ログインロールは、リポジトリのワークフローだけが引き受けられます。
+
+### GitHub CLI がない場合
+
+`gh` がインストールされていない、またはサインインしていない場合でも、スクリプトは AWS 側のすべてを作成します。その後、**Settings → Environments** と **Settings → Secrets and variables → Actions → Variables** で手作業で作成するための environment と変数を表示します。
+
+### 無人で実行する
+
+```sh
+AWS_PROFILE=my-profile AWS_REGION=eu-west-1 ./scripts/setup-stage.sh --yes discava-development
+```
+
+`--yes` はすべての既定値を受け入れるので、自動デプロイはオンになりません。`./scripts/setup-stage.sh --help` で、各回答をあらかじめ設定する環境変数が一覧できます。
+
+### 再実行するタイミング
+
+- カスタムドメインや通知の送信元を追加または変更するとき（<Link path="deploy/configuration">ステージ設定</Link> を参照）
+- 新しいバージョンの Discava を取り込んだ後、デプロイする前。スクリプトは実行ロールと boundary の権限を保持しており、新しい種類の AWS リソースを使うバージョンはそれらを拡張します。更新しないと、デプロイはアクセス拒否のエラーで失敗します
+
+## 4. 本番環境を保護する
+
+フォークでワークフローを実行できる人は、誰でもステージをデプロイできます。`discava-production` や、実際のユーザーがいるステージでは、**Settings → Environments → `<stage>`** を開いて次を行ってください。
+
+- **必須レビュアー**を追加し、各デプロイが承認を待つようにします
+- **デプロイブランチ**を `main` に制限します
+
+## 確認する
+
+```sh
+gh variable list --env discava-development
+gh variable list
+```
+
+1つ目には3つの `AWS_*` 変数が表示されるはずです。2つ目には `AWS_DOCKER_LOGIN_ROLE_ARN` が表示され、自動デプロイを選んだ場合は `AUTO_DEPLOY_STAGE` も表示されます。
+
+次へ: <Link path="deploy/first-deploy">初回デプロイ</Link>。

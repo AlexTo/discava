@@ -1,0 +1,150 @@
+---
+title: 아키텍처 개요
+description: Discava를 이루는 구성 요소, 각 요소의 책임, 연결 방식을 설명합니다.
+sidebar:
+  order: 0
+  label: Overview
+---
+
+import Link from '@components/link.astro';
+
+Discava는 AWS의 서버리스 구성 요소 모음입니다. 아무도 쓰지 않으면 아무것도 실행되지 않습니다. 계속 켜 두어야 하는 서버, 컨테이너, 클러스터가 없습니다.
+
+## 시스템 한눈에 보기
+
+```d2 title="Components and how they connect"
+direction: down
+
+users: "Students, instructors, admins"
+
+edge: "Websites" {
+  student: "Student portal"
+  instructor: "Instructor portal"
+  admin: "Admin portal"
+}
+
+identity: "Cognito\n(sign-in, groups)"
+
+apis: "APIs" {
+  core: "core-api"
+  instr: "instructor-api"
+  adm: "admin-api"
+}
+
+data: "Data" {
+  table: "Core table\n(DynamoDB)"
+  search: "Search\n(OpenSearch Serverless)"
+  lesson: "Lesson media\n(S3 + CloudFront)"
+  public: "Public media\n(S3 + CloudFront)"
+}
+
+async: "Background work" {
+  router: "Stream router"
+  handlers: "Feature handlers"
+  media: "Media pipeline\n(MediaConvert, Transcribe)"
+  router -> handlers: "one queue each"
+}
+
+email: "SES"
+stripe: "Stripe"
+pay: "Stripe webhook API"
+renderer: "Page renderer"
+
+users -> edge
+users -> identity: "sign in"
+edge -> apis: "tRPC over HTTPS"
+apis -> data.table
+apis.core -> data.search: "query"
+apis.instr -> async.media: "submit video"
+data.table -> async.router: "change stream"
+async.handlers -> data.table
+async.handlers -> data.search: "index"
+async.handlers -> email
+async.media -> data.lesson: "renditions"
+users -> data.lesson: "watch"
+apis.core -> stripe: "start checkout"
+stripe -> pay: "signed confirmation"
+pay -> data.table
+edge.student -> renderer: "public pages"
+renderer -> data.table: "read"
+```
+
+## 구성 요소
+
+### 세 개의 포털
+
+| 포털 | 용도 | 통신 대상 |
+| --- | --- | --- |
+| **학생 포털** | 카탈로그 탐색, 강좌 구매와 수강, 퀴즈, 과제, 토론, 수료증 | core-api |
+| **강사 포털** | 강좌 제작과 가격 설정, 쿠폰, 채점, 분석, 수익, 학생 질문 답변 | core-api, instructor-api |
+| **관리자 포털** | 카테고리, 리뷰 검수, 수료증, 브랜딩, Stripe 연결 | core-api, admin-api |
+
+각 포털은 React 싱글 페이지 애플리케이션입니다. 비공개 S3 버킷의 정적 파일을 CloudFront가 제공합니다. 포털은 옆에 배포된 `runtime-config.json` 파일에서 API와 로그인 페이지의 위치를 알아내므로, 같은 빌드가 모든 스테이지에서 동작합니다.
+
+### 공개 페이지
+
+크롤러나 링크 미리보기에게 싱글 페이지 애플리케이션은 빈 껍데기입니다. 그래서 학생 포털의 CloudFront 배포가 몇몇 공개 주소를 Lambda 함수인 **페이지 렌더러**로 보내고, 렌더러가 실제 HTML로 응답합니다. 강좌 소개 페이지(`/learn/*`), 강사 프로필(`/instructors/*`), 수료증 링크 미리보기(`/certificates/*`), `sitemap.xml`, `robots.txt`가 해당합니다. 설계는 <Link path="design/public-pages">공개 페이지</Link>에 있습니다.
+
+### 하나의 ID 공급자
+
+Cognito 사용자 풀 하나에 모든 사용자가 있습니다. `student`, `instructor`, `admin` 세 그룹이 사용자가 할 수 있는 일을 결정합니다. 로그인은 Cognito의 호스팅 페이지에서 이루어지고, 포털은 토큰을 받아 API를 호출할 때마다 함께 보냅니다.
+
+### 세 개의 API
+
+각 API는 Lambda 함수 앞에 놓인 API Gateway REST API이며 [tRPC](https://trpc.io/)로 통신합니다.
+
+| API | 호출 가능한 대상 | 예시 |
+| --- | --- | --- |
+| **core-api** | 로그인한 모든 사용자, 그리고 일부 공개 프로시저 | 카탈로그, 수강 등록, 결제, 레슨 콘텐츠, 퀴즈, 과제, 토론, 수료증, 검색 |
+| **instructor-api** | `instructor` 구성원 | 강좌 생성, 편집, 가격 설정, 쿠폰, 미디어 업로드, 채점, 분석, 수익과 정산 |
+| **admin-api** | `admin` 구성원 | 카테고리 분류, 리뷰 검수, 수료증, 브랜딩, Stripe 연결 |
+
+대상별로 나누면 각 API가 자체 함수, 권한, 요청 제한, 방화벽을 가집니다. 강사 전용 버그에 학생의 토큰으로 접근할 수 없고, 학생 트래픽이 폭주해도 강사 API가 굶지 않습니다.
+
+### 하나의 테이블
+
+모든 애플리케이션 데이터는 **코어 테이블**이라는 DynamoDB 테이블 하나에 있습니다. 강좌, 모듈, 레슨, 수강 등록, 진도, 퀴즈 응시, 토론, 리뷰, 수료증, 알림, 쿠폰, 주문, 강사 수익과 정산이 들어 있습니다. 관련 레코드는 파티션을 공유하므로, 강좌 하나의 전체 커리큘럼이 쿼리 한 번으로 조회됩니다.
+
+### 검색
+
+OpenSearch Serverless 컬렉션에 인덱스가 두 개 있습니다.
+
+- **강좌**: 게시된 모든 강좌. 카탈로그의 검색, 추천, 필터에 답합니다.
+- **전사**: 레슨 동영상의 자막 텍스트. 수강 등록한 학생이 강좌 안에서 어떤 문구가 나온 시점을 찾게 해 줍니다.
+
+기준 데이터는 테이블입니다. 인덱스는 변경 스트림으로 채우고, 테이블로부터 다시 만들 수 있으며, API가 직접 쓰지 않습니다.
+
+### 미디어
+
+| 저장소 | 내용 | 접근 |
+| --- | --- | --- |
+| **강의 미디어** | 레슨 동영상, 자막, 파일, 과제 제출물 | 비공개. 수강 등록 같은 접근 확인 후 API가 발급한 서명이 있는 요청에만 CloudFront가 제공 |
+| **업로드 버킷** | 들어오는 중인 파일 | 사전 서명 URL로만 쓰기 가능, 처리 작업이 읽음, 수명이 짧음 |
+| **공개 미디어** | 강좌 이미지, 강사 프로필 사진, 플랫폼 브랜드(로고, 아이콘, 이름, 색상) | CloudFront를 통해 누구나 읽을 수 있음 |
+
+### 결제
+
+유료 강좌는 Stripe의 호스팅 결제 페이지에서 구매하며, 관리자가 관리자 포털에서 연결한 Stripe 계정을 사용합니다. Stripe는 각 결제를 전용의 작은 API인 **Stripe 웹훅 API**로 확인해 주고, 이 API가 메시지 서명을 검증한 뒤 학생을 수강 등록합니다. 로그인한 사용자가 아니라 Stripe가 호출하기 때문에 세 개의 tRPC API와 분리되어 있습니다. 설계는 <Link path="design/payments">결제</Link>에 있습니다.
+
+### 백그라운드 작업
+
+요청 밖에서 세 가지 일이 일어납니다.
+
+- **데이터 변경에 반응.** 테이블의 변경 스트림에는 **스트림 라우터**라는 읽기 주체가 하나 있고, 각 변경을 그것을 원하는 모든 기능의 큐로 넘깁니다. 기능은 여덟 가지입니다. 진도 재계산(수료증 발급도 포함), 강좌 검색 색인, 전사 색인, 분석, 알림 전달, 강사 수익 기록, 자막 번역, 브랜드 게시.
+- **동영상 처리.** 업로드된 동영상은 MediaConvert가 적응형 스트리밍 렌디션으로 변환하고, 이어서 Transcribe가 자막을 만듭니다. Amazon Translate가 자막을 강좌의 다른 자막 언어로 번역합니다.
+- **강사 정산.** 하루에 한 번 실행되는 작업이 각 강사에게 지급할 수익을 Stripe 이체로 보냅니다. <Link path="design/instructor-payouts">강사 정산</Link>을 참고하세요.
+
+## 설계 원칙
+
+- **서버리스만.** 모든 구성 요소는 사용량만큼 과금되고 0까지 줄어듭니다.
+- **방법은 하나.** 클라우드 하나, 배포 도구 하나, 테이블 하나. 설정하고 문서화하고 테스트할 선택지가 줄어듭니다.
+- **기본이 안전.** 스테이지가 끄지 않는 한 모든 보호 기능이 켜져 있습니다.
+- **로컬에서 실행.** Discava가 쓰는 모든 AWS 서비스에 로컬 대역이 있으므로, 개발에 AWS 계정이 필요 없습니다.
+
+## 더 읽어보기
+
+- <Link path="architecture/aws">AWS 배포</Link>: 스택, 각 스택의 내용, 배포 순서
+- <Link path="architecture/flows">요청과 데이터 흐름</Link>: 로그인, API 호출, 동영상의 여정, 변경이 전파되는 방식
+- <Link path="architecture/security">보안 모델</Link>: 누가 무엇에 접근할 수 있는지, 스테이지가 켤 수 있는 보호 기능
+- <Link path="architecture/codebase">코드베이스 지도</Link>: 각 구성 요소의 코드 위치
+- <Link path="design">설계</Link>: 개별 기능의 동작 방식

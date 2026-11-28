@@ -1,0 +1,227 @@
+---
+title: Pagamentos
+description: Como um curso pago é comprado com o Stripe Checkout, o registro do pedido, o webhook que entrega o curso exatamente uma vez, cupons, reembolsos e a conexão do administrador com o Stripe.
+sidebar:
+  order: 10
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261116-013315-stripe-checkout/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013315-stripe-checkout/) (checkout) e [`specs/20261116-013138-coupons-discount-codes/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013138-coupons-discount-codes/) (cupons)
+
+## A regra
+
+**Um curso com preço só é acessado por um pedido pago, e só a confirmação assinada do Stripe torna um pedido pago.** Nada que um navegador envie, incluindo o retorno da página do Stripe, matricula ninguém. O `course.enrol` do core-api recusa um curso com preço ("This course must be purchased"), e o webhook é o único que chama `settleOrderPaid`.
+
+Há um caso sem pagamento: um [cupom](#cupons) que cobre o preço inteiro. O servidor calcula que o total é zero e grava o pedido já como `paid`, então o Stripe nunca é chamado.
+
+## Preços
+
+Um curso tem `priceAmount` e `priceCurrency`. O valor é um inteiro na menor unidade da moeda (1999 é 19,99), então nenhum preço é um número de ponto flutuante. `0` é gratuito, e todo curso novo começa gratuito.
+
+- As moedas suportadas são USD, EUR, GBP, AUD e CAD. Todas têm duas casas decimais. Uma moeda com nenhuma ou com três não é suportada.
+- Um preço acima de zero fica entre 1,00 e 10.000,00.
+- Um instrutor define o preço com o `course.setPrice` do instructor-api, em qualquer status do curso. Definir um preço acima de zero exige uma conexão ativa com o Stripe. Voltar para gratuito nunca exige.
+- Uma mudança de preço vale para novas compras. Ela nunca afeta um pedido ou uma matrícula: os alunos já matriculados mantêm o acesso.
+
+As regras e a formatação ficam em `@discava/common-web-utils/price`, compartilhado pelos portais e pelas APIs.
+
+## O pedido
+
+Um `order` é uma tentativa de um aluno de comprar um curso. Ao ser criado, ele copia o título do curso, o preço de tabela (`listAmount`), o valor a cobrar (`amount`) e a moeda, junto com a conta e o modo do Stripe sob os quais foi iniciado. Um pedido iniciado com cupom também copia `discountAmount`, `couponCode`, `couponType` e `couponValue`, e `amount` é o preço de tabela menos o desconto.
+
+| Status | Significado |
+| --- | --- |
+| `pending` | Um checkout está aberto |
+| `paid` | O Stripe confirmou o pagamento e o aluno está matriculado |
+| `expired` | O checkout foi abandonado, ou sua criação falhou |
+| `refunded` | O valor inteiro voltou para o aluno |
+
+`helpers/order.ts` no core-table é o único que escreve em `order` e no `orderId` de uma matrícula. Toda mudança é uma escrita condicional ao status de origem, então uma chamada repetida ou concorrente não altera nada. Nada disso chama o Stripe: quem chama faz isso antes ou depois.
+
+## Iniciar um checkout
+
+O `payment.checkout` do core-api recebe o ID de um curso e um `couponCode` opcional. O valor e a moeda são calculados no servidor a partir do curso (e do cupom), nunca tomados da entrada. Sem código:
+
+1. Ele recusa um curso que não está publicado, um curso gratuito e um aluno que já está matriculado.
+2. Se o aluno tem um pedido `pending` para o curso sem cupom e com mais de cinco minutos restantes, ele retorna a página desse pedido, então escolher **Buy now** duas vezes cria um só pedido.
+3. Caso contrário, `startOrder` cria um pedido `pending` em uma transação que também verifica se a conexão com o Stripe está `active` e eleva o `latestCheckoutExpiresAt` da conexão para cobrir o novo checkout.
+4. Ele cria uma sessão do Stripe Checkout com o ID do pedido como chave de idempotência, apenas pagamentos com cartão, e os IDs do pedido, do aluno e do curso nos metadados. O endereço da sessão é guardado no pedido e retornado.
+
+Um checkout dura uma hora. Se o Stripe não puder ser alcançado, o pedido expira e o aluno vê "Couldn't start the payment".
+
+Um checkout com código segue os mesmos passos com uma reserva do código adicionada: veja [Cupons](#cupons).
+
+`payment.available` informa ao portal do aluno se uma compra pode começar: apenas que a conexão está ativa, nada sobre a conta ou a chave.
+
+## O webhook
+
+O Stripe envia para `POST /stripe/webhook`, uma API do API Gateway própria no stack `Payments`, com seu próprio WAF, limitação de taxa e domínio. O handler fica em `packages/events/src/payments/`.
+
+- **A assinatura é o único portão.** A mensagem é verificada contra seus bytes exatos com o segredo de assinatura guardado, e recusada com 400 se tiver mais de cinco minutos ou não for verificada. Sem nada conectado não há segredo, então toda mensagem falha.
+- **400** significa que nada mudou. **500** significa que o processamento falhou e o Stripe deve tentar de novo. **200** cobre eventos tratados, duplicados, sem correspondência e ignorados.
+
+| Evento | O que acontece |
+| --- | --- |
+| `checkout.session.completed` | O pedido é liquidado, ou reembolsado se não puder ser entregue. Uma sessão que ainda não foi paga é ignorada |
+| `checkout.session.expired` | Um pedido `pending` vira `expired`, e a reserva de seu cupom é liberada |
+| `charge.refunded` | O reembolso é registrado no pedido |
+| `refund.failed`, `charge.refund.updated` (`status: failed`) | `refundFailedAt` é definido em um pedido `paid`; um pedido que `charge.refunded` já moveu para `refunded` volta para `paid` e a matrícula é restaurada |
+
+Estes são os únicos eventos registrados no Stripe. A lista é gravada na conexão quando o endpoint é registrado. Se ela difere desta (uma conexão salva antes de um evento ser adicionado), a página de pagamentos do admin pede que a chave seja salva de novo, e esse salvamento atualiza os eventos do endpoint existente sem mudar sua URL, seu ID nem seu segredo de assinatura.
+
+### Entregar exatamente uma vez
+
+`settleOrderPaid` move o pedido de `pending` para `paid` e dá ao aluno sua matrícula em **uma transação**, que também verifica se o curso ainda está publicado. A matrícula é criada, ou restaurada se o aluno tinha uma `dropped`. Se o pedido tem um cupom, a mesma transação confirma seu resgate. O Stripe entrega ao menos uma vez e em qualquer ordem, então a mesma confirmação chegando cinco vezes ao mesmo tempo ainda deixa um pedido pago e uma matrícula: toda chamada depois da primeira vê que o pedido não está mais `pending`.
+
+### Um pagamento que não pode ser entregue
+
+O dinheiro foi cobrado, então nunca é mantido. O webhook pede ao Stripe um reembolso total, com uma chave de idempotência montada a partir do ID do pedido, e `refundUndeliverable` marca o pedido como `refunded` com um motivo. Nenhuma matrícula é dada, e a reserva do cupom do pedido é liberada.
+
+| Motivo | Quando |
+| --- | --- |
+| `duplicate` | O aluno já está matriculado |
+| `unavailable` | O curso não está mais publicado |
+| `mismatch` | O valor, a moeda, ou o ID do pedido, do aluno ou do curso da sessão difere do pedido. Isso também é registrado como erro no log ("Paid session differs from its order; refunding"), e o aluno já foi reembolsado quando a linha aparece |
+
+Uma sessão paga, sessão expirada ou reembolso cujo pedido não está na tabela é registrado como erro ("Paid session for an unknown order", "Expired session for an unknown order", "Refund for an unknown order") e respondido com 200. Um operador deve ficar atento a essas linhas: elas significam que o Stripe guarda um pagamento do qual o Discava não tem registro.
+
+## Cupons
+
+Um instrutor cria códigos de desconto para um curso pago com `coupon.create`, `coupon.list`, `coupon.update` e `coupon.delete` do instructor-api. Um aluno digita um na página do curso: o `coupon.preview` do core-api mostra o que ele pagaria e não escreve nada, e `payment.checkout` recebe o código como `couponCode`. O <Link path="guides/payments">guia de Pagamentos</Link> cobre as telas.
+
+| Registro | Chave | Guarda |
+| --- | --- | --- |
+| `coupon` | Curso, depois código | `type` (`percent` ou `fixed`), `value`, `expiresAt` e `maxRedemptions` opcionais, `enabled` e `redeemedCount` |
+| `couponRedemption` | Curso e código, depois aluno | O pedido a que pertence, `status` (`reserved` ou `redeemed`) e `reservedUntil` enquanto reservado |
+
+A chave de `couponRedemption` é a regra de que um aluno usa um código uma vez.
+
+### Códigos e preços
+
+- Um código tem de 4 a 24 caracteres de A-Z, 0-9 e `-`, guardado em maiúsculas. Um código gerado tem 8 caracteres escritos `XXXX-XXXX`.
+- Uma porcentagem é um número inteiro de 1 a 100. Um valor fixo está na moeda do curso, acima de zero e não acima do preço do curso quando o código é criado.
+- O tipo, o valor e a moeda de um código nunca mudam. `coupon.update` muda apenas `enabled`, a validade e o limite, e não pode baixar o limite abaixo de `redeemedCount`. `coupon.delete` só funciona enquanto `redeemedCount` é 0; um código usado é desativado em vez disso.
+- `priceWithCoupon` em `helpers/coupon-price.ts` do core-table é a única função de preço. Uma porcentagem é arredondada para baixo, e um valor fixo nunca tira mais que o preço de tabela.
+- Um total acima de zero mas abaixo da cobrança mínima do Stripe (0,50, ou 0,30 para GBP) não pode ser pago, então o código é recusado.
+
+`coupon.preview` e `payment.checkout` executam a mesma verificação (`checkCoupon`), então recusam os mesmos códigos com as mesmas mensagens. Um código desconhecido, o código de outro curso e um código fixo em outra moeda recebem todos "This code is not valid for this course", então um aluno não consegue distingui-los.
+
+### Reservar, confirmar, liberar
+
+`helpers/coupon-redemption.ts` no core-table é o único que escreve em `redeemedCount` e em `couponRedemption`. Ele monta três conjuntos de escritas, cada um executado dentro da transação da mudança de pedido que o causa:
+
+| Passo | Quando | O que escreve |
+| --- | --- | --- |
+| **Claim** | `payment.checkout` cria o pedido | Soma um a `redeemedCount`, sob a condição de que o cupom esteja ativado, não expirado e abaixo do limite. Cria o resgate do aluno como `reserved`, o que falha se ele já tiver um para o código |
+| **Confirm** | `settleOrderPaid` marca o pedido como pago | `reserved` vira `redeemed` |
+| **Release** | O pedido expira, é substituído por um novo checkout, ou é reembolsado por não poder ser entregue | Apaga o resgate `reserved` e tira um de `redeemedCount` |
+
+`redeemedCount` conta, portanto, resgates reservados e resgatados juntos. Como a reserva é uma condição na própria transação do pedido, o limite se mantém quando muitos alunos iniciam um checkout no mesmo instante. Uma transação cancelada não escreve nada; o checkout lê de novo para dar a recusa exata, e desiste com "Too many people are checking out; try again" após três conflitos.
+
+Uma reserva dura até cinco minutos depois que seu checkout expira (`reservedUntil`). Quando um código parece esgotado, o checkout primeiro libera suas reservas que passaram desse prazo e cuja sessão do Stripe terminou, e então verifica mais uma vez. Uma sessão que o Stripe informa como concluída mantém sua reserva: o evento de pagamento pode ainda estar a caminho.
+
+### Um checkout ativo
+
+Um aluno tem um checkout ativo por curso. Iniciar um checkout com outro código, ou sem nenhum depois de um com código, substitui o pedido `pending` anterior:
+
+1. A sessão do Stripe do pedido anterior é expirada primeiro, para que nunca possa ser paga.
+2. A transação do novo pedido move o pedido anterior para `expired` e libera sua reserva.
+
+Se o Stripe diz que a sessão anterior já foi paga, a resposta é "You are already enrolled in this course". Iniciar de novo com o mesmo código e com mais de cinco minutos restantes retorna a página do checkout aberto.
+
+### Um código que cobre o preço inteiro
+
+Quando o total é zero, `startFreeOrder` grava o pedido já como `paid` com valor 0, a matrícula e o resgate como `redeemed`, em uma transação. O Stripe nunca é chamado e `payment.checkout` retorna `enrolled: true` no lugar de um endereço de página. Ainda é preciso uma conexão ativa com o Stripe. Um pedido assim não é uma venda, então não registra <Link path="design/instructor-payouts">ganhos</Link>.
+
+### Cupons e reembolsos
+
+Um reembolso total após a entrega deixa o resgate como `redeemed`, então o aluno não pode usar o mesmo código de novo.
+
+## Reembolsos
+
+Um reembolso começa no Stripe: pelo painel do Stripe, ou pelo `payment.requestRefund` do core-api em nome do aluno. `charge.refunded` traz o total reembolsado até agora, e `refundOrder` o aplica:
+
+- **Abaixo do valor do pedido**, só `refundedAmount` sobe. O aluno mantém o acesso.
+- **No valor do pedido**, uma transação move o pedido para `refunded` e define a matrícula como `dropped`, mas só se a matrícula ainda nomear este pedido. Um aviso de reembolso atrasado além de uma segunda compra não pode encerrar a nova matrícula.
+
+Após um reembolso total, o webhook publica uma notificação `order.refunded` ("Your refund for … is complete"), enviada por e-mail além de exibida no portal. Ela só é enviada quando o pedido está `refunded` com motivo `requested` (todo reembolso total registrado a partir de `charge.refunded`, seja do painel ou de um pedido do aluno) e a matrícula ainda nomeia o pedido. Sua chave de deduplicação é o ID do pedido, então um aviso reenviado não a repete, e uma publicação que falhou é tentada de novo pela reentrega do Stripe. Não há notificação para um reembolso parcial, nem para o reembolso automático de um pagamento que não pôde ser entregue.
+
+### Pedidos de reembolso
+
+O `payment.requestRefund` do core-api permite que um aluno reembolse a própria compra, e `payment.myOrder` informa à página do curso se ele pode. `refundEligibility` no core-table só permite isso enquanto:
+
+- o pedido está `paid` e a matrícula do aluno o nomeia e não está `dropped`;
+- o pedido foi pago pela conta do Stripe conectada agora, e os pagamentos estão conectados;
+- nenhum reembolso foi pedido para ele ainda;
+- o aluno não concluiu o curso;
+- o aluno concluiu menos de `REFUND_PROGRESS_LIMIT_PERCENT` (50) dele, calculado quando o pedido é feito a partir de suas conclusões e do currículo atual (`readRefundLimits`), não lido do `progressPercent` guardado;
+- nenhum dos pedidos anteriores do aluno para o curso foi reembolsado a pedido dele (`refundRequestedAt` definido; um reembolso de operador ou um reembolso automático não conta);
+- está dentro de `REFUND_WINDOW_DAYS` (14) do pagamento.
+
+`requestRefund` pede ao Stripe que reembolse o que resta do valor, com uma chave de idempotência montada a partir do ID do pedido, e então define `refundRequestedAt` no pedido. Ele nunca move o pedido ou a matrícula por conta própria: o `charge.refunded` que se segue faz isso. O Stripe é chamado antes da marca, então uma queda entre os dois deixa um reembolso que o aviso ainda registra, nunca uma marca sem reembolso.
+
+O Stripe envia `charge.refunded` assim que um reembolso é criado, mesmo enquanto ele ainda está `pending`, e pode falhar o reembolso depois, se o banco devolver o dinheiro. Por isso uma falha costuma chegar para um pedido que já está `refunded` e uma matrícula que já está `dropped`. Um reembolso que falha é desfeito, para que o aluno não perca o dinheiro e o curso. Se o Stripe informa que o reembolso falhou (`refund.failed`, ou `charge.refund.updated` com `status: failed`):
+
+- Para um pedido `refunded` com motivo `requested`, `reverseRefund` executa uma transação: o pedido volta para `paid`, `refundedAt` e `refundedAmount` são removidos, `refundFailedAt` é definido e `refundRequestedAt` é mantido; a matrícula passa de `dropped` de volta para `active` (`completed` se tiver `completedAt`), mas só enquanto ainda nomear este pedido. Se o aluno comprou o curso de novo após o reembolso, a matrícula nomeia o novo pedido e `reverseRefund` não muda nada, nem pedido nem matrícula: o pedido antigo de volta em `paid` seria um segundo pedido pago para o curso. Nenhuma notificação é enviada, e o reembolso que falhou fica com o suporte. Ele é condicionado a o pedido estar `refunded`, então um evento de falha repetido não muda nada. `refundOrder` ignora um `charge.refunded` que o Stripe criou antes do `refundFailedAt` do pedido (um aviso reenviado ou atrasado do reembolso que falhou), para não encerrar o acesso uma segunda vez; um reembolso criado depois dele é aplicado como um novo. O aluno recebe uma notificação `order.refund_failed` ("Seu reembolso falhou; seu acesso foi restaurado. Fale com o suporte sobre o reembolso"), deduplicada pelo ID do pedido. Os certificados não são tocados: só um admin revoga um por reembolso.
+- **Ganhos:** a mudança no pedido chega ao registrador de ganhos como um pedido `paid` com `refundFailedAt` e sem `refundedAmount`, e `recordRefundReversal` lança o reembolso desfeito: uma entrada `refund` por instrutor com os valores do reembolso negados (ID da entrada `refund-reversal-<orderId>-<total>`), datada em `refundFailedAt`, e `earningOrder.refundedMinor` de volta a 0, em uma transação. As entradas de reembolso originais nunca são editadas, então um reembolso que um repasse já descontou é devolvido pelo próximo repasse, e os ganhos da venda ficam iguais aos de antes do pedido de reembolso. O momento da reversão fica em `earningOrder.reversedAt`, mesmo quando o livro-razão ainda não tinha nenhum reembolso, e `recordRefund` deixa de fora um reembolso datado nele ou antes. Assim, uma repetição, uma imagem de reembolso entregue depois da reversão, ou uma entregue antes dela, não registra nada, enquanto um reembolso posterior do mesmo pedido (o suporte reembolsa de novo) é registrado como novo e pode ser revertido por sua vez.
+- Para um pedido ainda `paid`, `markRefundFailed` define `refundFailedAt`.
+
+O pedido fica `paid` com `refundRequestedAt` mantido, então nenhum segundo pedido é oferecido; `payment.myOrder` retorna `refundFailedAt` e a página do curso informa ao aluno que o reembolso falhou e que ele deve falar com o suporte, sem o botão "Request a refund". A página do curso consulta um reembolso pendente por um tempo limitado (2 minutos), depois diz que ele ainda está sendo processado e oferece um botão para verificar de novo.
+
+Uma matrícula `dropped` mantém seu progresso e suas conclusões. O aluno pode voltar:
+
+- **Comprando de novo.** Liquidar o novo pedido restaura a matrícula, como `completed` se ele tinha terminado o curso, com seu progresso.
+- **Matriculando-se, se o curso agora é gratuito.** `course.enrol` chama `restoreFreeEnrolment`, que restaura a matrícula e remove seu `orderId`. Nenhum pedido é gravado.
+
+### Sair de um curso
+
+`course.unenrol` encerra uma matrícula que não foi paga: `unenrolFromCourse` a define como `dropped` apenas enquanto não tem `orderId`, e recusa com `EnrolmentPaidForError` caso contrário. Uma matrícula comprada só termina por um reembolso, então um curso pago não pode ser deixado sem um. O progresso e as conclusões são mantidos, e `course.enrol` restaura a matrícula enquanto o curso é gratuito. O status e o preço do curso não são verificados, então um aluno pode sair de um curso arquivado ou que depois ganhou preço.
+
+### Termos
+
+- Os dois limites são constantes em `helpers/order.ts` do core-table: `REFUND_WINDOW_DAYS` (14) e `REFUND_PROGRESS_LIMIT_PERCENT` (50).
+- `payment.myOrder` e `course.publicView` os retornam como `refundWindowDays` e `refundProgressLimitPercent`, então a linha de termos na página do curso afirma o que a API aplica.
+- `course.myEnrolment` retorna `refundedBefore`, então a página avisa um aluno que foi reembolsado a pedido próprio antes de ele comprar de novo.
+- Um reembolso de operador no Stripe não está sujeito a nenhum desses termos.
+- Os pedidos são reembolsados automaticamente, sem revisão.
+- Os certificados sobrevivem aos reembolsos.
+
+## A conexão com o Stripe
+
+O Stripe não é configurado no momento do deploy. Um administrador cola uma chave secreta na página **Payments** do portal de administração.
+
+- **`paymentConnection`** é um registro único que guarda os fatos não secretos: status, modo de teste ou produção, o ID e o nome da conta, os quatro últimos caracteres da chave e o endereço de webhook registrado.
+- **A chave e o segredo de assinatura do webhook** ficam no Secrets Manager. A função dedicada `PaymentsConnect` do admin-api é o único código que pode escrevê-los. A função de checkout lê a chave, o webhook lê as duas, e nenhum deles pode escrever.
+- **`paymentChange`** é uma linha de auditoria somente de acréscimo para cada tentativa: quem, quando, qual conta e os quatro últimos caracteres da chave. Ela nunca guarda uma chave nem o texto de erro do Stripe.
+
+Salvar uma chave verifica seu formato, pergunta ao Stripe de quem ela é, registra o endereço de webhook do stage para os três eventos, e guarda a chave e o segredo de assinatura que o Stripe retorna.
+
+| Salvar | O que faz |
+| --- | --- |
+| **Rotation** (mesma conta, mesmo endereço) | Substitui apenas a chave. O registro e o segredo de assinatura permanecem, então checkouts abertos ainda são concluídos |
+| **Switch** (outra conta ou modo, ou um novo endereço) | Obtém um lease, registra com a nova chave, guarda os dois segredos, e então remove o registro antigo |
+| **Disconnect** | Obtém um lease, marca o registro como `disconnected` e apaga os segredos |
+
+Uma troca ou desconexão obtém um **lease** de dois minutos: o status do registro passa a `changing`, que o checkout e a precificação tratam como não conectado. O lease é recusado enquanto um checkout ainda pode estar aberto ("Checkouts are open until …"), então nenhum pagamento está em andamento enquanto os segredos são substituídos. Uma rotação não obtém lease, mas é condicionada à `revision` do registro, então perde de forma limpa para uma troca concorrente. Uma mudança que falha restaura o registro e os segredos.
+
+## Invariantes
+
+Dois arquivos em `helpers/invariants/` do core-table verificam as regras que abrangem vários registros, depois de cada cenário de ponta a ponta:
+
+- `payments.ts`: os campos de um pedido correspondem ao seu status, o preço de tabela menos o desconto é o valor cobrado, um pedido pago tem sua matrícula, o `orderId` de uma matrícula nomeia um pedido do mesmo aluno e curso, e uma matrícula sem pedido em um curso com preço data de quando o curso era gratuito.
+- `coupons.ts`: `redeemedCount` é igual ao número de resgates do cupom e está dentro do limite, cada resgate tem seu pedido (pendente enquanto reservado, pago depois de resgatado), e um pedido gratuito feito por um código tem sua matrícula.
+
+## Desenvolvimento local
+
+O executor de eventos inclui um substituto do Stripe (`packages/events/src/local/stripe-stand-in.ts`): a API do Stripe, uma página de checkout hospedada com **Pay**, **Decline card** e **Cancel**, e entregas de webhook assinadas para `/stripe/webhook` na porta 2024. Conecte-o como Carol com a chave `sk_test_local`. A chave é guardada em `tmp/local-dev/secrets/`, ignorado pelo git, no lugar do Secrets Manager.
+
+Os controles em `/stripe/test/` conduzem o que uma conta real do Stripe faria: `refund`, `refunds` (lista os reembolsos de um pagamento), `fail-next-refund` (o próximo reembolso é anunciado com `charge.refunded` e, um instante depois, informado como falho, e a cobrança deixa de estar reembolsada), `hold-next-refund` (anunciado com `charge.refunded`, nunca concluído), `replay` (entrega uma confirmação de novo), `expire`, `forge` (uma mensagem com assinatura errada) e `endpoints`.
+
+`LOCAL_CHECKOUT_TTL_SECONDS` encurta a vida de uma hora de um checkout, apenas no desenvolvimento local.
+
+## Limitações
+
+- Apenas pagamentos com cartão, sem tratamento de impostos e sem conversão de moeda.
+
+<Link path="design/instructor-payouts">Repasses de instrutores</Link> cobre o que acontece com o dinheiro depois que um pedido é pago.

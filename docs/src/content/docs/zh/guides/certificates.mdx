@@ -1,0 +1,82 @@
+---
+title: 证书
+description: 为课程开启证书并设置获得证书的条件，学生的要求卡片，查看、下载和分享证书，公开页面，以及撤销和恢复。
+---
+
+import Link from '@components/link.astro';
+
+课程可以向每位满足要求的学生颁发结业证书。每张证书都有一个 ID 和一个公开页面，任何人都可以用它来核验。
+
+## 给讲师：提供证书
+
+1. 在 **My Courses** 中打开课程，进入它的 **Certificates** 部分。
+2. 打开 **Issue a certificate on completion**。
+3. 可选：勾选 **Require passing every quiz**。及格分为 0% 的测验不计入。
+4. 可选：勾选 **Require graded assignments to be returned with at least** 并填写一个百分比，输入 1 到 100 之间的整数。
+
+必须完成课程中的每一项，这一点始终是要求。
+
+修改要求只影响还没有证书的学生。之后符合条件的学生会自动获得证书，没有人会失去已有的证书。
+
+同一部分中的 **Issued certificates** 列出每位学习者、证书 ID、完成日期和状态。
+
+## 给学生：如何获得证书
+
+课程的 **Certificate** 卡片会列出你还需要做什么：
+
+| 要求 | 显示内容 |
+| --- | --- |
+| 完成每一项 | 你是否已完成所有内容 |
+| 通过每个测验 | 每个测验显示为 Passed、Not attempted 或 Not passed yet |
+| 作业以至少某个百分比批改返回 | 每个作业显示为 Done、Not submitted 或 Waiting to be graded，或显示批改返回的分数 |
+
+没有剩余尝试次数的测验会显示 "Not passed, no attempts left. Ask your instructor for another attempt."
+
+全部满足后，卡片会显示 "Your certificate is being prepared."，随后提供：
+
+- **View**：打开证书页面。
+- **Download PDF**。
+- **Copy link**：复制证书页面的地址。
+- **Add to LinkedIn**。
+
+你还会通过铃铛和电子邮件收到通知，之后还有一次添加到 LinkedIn 的提醒。参见<Link path="guides/notifications">通知</Link>。
+
+## 证书页面
+
+`/certificates/<certificate ID>` 处的页面是公开的。它显示 "Certificate of completion"、学习者姓名、课程、日期、证书所确认的内容和证书 ID。任何拿到链接的人都无需登录就能阅读。
+
+不存在的 ID 会显示 "Certificate not found"。
+
+## 添加到 LinkedIn
+
+1. 选择 **Add to LinkedIn**，可在课程的 **Certificate** 卡片上，或在你已登录时的证书页面上。
+2. 选择 **Continue to LinkedIn**。
+3. 在 LinkedIn 上保存该条目。
+
+你的证书页面还列出了 LinkedIn 要求的信息，以便你手动填写表单：颁发机构、颁发日期、证书 ID 和证书 URL。
+
+## 撤销和恢复
+
+被撤销的证书不再有效。它的公开页面会显示 "This certificate has been revoked and is no longer valid."。学生会收到通知，他们的课程卡片会显示日期和原因。恢复会让它以相同的 ID 重新生效，学生会再次收到通知。
+
+| 谁 | 在哪里 | 可以给出的原因 |
+| --- | --- | --- |
+| 课程的讲师 | 课程 **Certificates** 部分中的 **Issued certificates** | Academic integrity、Issued in error、Other |
+| 管理员 | 管理门户中的 **Certificates** | 相同，另加 Order refunded |
+
+**给讲师：**在证书上选择 **Revoke**，选择一个 **Reason**，需要的话添加 **Note**，然后确认。**Restore** 可以撤销该操作。**History** 显示谁撤销和恢复了它，以及时间。
+
+**给管理员：**
+
+1. 打开管理门户中的 **Certificates**。
+2. 输入 **Certificate ID** 并选择 **Look up**。证书会显示为 **Valid** 或 **Revoked**。
+3. 选择 **Revoke**，选择一个 **Reason**，然后用 **Revoke certificate** 确认。原因为 Other 时需要填写 **Note**。
+
+**Restore** 用 **Restore certificate** 确认，可以撤销该操作。
+
+谁能撤销谁的操作：
+
+- 管理员可以恢复任何证书。
+- 讲师可以恢复由讲师撤销的证书，但不能恢复由管理员撤销的证书。后者显示为 "Revoked by an administrator"。
+
+付费课程的全额退款本身不会收回证书。参见<Link path="guides/payments">付费课程和支付</Link>。

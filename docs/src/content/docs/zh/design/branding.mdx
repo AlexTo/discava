@@ -1,0 +1,52 @@
+---
+title: 品牌
+description: "管理员设置的平台品牌如何存储、发布和应用：记录及其修订号，不可变的图片键，已发布的文档及其缓存预算，页面渲染器，调色板和 SVG 检查。"
+sidebar:
+  order: 13
+---
+
+**规格：** [`specs/20261122-090054-admin-branding/`](https://github.com/AlexTo/discava/tree/main/specs/20261122-090054-admin-branding/)
+
+管理员在管理门户中设置徽标、名称、图标、分享图片和颜色，每个门户和公开页面会在 5 分钟内显示它们，无需部署。本页描述这是如何实现的。
+
+## 记录及其修订号
+
+品牌是 core table 中的一条 `platformBrand` 记录，键是固定的。在第一次保存之前它不存在，不存在就表示默认品牌。`helpers/platform-brand.ts` 中的 `saveBrand` 是它唯一的写入者。
+
+每次保存都带有完整的品牌，以及管理员加载时的 `revision`。
+
+- 第一次保存以记录不存在为条件，之后的保存以 `revision` 仍是加载时的值为条件。
+- 条件失败会变成 `CONFLICT`（"Someone else changed the branding. Reload to see their changes."），因此过期的保存永远不会只应用一半。
+- `changedBy`、`changedByName` 和 `changedAt` 字段说明最后是谁保存的。
+
+## 图片与不可变的键
+
+图片存放在公开媒体存储桶的 `brand/<kind>/<nonce>.<ext>` 下，其中 `kind` 是 `logo`、`icon` 或 `share-image`。`branding.createUploadUrl` 会预签名一个 `PUT`，限定确切的内容类型、长度、一年的不可变 `Cache-Control` 以及标签 `lifecycle=unattached`。每次新上传都是一个新的键，所以一旦品牌指向别处，被替换的图片就不可能再从缓存中提供。
+
+`branding.save` 会读取每个新引用的对象，并按照 `@discava/common-branding/image-rules` 中的规则检查它的类型、大小和形态（管理门户在上传之前会运行同样的规则）。它会从保留的对象上移除该标签，并把标签重新加到被替换的对象上，存储桶的生命周期规则会在一天后删除它。只要有任何一张图片未通过，就不会写入任何内容。
+
+### SVG 检查
+
+SVG 徽标会被解析（admin-api 的 `helpers/brand-image.ts`），除非每个元素和属性都在允许列表中，否则会被拒绝：不允许 `script`、`foreignObject`、`iframe`、事件处理属性，也不允许除同一文档内 `#fragment` 之外的引用。选择拒绝而不是改写，可以让存储的文件与上传的完全一致。徽标通过 `<img>` 显示，浏览器在其中从不运行 SVG 脚本，对于直接打开的文件，分发还会添加带有 `sandbox` 的 `Content-Security-Policy`。图标只允许 PNG，因为 iOS 主屏幕图标必须是位图。
+
+## 已发布的文档
+
+浏览器不读取表。`brand-publishing` 流功能（见[路由器](./stream-event-router/)）读取当前的记录，而不是流中的镜像，所以延迟送达的事件不会发布较旧的修订。它把 `brand/brand.json` 放入公开媒体存储桶，并带上 `Cache-Control: public, max-age=60, s-maxage=240`。该文档不包含是谁在何时保存的。门户从另一个源获取它，所以分发会为 `brand/` 下的所有内容添加 `GET` 和 `HEAD` 的 CORS 头。
+
+这就是**缓存预算**：浏览器最多保留该文档 60 秒，CloudFront 最多 240 秒，所以更改会在 5 分钟内到达每一次新的页面加载。文档缺失、无法读取或无效，都意味着使用默认品牌，因此故障永远不会弄坏页面。
+
+## 在门户中
+
+`@discava/common-web-utils/brand` 中的 `BrandProvider` 位于每个门户的 `RuntimeConfigProvider` 之内，`useBrand()` 给出解析后的品牌。它从页面渲染器嵌入的品牌开始，其次是它最后一次见到的品牌（保存在 `localStorage` 中），再不然就什么都没有。有品牌时它立即渲染并在后台刷新；没有时，它会保持首次渲染，直到 `brand.json` 到达或经过一秒。它会设置 CSS 变量、图标链接、主题颜色和标题。管理门户还会从 `branding.get` 和每次保存获取数据，所以管理员能立即看到更改。
+
+## 页面渲染器
+
+[页面渲染器](./public-pages/)在每次渲染时读取该记录（页面随后会缓存 300 秒），并把它应用到标题后缀、`og:site_name`、JSON-LD 提供者、`og:image` 和 `twitter:image`（当页面自己没有分享图片时使用分享图片）、图标链接和一段内联的 `:root` 样式，并把品牌文档嵌入页面数据，让门户以它为起点。如果读取失败，它会记录一条警告并渲染默认品牌。
+
+## 调色板
+
+`@discava/common-branding/colour` 中的 `brandPalette(hex)` 返回需要覆盖的 CSS 变量：`--primary`、`--primary-foreground`、`--ring`、对应的侧边栏变量以及 `--brand-link`。它选择与品牌颜色之间 WCAG 对比度更高的文字颜色，当两者都达不到 4.5:1 时，会拒绝该颜色。只有当品牌颜色在页面背景上达到 4.5:1 时，`--brand-link` 才是品牌颜色。同一个函数运行在 admin-api、管理门户的预览、各个门户和渲染器中，所以它们不会出现分歧。表示含义的颜色（危险、图表和状态）不会被改动。
+
+## 不属于品牌的部分
+
+Cognito 托管的登录页面和文档站点保持它们自己的外观。

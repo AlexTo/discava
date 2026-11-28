@@ -1,0 +1,78 @@
+---
+title: Valutazione e feedback dei compiti
+description: Come gli istruttori restituiscono i compiti da caricare con punteggio e feedback, richiedono nuove consegne e vedono il lavoro in attesa, con i record e le regole che stanno dietro.
+sidebar:
+  order: 12
+---
+
+**Spec:** [`specs/20261120-230057-assignment-grading/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-230057-assignment-grading/)
+
+Uno studente consegna un file a un compito da caricare e può sostituirlo finché non viene restituito. Un istruttore del corso elenca il lavoro di ogni studente iscritto, apre una consegna e la restituisce come definitiva con punteggio e feedback, oppure chiede una nuova consegna con il solo feedback. Solo gli istruttori del corso possono elencare, leggere o restituire le consegne.
+
+| Chi | API | Procedure |
+|---|---|---|
+| Studente | core-api | `assignment.uploadUrl`, `submit`, `mySubmission`, `submissionFileUrl` |
+| Istruttore | instructor-api | `assignmentSubmission.list`, `get`, `fileUrl`, `return`, `requestResubmission`, `amendGrade` e `gradingQueue.list` |
+
+## Consegne e valutazione
+
+Una consegna è un record `assignmentSubmission` per studente per compito. Il suo `status` cambia così:
+
+| Transizione | Chi | Condizione | Effetto |
+|---|---|---|---|
+| Consegna (prima) | Studente | Nessuna consegna ancora | `submitted`, `version` 1, entra nell'indice di attesa |
+| Riconsegna | Studente | `version` invariata e stato `submitted` o `resubmission_requested` | `submitted`, `version` + 1, torna nell'indice di attesa |
+| Richiesta di riconsegna | Istruttore | `version` e `reviewRevision` invariate, stato `submitted` | `resubmission_requested`, esce dall'indice di attesa |
+| Restituzione definitiva | Istruttore | `version` e `reviewRevision` invariate, stato `submitted` o `resubmission_requested` | `returned`, imposta il punteggio, impedisce allo studente di riconsegnare |
+| Modifica del voto | Istruttore | `reviewRevision` invariata, stato `returned` | Punteggio e feedback cambiano, lo stato resta `returned` |
+
+- **Concorrenza.** Ogni azione dell'istruttore aggiunge uno a `reviewRevision`, e ogni scrittura è condizionata alla `version` e alla `reviewRevision` che l'istruttore stava guardando. Una restituzione non può cadere su un file che lo studente ha nel frattempo sostituito, e quando due istruttori agiscono insieme ne vince esattamente uno.
+- **Il punteggio** è un numero da 0 al `maxPoints` del compito, con al massimo due decimali. `pointsOutOf` conserva il massimo rispetto al quale il lavoro è stato valutato, nel caso `maxPoints` cambi in seguito.
+- **Studenti che se ne sono andati.** Restituire o modificare è rifiutato per uno studente che non è più iscritto. L'istruttore può comunque leggere il suo lavoro.
+- **Il completamento non cambia.** La valutazione non modifica mai il completamento dello studente né lo `studentActivityCount` dell'elemento di contenuto. Una richiesta di riconsegna non annulla il completamento, e una riconsegna non conta lo studente una seconda volta.
+
+## Giri di feedback
+
+Ogni azione dell'istruttore scrive un record `submissionFeedback`: una richiesta di riconsegna, una restituzione definitiva o una modifica. Il feedback è obbligatorio in una richiesta di riconsegna e facoltativo in una restituzione.
+
+- I giri sono solo in aggiunta e hanno come chiave la consegna e l'ora, quindi la cronologia di uno studente è una sola query, dal più recente. Lo studente vede il feedback precedente attraverso le riconsegne, così sa cosa gli è stato chiesto.
+- La consegna conserva solo il voto corrente. I giri sono record separati perché ognuno può contenere 20 000 caratteri di JSON Tiptap e il loro numero non ha limite: un elenco sulla consegna potrebbe raggiungere il limite di dimensione degli item di DynamoDB.
+
+Lo studente riceve una notifica nell'app e via email (attiva per impostazione predefinita) per ogni azione: `assignment.returned`, `assignment.resubmission_requested` e `assignment.grade_updated`, ciascuna deduplicata sul `feedbackId` del giro. La notifica e il giro sono scritti nella stessa transazione della modifica alla consegna.
+
+## L'indice di attesa e l'iscrizione
+
+Le consegne in attesa di un istruttore (stato `submitted`) hanno `waitingCourseId` e `waitingSince`, che fanno da chiave a un indice sparso (`byWaiting`) con il corso come partizione e l'ora di consegna come chiave di ordinamento. Ogni scrittura che cambia `status` imposta o rimuove entrambi gli attributi insieme tramite `waitingKeys`.
+
+La coda di valutazione nella home dell'istruttore (`gradingQueue.list`) è quindi una query per ogni corso che l'istruttore insegna, già in ordine dal più vecchio, unite in memoria. Legge ogni voce in attesa, quindi il totale è esatto.
+
+**L'iscrizione viene applicata al momento della lettura.** La coda legge in batch le iscrizioni degli studenti elencati e omette gli studenti la cui iscrizione è `dropped` o mancante. Salvare l'iscrizione nell'indice farebbe sì che rimborsi e checkout riscrivano ogni consegna che uno studente ha nel corso, dentro le loro transazioni. Leggerla invece lascia in pace il codice dei pagamenti, e uno studente che si iscrive di nuovo ricompare nella coda senza alcuna scrittura.
+
+Poiché un'iscrizione mancante nasconde uno studente, una lettura parziale non deve passare per completa. Quando DynamoDB lascia chiavi non elaborate sotto throttling, la coda le richiede di nuovo, fino a tre volte con una pausa crescente, e poi fa fallire la richiesta invece di restituire una coda più corta.
+
+L'elenco per compito legge ogni consegna e ogni iscrizione del corso (due query su una sola partizione), le unisce e pagina in memoria, 50 righe alla volta, con un cursore che codifica la posizione di ordinamento dell'ultima riga. Gli studenti senza consegna compaiono come "non consegnato", e quelli che se ne sono andati come "non più iscritto".
+
+## L'avviso giornaliero
+
+Gli istruttori vengono informati delle nuove consegne da `assignment.submissions_received`, al massimo una volta per compito al giorno (UTC) per istruttore, nell'app, con l'email disattivata per impostazione predefinita. Un piccolo record `submissionNotice` (uno per compito al giorno, con scadenza due giorni dopo) fa da marcatore. `submit` lo legge per primo; se è assente, la stessa transazione lo crea e scrive una notifica per istruttore, con un tetto perché la transazione resti sotto il limite di 100 item di DynamoDB. Se un'altra consegna vince la corsa, il retry esistente viene eseguito di nuovo senza il marcatore e le notifiche. Questo rende "al massimo una volta al giorno" un fatto del database e non una speranza di tempistica.
+
+## Anteprima di un file consegnato
+
+La pagina di revisione mostra PDF e immagini (png, jpg, jpeg, gif, webp) accanto al modulo di valutazione; ogni altro tipo di file mostra i suoi dettagli e un pulsante Download.
+
+- **Le immagini** sono un `<img>` che usa lo stesso URL firmato CloudFront di cinque minuti di un download. I browser ignorano `Content-Disposition` per le immagini.
+- **I PDF** sono recuperati dall'URL firmato e disegnati su canvas da `react-pdf` (PDF.js), caricato solo nella pagina di revisione. I file salvati sono serviti con `Content-Disposition: attachment` e la CSP del portale blocca `<iframe>` e `<embed>`, quindi disegnare su canvas non richiede modifiche alla distribuzione, alla CSP o agli oggetti salvati.
+
+**Limite noto: JPEG 2000 e JBIG2.** PDF.js decodifica questi formati di immagine incorporati con WebAssembly, che la CSP del portale (`script-src 'self'`, senza `'wasm-unsafe-eval'`) blocca. Queste immagini potrebbero non essere disegnate, ma il resto della pagina viene reso e Download funziona ancora. Allentare una CSP condivisa per questo è stato giudicato non conveniente.
+
+Il punteggio e il feedback non ancora inviati di un istruttore sono conservati nel suo browser, per consegna, e non vengono salvati sul server.
+
+## Le regole che i controlli impongono
+
+Gli helper condivisi in `helpers/assignment-grading.ts` di core-table sono gli unici a scrivere i campi del voto e `submissionFeedback`. La consegna dello studente, in `helpers/assignment-submission.ts`, imposta le chiavi di attesa tramite lo stesso `waitingKeys`. I controlli in `helpers/invariants/assignment-grading.ts` coprono:
+
+- la forma del voto: `returned` ha punteggio entro `pointsOutOf`, chi ha restituito e le ore, e nient'altro li ha;
+- le chiavi di attesa coerenti con `status`;
+- ogni giro appartenente a una consegna, e la forma del giro;
+- il giro più recente coerente con lo stato e la `reviewRevision` della consegna;
+- la forma del marcatore dell'avviso giornaliero.

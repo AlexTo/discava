@@ -1,0 +1,101 @@
+---
+title: Revenus et versements
+description: Comment les revenus d'un instructeur sont calculés, la page Earnings, la configuration d'un compte de versement, quand les versements sont envoyés, et ce que fait un changement de compte de paiement.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+Quand un étudiant achète votre cours, votre part est enregistrée en quelques secondes et vous est versée via Stripe.
+
+## Comment les revenus sont calculés
+
+Pour chaque vente :
+
+> net = montant payé − commission de la plateforme
+
+- Le **montant payé** est ce que l'étudiant a payé, après un éventuel coupon. Une **réduction** l'abaisse, et abaisse donc votre part : vous gagnez sur le montant payé, jamais sur le prix catalogue.
+- La **commission de la plateforme** est un pourcentage du montant payé, fixé par la plateforme (20 % sauf modification). Une vente garde la commission avec laquelle elle a été enregistrée.
+- Si un cours a **plusieurs instructeurs**, ils se partagent chaque vente à parts égales.
+- Un **remboursement** reprend votre part du montant remboursé, et rend la commission correspondante. Un remboursement intégral ramène la vente à zéro.
+
+Chaque devise est tenue à part. Rien n'est converti.
+
+Une vente compte le jour où elle a été payée, et un remboursement le jour où il a été fait, donc le remboursement d'une vente du mois dernier abaisse les chiffres de ce mois-ci. Les jours sont des jours UTC.
+
+## La page Earnings
+
+**Earnings** dans la barre latérale du portail instructeur a quatre parties.
+
+**Payout account** : son statut et la seule chose à faire à son sujet. Voir [Configurer les versements](#configurer-les-versements).
+
+**Balance**, par devise :
+
+| Chiffre | Signification |
+| --- | --- |
+| **On hold** | Gagné, mais encore dans la période de rétention. La page montre la prochaine date de libération |
+| **Waiting for account setup** | Hors de la période de rétention, mais vous n'avez pas de compte de versement actif |
+| **Ready** | Partira avec le prochain versement |
+
+**Report** : le mois en cours pour commencer. Choisissez un autre mois, ou choisissez **Custom range** et définissez des dates From et To espacées d'au plus 366 jours.
+
+- Pour chaque cours, il montre le nombre de commandes, le brut, les réductions, les remboursements, la commission de la plateforme et le net, avec un total par devise.
+- **Show orders** sur un cours liste chaque vente et remboursement avec une référence de commande. Il n'affiche jamais qui a acheté.
+- Les jours sont comptés en UTC.
+
+**Payouts** : la date, le montant et le statut de chaque versement.
+
+## Configurer les versements
+
+1. Ouvrez **Earnings**.
+2. Sur la carte **Payout account**, choisissez **Set up payouts**.
+3. Donnez à Stripe votre identité et vos coordonnées bancaires sur ses propres pages. Stripe vous renvoie vers Earnings quand vous avez fini.
+
+La carte montre où vous en êtes :
+
+| Statut | Quoi faire |
+| --- | --- |
+| **Not set up** | **Set up payouts** |
+| **In progress** | **Continue setup** : le formulaire de Stripe n'est pas terminé |
+| **Active** | Rien. **Open Stripe dashboard** vous mène à votre compte Stripe |
+| **Restricted** | **Fix account** : Stripe a besoin de quelque chose de plus de votre part |
+
+Si la carte indique « Payouts aren't available yet », la plateforme n'a pas connecté Stripe. Demandez à un administrateur.
+
+Les revenus sont enregistrés que vous ayez configuré les versements ou non. Ils attendent que vous le fassiez.
+
+## Quand vous êtes payé
+
+- Chaque vente est **retenue** pendant un nombre de jours fixé par la plateforme (14 sur le stage de production sauf modification), pour qu'un remboursement dans ce délai n'ait jamais à vous être repris.
+- Une exécution des versements a lieu **une fois par jour**. Elle envoie tout ce qui est prêt, un versement par devise.
+- Un solde inférieur au **versement minimum** (10,00 sauf modification) attend une exécution ultérieure.
+
+Le statut d'un versement est l'un des suivants :
+
+- **Pending** : il est en cours d'envoi.
+- **Sent** : Stripe l'a accepté.
+- **Failed** : Stripe l'a refusé, avec le motif. Ses revenus retournent dans votre solde et sont retentés.
+
+## Remboursements après que vous avez été payé
+
+Un remboursement effectué après le versement de sa vente laisse un **solde négatif**. Il est déduit de votre prochain versement. Rien n'est prélevé sur votre compte bancaire.
+
+## Revenus retenus
+
+Si la plateforme change le compte Stripe avec lequel elle encaisse, les revenus d'avant le changement qui n'avaient pas été versés apparaissent comme **Held** : « Earned before the platform changed its payment account. Contact the platform to be paid. » Votre compte de versement apparaît comme non configuré, parce qu'il appartenait à l'ancien compte. Configurez-le de nouveau pour les ventes à partir de maintenant.
+
+## Pour les administrateurs
+
+- Les versements demandent que **Connect** soit activé sur le compte Stripe de la plateforme. Sans cela, un instructeur qui choisit **Set up payouts** reçoit « This platform can't set up payout accounts yet ».
+- Une clé restreinte doit aussi pouvoir gérer les comptes connectés, les liens de compte, les liens de connexion et les transferts, en plus de ce que demande l'<Link path="guides/payments">encaissement des paiements</Link>.
+- La commission, la période de rétention et le versement minimum se règlent par stage. Le stage de développement retient les ventes 1 jour, pas 14. Voir <Link path="deploy/configuration">Configuration d'un stage</Link>.
+- Changer de compte ou de mode Stripe retient les revenus impayés de chaque instructeur. Laissez d'abord l'exécution quotidienne payer ce qui est prêt, et payez les revenus retenus à la main.
+
+## Limites
+
+- Pas de formulaires fiscaux, de factures ni de calcul des taxes.
+- Pas de conversion de devises.
+- Les litiges et rétrofacturations n'apparaissent pas dans le rapport.
+
+<Link path="design/instructor-payouts">Versements aux instructeurs</Link> décrit son fonctionnement.

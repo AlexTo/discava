@@ -1,0 +1,82 @@
+---
+title: Certificats
+description: Activer les certificats pour un cours et définir ce qui permet d'en obtenir un, la carte des conditions de l'étudiant, consulter, télécharger et partager un certificat, la page publique, et la révocation et la restauration.
+---
+
+import Link from '@components/link.astro';
+
+Un cours peut délivrer un certificat d'achèvement à chaque étudiant qui remplit ses conditions. Chaque certificat a un identifiant et une page publique que n'importe qui peut utiliser pour le vérifier.
+
+## Pour les instructeurs : proposer un certificat
+
+1. Ouvrez le cours depuis **My Courses** et allez à sa section **Certificates**.
+2. Activez **Issue a certificate on completion**.
+3. Cochez éventuellement **Require passing every quiz**. Un quiz dont la note de passage est 0 % ne compte pas.
+4. Cochez éventuellement **Require graded assignments to be returned with at least** un pourcentage, et saisissez un nombre entier de 1 à 100.
+
+Terminer chaque élément du cours est toujours obligatoire.
+
+Modifier les conditions n'affecte que les étudiants qui n'ont pas encore de certificat. Les étudiants qui se qualifient alors reçoivent le leur automatiquement, et personne n'en perd un.
+
+**Issued certificates**, dans la même section, liste chaque apprenant, l'identifiant du certificat, la date d'achèvement et le statut.
+
+## Pour les étudiants : en obtenir un
+
+La carte **Certificate** du cours liste ce qu'il vous reste à faire :
+
+| Condition | Ce qu'elle affiche |
+| --- | --- |
+| Terminer chaque élément | Si vous avez tout terminé |
+| Réussir chaque quiz | Chaque quiz comme Passed, Not attempted ou Not passed yet |
+| Devoirs notés rendus avec au moins un pourcentage | Chaque devoir comme Done, Not submitted ou Waiting to be graded, ou la note avec laquelle il a été rendu |
+
+Un quiz sans tentative restante affiche « Not passed, no attempts left. Ask your instructor for another attempt. »
+
+Quand tout est rempli, la carte indique « Your certificate is being prepared. » puis propose :
+
+- **View** : ouvre la page du certificat.
+- **Download PDF**.
+- **Copy link** : copie l'adresse de la page du certificat.
+- **Add to LinkedIn**.
+
+Vous en êtes aussi informé dans la cloche et par e-mail, avec un rappel ultérieur pour l'ajouter à LinkedIn. Voir <Link path="guides/notifications">Notifications</Link>.
+
+## La page du certificat
+
+La page à `/certificates/<certificate ID>` est publique. Elle affiche « Certificate of completion », le nom de l'apprenant, le cours, la date, ce que le certificat atteste et l'identifiant du certificat. Toute personne ayant le lien peut la lire sans se connecter.
+
+Un identifiant qui n'existe pas affiche « Certificate not found ».
+
+## L'ajouter à LinkedIn
+
+1. Choisissez **Add to LinkedIn**, sur la carte **Certificate** du cours ou sur la page de votre certificat quand vous êtes connecté.
+2. Choisissez **Continue to LinkedIn**.
+3. Enregistrez l'entrée sur LinkedIn.
+
+La page de votre certificat liste aussi ce que LinkedIn demande, au cas où vous remplissez le formulaire à la main : organisation émettrice, date d'émission, identifiant de la certification et URL de la certification.
+
+## Révoquer et restaurer
+
+Un certificat révoqué n'est plus valide. Sa page publique indique « This certificate has been revoked and is no longer valid. » L'étudiant en est informé, et la carte de son cours montre la date et le motif. Le restaurer le rend de nouveau valide avec le même identifiant, et l'étudiant en est de nouveau informé.
+
+| Qui | Où | Motifs qu'il peut donner |
+| --- | --- | --- |
+| Un instructeur du cours | **Issued certificates** dans la section **Certificates** du cours | Academic integrity, Issued in error, Other |
+| Un administrateur | **Certificates** dans le portail admin | Les mêmes, et Order refunded |
+
+**Pour les instructeurs :** choisissez **Revoke** sur un certificat, sélectionnez un **Reason**, ajoutez une **Note** si vous le souhaitez, et confirmez. **Restore** l'annule. **History** montre qui l'a révoqué et restauré, et quand.
+
+**Pour les administrateurs :**
+
+1. Ouvrez **Certificates** dans le portail admin.
+2. Saisissez le **Certificate ID** et choisissez **Look up**. Le certificat apparaît comme **Valid** ou **Revoked**.
+3. Choisissez **Revoke**, sélectionnez un **Reason** et confirmez avec **Revoke certificate**. Le motif Other demande une **Note**.
+
+**Restore**, confirmé avec **Restore certificate**, l'annule.
+
+Qui peut annuler l'action de qui :
+
+- Un administrateur peut restaurer n'importe quel certificat.
+- Un instructeur peut restaurer un certificat qu'un instructeur a révoqué, mais pas un certificat qu'un administrateur a révoqué. Il apparaît alors comme « Revoked by an administrator ».
+
+Le remboursement intégral d'un cours payant ne retire pas un certificat à lui seul. Voir <Link path="guides/payments">Cours payants et paiements</Link>.

@@ -1,0 +1,220 @@
+---
+title: Flussi di richieste e dati
+description: Come accesso, chiamata API, pagina pubblica, caricamento di un video, modifica dei dati, acquisto e ricerca attraversano i componenti di Discava.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+Sette flussi spiegano la maggior parte del sistema.
+
+## Accedere
+
+```d2 title="Sign-in"
+shape: sequence_diagram
+browser: "Browser"
+portal: "Portal (CloudFront)"
+cognito: "Cognito"
+trigger: "Pre token generation"
+table: "Core table"
+
+browser -> portal: "load app and runtime-config.json"
+browser -> cognito: "redirect to sign-in page"
+cognito -> trigger: "before issuing tokens"
+trigger -> table: "write the user record"
+cognito -> browser: "tokens, with the user's groups"
+```
+
+1. Il portale si carica e legge `runtime-config.json` per trovare Cognito.
+2. L'utente accede sulla pagina ospitata di Cognito.
+3. Prima di emettere i token, Cognito chiama una funzione che scrive il record dell'utente nella tabella principale, così l'applicazione ha una riga per chiunque abbia un token. La scrittura è best effort: se fallisce o è lenta, l'utente accede comunque, e il prossimo accesso o aggiornamento del token riprova.
+4. Il browser riceve i token che includono i gruppi dell'utente.
+
+Quando qualcuno si registra da solo, un secondo trigger lo aggiunge ai gruppi `student` e `instructor`.
+
+## Chiamare un'API
+
+```d2 title="An API call"
+shape: sequence_diagram
+browser: "Browser"
+waf: "WAF"
+gw: "API Gateway"
+fn: "API function"
+table: "Core table"
+
+browser -> waf: "tRPC call with token"
+waf -> gw: "allowed"
+gw -> gw: "verify token with Cognito, throttle"
+gw -> fn: "invoke"
+fn -> fn: "check group, validate input"
+fn -> table: "read or write"
+fn -> browser: "result"
+```
+
+Una richiesta viene controllata tre volte prima di toccare i dati:
+
+1. **WAF**, quando lo stage lo ha attivo, filtra gli attacchi comuni.
+2. **API Gateway** verifica il token rispetto al pool di utenti e applica i limiti di richieste. Alcune procedure pubbliche, come la visualizzazione della pagina di presentazione di un corso pubblicato, saltano il controllo del token.
+3. **La funzione** controlla il gruppo del chiamante (instructor-api richiede `instructor`, admin-api richiede `admin`), valida l'input e applica la regola di quella procedura, come "il chiamante è iscritto a questo corso".
+
+## Servire una pagina pubblica
+
+Le pagine di presentazione dei corsi, i profili degli istruttori e le pagine dei certificati devono essere leggibili da crawler e anteprime dei link, che non eseguono il JavaScript del portale.
+
+```d2 title="A public page"
+shape: sequence_diagram
+visitor: "Crawler or browser"
+cf: "Student portal (CloudFront)"
+fn: "Page renderer"
+table: "Core table"
+
+visitor -> cf: "GET /learn/<courseId>"
+cf -> fn: "on a cache miss"
+fn -> table: "read the course"
+fn -> cf: "HTML"
+cf -> visitor: "HTML, cached for up to five minutes"
+```
+
+1. La distribuzione CloudFront del portale studenti invia `/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml` e `/robots.txt` al renderer delle pagine. Ogni altro percorso è il sito statico.
+2. Il renderer legge la tabella e riempie l'`index.html` del portale con il contenuto e i metadati della pagina. Ha accesso di sola lettura, e solo CloudFront può chiamarlo.
+3. CloudFront mette in cache la risposta in base al solo percorso, quindi non dipende mai da chi la richiede.
+
+<Link path="design/public-pages">Pagine pubbliche</Link> contiene il progetto completo.
+
+## Il viaggio di un video
+
+```d2 title="From upload to playback"
+direction: right
+instructor: "Instructor"
+api: "instructor-api"
+upload: "Upload bucket"
+mc: "MediaConvert"
+lesson: "Lesson media bucket"
+done: "transcode-complete"
+tr: "Transcribe"
+cap: "transcribe-complete"
+table: "Core table"
+cf: "CloudFront"
+student: "Student"
+
+instructor -> api: "1. ask to upload"
+instructor -> upload: "2. PUT file (presigned URL)"
+api -> mc: "3. submit job"
+mc -> lesson: "4. HLS renditions"
+mc -> done: "5. job finished (EventBridge)"
+done -> table: "mark ready"
+done -> tr: "6. start captions"
+tr -> cap: "7. finished (EventBridge)"
+cap -> lesson: "caption track"
+student -> cf: "8. play (signed)"
+cf -> lesson
+```
+
+**Caricamento.** Il browser carica direttamente su S3 con un URL prefirmato da instructor-api, così i file grandi non passano mai da una funzione Lambda.
+
+**Transcodifica.** MediaConvert trasforma il caricamento in rendition HLS a più qualità, così il player si adatta alla connessione dello spettatore. Quando il job termina, una regola EventBridge invoca una funzione che segna il video come pronto e avvia un job Transcribe per i sottotitoli.
+
+**Sottotitoli.** Quando Transcribe termina, una seconda funzione salva la traccia dei sottotitoli. Se il corso ha altre lingue di sottotitoli, la feature di traduzione dei sottotitoli (vedi [Reagire a una modifica](#reagire-a-una-modifica)) traduce la traccia con Amazon Translate. La feature di indicizzazione delle trascrizioni aggiunge il testo dei sottotitoli alla ricerca.
+
+**Recupero.** Una funzione gira ogni 30 minuti per trovare i video bloccati in elaborazione. Ogni gestore di completamento ha una coda di errore, e i file ritirati vengono rimossi da pulizie pianificate.
+
+**Riproduzione.** I media delle lezioni sono privati. Quando uno studente iscritto apre una lezione, core-api controlla l'iscrizione ed emette una firma CloudFront di breve durata. CloudFront serve il video solo alle richieste che la portano. Due cose sono aperte a chiunque, autenticato o no: il video di anteprima di un corso e le lezioni che l'istruttore ha segnato come anteprime gratuite. La chiave di firma è custodita da una funzione dedicata in ciascuna API che firma, non dalla funzione condivisa dell'API.
+
+## Reagire a una modifica
+
+Alcuni risultati dipendono da molti record: il progresso di uno studente in un corso, la voce di ricerca di un corso, le analisi e i guadagni di un istruttore. Non vengono calcolati dentro la richiesta che modifica i dati. Vengono ricalcolati dopo, a partire dallo stream delle modifiche della tabella.
+
+```d2 title="One stream reader, one queue per feature"
+direction: right
+api: "Any API write"
+table: "Core table"
+stream: "Change stream"
+router: "Stream router"
+q1: "progress queue"
+q2: "search queue"
+q3: "analytics queue"
+q4: "notification queue"
+h1: "Progress recalculation"
+h2: "Search indexing"
+h3: "Analytics update"
+h4: "Notification delivery"
+os: "OpenSearch"
+ses: "SES"
+
+api -> table
+table -> stream
+stream -> router
+router -> q1
+router -> q2
+router -> q3
+router -> q4
+q1 -> h1
+q2 -> h2
+q3 -> h3
+q4 -> h4
+h1 -> table
+h3 -> table
+h2 -> os
+h4 -> ses
+```
+
+Il diagramma mostra quattro delle otto feature:
+
+| Feature | Reagisce a una modifica con |
+| --- | --- |
+| Ricalcolo del progresso | Aggiornamento del progresso di uno studente nel corso, ed emissione del certificato quando il corso è completo |
+| Indicizzazione della ricerca | Aggiornamento della voce del corso nell'indice dei corsi |
+| Indicizzazione delle trascrizioni | Aggiornamento del testo dei sottotitoli di un video nell'indice delle trascrizioni |
+| Aggiornamento delle analisi | Aggiornamento dei dati di analisi del corso |
+| Consegna delle notifiche | Distribuzione di un annuncio ai suoi studenti e invio delle email tramite SES |
+| Registrazione dei guadagni | Registrazione della quota di ogni istruttore su un ordine pagato |
+| Traduzione dei sottotitoli | Traduzione dei sottotitoli di un video nelle altre lingue del corso |
+| Pubblicazione del brand | Scrittura del file del brand della piattaforma nei media pubblici, da cui i portali lo recuperano |
+
+- Il **router dello stream** è l'unico lettore dello stream. Copia ogni modifica nella coda di ogni feature il cui filtro corrisponde.
+- Ogni **feature** ha la propria coda, quindi una feature lenta o in errore non ritarda mai le altre.
+- Un messaggio che continua a fallire passa alla **coda di errore** di quella feature, che fa scattare un allarme. Un operatore corregge la causa e rimette in coda i messaggi.
+- I gestori possono ricevere una modifica due volte o fuori ordine, quindi ciascuno è scritto per dare lo stesso risultato in entrambi i casi.
+
+La conseguenza per gli utenti: dati come progresso e analisi si aggiornano qualche secondo dopo l'azione che li ha causati.
+
+<Link path="design/stream-event-router">Router degli eventi dello stream</Link> contiene il progetto completo, mentre <Link path="design/search">Ricerca</Link> e <Link path="design/progress-and-completion">Progresso e completamento</Link> trattano due delle sue feature.
+
+## Acquistare un corso
+
+Un corso a pagamento si acquista sulla pagina di Stripe, e lo studente viene iscritto dalla conferma di Stripe, mai dal ritorno del browser.
+
+```d2 title="A purchase"
+direction: right
+student: "Student portal"
+core: "core-api"
+table: "Core table"
+stripe: "Stripe"
+hook: "Stripe webhook API"
+
+student -> core: "1. Buy now"
+core -> table: "2. pending order"
+core -> stripe: "3. create checkout"
+student -> stripe: "4. pay"
+stripe -> hook: "5. signed confirmation"
+hook -> table: "6. order paid + enrolment"
+```
+
+1. core-api scrive un ordine `pending`, poi chiede a Stripe una pagina di checkout e vi manda lo studente. L'importo è il prezzo del corso, meno un coupon se lo studente ne ha inserito uno, e mai una cifra inviata dal browser. Un coupon viene riscattato prima che l'ordine sia scritto, così il suo limite di utilizzi regge anche quando più studenti completano l'acquisto nello stesso momento.
+2. Lo studente paga su Stripe. Discava non vede mai un numero di carta.
+3. Stripe invia una conferma firmata all'API del webhook. Il gestore verifica la firma, poi segna l'ordine come pagato e crea l'iscrizione in un'unica transazione.
+4. Tornato sulla pagina del corso, il portale attende che l'iscrizione compaia, di solito entro pochi secondi.
+
+Stripe può consegnare una conferma più di una volta, quindi la seconda volta il gestore non cambia nulla. Un pagamento che non può essere consegnato, ad esempio per un corso nel frattempo non più pubblicato, viene rimborsato automaticamente.
+
+L'ordine pagato poi percorre lo stream delle modifiche come qualsiasi altra scrittura: la feature dei guadagni registra la quota di ogni istruttore, e un'esecuzione giornaliera paga quanto dovuto. <Link path="design/payments">Pagamenti</Link> e <Link path="design/instructor-payouts">Pagamenti agli istruttori</Link> contengono il progetto completo.
+
+## Cercare
+
+La ricerca legge da OpenSearch, che lo stream tiene aggiornato.
+
+- **Il catalogo.** La procedura di ricerca pubblica di core-api invia la query e i filtri, e restituisce i corsi pubblicati ordinati per pertinenza e valutazione. Una seconda procedura suggerisce i titoli mentre lo studente digita. Un corso appena pubblicato compare qualche secondo dopo la pubblicazione.
+- **Dentro un corso.** Uno studente iscritto può cercare ciò che è stato detto nei video del corso. core-api decide dalla tabella quali video lo studente può guardare e limita la query a quelli, quindi l'indice non decide mai l'accesso.
+
+<Link path="design/search">Ricerca</Link> contiene il progetto.

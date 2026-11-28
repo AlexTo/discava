@@ -1,0 +1,131 @@
+---
+title: Certificats
+description: Comment un certificat de complétion est émis selon les critères d'un cours, révoqué et restauré, partagé, ajouté à LinkedIn et vérifié.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+**Spec :** [`specs/_archive/20261115-204447-certificates/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204447-certificates/) (émission) et [`specs/20261120-154550-certificate-criteria-revocation/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154550-certificate-criteria-revocation/) (critères, ce qui a été évalué, révocation)
+
+**Spec :** [`specs/20261120-003448-linkedin-certificate-sharing/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-003448-linkedin-certificate-sharing/) (ajout d'un certificat à LinkedIn)
+
+## La règle
+
+**Un certificat n'est jamais écrit que côté serveur, par le recalcul de la progression, et un étudiant en a au plus un par cours.** Il est émis quand l'étudiant a terminé le cours (voir <Link path="design/progress-and-completion">Progression et complétion</Link>) **et** satisfait les critères en vigueur pour le cours à ce moment-là. Rien de ce qu'un étudiant ou un instructeur fait dans un navigateur ne peut en créer un.
+
+La complétion elle-même n'est pas modifiée par les critères : une inscription devient toujours `completed` quand chaque élément visible est terminé. « Terminé, sans certificat pour l'instant » est un état normal et durable, et l'accueil du cours explique ce qui reste exigé.
+
+## Les critères
+
+- **Où ils vivent** : une map `certificateCriteria` sur le cours, à côté du réglage par cours : `{ version, requireQuizPass }`. Un nouveau cours a `{ version: 1, requireQuizPass: false }`. `setCertificateCriteria` en est le seul écrivain après la création et ajoute un à `version` seulement quand quelque chose a changé.
+- **La règle** : `evaluateCertificateCriteria` dans `core-table` est une fonction pure utilisée à la fois par l'émetteur et par le lecteur (`certificate.requirements`, que l'accueil du cours affiche), donc la page et l'émetteur ne peuvent pas diverger. Avec `requireQuizPass` activé, chaque quiz évalué doit être réussi : son `passedAt` est défini (et `passedAt` est permanent) **et** le meilleur score de l'étudiant atteint la note de réussite *actuelle* du quiz. Relever une note de réussite peut donc retenir un certificat pas encore émis, et en abaisser une peut le libérer. Un quiz évalué est un quiz effectivement visible dont la note de réussite est supérieure à 0 ; un quiz avec une note de réussite de 0 % est un entraînement et n'est pas évalué.
+- **Changer les critères sur un cours en ligne** : les critères lus au moment où un étudiant est évalué s'appliquent. Un certificat déjà émis n'est jamais réexaminé. Assouplir émet des certificats à tous ceux qui deviennent qualifiés ; durcir n'affecte que les étudiants qui ne sont pas encore qualifiés. Le contrôle de l'instructeur le dit avant l'enregistrement.
+
+## Téléversements notés
+
+Un second critère, `minUploadScorePercent` (un nombre entier de 1 à 100, absent quand il n'est pas exigé), se trouve dans la même map et se définit via le même `setCertificateCriteria`, qui le retire quand on lui donne `null`.
+
+- **La règle** : une fois défini, chaque devoir effectivement visible est évalué. Il est satisfait quand la remise de l'étudiant est `returned` et que `floor(points / pointsOutOf * 100)` est au moins égal au minimum, où `pointsOutOf` est la base sur laquelle le travail a été noté (le `maxPoints` du devoir quand il n'y a pas de note d'où le lire). Une remise absente est « not submitted », une remise pas encore rendue est « waiting to be graded », et une remise rendue avec moins de points est « below the score ». Un cours sans devoir visible n'a rien à satisfaire.
+- **Renotation** : un changement du `status`, des `points` ou de `returnedAt` d'une remise recalcule cet étudiant, donc une note corrigée à la hausse émet le certificat, et une nouvelle remise (qui ne change rien de cela) ne fait rien.
+- **Ce qui est enregistré** : l'`assessment` du certificat conserve `minUploadScorePercent`, `assessedUploadCount` et une entrée `upload` par devoir dans la liste interne ; la tranche porte sur les quiz et les téléversements ensemble. L'énoncé gagne « Graded assignments returned with at least 60%: 2. »
+- Les remises ne sont lues que lorsque le critère est défini.
+
+## Ce que le certificat enregistre
+
+Le certificat copie les critères sous lesquels il a été émis, avec leur `version`, dans un `assessment` en lecture seule, de sorte que ce qu'il décrit ne dérive jamais quand le cours change :
+
+- les deux réglages, le nombre d'éléments visibles, le nombre d'éléments évalués, la note de réussite la plus basse et la plus haute, la durée du cours en heures et une **tranche de score** (la tranche de dix points de la moyenne des meilleurs scores, de 0-9 % à 90-100 %). Chacun est affiché sur la page publique et dans le PDF comme les mêmes lignes de texte (`assessmentStatement`).
+- la **liste des éléments évalués** avec chaque score. Elle existe pour qu'un invariant puisse vérifier la règle, et n'est jamais renvoyée par une API ni affichée.
+- Quand rien n'était exigé, il n'y a pas de tranche et l'énoncé dit « No graded assessment was required for this certificate. » Un score exact n'est jamais affiché.
+
+## Ce qui fait arriver un certificat en attente
+
+Le recalcul (voir <Link path="design/progress-and-completion">Progression et complétion</Link>) s'exécute pour plus qu'un élément terminé. Un étudiant qui se qualifie reçoit un certificat dans les secondes qui suivent :
+
+- la réussite d'un quiz après que son élément était déjà terminé (tentatives épuisées, limite relevée, une tentative ultérieure réussie), ou un meilleur score sur un quiz déjà réussi : cet étudiant ;
+- un changement des critères, ou l'activation des certificats : chaque étudiant inscrit qui n'a pas abandonné ;
+- un changement de la note de réussite d'un quiz (y compris vers ou depuis 0, ce qui change s'il est évalué) : chaque étudiant inscrit qui n'a pas abandonné ;
+- les complétions d'éléments et les changements de visibilité qui le déclenchaient déjà.
+
+Ainsi, activer les certificats ou assouplir les critères émet à tous ceux qui se qualifient déjà.
+
+## Comment il est émis
+
+- La Lambda de recalcul de la progression appelle `issueCertificate` après avoir écrit la progression et l'inscription d'un étudiant, quand l'étudiant n'a pas abandonné et que l'inscription est `completed`.
+- Elle lit d'abord le `certificate` de l'étudiant pour le cours. Seulement s'il n'y en a pas, elle lit le cours et l'utilisateur, donc les étudiants encore en cours, et ceux qui ont déjà un certificat, ne coûtent aucune lecture supplémentaire.
+- `issueCertificate` est le seul écrivain de `certificate`. Il crée l'enregistrement avec la condition que la clé n'existe pas déjà, donc deux recalculs exécutés au même instant laissent un seul certificat avec un seul ID, et les deux le renvoient. Une erreur n'est jamais avalée : le lot est réessayé.
+- Le certificat copie ce qu'il imprime (le nom de l'apprenant, le titre du cours et la date de complétion) au moment de l'émission. Renommer le cours plus tard ne le change pas.
+- L'ID fait 16 caractères en base32 de Crockford, affiché sous la forme `XXXX-XXXX-XXXX-XXXX`. Les recherches ignorent les tirets, les espaces et la casse, et lisent `O` comme `0` et `I` ou `L` comme `1`.
+
+## Le réglage par cours
+
+Un instructeur active ou désactive **Issue a certificate on completion** dans les paramètres du cours, quel que soit le statut du cours. Il est activé pour chaque nouveau cours.
+
+- Il s'applique à partir de là. Le désactiver ne retire ni n'invalide jamais un certificat déjà émis, et l'activer donne un certificat à chaque étudiant déjà qualifié, en quelques secondes.
+- Les certificats existants continuent d'être vérifiables quand le réglage est désactivé.
+
+## Ce qu'affiche la page publique
+
+`/certificates/<ID>` dans le portail étudiant ne demande aucune connexion. Elle affiche le nom de l'apprenant, le titre du cours, la date de complétion, l'ID du certificat et l'énoncé de l'évaluation, et rien d'autre : pas d'e-mail, pas d'ID d'utilisateur, pas de scores par élément et pas de lien vers le compte de l'apprenant. Un ID mal formé ou inconnu obtient le même « Certificate not found ».
+
+Un certificat **révoqué** affiche « This certificate has been revoked and is no longer valid », avec l'ID et la date, et rien sur l'apprenant, le cours, la raison ni qui a agi. Il est distinct de « not found » pour qu'un ID qui se vérifiait auparavant n'ait pas l'air d'une panne de la plateforme. Le changement apparaît au chargement suivant de la page, et l'aperçu du lien et la vérification du PDF le suivent. `certificate.pdf` refuse un certificat révoqué (« This certificate has been revoked ») ; un PDF déjà téléchargé ne peut pas être rappelé et la page fait foi.
+
+## Révocation et restauration
+
+- **Qui** : un instructeur du cours liste ses certificats (section Certificates du cours) et en révoque un avec la raison `academic-integrity`, `issued-in-error` ou `other` (avec une note). Un administrateur recherche n'importe quel certificat par ID et peut aussi utiliser `refunded`.
+- **Les procédures** : `certificate.list`, `history`, `revoke` et `restore` d'instructor-api, et `certificate.get`, `revoke` et `restore` d'admin-api.
+- **Restauration** : un administrateur toujours ; un instructeur seulement une révocation faite par un instructeur. Un instructeur voit « Revoked by an administrator » et pas de Restore sur l'autre sorte.
+- **L'enregistrement** : le certificat porte son état actuel (`revokedAt`, `revocationReason`, `revokedByRole`), et chaque changement ajoute aussi un `certificateEvent` (`revoked` ou `restored`, acteur, rôle, raison, note, date) dans la même transaction. `revokeCertificate` et `restoreCertificate` dans `core-table` sont les seuls écrivains des deux. L'historique est conservé pour un audit ; une révocation, une restauration et une seconde révocation laissent trois événements.
+- **Concurrence** : l'écriture est conditionnée par l'état attendu, donc deux révocations simultanées laissent une révocation et un événement, et les deux requêtes reçoivent une réponse.
+- **Jamais remplacé** : un certificat révoqué garde son ID et n'est jamais réémis ; le recalcul s'arrête devant un certificat existant quel que soit son statut. La restauration rend le même ID de nouveau valide.
+- **Prévenir l'apprenant** : les notifications `certificate.revoked` et `certificate.restored` partent après le changement, avec la catégorie de raison et une clé de déduplication formée de l'ID du certificat et de la date de l'événement.
+- **Rien ne révoque automatiquement.** En particulier un remboursement ne le fait pas : les certificats survivent aux remboursements, et un administrateur révoque avec la raison `refunded` quand c'est justifié. C'est la décision prise par défaut (la recherche R-8 de la spec liste ce que changerait la révocation à chaque remboursement), en attente de la confirmation du mainteneur.
+- **Un certificat révoqué masque ses actions** : l'action LinkedIn est masquée, `recordLinkedInClick` le refuse, et le rappel de partage n'est jamais envoyé pour lui.
+
+## Invariants
+
+Les vérifications d'invariants (voir la recherche R-10 de la spec) garantissent que : l'`assessment` d'un certificat est bien formé et que ses comptes, ses notes de réussite et sa tranche découlent des éléments listés ; chaque quiz listé a été réussi par l'étudiant au plus tard à l'heure d'émission, à ou au-dessus de sa note de réussite, et chaque téléversement listé a obtenu au moins le minimum enregistré et a toujours une remise (`certificate-met-criteria`) ; un certificat est révoqué exactement quand son dernier événement est `revoked` (`certificate-status-matches-history`) ; chaque cours a des critères bien formés ; et un certificat exige toujours une inscription terminée (ou abandonnée après la complétion), révoqué ou non. D'autres vérifications couvrent la forme du clic LinkedIn, le fait qu'aucun rappel n'a été envoyé après un clic, et la concordance des certificats et de leurs notifications. Ne sont pas des violations : une inscription terminée sans certificat, un certificat qui diffère des critères actuels du cours, et un quiz listé depuis masqué ou doté d'une note de réussite plus élevée.
+
+## Partage et vérification
+
+Un étudiant retrouve ses certificats dans **My Learning**, sur chaque cours terminé, avec quatre actions :
+
+- **View** ouvre la page publique.
+- **Download PDF** enregistre un certificat A4 d'une page qui porte le même ID et l'adresse de la page.
+- **Copy link** copie l'adresse de la page publique.
+- **Add to LinkedIn profile** ouvre le formulaire de LinkedIn pour une nouvelle certification (voir plus bas).
+
+Toute personne qui a le lien, ou l'ID, peut vérifier un certificat sur cette page.
+
+## L'ajouter à LinkedIn
+
+Le portail étudiant construit le lien dans le navigateur de l'apprenant (`lib/linkedin-add-to-profile.ts`, `buildLinkedInAddToProfileUrl`) et l'ouvre. Aucun serveur ne le construit ni ne le voit, et rien n'est envoyé à LinkedIn avant que l'apprenant clique.
+
+- **Ce qui est envoyé** : l'adresse `profile/add` de LinkedIn avec `startTask=CERTIFICATION_NAME`, `name` (le titre du cours imprimé sur le certificat), l'émetteur (`organizationName` à partir du nom de plateforme défini sur la page Branding du portail admin, ou `organizationId` à la place quand le stage définit `linkedInOrganizationId`, jamais les deux), `issueYear` et `issueMonth` (à partir de la date de complétion en UTC), `certUrl` (l'adresse de la page publique) et `certId` (tel qu'affiché). Il n'y a pas d'expiration. Chaque valeur est encodée en pourcentage.
+- **Ce qui ne l'est jamais** : le nom de l'apprenant, son e-mail, son ID d'utilisateur ou toute valeur de session. LinkedIn sait qui est le membre ; nous ne le lui disons pas. Le lien porte `rel="noopener noreferrer"` pour que le navigateur ne nomme pas la page d'origine, et aucun script ni API de LinkedIn n'est chargé ou appelé.
+- **Ce que le clic enregistre** : le premier clic appelle `certificate.recordLinkedInClick({ certificateId, source })` public, qui définit `linkedInClickedAt` et `linkedInClickSource` sur le certificat une seule fois et ne les change jamais. Un échec d'enregistrement n'empêche jamais le formulaire de s'ouvrir. L'enregistrement signifie « l'apprenant a ouvert le formulaire », pas « le certificat est sur LinkedIn » : LinkedIn ne renvoie rien.
+- **D'où peut venir un clic** : `linkedInClickSource` vaut `my-learning`, `certificate-page`, `issued-email` ou `reminder-email`. Les deux e-mails renvoient vers `/certificates/<ID>/linkedin?source=…`. Cette route du portail fonctionne sans connexion, enregistre l'utilisation et remplace la page par l'adresse de LinkedIn.
+- **Lire l'adoption** : la part des certificats avec `linkedInClickedAt`, répartie par `linkedInClickSource`. Le chiffre est dérivé des enregistrements stockés.
+- **Si LinkedIn ignore les valeurs** : le lien ouvre quand même le bon formulaire, et la vue du propriétaire sur la page publique liste chaque valeur à copier à la main. L'aide de LinkedIn indique que les liens personnalisés peuvent ne pas pré-remplir ; un mainteneur a vérifié le 2026-11-20 que le formulaire s'ouvre avec les valeurs (recherches R-1 à R-3 de la spec).
+
+## Prévenir l'apprenant
+
+- **La notification** `certificate.issued` est écrite dans la même transaction que le certificat par `issueCertificate`, avec l'ID du certificat comme clé de déduplication, donc il n'y a jamais de certificat sans sa notification, et une nouvelle tentative n'en fait pas une seconde.
+- **L'e-mail** a deux liens : la page du certificat, et **Add to LinkedIn profile** (l'`action` facultative de la notification, que la cloche ignore).
+- **Le réglage** : un seul interrupteur, **Certificates**, dans Notification settings gouverne à la fois l'e-mail d'émission et le rappel. `certificate.reminder` n'a pas de réglage propre (`emailPreferenceType` pointe vers `certificate.issued`), et se désabonner du premier e-mail arrête aussi le rappel.
+- **Le rappel** : trois jours après l'émission, un calendrier EventBridge Scheduler ponctuel (`cert-reminder-<ID>`) appelle la Lambda `certificate-reminder`. Elle s'arrête si le type d'e-mail est désactivé. Sinon elle revendique le rappel par une écriture conditionnelle de `reminderSentAt` qui ne réussit que si aucun clic n'a été enregistré et qu'aucun rappel n'a été envoyé, puis publie `certificate.reminder` avec l'heure stockée. Un clic et un envoi ne se marchent pas dessus : la première écriture qui passe décide. Un recalcul ultérieur répare un certificat émis mais jamais planifié, sauf si le rappel est déjà échu : un rappel n'est jamais envoyé en retard (recherches R-4 à R-7).
+
+## L'aperçu du lien
+
+Les robots d'aperçu de liens n'exécutent aucun script, donc le moteur de rendu des pages (voir <Link path="design/public-pages">Pages publiques</Link>) répond à `/certificates/<ID>` avec un en-tête construit à partir de `certificate.verify` : le titre « l'apprenant a terminé le cours », la date de complétion, le nom de la plateforme et l'ID. Il n'affiche jamais plus que la page. La page est toujours `noindex`, sur chaque stage, car elle nomme une personne. Les chemins plus profonds comme `/certificates/<ID>/linkedin` reçoivent le gabarit simple (recherche R-8).
+
+## Limites
+
+- Les critères n'ont pas d'historique : seuls la version et les réglages sous lesquels un certificat a été émis sont conservés, sur le certificat.
+- Un quiz est évalué selon sa propre note de réussite ; il n'y a pas de note de réussite pour tout le cours ni de choix par quiz de ce qui compte.
+- Un PDF révoqué déjà téléchargé existe toujours ; seule la page dit qu'il n'est plus valide.
+- LinkedIn ne renvoie rien, donc Discava ne peut pas savoir si un certificat a été enregistré sur un profil, seulement que le formulaire a été ouvert.
+- Toute personne qui détient l'ID du certificat peut enregistrer une première utilisation. Son seul effet est un rappel de moins.
+- Le PDF utilise des polices standard, donc les caractères hors Latin-1 (par exemple chinois, japonais ou emoji) s'impriment en `?`. La page publique les affiche correctement.

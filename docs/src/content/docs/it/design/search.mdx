@@ -1,0 +1,317 @@
+---
+title: Ricerca
+description: "Come funziona la ricerca dei corsi: la collection OpenSearch Serverless, la pipeline di indicizzazione e come viene imposta la visibilità."
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+La core table (`packages/databases/core-table`) è costruita per l'accesso per chiave, non per "trovare un corso il cui titolo o la cui descrizione corrisponde a questo testo". [Amazon OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html) è il livello di ricerca per questo scopo, tenuto fuori dalla core table invece di aggiungere altri GSI.
+
+## Ambito
+
+Due indici nell'unica collection:
+
+| Indice | Contiene | Chi può cercarvi |
+|---|---|---|
+| `courses` | Ogni corso attualmente **pubblicato**. Di un corso non pubblicato il documento viene eliminato invece di essere conservato con un flag | Chiunque, con o senza accesso (`course.publicSearch`, `course.publicSuggest`) |
+| `transcripts` | Passaggi delle tracce dei sottotitoli dei video che un discente iscritto può guardare | I discenti iscritti, all'interno di un corso (`transcript.search`) |
+
+Altri tipi di contenuto (istruttori, annunci) arriveranno dopo, ciascuno come proprio indice e propria procedura invece di una sola query che li mescola. I mapping type sono stati rimossi in OpenSearch 2.0, quindi si usa un indice per tipo. Ogni tipo ha anche la propria regola di visibilità, più semplice da leggere e testare se tenuta separata.
+
+## Costo: NextGen, non zero-ETL
+
+Due alternative native AWS sono state scartate, entrambe per il costo:
+
+- **Sincronizzazione**: [l'integrazione zero-ETL di OpenSearch Ingestion per DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/OpenSearchIngestionForDynamoDB.html) esegue una pipeline gestita fatturata per OCU-ora con un minimo fisso, che la tabella cambi o no, e non ha un equivalente per lo sviluppo locale. DynamoDB Streams e una Lambda (vedi sotto) non costano nulla tra una scrittura e l'altra e riusano l'event runner locale.
+- **Capacità della collection**: la generazione classica ha una soglia fissa di 2 OCU, fatturata in modo continuo. La collection invece sta in un collection group NextGen (`AWS::OpenSearchServerless::CollectionGroup`, `Generation: NEXTGEN`), la cui soglia è una scelta per stage (`min{Indexing,Search}CapacityInOcu` nella configurazione `search` dello stage).
+
+| Stage | OCU minime (indicizzazione / ricerca) | Effetto |
+|---|---|---|
+| `discava-development` | 0 / 0 | Scala a zero tra un tester e l'altro. La prima ricerca dopo una pausa attende circa 10-30 s per un avvio a freddo |
+| `discava-production` | 1 / 1 | Mai servita a freddo, e comunque sotto la soglia della classica |
+
+NextGen è disponibile solo in un sottoinsieme di regioni (al momento della scrittura: US East N. Virginia/Ohio, US West Oregon, Asia Pacific Mumbai/Singapore/Sydney/Tokyo, Europe Frankfurt/Ireland/Spain/Stockholm). Verifica che la regione di deploy dello stage sia una di queste.
+
+## Pacchetti
+
+| Pacchetto | Contiene |
+|---|---|
+| `packages/databases/search` | Il client (`getOpenSearchClient`, `resolveIndexName`), lo schema zod e il mapping di ogni indice (`src/indices`), il generatore del manifest degli indici e l'index-sync (`src/index-sync`) |
+| `packages/common/constructs` | `OpenSearchCollection` (generico: un collection group NextGen, la collection, le sue policy di sicurezza, `grantRead`/`grantWrite`, la custom resource index-sync) e `SearchCollection` (l'istanza di Discava) |
+| `packages/events` | `src/search/search-indexing.ts` mantiene l'indice `courses` allineato alla tabella, e `search-reindex.ts` lo ricostruisce. `transcript-indexing.ts` e `transcript-reindex.ts` fanno lo stesso per `transcripts` (vedi [Ricerca nelle trascrizioni](#ricerca-nelle-trascrizioni)) |
+| `packages/apis/core-api` | `course.publicSearch` e `course.publicSuggest` (`procedures/search.ts`, con `helpers/search-query.ts` e `suggest-query.ts`). `transcript.search` (`procedures/transcript.ts`, con `helpers/transcript-access.ts`, `transcript-query.ts` e `transcript-snippet.ts`) |
+| `packages/common/web-utils` | `webvtt`: il parser WebVTT condiviso dal pannello della trascrizione e dall'indicizzatore delle trascrizioni |
+
+**Index-sync** crea un indice mancante e applica il mapping a uno esistente (`putMapping`). Non elimina mai un indice. Gira a ogni deploy, quindi un indice eliminato a mano ritorna.
+
+Il pacchetto search rispecchia di proposito la forma di `packages/databases/core-table`. È costruito a mano per corrispondere al generatore `ts#opensearch` proposto in [awslabs/nx-plugin-for-aws#1267](https://github.com/awslabs/nx-plugin-for-aws/issues/1267) (non ancora in `@aws/nx-plugin`), così può essere contribuito a monte e poi rimesso al suo posto con una piccola differenza.
+
+## Pipeline di indicizzazione
+
+```d2 title="A course change reaches the search index through the stream router"
+direction: right
+
+table: "Core table" {shape: cylinder}
+router: "Stream router"
+queue: "search-indexing queue"
+index: "Search indexing"
+search: "courses index" {shape: cylinder}
+
+table -> router: "stream"
+router -> queue: "SEARCH_STREAM_FILTERS"
+queue -> index
+index -> table: "read course and rating"
+index -> search: "index / delete"
+```
+
+Lo stream della core table ha un solo lettore, lo <Link path="design/stream-event-router">stream router</Link>, che invia ogni modifica alla coda di ogni funzionalità registrata per essa. L'indicizzazione della ricerca è una di queste funzionalità (`search-indexing`), con la propria coda e coda dei fallimenti, quindi un suo fallimento non blocca mai un'altra funzionalità.
+
+Il suo filtro, `SEARCH_STREAM_FILTERS` (`core-table/src/helpers/search-stream.ts`), lascia passare ogni inserimento e modifica di un record `course` o `courseRating`, e la rimozione di un `course`. Le modifiche al curriculum e le singole recensioni non possono cambiare un documento, quindi non vengono instradate.
+
+`search-indexing.ts` usa una modifica solo per sapere quale corso è cambiato, poi legge quel corso come lo contiene ora la tabella:
+
+- Ogni `courseId` distinto nel batch viene letto una volta per chiave, in modo consistente, con il suo conteggio delle valutazioni.
+- Se il corso è `'published'`, il suo documento viene scritto (costruito da `toCourseDocument`, validato con `CourseDocumentSchema`). Se non è pubblicato o non esiste più, il suo documento viene eliminato.
+- L'id di un documento è il `courseId` del corso, quindi un record rieseguito, ritentato o riordinato converge sullo stesso documento, mai su un duplicato.
+
+Un indice appena creato parte vuoto. Lo stream porta solo le modifiche fatte dopo che l'indice esiste, quindi un corso pubblicato prima non è ricercabile finché non viene scritto di nuovo o l'indice non viene ricostruito.
+
+### Il documento del corso
+
+Oltre a `courseId`, `title`, `description`, `imageKey`, `status`, `publishedAt` e `updatedAt`, un documento porta tre gruppi facoltativi di campi:
+
+| Gruppo | Campi | Mappato come |
+|---|---|---|
+| Catalogo | `categoryId`, `tags`, `level`, `language`, `durationHours` | `keyword` (`tags` come array), `durationHours` come `integer` |
+| Valutazione | `ratingCount`, `ratingAverage`, `ratingScore`, `ratingBoost` | `integer` e `float`. Un corso senza valutazioni ha solo `ratingBoost`, impostato a 1 |
+| Prezzo | `priceAmount` (unità minori), `priceCurrency` | `integer`, `keyword` |
+
+`title` e `description` sono `text` con l'analyzer `english`, quindi "design" trova "designing".
+
+Il documento memorizza `categoryId`, non il nome né lo slug della categoria. Una ridenominazione allora non tocca nessun documento, e una risposta risolve nomi e slug dai record `category` quando viene costruita.
+
+### Reindicizzare uno stage distribuito
+
+`src/search/search-reindex.ts` è una Lambda privata senza sorgente di eventi e senza route API. Scorre a pagine i corsi pubblicati, li scrive con `_bulk` usando lo stesso `toCourseDocument` dell'indicizzatore dello stream, poi elimina i documenti dei corsi che non sono più pubblicati. Eseguila dopo che l'indice è stato ricreato, dopo un bug di indicizzazione, o dopo un deploy che aggiunge un campo:
+
+```sh
+pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development
+```
+
+Stampa quanti corsi sono stati indicizzati e quanti documenti obsoleti sono stati rimossi. Eseguirla due volte lascia gli stessi documenti.
+
+- Gira con un proprio ruolo perché la data access policy della collection nomina solo i ruoli Lambda dello stack. Il login AWS di una persona riceve un 403 sul data plane.
+- `aoss:WriteDocument` di `grantWrite` copre anche le eliminazioni.
+- Il suo timeout è di 5 minuti. Un catalogo troppo grande per una sola invocazione richiederebbe che la Lambda passasse il testimone a se stessa.
+
+In locale, `pnpm nx run @discava/e2e:seed-local-courses` crea e pubblica corsi tramite l'API dell'istruttore, e lo stream li indicizza.
+
+### Rilasciare i campi del catalogo
+
+Aggiungere un campo al mapping di `courses` è additivo: il `putMapping` di index-sync lo applica all'indice attivo sul posto al deploy, senza un nuovo indice. I campi del catalogo sono stati aggiunti così. Cambiare o rimuovere una proprietà esistente è una modifica che rompe la compatibilità e richiede invece l'indice versionato di #270.
+
+Un corso pubblicato prima di un deploy simile non ha valore per il nuovo campo finché non viene scritto di nuovo, quindi dopo il deploy **esegui una volta la reindicizzazione** (il comando sopra).
+
+## La procedura di ricerca
+
+`course.publicSearch` è costruita su `publicSearchProcedure` (`src/init.ts`), che aggiunge un plugin di ricerca scritto a mano (`createSearchPlugin`, in `src/middleware/search.ts`) e il plugin della core table. Il plugin è scritto a mano perché il generatore `connection` non ha ancora la combinazione tRPC con OpenSearch.
+
+È pubblica, come `course.publicList`: anche un chiamante senza accesso può cercare. La visibilità è imposta due volte: al momento dell'indicizzazione (sopra), e di nuovo nella query, che filtra sempre su `status: 'published'` anche se ogni corso indicizzato lo è già. Un bug in uno dei due non è allora l'unica cosa tra un chiamante e un corso in bozza o archiviato.
+
+`buildSearchRequest` (`helpers/search-query.ts`) costruisce una richiesta:
+
+- **Testo**: un `multi_match` su `title` e `description`. Qualsiasi parola può corrispondere, e più parole corrispondono più il punteggio è alto. Senza testo, ogni corso pubblicato corrisponde.
+- **Ordinamento per rilevanza**: con l'ordinamento predefinito, il punteggio di una query di testo è moltiplicato per il `ratingBoost` del corso, quindi un corso ben valutato precede uno ugualmente rilevante ma valutato male. Senza testo l'ordine è dal più recente pubblicato. Gli ordinamenti `rating` e `newest` sostituiscono entrambi.
+- **Filtri**: categoria, tag, livello, lingua e durata vanno in `post_filter`, quindi i risultati sono completamente filtrati. Una valutazione minima va nella query stessa, così ogni conteggio delle faccette la rispetta.
+- **Faccette**: un'aggregazione `filter` per faccetta, che applica ogni filtro tranne il proprio, così i suoi conteggi mostrano cosa darebbe la scelta di un altro valore.
+
+La risposta indica la categoria di ogni risultato dai record `category`, letti in parallelo alla ricerca. Una richiesta che impiega più di 8 secondi diventa tRPC `TIMEOUT`, così una collection a freddo dà un errore chiaro e ritentabile prima del timeout della Lambda stessa.
+
+## Suggerimenti
+
+**Spec:** [`specs/20261119-195009-search-suggestions/`](https://github.com/AlexTo/discava/tree/main/specs/20261119-195009-search-suggestions/)
+
+La casella di ricerca del portale studenti (`site-search.tsx`) mostra fino a 10 corsi corrispondenti mentre si digita. `course.publicSuggest` (`{ q }` in ingresso, `{ items: [{ courseId, title, imageKey? }] }` in uscita) è costruita su `publicSearchProcedure`, nello stesso file di `publicSearch`. La sua richiesta è costruita da `buildSuggestRequest` (`helpers/suggest-query.ts`).
+
+### Perché non `publicSearch`
+
+`publicSearch` esegue sempre cinque aggregazioni di faccette, legge ogni categoria dalla core table e restituisce schede di risultato complete. I suggerimenti non hanno bisogno di nulla di tutto ciò, e scattano molto più spesso. Una procedura separata ha anche i propri limiti di input (da 3 a 200 caratteri) e un timeout più breve senza allentare quelli di `publicSearch`. Un flag `mode` su `publicSearch` è stato scartato: una procedura con due forme di output è più difficile da tipizzare e testare.
+
+### La query
+
+Una `match_bool_prefix` su `title`, dentro lo stesso `function_score` con `ratingBoost` e lo stesso filtro `status: 'published'` della ricerca completa.
+
+- Ogni termine tranne l'ultimo corrisponde come termine intero (con stemming), e l'ultimo come prefisso. "pyth" trova "Python for Data Analysis".
+- La richiesta non imposta nessun `operator`, quindi i termini sono in OR. Un termine corrispondente basta, e un corso che ne corrisponde di più ha un punteggio più alto: "java zzzz" suggerisce comunque i corsi Java.
+- I risultati si ordinano per punteggio, poi `publishedAt` decrescente, poi `courseId`.
+- Non ci sono aggregazioni, `track_total_hits` è disattivato, e vengono recuperati solo `courseId`, `title` e `imageKey`.
+
+Interroga il campo `title` esistente, quindi il mapping non cambia e nessuno stage richiede una reindicizzazione.
+
+Il limite noto: l'ultimo termine subisce lo stemming prima che venga applicato il prefisso, quindi una parola digitata a metà il cui stem non è un prefisso dello stem indicizzato può non trovare nulla finché non si digita il carattere successivo. Se questo si rivela troppo frequente, il seguito è un sotto-campo `title.suggest` di tipo `search_as_you_type` con l'analyzer `standard`, interrogato con `multi_match` `bool_prefix`. È additivo (`putMapping`) ma richiede una reindicizzazione per stage.
+
+### Digitazione, debounce e riuso
+
+- Non viene inviato nulla sotto i **3 caratteri** (dopo il trim) né sopra i 200.
+- Il testo ripulito è sottoposto a **debounce di 300 ms** (`useDebouncedValue`), quindi una raffica di digitazione invia una sola richiesta, per l'ultimo testo.
+- La query è identificata dal testo, quindi una risposta lenta per "javas" finisce nella voce di cache "javas" e non sostituisce mai l'elenco per "javascript". Riscrivere un testo recente entro `staleTime` (60 s) riusa la sua risposta e non invia nulla.
+- Inviare il form o scegliere una riga annulla il debounce in sospeso, così non parte nessuna richiesta per un testo già inviato.
+
+### Fallimento, timeout e throttle
+
+La richiesta ha un **timeout di 3 s** (`SUGGEST_REQUEST_TIMEOUT_MS`), più breve degli 8 s di `publicSearch`, così una collection a freddo non trattiene la concorrenza Lambda a ogni pausa. Un `TimeoutError` diventa tRPC `TIMEOUT`, come in `publicSearch`. Il portale tratta qualsiasi errore, compreso un 429, come "nessun suggerimento": non mostra nessun avviso e non ritenta, perché la pausa successiva sostituisce comunque la richiesta.
+
+`course.publicSuggest` è in `PUBLIC_OPERATIONS`, ma non usa il `publicThrottle` condiviso. Quel limite è condiviso da ogni chiamante, non contato per visitatore, ed è troppo stretto per la richiesta più frequente che riceve core-api: su `discava-development` due persone che digitano insieme farebbero smettere in silenzio di funzionare il menu a tendina. Ha un proprio throttle, impostato da due chiavi di stage `coreApi`, `publicSuggestThrottleRateLimit` e `publicSuggestThrottleBurstLimit`:
+
+| Stage | Throttle dei suggerimenti (rate / burst) | Altre operazioni pubbliche |
+|---|---|---|
+| `discava-development` | 5 / 10 | 1 / 3 |
+| `discava-production` | 100 / 200 | 20 / 40 |
+| Predefinito (lo stage non imposta nessuna chiave) | 100 / 200 | 20 / 40 |
+
+Una persona che digita con regolarità costa circa 1 richiesta/s.
+
+- Il 5 / 10 di development copre circa cinque tester contemporanei e mantiene piccolo ciò che un'ondata anonima può raggiungere. Il WAF lì è spento, e la concorrenza riservata di core-api pari a 10 limita comunque le richieste concorrenti.
+- Il 100 / 200 di production copre circa 100 persone che digitano nello stesso momento. Una richiesta è una query da 10 risultati senza letture della core table, quindi trattiene una Lambda per poco. Alzalo con il traffico reale, come gli altri limiti dello stage.
+
+Non c'è una regola di rate per IP su nessuno dei due stage, quindi un singolo chiamante pesante può ancora usare l'intero limite, come per le altre operazioni pubbliche.
+
+## Ricerca nelle trascrizioni
+
+**Spec:** [`specs/20261120-002950-transcript-search/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002950-transcript-search/)
+
+Un discente iscritto può cercare ciò che viene detto nei video di un corso e aprire il video in quel momento. Il pannello che mostra la trascrizione di un video è descritto nella pagina del <Link path="design/video-player">video player</Link>.
+
+### Perché un indice separato
+
+L'indice `transcripts` sta accanto a `courses`, non dentro di esso:
+
+- **Unità**: un corso in uno, un passaggio nell'altro.
+- **Ciclo di vita**: un documento di corso esiste finché il corso è pubblicato. Un passaggio esiste finché il suo video può essere guardato, anche in un corso in bozza o archiviato.
+- **Visibilità**: `courses` è pubblico, le trascrizioni sono per i discenti iscritti. Tenere il contenuto dei corsi a pagamento fuori dall'indice interrogato dai chiamanti anonimi significa che un errore in una query pubblica non può restituirlo.
+- **Dimensione**: le trascrizioni sono di megabyte. Nel documento del corso, ogni modifica al corso le riscriverebbe e ogni ricerca nel catalogo le valuterebbe.
+
+Index-sync crea l'indice al deploy senza cambiare nessun mapping esistente.
+
+### Un passaggio, e come un risultato diventa un tempo
+
+Un documento è un **passaggio** di una traccia di sottotitoli: cue consecutivi uniti da singoli spazi. Un passaggio si chiude quando il cue successivo lo porterebbe oltre 30 secondi dall'inizio del suo primo cue, o oltre 600 caratteri. Ogni passaggio dopo il primo inizia con l'ultimo cue del precedente, così una frase a cavallo di due cue si trova sempre dentro un passaggio.
+
+Un documento memorizza il testo, il suo tempo di inizio e di fine, e per ogni cue il suo tempo di inizio e l'offset in caratteri nel testo (memorizzati, non indicizzati). Sono circa 130 documenti per ora di video per traccia.
+
+Per trasformare un risultato in un tempo:
+
+1. La query chiede l'intero passaggio evidenziato, con due caratteri di uso privato come tag (`MATCH_START` e `MATCH_END` in `transcript-query.ts`).
+2. La procedura trova la prima corrispondenza con tag, ne prende l'offset, e cerca il cue in cui cade. L'inizio di quel cue è il tempo del momento.
+3. Il frammento viene ritagliato dallo stesso testo e restituito come parti `{ text, match }`, mai HTML.
+
+La sovrapposizione significa che una corrispondenza in un cue condiviso viene trovata due volte. La procedura chiede 40 risultati e scarta le ripetizioni per video, traccia e inizio del cue, per restituirne fino a 20.
+
+### La funzionalità `transcript-indexing`
+
+Una funzionalità di stream a sé (vedi lo <Link path="design/stream-event-router">stream router</Link>), con la propria coda e coda dei fallimenti. Legge il bucket dei media delle lezioni, cosa che l'indicizzatore dei corsi non dovrebbe fare, e un file di sottotitoli errato non deve fermare l'indicizzazione dei corsi. Come `search-indexing`, usa una modifica solo per sapere quale elemento è cambiato (`transcript-actions.ts`), poi legge l'elemento come lo contiene ora la tabella (`transcript-sync.ts`).
+
+| Record | Effetto |
+|---|---|
+| `contentItem` INSERT | Un video che ha già `captionTracks` viene sincronizzato |
+| `contentItem` MODIFY | Un video il cui `captionTracks`, `captionTracksRev`, `status`, `s3Key`, `previousS3Key`, `visibility` o `archivedAt` è cambiato viene sincronizzato. Qualsiasi altra modifica (come un contatore degli studenti) non fa nulla e non legge nulla |
+| `contentItem` REMOVE | Ogni documento di quel `contentItemId` viene eliminato |
+| `lesson` o `module` MODIFY | Se è cambiato se viene mostrato, ogni elemento video sotto di esso viene sincronizzato |
+| `lesson` o `module` REMOVE | Ogni documento di quel `lessonId` o `moduleId` viene eliminato |
+
+**Sincronizzare un elemento** (`syncItemTranscripts`):
+
+1. Legge l'elemento, la sua lezione e il suo modulo in modo consistente.
+2. Calcola i documenti voluti. Se tutti e tre sono mostrati e l'elemento è un video con una versione riproducibile, sono i passaggi di ogni traccia di quella versione, costruiti dai file WebVTT nel bucket dei media delle lezioni. Altrimenti non ne è voluto nessuno.
+3. Elenca gli id che l'indice contiene per l'elemento, scrive quelli voluti con `_bulk` ed elimina il resto.
+4. Rilegge i tre record. Se ciò da cui dipendono i documenti è cambiato, sincronizza ancora una volta (fino a 3 giri prima di fallire per un nuovo tentativo), così due sincronizzazioni sovrapposte di uno stesso elemento finiscono comunque sullo stato corrente.
+
+L'id di un documento è `<contentItemId>.<trackId>.<seq>` (`transcriptDocumentId`). Una consegna duplicata, tardiva o riordinata scrive quindi gli stessi documenti, e una traccia sostituita, che riceve un nuovo `trackId`, non può essere scambiata con la vecchia.
+
+**Caso residuo noto.** OpenSearch Serverless mostra una scrittura alle ricerche qualche secondo dopo e non ha `refresh=wait_for`. Se una traccia viene aggiunta e sostituita nel giro di pochi secondi, la seconda sincronizzazione può non vedere i documenti della prima quando elenca gli id, e li lascia indietro. Non vengono mai mostrati, perché la ricerca restituisce solo risultati la cui traccia e versione la tabella elenca ora (vedi sotto). La ricostruzione li rimuove. Niente si affida a `_delete_by_query`.
+
+Gli scrittori (il completamento di Transcribe, le procedure dei sottotitoli di instructor-api, lo scambio di versione) sono invariati e non possono fallire a causa della ricerca.
+
+### Ricostruzione
+
+L'indice parte vuoto su ogni stage e conosce solo le modifiche successive, quindi i video sottotitolati prima del deploy richiedono un'esecuzione. La ricostruzione è anche la riparazione per i residui sopra, per un indice ricreato e per una futura modifica dell'analyzer.
+
+```sh
+pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development
+pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development --course=<courseId>
+```
+
+`transcript-reindex.ts` è una Lambda privata senza sorgente di eventi, come `search-reindex.ts`. Per ogni corso (uno, oppure ogni corso tramite `course.query.byStatus` per ogni stato) legge il curriculum, sincronizza ogni elemento video, poi elimina i documenti di quel corso il cui elemento non è nel curriculum.
+
+Quando il suo tempo sta per finire restituisce un cursore, e lo script la richiama finché non ce ne sono più, poi stampa i totali. Senza `--stage` gira in-process contro lo stack locale. Eseguirla due volte lascia gli stessi documenti.
+
+### La procedura di ricerca
+
+`transcript.search` è solo per utenti con accesso (`courseSearchProcedure`) e riceve `{ courseId, q, language? }`, con `q` da 2 a 200 caratteri. A ogni chiamata:
+
+1. legge il curriculum del corso e l'iscrizione del chiamante e chiama `requireEnrolment`, la funzione che usa `contentItem.videoUrl`;
+2. costruisce dalla tabella l'**insieme guardabile** (`watchableVideos`): elementi video effettivamente visibili con una versione riproducibile, ciascuno con la sua versione e gli id delle tracce;
+3. interroga l'indice con filtri che costruisce da sé: `courseId` dall'input verificato, `contentItemId` nell'insieme guardabile, e la regola della lingua sotto. Con un insieme vuoto non restituisce nulla senza interrogare;
+4. scarta ogni risultato la cui versione o traccia non è nell'insieme guardabile;
+5. prende i titoli dal curriculum letto, non dall'indice.
+
+L'indice è in ritardo di qualche secondo rispetto alla tabella e può contenere residui, quindi un filtro che si fidasse di un flag indicizzato restituirebbe per quei secondi il testo di un video appena nascosto. Costruire il filtro dalla tabella chiude questo varco, e nulla di ciò che invia il browser può aggiungere un video. È di nuovo la regola "imposta due volte": l'indicizzatore conserva solo i passaggi degli elementi guardabili, e la query ammette solo elementi guardabili.
+
+Il costo è una query del curriculum per ricerca, che `course.view` paga già a ogni pagina del player del corso. Una richiesta che impiega più di 8 secondi diventa `TIMEOUT`, come nella ricerca dei corsi.
+
+### Quale traccia viene cercata
+
+I passaggi sono costruiti per ogni traccia della versione che gli studenti riproducono (fino a 10), ciascuno con i propri `language`, `isDefault` e `trackLanguages`.
+
+Una ricerca guarda, per video, nella traccia della lingua che il browser invia (la lingua dei sottotitoli ricordata dal discente) quando il video ne ha una, altrimenti nella traccia predefinita. Un momento non viene quindi mai elencato due volte in due lingue, e il risultato corrisponde alla trascrizione che il discente apre. Cambiare la lingua dei sottotitoli non richiede una reindicizzazione.
+
+`text` è analizzato con `standard` e ha un sotto-campo `english`. Ogni query corrisponde a entrambi e richiede ogni parola, quindi le tracce inglesi ottengono lo stemming che ha la ricerca dei corsi e le altre lingue corrispondono per parole intere. Una corrispondenza di frase ha un punteggio più alto. Cinese, giapponese e thailandese sono divisi per carattere, il che trova comunque le frasi con un punteggio più debole. Sotto-campi per lingua sarebbero una modifica additiva.
+
+### Costo
+
+Nessuna configurazione di stage cambia: il secondo indice non aggiunge nessuna soglia di capacità al collection group.
+
+- **L'indicizzazione** avviene in brevi raffiche quando un video viene sottotitolato o una traccia cambia: un `_bulk` di circa 130 piccoli documenti per ora di video per traccia.
+- **La ricerca** avviene all'invio, non a ogni battitura, filtrata su un corso, senza aggregazioni.
+- **L'archiviazione** è di circa 150 KB di sorgente per ora di video per traccia, quindi un corso di 20 ore con due tracce sono circa 5.000 documenti e 6 MB.
+- **Attorno**: un messaggio SQS per ogni modifica instradata di `contentItem`, `lesson` o `module`, un GET S3 per traccia a ogni sincronizzazione, e una query del curriculum per ricerca.
+
+Su uno stage con soglia di capacità 0, la prima ricerca dopo una pausa può incappare nell'avvio a freddo e andare in timeout. Lato indicizzazione, le cinque ricezioni della coda dovrebbero sopravvivere a un avvio a freddo.
+
+### Come si inserisce in #270
+
+Aggiungere l'indice è il caso che index-sync già gestisce, quindi nulla qui è in conflitto con #270 (cambiare il mapping di un indice esistente).
+
+- Ogni chiamante usa `resolveIndexName('transcripts')`, quindi quando i nomi logici diventeranno alias su indici versionati i chiamanti non cambieranno.
+- Le successive modifiche additive passano da `putMapping`.
+- Una modifica che rompe la compatibilità (l'analyzer di `text`, il tipo di un campo) è il caso di #270, e la ricostruzione sopra è il "job di ricostruzione" di cui ha bisogno. La sua protezione contro le scritture obsolete dovrebbe usare il `captionTracksRev` dell'elemento con la versione: i documenti portano `versionId`, e `captionTracksRev` può essere aggiunto come campo allora.
+- Prima del lancio, una modifica che rompe la compatibilità è "elimina l'indice, distribuisci, esegui la ricostruzione".
+
+### Su cosa può contare il tutor AI (#289)
+
+Un documento è un passaggio di circa 30 secondi con il suo corso, modulo, lezione, video, versione, traccia, lingua e intervallo di tempo. Il recupero può quindi essere circoscritto a una lezione, un video o un corso e può citare "lezione X a 12:40".
+
+`watchableVideos` fornisce i video che il discente può guardare e `buildTranscriptSearchRequest` costruisce la richiesta filtrata su di essi. Il tutor chiama le stesse due, quindi non può recuperare ciò che il discente non può guardare.
+
+Il recupero è lessicale (BM25). Se il tutor voglia un recupero vettoriale è una questione aperta per #289: richiede un embedding per passaggio e un campo `knn_vector`, e se una collection di ricerca NextGen ne accetti uno va prima verificato. Se serve un'impostazione alla creazione, l'indice viene ricreato e ricostruito, il che non costa nulla prima del lancio.
+
+## Sviluppo locale
+
+`pnpm dev` esegue un container `opensearchproject/opensearch` sulla porta 9200 (`packages/tooling/local-dev/src/opensearch`, lo stesso schema `runLocalContainer` di DynamoDB local e S3Mock), a nodo singolo, con il plugin di sicurezza disattivato e la memoria limitata. Il target `dev` di `@discava/search` lo avvia e sincronizza gli indici locali.
+
+- L'event runner locale (`packages/events/src/local/event-runner.ts`) esegue lo stesso stream router, le stesse funzionalità e gli stessi handler di indicizzazione di uno stage distribuito.
+- `pnpm nx run @discava/tooling-local-dev:reset-local-data` cancella anche gli indici.
+
+L'immagine è fissata in `packages/databases/search/config.json` a una release 3.x, non a `latest`. [OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-overview.html) aggiorna automaticamente le collection alle nuove release open source e richiede client compatibili con OpenSearch 3.x, quindi lo sviluppo locale resta su quella linea senza muoversi a ogni nuova release. Era la release più recente quando è stata fissata, scelta per corrispondere a Serverless, quindi a differenza delle altre immagini locali non è stata trattenuta per due settimane. Fissala di nuovo quando Serverless passa a una versione minore più recente, e ricontrolla le chiamate in `sync-indices.ts` e le procedure rispetto al suo [elenco di operazioni supportate](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-genref.html).
+
+## Scostamenti da #1267
+
+Conservati qui così che la proposta `ts#opensearch` a monte (o una PR che la adotti) possa verificarli uno per uno:
+
+- CDK non ha ancora un construct L2 per `AWS::OpenSearchServerless::*`, solo risorse L1 `Cfn*`; `OpenSearchCollection` scrive a mano la data access policy e `grantRead`/`grantWrite` sopra di esse.
+- La voce della data access policy di un beneficiario richiede il suo ARN letterale del principal (OpenSearch Serverless autorizza lì per ARN, non tramite la policy IAM del beneficiario). Ogni concessione crea una propria policy nello stack del beneficiario, nominata dal percorso del construct del beneficiario, invece di una policy condivisa in uno stack che dipende da ogni beneficiario: una policy condivisa importerebbe l'ARN di ogni ruolo, e CloudFormation si rifiuta poi di distribuire uno stack che smette di esportare un ruolo spostato in un altro stack.
+- La concessione di data access della custom resource index-sync è una policy separata, eager e nello stesso stack, diversa da quella che `grantRead`/`grantWrite` popolano: deve esistere prima che la custom resource giri per la prima volta, durante il deploy dello stack della collection stessa, cosa che una policy cross-stack differita non può garantire.
+- Ogni collection viene creata dentro il proprio `AWS::OpenSearchServerless::CollectionGroup` NextGen (vedi [Costo](#costo-nextgen-non-zero-etl)), una risorsa successiva a #1267; un generatore scritto su #1267 così com'è creerebbe invece una collection classica sempre attiva.
+- Il target che genera il manifest degli indici è `generate-indices-manifest`, non `indices`: ogni altro target di questo workspace è un verbo (`compile`, `bundle`, `pull-image`), e `indices` si legge come se creasse o elencasse indici invece di scrivere il file del manifest.

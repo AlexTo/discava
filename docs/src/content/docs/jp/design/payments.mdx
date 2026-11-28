@@ -1,0 +1,227 @@
+---
+title: 決済
+description: Stripe Checkout での有料コースの購入、注文レコード、コースをちょうど1回だけ届ける Webhook、クーポン、返金、そして管理者の Stripe 連携。
+sidebar:
+  order: 10
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261116-013315-stripe-checkout/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013315-stripe-checkout/)（チェックアウト）および [`specs/20261116-013138-coupons-discount-codes/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013138-coupons-discount-codes/)（クーポン）
+
+## ルール
+
+**有料コースには支払い済みの注文によってのみ入れ、注文が支払い済みになるのは Stripe の署名付きの確認だけです。** Stripe のページからの戻りを含め、ブラウザが送るものによって誰かが受講登録されることはありません。core-api の `course.enrol` は有料コースを拒否し（"This course must be purchased"）、`settleOrderPaid` を呼び出すのは Webhook だけです。
+
+支払いが発生しないケースが1つあります。価格の全額を引く[クーポン](#クーポン)です。サーバーが合計が0になることを計算し、注文を最初から `paid` で書き込むため、Stripe は呼び出されません。
+
+## 価格
+
+コースは `priceAmount` と `priceCurrency` を持ちます。金額は通貨の最小単位の整数で（1999 は 19.99）、価格が浮動小数点数になることはありません。`0` は無料で、新しいコースはすべて無料で始まります。
+
+- 対応する通貨は USD、EUR、GBP、AUD、CAD です。すべて小数点以下2桁です。小数点以下が0桁または3桁の通貨には対応していません。
+- 0より大きい価格は、1.00 から 10,000.00 の間です。
+- 講師は、instructor-api の `course.setPrice` で、コースの status を問わず価格を設定できます。0より大きい価格を設定するには、有効な Stripe 連携が必要です。無料に戻すときは不要です。
+- 価格の変更は、新しい購入に適用されます。注文や受講登録には影響せず、すでに受講登録している受講生はアクセスを保持します。
+
+ルールとフォーマットは `@discava/common-web-utils/price` にあり、ポータルと API で共有されます。
+
+## 注文
+
+`order` は、1人の受講生が1つのコースを購入しようとする1回の試行です。作成時に、コースのタイトル、定価（`listAmount`）、請求する金額（`amount`）、通貨、そして開始時の Stripe アカウントとモードをコピーします。クーポン付きで開始された注文は、`discountAmount`、`couponCode`、`couponType`、`couponValue` もコピーし、`amount` は定価から割引を引いた額です。
+
+| Status | 意味 |
+| --- | --- |
+| `pending` | チェックアウトが開いている |
+| `paid` | Stripe が支払いを確認し、受講生が受講登録された |
+| `expired` | チェックアウトが放棄された、または作成に失敗した |
+| `refunded` | 全額が受講生に戻された |
+
+`order` と、受講登録の `orderId` を書き込むのは、core-table の `helpers/order.ts` だけです。すべての遷移は、遷移元の status を条件にした条件付き書き込みなので、繰り返された呼び出しや競合した呼び出しは何も変えません。このどれも Stripe を呼びません。呼び出し元がその前か後に行います。
+
+## チェックアウトの開始
+
+core-api の `payment.checkout` は、コース ID と任意の `couponCode` を受け取ります。金額と通貨は、入力から取るのではなく、サーバー側でコース（とクーポン）から計算されます。コードなしの場合は次のとおりです。
+
+1. 公開されていないコース、無料コース、すでに受講登録している受講生を拒否します。
+2. 受講生がそのコースにクーポンなしで `pending` の注文を持ち、残り時間が5分より長い場合は、その注文のページを返すため、**Buy now** を2回選んでも注文は1つになります。
+3. そうでなければ、`startOrder` が1つのトランザクションで `pending` の注文を作成します。このトランザクションは、Stripe 連携が `active` であることを確認し、新しいチェックアウトを含むよう連携の `latestCheckoutExpiresAt` を引き上げます。
+4. 注文 ID を冪等キーにして、カード決済のみ、メタデータに注文、受講生、コースの ID を入れた Stripe Checkout セッションを作成します。セッションのアドレスは注文に保存されて返されます。
+
+チェックアウトの有効期間は1時間です。Stripe に接続できない場合は注文が期限切れになり、受講生には "Couldn't start the payment" と表示されます。
+
+コード付きのチェックアウトも同じ手順に、コードのクレームが加わります。[クーポン](#クーポン)を参照してください。
+
+`payment.available` は、購入を開始できるかどうかを受講生ポータルに伝えます。伝えるのは連携が有効かどうかだけで、アカウントやキーについては何も伝えません。
+
+## Webhook
+
+Stripe は `POST /stripe/webhook` に送信します。これは `Payments` スタックにある専用の API Gateway API で、独自の WAF、スロットリング、ドメインを持ちます。ハンドラーは `packages/events/src/payments/` にあります。
+
+- **署名が唯一の関門です。** メッセージは、保存された署名シークレットで、そのバイト列そのものに対して検証され、5分より古い場合や検証できない場合は 400 で拒否されます。何も連携されていなければシークレットがないため、すべてのメッセージが失敗します。
+- **400** は何も変わっていないことを意味します。**500** は処理に失敗し、Stripe が再試行すべきことを意味します。**200** は、処理済み、重複、一致なし、無視のイベントを含みます。
+
+| イベント | 起きること |
+| --- | --- |
+| `checkout.session.completed` | 注文が決済処理されるか、届けられない場合は返金される。まだ支払われていないセッションは無視される |
+| `checkout.session.expired` | `pending` の注文が `expired` になり、そのクーポンのクレームが解放される |
+| `charge.refunded` | 返金が注文に対して記録される |
+| `refund.failed`、`charge.refund.updated`（`status: failed`） | `paid` の注文に `refundFailedAt` が設定される。`charge.refunded` がすでに `refunded` に移した注文は `paid` に戻され、受講登録が復元される |
+
+Stripe に登録されているイベントは、これだけです。このリストは、エンドポイントの登録時に連携に記録されます。ここに挙げたものと異なる場合（イベントが追加される前に保存された連携）、管理者の支払いページはキーをもう一度保存するよう求め、その保存は、URL、ID、署名シークレットを変えずに、既存のエンドポイントのイベントを更新します。
+
+### ちょうど1回の配信
+
+`settleOrderPaid` は、注文を `pending` から `paid` に移し、受講生に受講登録を与えます。これは**1つのトランザクション**で行われ、コースがまだ公開されていることも確認します。受講登録は作成されるか、受講生が `dropped` の受講登録を持っていた場合は復元されます。注文にクーポンがある場合は、同じトランザクションでその利用が確定されます。Stripe は少なくとも1回、任意の順序で配信するため、同じ確認が同時に5回届いても、支払い済みの注文と受講登録は1つずつだけ残ります。最初の呼び出し以降はすべて、注文がもう `pending` でないことを見つけるためです。
+
+### 届けられない支払い
+
+お金はすでに受け取られているので、保持されることはありません。Webhook は、注文 ID から作った冪等キーで Stripe に全額返金を依頼し、`refundUndeliverable` が注文に理由付きで `refunded` の印を付けます。受講登録は与えられず、注文のクーポンのクレームは解放されます。
+
+| 理由 | いつ |
+| --- | --- |
+| `duplicate` | 受講生がすでに受講登録している |
+| `unavailable` | コースがもう公開されていない |
+| `mismatch` | セッションの金額、通貨、または注文、受講生、コースの ID が注文と異なる。これもエラーとしてログに記録され（"Paid session differs from its order; refunding"）、その行が現れる時点で受講生には返金済みです |
+
+注文がテーブルにない、支払い済みセッション、期限切れセッション、返金は、エラーとしてログに記録され（"Paid session for an unknown order"、"Expired session for an unknown order"、"Refund for an unknown order"）、200 が返されます。オペレーターはこれらの行に注意してください。Stripe が、Discava に記録のない支払いを保持していることを意味します。
+
+## クーポン
+
+講師は、instructor-api の `coupon.create`、`coupon.list`、`coupon.update`、`coupon.delete` で、有料コースの割引コードを作成します。受講生はコースページでコードを入力します。core-api の `coupon.preview` は支払額を表示するだけで何も書き込まず、`payment.checkout` はコードを `couponCode` として受け取ります。画面については<Link path="guides/payments">決済ガイド</Link>を参照してください。
+
+| レコード | キー | 保持するもの |
+| --- | --- | --- |
+| `coupon` | コース、次にコード | `type`（`percent` または `fixed`）、`value`、任意の `expiresAt` と `maxRedemptions`、`enabled`、`redeemedCount` |
+| `couponRedemption` | コースとコード、次に受講生 | 紐付く注文、`status`（`reserved` または `redeemed`）、予約中は `reservedUntil` |
+
+`couponRedemption` のキーが、受講生がコードを1回だけ使えるというルールを表しています。
+
+### コードと価格
+
+- コードは A-Z、0-9、`-` の4〜24文字で、大文字で保存されます。生成されるコードは8文字で、`XXXX-XXXX` の形で表記されます。
+- パーセンテージは1〜100の整数です。固定額はコースの通貨で、0より大きく、コードの作成時にコースの価格以下でなければなりません。
+- コードの type、value、通貨は変更できません。`coupon.update` が変更できるのは `enabled`、有効期限、上限だけで、上限を `redeemedCount` より下げることはできません。`coupon.delete` は `redeemedCount` が 0 の間だけ使えます。使用済みのコードは代わりに無効化します。
+- core-table の `helpers/coupon-price.ts` にある `priceWithCoupon` が、唯一の価格関数です。パーセンテージは切り捨てられ、固定額が定価を超えて引くことはありません。
+- 0より大きいが Stripe の最低請求額（0.50、GBP は 0.30）を下回る合計は支払えないため、そのコードは拒否されます。
+
+`coupon.preview` と `payment.checkout` は同じチェック（`checkCoupon`）を実行するため、同じコードを同じメッセージで拒否します。不明なコード、別のコースのコード、別の通貨の固定額コードはすべて "This code is not valid for this course" になるため、受講生がそれらを区別することはできません。
+
+### クレーム、確定、解放
+
+core-table の `helpers/coupon-redemption.ts` が、`redeemedCount` と `couponRedemption` の唯一の書き込み元です。3つの書き込みセットを組み立て、それぞれを、それを引き起こす注文の変更のトランザクション内で実行します。
+
+| ステップ | いつ | 書き込む内容 |
+| --- | --- | --- |
+| **Claim** | `payment.checkout` が注文を作成する | クーポンが有効で、期限切れでなく、上限未満であることを条件に、`redeemedCount` に1を加える。受講生の利用を `reserved` で作成し、受講生がそのコードの利用をすでに持っている場合は失敗する |
+| **Confirm** | `settleOrderPaid` が注文を支払い済みにする | `reserved` が `redeemed` になる |
+| **Release** | 注文が期限切れになる、新しいチェックアウトに置き換えられる、または届けられないものとして返金される | `reserved` の利用を削除し、`redeemedCount` から1を引く |
+
+したがって、`redeemedCount` は、予約中と利用済みの両方を合わせて数えます。クレームは注文自身のトランザクション内の条件なので、多くの受講生が同時にチェックアウトを始めても、上限は守られます。キャンセルされたトランザクションは何も書き込みません。チェックアウトは正確な拒否理由を返すためにもう一度読み、3回競合すると "Too many people are checking out; try again" で諦めます。
+
+予約は、そのチェックアウトの期限切れから5分後（`reservedUntil`）まで続きます。コードが使い切られたように見えるとき、チェックアウトはまず、その時刻を過ぎていて Stripe のセッションが終了している予約を解放し、もう一度確認します。Stripe が完了と報告するセッションは予約を保持します。支払い済みのイベントがまだ届く途中かもしれないためです。
+
+### 有効なチェックアウトは1つ
+
+受講生は、コースごとに有効なチェックアウトを1つだけ持ちます。別のコードで、またはコードありの後にコードなしでチェックアウトを開始すると、以前の `pending` の注文が置き換えられます。
+
+1. まず、以前の注文の Stripe セッションが期限切れにされるため、それが支払われることはありません。
+2. 新しい注文のトランザクションが、以前の注文を `expired` に移し、そのクレームを解放します。
+
+以前のセッションがすでに支払い済みだと Stripe が答えた場合の返答は "You are already enrolled in this course" です。同じコードで残り時間が5分より長いときに再度開始すると、開いているチェックアウトのページが返されます。
+
+### 価格の全額を引くコード
+
+合計が0の場合、`startFreeOrder` は、金額0で最初から `paid` の注文、受講登録、`redeemed` の利用を、1つのトランザクションで書き込みます。Stripe は呼び出されず、`payment.checkout` はページのアドレスの代わりに `enrolled: true` を返します。それでも有効な Stripe 連携は必要です。このような注文は販売ではないため、<Link path="design/instructor-payouts">収益</Link>は記録されません。
+
+### クーポンと返金
+
+配信後の全額返金では利用は `redeemed` のままなので、受講生が同じコードを再び使うことはできません。
+
+## 返金
+
+返金は Stripe で始まります。Stripe ダッシュボードから、または受講生に代わって core-api の `payment.requestRefund` から行われます。`charge.refunded` はこれまでの返金合計を運び、`refundOrder` がそれを適用します。
+
+- **注文の金額を下回る場合**、上がるのは `refundedAmount` だけです。受講生はアクセスを保持します。
+- **注文の金額に達した場合**、1つのトランザクションで注文を `refunded` に移し、受講登録を `dropped` にします。ただし、受講登録がまだこの注文を指している場合に限ります。2回目の購入より後に遅れて届いた返金通知が、新しい受講登録を終わらせることはありません。
+
+全額返金の後、Webhook は `order.refunded` 通知（"Your refund for … is complete"）を発行し、ポータルに表示するほか、メールでも送ります。これが送られるのは、注文が理由 `requested` の `refunded` で（`charge.refunded` から記録されるすべての全額返金で、ダッシュボードからでも受講生の依頼でも同じ）、受講登録がまだその注文を指している場合だけです。重複排除キーは注文 ID なので、再配信された通知で繰り返されることはなく、発行に失敗した場合は Stripe の再配信で再試行されます。一部返金や、届けられなかった支払いの自動返金には、通知はありません。
+
+### 返金のリクエスト
+
+core-api の `payment.requestRefund` は、受講生が自分の購入を返金できるようにし、`payment.myOrder` は、それが可能かどうかをコースページに伝えます。core-table の `refundEligibility` が許可するのは、次の条件がすべて満たされる間だけです。
+
+- 注文が `paid` で、受講生の受講登録がそれを指し、`dropped` ではない
+- 注文が現在連携している Stripe アカウントで支払われており、決済が連携されている
+- その注文に対して返金がまだリクエストされていない
+- 受講生がコースを修了していない
+- 受講生が完了した割合が `REFUND_PROGRESS_LIMIT_PERCENT`（50）未満である。これは、保存された `progressPercent` を読むのではなく、リクエスト時に受講生の完了状況と現在のカリキュラムから計算されます（`readRefundLimits`）
+- 受講生がそのコースで以前に行った注文のどれも、自分のリクエストで返金されていない（`refundRequestedAt` が設定されているもの。オペレーターによる返金や自動返金は数えません）
+- 支払いから `REFUND_WINDOW_DAYS`（14）日以内である
+
+`requestRefund` は、注文 ID から作った冪等キーで、金額の残りの返金を Stripe に依頼し、その後、注文に `refundRequestedAt` を設定します。注文や受講登録を自分で動かすことはなく、それに続く `charge.refunded` が行います。印の前に Stripe が呼ばれるため、その間でクラッシュしても、通知が引き続き記録する返金が残るだけで、返金のない印が残ることはありません。
+
+Stripe は、返金が作られるとすぐに、まだ `pending` の間でも `charge.refunded` を送り、銀行がお金を返してきた場合は、その後で返金を失敗にすることがあります。そのため、失敗は多くの場合、すでに `refunded` の注文と、すでに `dropped` の受講登録に対して届きます。失敗した返金は元に戻されるので、受講生がお金とコースの両方を失うことはありません。Stripe が返金を失敗と報告した場合（`refund.failed`、または `status: failed` の `charge.refund.updated`）は、次のとおりです。
+
+- 理由 `requested` で `refunded` の注文では、`reverseRefund` が1つのトランザクションを実行します。注文は `paid` に戻り、`refundedAt` と `refundedAmount` は削除され、`refundFailedAt` が設定され、`refundRequestedAt` は保持されます。受講登録は `dropped` から `active` に戻り（`completedAt` があれば `completed`）、ただし、受講登録がまだこの注文を指している場合に限ります。返金の後に受講生がコースをもう一度購入した場合、受講登録は新しい注文を指しており、`reverseRefund` は注文も受講登録も変更しません。古い注文を `paid` に戻すと、コースに支払い済みの注文が2つできてしまうためです。通知は送られず、失敗した返金はサポートに任されます。これは注文が `refunded` であることを条件とするので、失敗イベントが繰り返されても何も変わりません。`refundOrder` は、注文の `refundFailedAt` より前に Stripe が作った `charge.refunded`（失敗した返金の、再配信された通知や遅れて届いた通知）を無視するため、アクセスを2度終わらせることはありません。その後に作られた返金は、新しい返金として適用されます。受講生には `order.refund_failed` 通知（"Your refund failed; your access is back. Contact support about your refund"）が届き、重複排除キーは注文 ID です。証明書には触れません。返金を理由に証明書を取り消せるのは、管理者だけです。
+- **収益:** 注文の変更は、`refundFailedAt` を持ち `refundedAmount` のない `paid` の注文として収益の記録処理に届き、`recordRefundReversal` が取り戻された返金を計上します。講師ごとの `refund` エントリは、返金の数値の符号を反転したもの（エントリ ID は `refund-reversal-<orderId>-<total>`）で、日付は `refundFailedAt`、そして `earningOrder.refundedMinor` は 0 に戻ります。これらは1つのトランザクションで行われます。元の返金エントリは編集されないため、支払いがすでに差し引いた返金は次の支払いで返され、販売の収益は返金リクエスト前と同じになります。取り消しの時刻は、台帳にまだ返金がなかった場合でも `earningOrder.reversedAt` に保持され、`recordRefund` はその時刻以前の日付の返金を除外します。そのため、繰り返し、取り消しの後に届いた返金イメージ、取り消しより前に届いたものは何も記録せず、同じ注文への後の返金（サポートが再度返金する場合）は新しいものとして記録され、同様に取り消すことができます。
+- まだ `paid` の注文では、`markRefundFailed` が `refundFailedAt` を設定します。
+
+注文は `refundRequestedAt` が保持されたまま `paid` なので、2回目のリクエストは提示されません。`payment.myOrder` は `refundFailedAt` を返し、コースページは受講生に返金が失敗したこととサポートへの連絡を伝え、「返金をリクエスト」ボタンは表示しません。コースページは、保留中の返金を一定時間（2分）ポーリングし、その後はまだ処理中であることを伝え、もう一度確認するボタンを提示します。
+
+`dropped` の受講登録は、進捗と完了状況を保持します。受講生は次の方法で戻れます。
+
+- **再度購入する。** 新しい注文が決済処理されると受講登録が復元され、コースを修了していた場合は `completed` として、進捗とともに復元されます。
+- **コースがいま無料の場合は、受講登録する。** `course.enrol` は `restoreFreeEnrolment` を呼び出し、受講登録を復元して `orderId` を削除します。注文は書き込まれません。
+
+### コースを退会する
+
+`course.unenrol` は、支払われていない受講登録を終了します。`unenrolFromCourse` は、`orderId` がない間だけ受講登録を `dropped` にし、そうでない場合は `EnrolmentPaidForError` で拒否します。購入された受講登録は返金によってのみ終了するため、有料コースは返金なしでは退会できません。進捗と完了状況は保持され、コースが無料である間は `course.enrol` が受講登録を復元します。コースの status と価格は確認されないため、受講生は、アーカイブされたコースや、その後に有料になったコースから退会できます。
+
+### 条件
+
+- 2つの上限は、core-table の `helpers/order.ts` の定数です。`REFUND_WINDOW_DAYS`（14）と `REFUND_PROGRESS_LIMIT_PERCENT`（50）です。
+- `payment.myOrder` と `course.publicView` はそれらを `refundWindowDays` と `refundProgressLimitPercent` として返すため、コースページの条件の行は、API が適用する内容を示します。
+- `course.myEnrolment` は `refundedBefore` を返すため、ページは、以前に自分のリクエストで返金を受けた受講生に、再度購入する前に警告します。
+- Stripe でのオペレーターによる返金には、これらの条件は一切適用されません。
+- リクエストは審査なしで自動的に返金されます。
+- 修了証は返金後も残ります。
+
+## Stripe 連携
+
+Stripe はデプロイ時には設定されません。管理者が、管理ポータルの **Payments** ページにシークレットキーを貼り付けます。
+
+- **`paymentConnection`** は、シークレットではない事実を保持する1件のレコードです。status、テストモードか本番モードか、アカウントの ID と名前、キーの末尾4文字、登録された Webhook のアドレスです。
+- **キーと Webhook の署名シークレット**は Secrets Manager にあります。それらを書き込めるコードは、admin-api の専用の `PaymentsConnect` 関数だけです。チェックアウト関数はキーを読み、Webhook は両方を読みますが、どちらも書き込めません。
+- **`paymentChange`** は、すべての試行について追記専用の監査行です。誰が、いつ、どのアカウントで、キーの末尾4文字を記録します。キーや Stripe のエラーテキストを保持することはありません。
+
+キーを保存すると、その形式を確認し、Stripe にそれが誰のものかを尋ね、ステージの Webhook アドレスを3つのイベントについて登録し、キーと Stripe が返す署名シークレットを保存します。
+
+| 保存 | 内容 |
+| --- | --- |
+| **Rotation**（同じアカウント、同じアドレス） | キーだけを置き換える。登録と署名シークレットは残るため、開いているチェックアウトは引き続き完了する |
+| **Switch**（別のアカウントまたはモード、または新しいアドレス） | リースを取得し、新しいキーで登録し、両方のシークレットを保存してから、古い登録を削除する |
+| **Disconnect** | リースを取得し、レコードを `disconnected` にしてシークレットを消去する |
+
+切り替えまたは切断は、2分間の**リース**を取得します。レコードの status は `changing` になり、チェックアウトと価格設定はこれを未連携として扱います。チェックアウトがまだ開いている可能性がある間は、リースは拒否される（"Checkouts are open until …"）ため、シークレットが置き換えられる間に処理中の支払いはありません。ローテーションはリースを取得しませんが、レコードの `revision` を条件にするため、同時に行われた切り替えには問題なく負けます。変更が失敗した場合は、レコードとシークレットが元に戻されます。
+
+## 不変条件
+
+core-table の `helpers/invariants/` にある2つのファイルが、エンドツーエンドのシナリオのたびに、複数のレコードにまたがるルールをチェックします。
+
+- `payments.ts`: 注文のフィールドが status と一致していること、定価から割引を引いた額が請求額であること、支払い済みの注文には受講登録があること、受講登録の `orderId` が同じ受講生とコースの注文を指していること、有料コースで注文のない受講登録が、コースが無料だった時期のものであること。
+- `coupons.ts`: `redeemedCount` がクーポンの利用の数と等しく、上限内にあること、各利用に注文があること（予約中は pending、利用済みになれば paid）、コードによる無料の注文に受講登録があること。
+
+## ローカル開発
+
+イベントランナーには Stripe のスタンドイン（`packages/events/src/local/stripe-stand-in.ts`）が含まれます。Stripe の API、**Pay**、**Decline card**、**Cancel** を備えたホスト型チェックアウトページ、そしてポート 2024 の `/stripe/webhook` への署名付き Webhook 配信です。Carol としてキー `sk_test_local` で連携してください。キーは Secrets Manager の代わりに、git の対象外である `tmp/local-dev/secrets/` に保持されます。
+
+`/stripe/test/` 配下のコントロールは、実際の Stripe アカウントが行うことを動かします。`refund`、`refunds`（支払いの返金を一覧）、`fail-next-refund`（次の返金は `charge.refunded` で通知され、少し後に失敗と報告され、課金はもう返金済みではなくなる）、`hold-next-refund`（`charge.refunded` で通知され、確定されない）、`replay`（確認をもう一度配信）、`expire`、`forge`（誤って署名されたメッセージ）、`endpoints` です。
+
+`LOCAL_CHECKOUT_TTL_SECONDS` は、チェックアウトの1時間の有効期間を短くします。ローカル開発のみです。
+
+## 制限事項
+
+- カード決済のみで、税の処理も通貨の換算もありません。
+
+注文が支払われた後のお金がどうなるかは、<Link path="design/instructor-payouts">講師への支払い</Link>で説明しています。

@@ -1,0 +1,150 @@
+---
+title: Panoramica dell'architettura
+description: I componenti che formano Discava, di cosa è responsabile ciascuno e come sono collegati.
+sidebar:
+  order: 0
+  label: Overview
+---
+
+import Link from '@components/link.astro';
+
+Discava è un insieme di componenti serverless su AWS. Nulla gira quando nessuno lo usa: non ci sono server, container o cluster da tenere in vita.
+
+## Il sistema in breve
+
+```d2 title="Components and how they connect"
+direction: down
+
+users: "Students, instructors, admins"
+
+edge: "Websites" {
+  student: "Student portal"
+  instructor: "Instructor portal"
+  admin: "Admin portal"
+}
+
+identity: "Cognito\n(sign-in, groups)"
+
+apis: "APIs" {
+  core: "core-api"
+  instr: "instructor-api"
+  adm: "admin-api"
+}
+
+data: "Data" {
+  table: "Core table\n(DynamoDB)"
+  search: "Search\n(OpenSearch Serverless)"
+  lesson: "Lesson media\n(S3 + CloudFront)"
+  public: "Public media\n(S3 + CloudFront)"
+}
+
+async: "Background work" {
+  router: "Stream router"
+  handlers: "Feature handlers"
+  media: "Media pipeline\n(MediaConvert, Transcribe)"
+  router -> handlers: "one queue each"
+}
+
+email: "SES"
+stripe: "Stripe"
+pay: "Stripe webhook API"
+renderer: "Page renderer"
+
+users -> edge
+users -> identity: "sign in"
+edge -> apis: "tRPC over HTTPS"
+apis -> data.table
+apis.core -> data.search: "query"
+apis.instr -> async.media: "submit video"
+data.table -> async.router: "change stream"
+async.handlers -> data.table
+async.handlers -> data.search: "index"
+async.handlers -> email
+async.media -> data.lesson: "renditions"
+users -> data.lesson: "watch"
+apis.core -> stripe: "start checkout"
+stripe -> pay: "signed confirmation"
+pay -> data.table
+edge.student -> renderer: "public pages"
+renderer -> data.table: "read"
+```
+
+## I componenti
+
+### Tre portali
+
+| Portale | Per | Parla con |
+| --- | --- | --- |
+| **Student portal** | Sfogliare il catalogo, acquistare e seguire corsi, quiz, compiti, discussioni, certificati | core-api |
+| **Instructor portal** | Creare e fissare il prezzo dei corsi, coupon, valutazione, analisi, guadagni, rispondere agli studenti | core-api, instructor-api |
+| **Admin portal** | Categorie, moderazione delle recensioni, certificati, brand e connessione a Stripe | core-api, admin-api |
+
+Ognuno è una single-page application React: file statici in un bucket S3 privato, serviti da CloudFront. Un portale scopre dove sono le sue API e la pagina di accesso da un file `runtime-config.json` distribuito accanto a esso, così la stessa build funziona su ogni stage.
+
+### Pagine pubbliche
+
+Per un crawler o un'anteprima di link, una single-page application è un guscio vuoto. Per questo la distribuzione CloudFront del portale studenti manda alcuni indirizzi pubblici a una funzione Lambda, il **page renderer**, che risponde con vero HTML: pagine dei corsi (`/learn/*`), profili degli istruttori (`/instructors/*`), anteprime dei link dei certificati (`/certificates/*`), `sitemap.xml` e `robots.txt`. <Link path="design/public-pages">Pagine pubbliche</Link> ha il progetto.
+
+### Un solo provider di identità
+
+Un user pool di Cognito contiene tutti gli utenti. Tre gruppi, `student`, `instructor` e `admin`, decidono cosa può fare un utente. L'accesso avviene sulla pagina ospitata da Cognito e il portale riceve i token che invia a ogni chiamata API.
+
+### Tre API
+
+Ogni API è una REST API di API Gateway davanti a funzioni Lambda, che parla [tRPC](https://trpc.io/).
+
+| API | Chi può chiamarla | Esempi |
+| --- | --- | --- |
+| **core-api** | Qualsiasi utente autenticato, più alcune procedure pubbliche | Catalogo, iscrizione, checkout, contenuti delle lezioni, quiz, compiti, discussioni, certificati, ricerca |
+| **instructor-api** | Membri di `instructor` | Creare, modificare e fissare il prezzo dei corsi, coupon, caricare media, valutare, analisi, guadagni e payout |
+| **admin-api** | Membri di `admin` | Tassonomia delle categorie, moderazione delle recensioni, certificati, brand, la connessione a Stripe |
+
+Dividere per pubblico significa che ogni API ha le proprie funzioni, permessi, limiti di richieste e firewall. Un bug riservato agli istruttori non è raggiungibile con il token di uno studente, e un'ondata di traffico degli studenti non può affamare l'API degli istruttori.
+
+### Una sola tabella
+
+Tutti i dati applicativi sono in un'unica tabella DynamoDB, la **core table**: corsi, moduli, lezioni, iscrizioni, progressi, tentativi dei quiz, discussioni, recensioni, certificati, notifiche, coupon, ordini, e guadagni e payout degli istruttori. I record correlati condividono una partizione, quindi l'intero curriculum di un corso è una sola query.
+
+### Ricerca
+
+Una collezione OpenSearch Serverless contiene due indici:
+
+- **Courses**: ogni corso pubblicato. Risponde alla ricerca, ai suggerimenti e ai filtri del catalogo.
+- **Transcripts**: il testo dei sottotitoli dei video delle lezioni. Permette a uno studente iscritto di trovare il momento di un corso in cui è stata detta una frase.
+
+La tabella è la fonte di verità. Gli indici vengono riempiti dal suo stream di modifiche, possono essere ricostruiti da essa e non vengono mai scritti da un'API.
+
+### Media
+
+| Archivio | Contiene | Accesso |
+| --- | --- | --- |
+| **Lesson media** | Video delle lezioni, sottotitoli, file e consegne dei compiti | Privato. Servito da CloudFront solo a richieste con una firma emessa da un'API dopo aver controllato l'accesso, per esempio l'iscrizione |
+| **Upload bucket** | File in ingresso | Solo scrittura tramite URL prefirmato, letto dal job di elaborazione, di breve durata |
+| **Public media** | Immagini dei corsi, foto dei profili degli istruttori e il brand della piattaforma (logo, icona, nome e colore) | Leggibile da chiunque tramite CloudFront |
+
+### Pagamenti
+
+I corsi a pagamento si acquistano sulla pagina di checkout ospitata da Stripe, con un account Stripe che un amministratore collega nel portale admin. Stripe conferma ogni pagamento a una piccola API propria, la **Stripe webhook API**, che verifica la firma del messaggio e iscrive lo studente. È separata dalle tre API tRPC perché a chiamarla è Stripe, non un utente autenticato. <Link path="design/payments">Pagamenti</Link> ha il progetto.
+
+### Lavoro in background
+
+Tre cose avvengono fuori da una richiesta:
+
+- **Reagire alle modifiche dei dati.** Lo stream di modifiche della tabella ha un solo lettore, lo **stream router**, che passa ogni modifica alla coda di ogni funzionalità che la vuole. Sono otto: ricalcolo dei progressi (che emette anche i certificati), indicizzazione della ricerca dei corsi, indicizzazione delle trascrizioni, analisi, consegna delle notifiche, registrazione dei guadagni degli istruttori, traduzione dei sottotitoli e pubblicazione del brand.
+- **Elaborare i video.** Un video caricato viene transcodificato da MediaConvert in versioni per lo streaming adattivo, poi sottotitolato da Transcribe. Amazon Translate trasforma i sottotitoli nelle altre lingue di sottotitoli del corso.
+- **Pagare gli istruttori.** Un'esecuzione giornaliera invia a ogni istruttore i guadagni dovuti, come trasferimento Stripe. Vedi <Link path="design/instructor-payouts">Payout degli istruttori</Link>.
+
+## Principi di progetto
+
+- **Solo serverless.** Ogni componente si paga a consumo e scala a zero.
+- **Un solo modo di fare le cose.** Un cloud, uno strumento di deploy, una tabella. Meno opzioni da configurare, documentare e testare.
+- **Sicuro per impostazione predefinita.** Ogni protezione è attiva a meno che uno stage la disattivi.
+- **Gira in locale.** Ogni servizio AWS che Discava usa ha un sostituto locale, quindi lo sviluppo non richiede un account AWS.
+
+## Per proseguire
+
+- <Link path="architecture/aws">Deploy su AWS</Link>: gli stack, cosa contiene ciascuno e l'ordine in cui vengono distribuiti
+- <Link path="architecture/flows">Flussi di richieste e dati</Link>: accesso, una chiamata API, il viaggio di un video e come si propagano le modifiche
+- <Link path="architecture/security">Modello di sicurezza</Link>: chi può raggiungere cosa e le protezioni che ogni stage può attivare
+- <Link path="architecture/codebase">Mappa del codice</Link>: dove vive il codice di ogni componente
+- <Link path="design">Design</Link>: come funzionano le singole funzionalità

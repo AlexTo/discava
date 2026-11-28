@@ -1,0 +1,131 @@
+---
+title: 수료증
+description: 강좌의 기준에 따라 수료증이 발급되고, 취소와 복원되고, 공유되고, LinkedIn에 추가되고, 검증되는 방식을 설명합니다.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/_archive/20261115-204447-certificates/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204447-certificates/) (발급)와 [`specs/20261120-154550-certificate-criteria-revocation/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154550-certificate-criteria-revocation/) (기준, 평가 대상, 취소)
+
+**Spec:** [`specs/20261120-003448-linkedin-certificate-sharing/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-003448-linkedin-certificate-sharing/) (수료증을 LinkedIn에 추가)
+
+## 규칙
+
+**수료증은 진행률 재계산에 의해 서버 측에서만 기록되며, 학생은 강좌당 최대 하나를 가집니다.** 학생이 강좌를 완료했고(<Link path="design/progress-and-completion">진행률과 완료</Link> 참고) **그 시점에 강좌에 적용되는 기준**을 충족했을 때 발급됩니다. 학생이나 강사가 브라우저에서 하는 어떤 동작도 수료증을 만들 수 없습니다.
+
+완료 자체는 기준의 영향을 받지 않습니다. 표시되는 모든 항목이 완료되면 수강 등록은 여전히 `completed`가 됩니다. "완료했지만 아직 수료증이 없는" 상태는 정상적이고 지속될 수 있는 상태이며, 강좌 홈이 아직 무엇이 필요한지 설명합니다.
+
+## 기준
+
+- **저장 위치**: 강좌의 `certificateCriteria` 맵이며 강좌별 스위치 옆에 있습니다. `{ version, requireQuizPass }` 형태입니다. 새 강좌는 `{ version: 1, requireQuizPass: false }`를 가집니다. `setCertificateCriteria`는 생성 이후 유일한 작성자이며, 무언가 바뀐 경우에만 `version`을 1 올립니다.
+- **규칙**: `core-table`의 `evaluateCertificateCriteria`는 발급기와 조회기(강좌 홈에 표시되는 `certificate.requirements`) 모두가 쓰는 순수 함수이므로, 페이지와 발급기가 어긋날 수 없습니다. `requireQuizPass`가 켜져 있으면 평가 대상 퀴즈를 모두 통과해야 합니다. 즉 `passedAt`이 설정되어 있고(`passedAt`은 영구적입니다) **그리고** 학생의 최고 점수가 퀴즈의 *현재* 합격 점수에 도달해야 합니다. 따라서 합격 점수를 올리면 아직 발급되지 않은 수료증이 보류될 수 있고, 낮추면 풀릴 수 있습니다. 평가 대상 퀴즈란 유효하게 표시되고 합격 점수가 0보다 큰 퀴즈이며, 합격 점수가 0%인 퀴즈는 연습용이므로 평가하지 않습니다.
+- **운영 중인 강좌의 기준 변경**: 학생을 평가하는 시점에 읽은 기준이 적용됩니다. 이미 발급된 수료증은 다시 검토되지 않습니다. 기준을 완화하면 새로 자격을 얻게 되는 모든 사람에게 수료증이 발급되고, 강화하면 아직 자격을 얻지 못한 학생에게만 영향을 줍니다. 강사의 컨트롤은 저장하기 전에 이를 안내합니다.
+
+## 채점된 업로드
+
+두 번째 기준 `minUploadScorePercent`(1~100의 정수이며, 필요하지 않으면 없음)는 같은 맵에 있고 같은 `setCertificateCriteria`로 설정하며, `null`을 주면 제거됩니다.
+
+- **규칙**: 설정되어 있으면 유효하게 표시되는 모든 과제가 평가 대상입니다. 학생의 제출물이 `returned`이고 `floor(points / pointsOutOf * 100)`이 최소값 이상이면 충족입니다. `pointsOutOf`는 해당 제출물이 채점된 만점입니다(읽을 성적이 없으면 과제의 `maxPoints`). 제출물이 없으면 "제출 안 함", 아직 반환되지 않았으면 "채점 대기 중", 더 낮은 점수로 반환되었으면 "점수 미달"입니다. 표시되는 과제가 없는 강좌는 충족할 것이 없습니다.
+- **재채점**: 제출물의 `status`, `points`, `returnedAt`이 바뀌면 해당 학생을 다시 계산하므로, 점수가 올라가도록 수정된 성적은 수료증을 발급하고, 재제출은(셋 중 어느 것도 바꾸지 않으므로) 아무 일도 하지 않습니다.
+- **기록되는 내용**: 수료증의 `assessment`는 `minUploadScorePercent`, `assessedUploadCount`, 내부 목록에 과제마다 하나씩의 `upload` 항목을 보관하며, 점수 구간은 퀴즈와 업로드를 합쳐서 계산합니다. 설명문에 "Graded assignments returned with at least 60%: 2."가 추가됩니다.
+- 제출물은 이 기준이 설정된 경우에만 읽습니다.
+
+## 수료증이 기록하는 내용
+
+수료증은 발급될 때의 기준을 `version`과 함께 읽기 전용 `assessment`에 복사하므로, 강좌가 바뀌어도 수료증이 설명하는 내용은 어긋나지 않습니다.
+
+- 두 설정, 표시되는 항목 수, 평가 대상 항목 수, 가장 낮은 합격 점수와 가장 높은 합격 점수, 강좌 길이(시간), **점수 구간**(최고 점수들의 평균이 속한 10점 단위 구간으로 0–9%부터 90–100%까지). 각각은 공개 페이지와 PDF에 같은 문장(`assessmentStatement`)으로 표시됩니다.
+- 각 점수가 있는 **평가 대상 항목 목록**. 불변 조건이 규칙을 검사할 수 있도록 존재하며, 어떤 API로도 반환되거나 표시되지 않습니다.
+- 필요한 것이 없었다면 점수 구간이 없고 설명문은 "No graded assessment was required for this certificate."라고 말합니다. 정확한 점수는 표시되지 않습니다.
+
+## 대기 중인 수료증이 도착하는 경우
+
+재계산(<Link path="design/progress-and-completion">진행률과 완료</Link> 참고)은 항목 완료 말고도 실행됩니다. 자격을 갖춘 학생은 다음 중 하나가 일어나고 몇 초 안에 수료증을 발급받습니다.
+
+- 항목이 이미 완료된 뒤 퀴즈를 통과한 경우(응시 횟수 소진, 한도 상향, 이후 응시에서 통과), 또는 이미 통과한 퀴즈에서 최고 점수가 올라간 경우: 해당 학생
+- 기준이 바뀌거나 수료증이 켜진 경우: 중도 포기하지 않은 수강 중인 모든 학생
+- 퀴즈의 합격 점수가 바뀐 경우(평가 여부가 바뀌는 0으로의 변경 또는 0에서의 변경 포함): 중도 포기하지 않은 수강 중인 모든 학생
+- 이미 재계산을 일으키던 항목 완료와 가시성 변경
+
+따라서 수료증을 켜거나 기준을 완화하면 이미 자격을 갖춘 모든 사람에게 발급됩니다.
+
+## 발급 방식
+
+- 진행률 재계산 Lambda는 학생의 진행률과 수강 등록을 기록한 뒤, 학생이 중도 포기하지 않았고 수강 등록이 `completed`이면 `issueCertificate`를 호출합니다.
+- 먼저 해당 강좌에 대한 학생의 `certificate`를 읽습니다. 없을 때만 강좌와 사용자를 읽으므로, 아직 진행 중인 학생과 이미 수료증이 있는 학생은 추가 읽기 비용이 들지 않습니다.
+- `issueCertificate`는 `certificate`의 유일한 작성자입니다. 키가 이미 존재하지 않는다는 조건으로 레코드를 만들기 때문에, 같은 순간 실행되는 재계산 두 개도 ID가 하나인 수료증 하나만 남기고 둘 다 그것을 반환합니다. 오류는 삼켜지지 않으며 배치가 재시도됩니다.
+- 수료증은 인쇄되는 내용(학습자 이름, 강좌 제목, 완료 날짜)을 발급 시점에 복사합니다. 나중에 강좌 이름을 바꿔도 수료증은 바뀌지 않습니다.
+- ID는 Crockford base32 16자이며 `XXXX-XXXX-XXXX-XXXX`로 표시됩니다. 조회는 대시, 공백, 대소문자를 무시하고 `O`는 `0`으로, `I`나 `L`은 `1`로 읽습니다.
+
+## 강좌별 스위치
+
+강사는 강좌 상태와 관계없이 강좌 설정에서 **Issue a certificate on completion** [완료 시 수료증 발급]을 켜거나 끕니다. 새 강좌는 모두 켜져 있습니다.
+
+- 그 시점부터 적용됩니다. 끄더라도 이미 발급된 수료증이 제거되거나 무효가 되지 않으며, 켜면 이미 자격을 갖춘 모든 학생에게 몇 초 안에 수료증이 주어집니다.
+- 기존 수료증은 스위치가 꺼져 있어도 계속 검증됩니다.
+
+## 공개 페이지가 보여 주는 내용
+
+학생 포털의 `/certificates/<ID>`는 로그인이 필요 없습니다. 학습자 이름, 강좌 제목, 완료 날짜, 수료증 ID, 평가 설명문만 보여 주며 그 밖에는 아무것도 없습니다. 이메일, 사용자 ID, 항목별 점수, 학습자 계정 링크는 없습니다. 형식이 잘못되었거나 알 수 없는 ID는 똑같이 "Certificate not found"가 표시됩니다.
+
+**취소된** 수료증은 ID와 날짜와 함께 "This certificate has been revoked and is no longer valid"를 보여 주며, 학습자, 강좌, 사유, 처리한 사람에 대해서는 아무것도 보여 주지 않습니다. 이전에 검증되던 ID가 플랫폼 장애처럼 보이지 않도록 "찾을 수 없음"과는 구별됩니다. 변경은 페이지를 다음에 로드할 때 나타나며, 링크 미리보기와 PDF 확인도 이를 따릅니다. `certificate.pdf`는 취소된 수료증을 거부합니다("This certificate has been revoked"). 이미 다운로드한 PDF는 회수할 수 없으며 페이지가 기준입니다.
+
+## 취소와 복원
+
+- **누가**: 강좌의 강사는 강좌의 수료증을 목록으로 보고(강좌의 Certificates 섹션) `academic-integrity`, `issued-in-error`, `other`(메모와 함께) 사유로 취소합니다. 관리자는 ID로 모든 수료증을 조회하며 `refunded` 사유도 사용할 수 있습니다.
+- **프로시저**: instructor-api의 `certificate.list`, `history`, `revoke`, `restore`와 admin-api의 `certificate.get`, `revoke`, `restore`.
+- **복원**: 관리자는 언제나 가능하고, 강사는 강사가 한 취소만 가능합니다. 강사는 다른 종류의 취소에 대해 "Revoked by an administrator"를 보며 Restore는 보이지 않습니다.
+- **레코드**: 수료증은 현재 상태(`revokedAt`, `revocationReason`, `revokedByRole`)를 가지며, 모든 변경은 같은 트랜잭션에서 `certificateEvent`(`revoked` 또는 `restored`, 행위자, 역할, 사유, 메모, 시각)도 추가합니다. `core-table`의 `revokeCertificate`와 `restoreCertificate`가 두 레코드의 유일한 작성자입니다. 이력은 감사를 위해 보관되며, 취소, 복원, 다시 취소하면 이벤트 세 개가 남습니다.
+- **경합**: 쓰기는 기대하는 상태를 조건으로 하므로, 동시에 두 번 취소해도 취소와 이벤트가 하나씩만 남고 두 요청 모두 응답을 받습니다.
+- **교체되지 않음**: 취소된 수료증은 ID를 유지하며 다시 발급되지 않습니다. 재계산은 상태와 관계없이 기존 수료증이 있으면 멈춥니다. 복원하면 같은 ID가 다시 유효해집니다.
+- **학습자에게 알림**: 변경 후 사유 분류와, 수료증 ID와 이벤트 시각으로 이루어진 중복 제거 키를 담아 `certificate.revoked`와 `certificate.restored` 알림이 나갑니다.
+- **자동으로 취소되는 것은 없습니다.** 특히 환불은 취소하지 않습니다. 수료증은 환불 후에도 유지되며, 필요하다고 판단되면 관리자가 `refunded` 사유로 취소합니다. 환불할 때마다 취소하면 무엇이 바뀌는지는 spec의 research R-8에 정리되어 있으며, 유지 관리자의 확인을 기다리는 동안 이것이 기본으로 택한 결정입니다.
+- **취소된 수료증은 동작을 숨깁니다**: LinkedIn 동작이 숨겨지고, `recordLinkedInClick`이 거부하며, 공유 알림 메일도 보내지 않습니다.
+
+## 불변 조건
+
+불변 조건 검사(spec의 research R-10 참고)는 다음을 보장합니다. 수료증의 `assessment`가 올바른 형태이고 개수, 합격 점수, 구간이 나열된 항목에서 도출됩니다. 나열된 모든 퀴즈는 학생이 발급 시각 이전에 합격 점수 이상으로 통과했고, 나열된 모든 업로드는 기록된 최소값 이상의 점수를 받았으며 여전히 제출물이 있습니다(`certificate-met-criteria`). 수료증은 가장 최근 이벤트가 `revoked`일 때만 정확히 취소 상태입니다(`certificate-status-matches-history`). 모든 강좌가 올바른 형태의 기준을 가집니다. 그리고 수료증은 취소 여부와 관계없이 여전히 완료된(또는 완료 후 중도 포기한) 수강 등록이 필요합니다. 추가 검사는 LinkedIn 클릭의 형태, 클릭 이후에 알림이 발송되지 않았는지, 수료증과 그 알림이 일치하는지를 다룹니다. 위반이 아닌 경우: 수료증이 없는 완료된 수강 등록, 강좌의 현재 기준과 다른 수료증, 이후에 숨겨지거나 더 높은 합격 점수가 지정된 나열된 퀴즈.
+
+## 공유와 검증
+
+학생은 **My Learning**의 완료한 각 강좌에서 수료증을 찾으며 네 가지 동작이 있습니다.
+
+- **View**는 공개 페이지를 엽니다.
+- **Download PDF**는 같은 ID와 페이지 주소가 담긴 A4 한 장짜리 수료증을 저장합니다.
+- **Copy link**는 공개 페이지의 주소를 복사합니다.
+- **Add to LinkedIn profile**은 새 자격증을 위한 LinkedIn 양식을 엽니다(아래 참고).
+
+링크나 ID를 가진 사람은 누구나 그 페이지에서 수료증을 확인할 수 있습니다.
+
+## LinkedIn에 추가하기
+
+학생 포털은 학습자의 브라우저에서 링크를 만들어(`lib/linkedin-add-to-profile.ts`, `buildLinkedInAddToProfileUrl`) 엽니다. 서버가 이를 만들거나 보지 않으며, 학습자가 클릭하기 전에는 LinkedIn에 아무것도 전송되지 않습니다.
+
+- **전송되는 것**: `startTask=CERTIFICATION_NAME`이 있는 LinkedIn의 `profile/add` 주소, `name`(수료증에 인쇄된 강좌 제목), 발급자(관리자 포털의 Branding 페이지에서 설정한 플랫폼 이름에서 가져온 `organizationName`, 또는 스테이지가 `linkedInOrganizationId`를 설정한 경우 대신 `organizationId`이며 둘을 함께 쓰지는 않음), `issueYear`와 `issueMonth`(UTC 기준 완료 날짜에서), `certUrl`(공개 페이지의 주소), `certId`(표시되는 그대로). 만료는 없습니다. 모든 값은 퍼센트 인코딩됩니다.
+- **전송되지 않는 것**: 학습자의 이름, 이메일, 사용자 ID, 세션 값. LinkedIn은 회원이 누구인지 알고 있으며 우리가 알려 주지 않습니다. 링크는 `rel="noopener noreferrer"`를 가지므로 브라우저가 참조 페이지를 밝히지 않으며, LinkedIn 스크립트나 API는 로드되거나 호출되지 않습니다.
+- **클릭이 기록하는 것**: 첫 클릭은 공개 `certificate.recordLinkedInClick({ certificateId, source })`를 호출하며, 이는 수료증에 `linkedInClickedAt`과 `linkedInClickSource`를 한 번 설정하고 이후 바꾸지 않습니다. 기록에 실패해도 양식이 열리는 것을 막지 않습니다. 이 기록은 "수료증이 LinkedIn에 있다"가 아니라 "학습자가 양식을 열었다"를 뜻합니다. LinkedIn은 아무것도 돌려보내지 않습니다.
+- **클릭이 올 수 있는 곳**: `linkedInClickSource`는 `my-learning`, `certificate-page`, `issued-email`, `reminder-email` 중 하나입니다. 두 이메일은 `/certificates/<ID>/linkedin?source=…`로 연결됩니다. 이 포털 경로는 로그아웃 상태에서도 동작하며, 사용을 기록하고 페이지를 LinkedIn의 주소로 바꿉니다.
+- **이용 현황 읽기**: `linkedInClickedAt`이 있는 수료증의 비율을 `linkedInClickSource`별로 나눈 것입니다. 이 수치는 저장된 레코드에서 도출됩니다.
+- **LinkedIn이 값을 무시하는 경우**: 링크는 여전히 올바른 양식을 열며, 공개 페이지의 소유자용 보기가 직접 복사할 모든 값을 나열합니다. LinkedIn 자체 도움말은 맞춤 링크가 자동으로 채워지지 않을 수 있다고 안내하며, 유지 관리자가 2026-11-20에 양식이 값과 함께 열리는 것을 확인했습니다(spec의 research R-1~R-3).
+
+## 학습자에게 알리기
+
+- **알림** `certificate.issued`는 `issueCertificate`가 수료증과 같은 트랜잭션에서 기록하며 수료증 ID를 중복 제거 키로 쓰므로, 알림 없는 수료증은 없고 재시도해도 두 번째 알림이 만들어지지 않습니다.
+- **이메일**에는 두 링크가 있습니다. 수료증 페이지와 **Add to LinkedIn profile**(알림의 선택 사항인 `action`이며 알림 벨은 이를 무시합니다).
+- **설정**: 알림 설정의 스위치 **Certificates** 하나가 발급 이메일과 알림 메일을 모두 관리합니다. `certificate.reminder`는 자체 설정이 없으며(`emailPreferenceType`이 `certificate.issued`를 가리킴), 첫 이메일을 구독 취소하면 알림 메일도 멈춥니다.
+- **알림 메일**: 발급 3일 후, 일회성 EventBridge Scheduler 스케줄(`cert-reminder-<ID>`)이 `certificate-reminder` Lambda를 호출합니다. 이메일 유형이 꺼져 있으면 멈춥니다. 그렇지 않으면 클릭이 기록되지 않았고 알림이 발송되지 않았을 때만 성공하는 `reminderSentAt` 조건부 쓰기로 알림을 선점한 뒤, 저장된 시각과 함께 `certificate.reminder`를 게시합니다. 클릭과 발송은 서로에 대해 안전하며, 먼저 반영된 쓰기가 결정합니다. 발급되었지만 스케줄되지 않은 수료증은 이후 재계산이 바로잡지만, 알림 시점이 이미 지났다면 바로잡지 않습니다. 알림은 늦게 발송되지 않습니다(research R-4~R-7).
+
+## 링크 미리보기
+
+링크 미리보기 크롤러는 스크립트를 실행하지 않으므로, 페이지 렌더러(<Link path="design/public-pages">공개 페이지</Link> 참고)는 `certificate.verify`로 만든 head로 `/certificates/<ID>`에 응답합니다. 제목 "학습자가 강좌를 완료했습니다", 완료 날짜, 플랫폼 이름, ID로 구성됩니다. 페이지가 보여 주는 것 이상은 절대 보여 주지 않습니다. 이 페이지는 사람의 이름이 들어 있으므로 모든 스테이지에서 항상 `noindex`입니다. `/certificates/<ID>/linkedin` 같은 더 깊은 경로는 기본 템플릿을 받습니다(research R-8).
+
+## 한계
+
+- 기준에는 이력이 없습니다. 수료증이 발급될 때의 버전과 설정만 수료증에 보관됩니다.
+- 퀴즈는 자체 합격 점수로 평가되며, 강좌 전체의 합격 점수나 퀴즈별로 무엇을 인정할지 선택하는 기능은 없습니다.
+- 이미 다운로드된 취소된 PDF는 여전히 존재하며, 더 이상 유효하지 않다고 말하는 것은 페이지뿐입니다.
+- LinkedIn은 아무것도 돌려보내지 않으므로 Discava는 수료증이 프로필에 저장되었는지 알 수 없고 양식이 열렸다는 것만 압니다.
+- 수료증 ID를 가진 사람은 누구나 첫 사용을 기록할 수 있습니다. 그 효과는 알림 메일이 하나 줄어드는 것뿐입니다.
+- PDF는 표준 글꼴을 사용하므로 Latin-1 밖의 문자(예: 중국어, 일본어, 이모지)는 `?`로 인쇄됩니다. 공개 페이지는 올바르게 보여 줍니다.

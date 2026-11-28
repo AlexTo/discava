@@ -1,0 +1,141 @@
+---
+title: Fork và thiết lập
+description: Fork Discava, chuẩn bị các thiết lập GitHub của fork và chạy script setup kết nối nó với tài khoản AWS của bạn.
+sidebar:
+  order: 2
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+Trang này kết nối một fork của Discava với tài khoản AWS của bạn. Khi xong, fork của bạn có mọi thứ mà Deploy workflow cần, và chưa có gì được triển khai.
+
+## 1. Fork và clone
+
+<Steps>
+
+1. Fork [AlexTo/discava](https://github.com/AlexTo/discava) trên GitHub. Giữ tên `discava` trừ khi bạn có lý do để đổi.
+
+2. Clone **fork của bạn**, không phải bản gốc. Script setup đọc repository cần tin tưởng từ remote `origin`.
+
+   ```sh
+   git clone https://github.com/<you>/discava.git
+   cd discava
+   ```
+
+3. Cài các dependency. Script setup cần chúng để đọc danh sách stage.
+
+   ```sh
+   corepack enable
+   pnpm i
+   ```
+
+</Steps>
+
+## 2. Chuẩn bị fork trên GitHub
+
+Ba thiết lập trong fork của bạn, đều nằm dưới tab **Settings** hoặc **Actions** của nó.
+
+<Steps>
+
+1. **Bật workflow.** GitHub tắt workflow trên một fork mới. Mở tab **Actions** và chọn **I understand my workflows, go ahead and enable them**.
+
+2. **Bật GitHub Pages.** Vào **Settings → Pages** và đặt **Source** thành **GitHub Actions**.
+
+   Workflow CI xuất bản site tài liệu này lên Pages ở mỗi lần push vào `main`. Nếu Pages tắt, job đó thất bại, CI bị đánh dấu thất bại, và lần triển khai tự động chờ CI sẽ không bao giờ bắt đầu. Triển khai thủ công vẫn hoạt động trong cả hai trường hợp.
+
+3. **Tùy chọn: thêm `CODECOV_TOKEN`.** CI tải độ phủ kiểm thử lên Codecov. Để xem độ phủ cho fork của bạn, hãy thêm token từ Codecov làm repository secret dưới **Settings → Secrets and variables → Actions**.
+
+</Steps>
+
+:::note[Địa chỉ của site tài liệu]
+CI build site tài liệu cho địa chỉ GitHub Pages của fork bạn, `https://<owner>.github.io/<repository>`, nên không có gì phải đổi. Để xuất bản nó ở nơi khác, như một tên miền riêng, hãy đặt các biến repository `DOCS_SITE` (ví dụ `https://docs.example.com`) và `DOCS_BASE_PATH` (ví dụ `/my-lms`, hoặc `/` cho gốc của tên miền).
+:::
+
+## 3. Chạy script setup
+
+Script là `scripts/setup-stage.sh`. Hãy chạy nó một lần cho mỗi stage bạn triển khai.
+
+```sh
+./scripts/setup-stage.sh discava-development
+```
+
+Nó hỏi một loạt câu hỏi, mỗi câu có một giá trị mặc định được phát hiện mà bạn chấp nhận bằng Enter. Không có gì được tạo cho đến khi bạn xác nhận bản tóm tắt ở cuối. Chạy lại là an toàn: mỗi bước tạo những gì còn thiếu và cập nhật những gì đã có.
+
+### Nó hỏi gì
+
+Theo thứ tự:
+
+| Câu hỏi | Trả lời gì |
+| --- | --- |
+| **Stage** | Stage cần thiết lập. Các stage đến từ `packages/common/infra-config/src/stages.config.ts` |
+| **GitHub** | Không cần trả lời nếu `origin` là fork của bạn. Nó in repository sẽ được tin tưởng: hãy kiểm tra đó là của bạn |
+| **AWS credentials** | Profile AWS CLI cho tài khoản đích, hoặc để trống để dùng thông tin xác thực mặc định. Nó in bạn đang đăng nhập là ai |
+| **Region** | Region chính của stage. Không hỏi nếu `stages.config.ts` đã đặt một region |
+| **CDK bootstrap** | Có, cho mỗi region mà nó báo là chưa bootstrap |
+| **GitHub environment** | Có, để tạo environment mang tên stage và đặt các biến của nó. Không hỏi nếu không có GitHub CLI |
+| **Deploy automatically?** | Có để triển khai stage này mỗi khi CI thành công trên `main`. Không (mặc định) để chỉ triển khai khi bạn chạy workflow. Chỉ một stage có thể tự động triển khai |
+| **Root domain** | Hiện tại để trống. Bạn có thể chạy lại script sau để phục vụ mọi thành phần từ một tên miền con của nó, dùng các chứng chỉ mà nó tìm thấy trong ACM (xem <Link path="deploy/configuration">Cấu hình stage</Link>) |
+| **Continue?** | Có, khi bản tóm tắt hiển thị repository, tài khoản, region và stage của bạn |
+
+### Nó tạo gì
+
+Trong **AWS**:
+
+| Tài nguyên | Tên | Mục đích |
+| --- | --- | --- |
+| OIDC provider | `token.actions.githubusercontent.com` | Cho phép GitHub Actions đăng nhập vào tài khoản này. Dùng chung cho mọi stage |
+| Deploy role | `github-deploy-<stage>` | Được Deploy workflow đảm nhận. Chỉ tin environment của repository bạn tên `<stage>`. Có thể xuất bản asset và quản lý các stack CloudFormation của stage |
+| Execution role | `cfn-execution-<stage>` | Được CloudFormation dùng để tạo các tài nguyên của stage. Quyền của nó nằm trong một inline policy và ba managed policy: `cfn-execution-<stage>-data`, `-edge` và `-compute` |
+| Permissions boundary | `permissions-boundary-<stage>` | Mọi IAM role mà stage tạo ra phải mang nó, giới hạn những gì một stack đã triển khai có thể tự cấp cho mình |
+| Docker login role | `github-docker-login-<repo>` | Cho phép các workflow trong repository của bạn đăng nhập vào Amazon ECR Public, để việc kéo image không bị giới hạn tốc độ. Dùng chung cho mọi stage |
+| CDK bootstrap stack | `CDKToolkit` | Asset bucket và các role mà CDK cần, ở mỗi region bạn đã đồng ý |
+
+Một stage có WAF trên các cổng hoặc media, như `discava-production`, cũng được bootstrap ở `us-east-1`.
+
+Trên **GitHub**:
+
+| Ở đâu | Biến | Giá trị |
+| --- | --- | --- |
+| Environment `<stage>` | `AWS_REGION` | Region của stage |
+| Environment `<stage>` | `AWS_DEPLOY_ROLE_ARN` | Deploy role |
+| Environment `<stage>` | `AWS_EXECUTION_ROLE_ARN` | Execution role |
+| Repository | `AWS_DOCKER_LOGIN_ROLE_ARN` | Docker login role |
+| Repository | `AUTO_DEPLOY_STAGE` | Tên stage, chỉ khi bạn chọn triển khai tự động |
+
+Đây là **biến, không phải secret**. Một ARN của role không nhạy cảm: deploy role chỉ có thể được đảm nhận bởi một workflow chạy trong environment tương ứng của repository bạn, và Docker login role chỉ bởi các workflow trong repository của bạn.
+
+### Không có GitHub CLI
+
+Nếu `gh` chưa được cài hoặc chưa đăng nhập, script vẫn tạo mọi thứ trong AWS, rồi in environment và các biến để bạn tạo thủ công dưới **Settings → Environments** và **Settings → Secrets and variables → Actions → Variables**.
+
+### Chạy không cần theo dõi
+
+```sh
+AWS_PROFILE=my-profile AWS_REGION=eu-west-1 ./scripts/setup-stage.sh --yes discava-development
+```
+
+`--yes` chấp nhận mọi giá trị mặc định, nên nó không bật triển khai tự động. `./scripts/setup-stage.sh --help` liệt kê các biến môi trường đặt sẵn từng câu trả lời.
+
+### Khi nào chạy lại
+
+- Để thêm hoặc đổi tên miền riêng hoặc người gửi thông báo (xem <Link path="deploy/configuration">Cấu hình stage</Link>)
+- Sau khi kéo một phiên bản Discava mới hơn, trước khi triển khai nó. Script giữ các quyền của execution role và boundary, và một phiên bản dùng một loại tài nguyên AWS mới sẽ mở rộng chúng. Nếu không cập nhật, lần triển khai thất bại với lỗi access-denied
+
+## 4. Bảo vệ production
+
+Bất kỳ ai có thể chạy workflow trong fork của bạn đều có thể triển khai một stage. Với `discava-production`, hoặc bất kỳ stage nào có người dùng thật, hãy mở **Settings → Environments → `<stage>`** và:
+
+- Thêm **required reviewers**, để mỗi lần triển khai chờ duyệt
+- Giới hạn **deployment branches** ở `main`
+
+## Kiểm tra công việc của bạn
+
+```sh
+gh variable list --env discava-development
+gh variable list
+```
+
+Lệnh đầu phải liệt kê ba biến `AWS_*`. Lệnh thứ hai phải liệt kê `AWS_DOCKER_LOGIN_ROLE_ARN`, và `AUTO_DEPLOY_STAGE` nếu bạn chọn triển khai tự động.
+
+Tiếp theo: <Link path="deploy/first-deploy">lần triển khai đầu tiên của bạn</Link>.

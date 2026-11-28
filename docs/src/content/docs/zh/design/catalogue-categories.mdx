@@ -1,0 +1,50 @@
+---
+title: 目录分类
+description: "管理员管理的分类体系、课程上的目录字段，以及它们如何为搜索分面提供数据。"
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+**规格：** [`specs/_archive/20261115-000000-catalogue-categories/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-000000-catalogue-categories/)
+
+课程可以按**分类**（每门课程一个，来自管理员管理的分类体系）来组织，并用另外四个可选字段来描述。学生可以用这些字段筛选目录。
+
+## 课程目录字段
+
+| 字段 | 规则 |
+|---|---|
+| `categoryId` | 设置或更改时，必须是一个已存在的**活跃**分类 |
+| `tags` | 最多 8 个，每个 1 到 30 个字符。存储时去除首尾空白并转为小写，重复项会被移除 |
+| `level` | `beginner`、`intermediate` 或 `advanced` |
+| `language` | 固定列表中的一个代码 |
+| `durationHours` | 1 到 500 的整数 |
+
+这五个字段都是可选的。讲师在讲师门户中通过 instructor-api 的 `course.updateCatalogue` 设置它们，并通过 `category.listActive` 选择分类。core-table 的 `helpers/course-catalogue.ts` 中的 `courseCatalogueWrites` 是这五个字段唯一的写入者，因此所有写入方都以相同方式校验它们。
+
+## 分类体系
+
+一个分类包含：
+
+- `name`：1 到 60 个字符，忽略大小写和空白后唯一；
+- `slug`：URL 安全，创建时从名称派生，之后永不更改。如果 slug 已被占用，会加上数字（`design`、`design-2`）；
+- `status`：`active` 或 `archived`。
+
+整个分类体系位于 core-table 的一个分区中，因此列出它只需一次查询。分类永远不会被删除：归档会把它从新分配的可选项中隐藏，而已经使用它的课程仍然保留它。
+
+唯一性由 `categoryClaim` 记录保证，这些记录与分类在同一个事务中写入，一条对应 slug，一条对应规范化后的名称。重命名会移动名称的占用记录，而保持 slug 不变，所以分类落地页的 URL 永远不会改变。core-table 中的 `helpers/category.ts` 是这两种记录唯一的写入者。
+
+不变量检查 `course-category-exists` 和 `category-claims-consistent` 保证：课程只会指向一个存在的分类，并且每个分类恰好拥有它的两条占用记录。
+
+## 管理门户与 `admin-api`
+
+管理员（`admin` Cognito 组）在管理门户中管理分类，管理门户调用 **`admin-api`**：这是一个独立的 tRPC API，有自己的 Lambda 和 API Gateway，构建方式与 instructor-api 相同，因此只有管理员才能访问它的过程。这些过程是 `category.list`、`create`、`rename` 和 `archive`。
+
+学生和访客通过 core-api 的公开 `category.list` 和 `category.bySlug` 读取分类，分类落地页就使用它们。
+
+新的 stage 没有任何分类。`pnpm nx run @discava/tooling-deploy:seed-categories` 会写入一组初始分类，并跳过已存在的分类。
+
+## 搜索分面
+
+分类、标签、级别、语言和时长都在 `courses` 搜索索引中建立了索引，搜索会为每一项返回分面计数。分面查询，以及部署之后要运行的一次性重新索引，见<Link path="design/search">搜索</Link>。

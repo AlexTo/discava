@@ -1,0 +1,227 @@
+---
+title: Thanh toán
+description: Cách một khóa học trả phí được mua bằng Stripe Checkout, bản ghi đơn hàng, webhook giao khóa học đúng một lần, coupon, hoàn tiền, và kết nối Stripe của quản trị viên.
+sidebar:
+  order: 10
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261116-013315-stripe-checkout/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013315-stripe-checkout/) (checkout) và [`specs/20261116-013138-coupons-discount-codes/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013138-coupons-discount-codes/) (coupon)
+
+## Quy tắc
+
+**Một khóa học có giá chỉ vào được bằng một đơn hàng đã thanh toán, và chỉ xác nhận có chữ ký của Stripe mới làm một đơn hàng thành đã thanh toán.** Không có gì trình duyệt gửi lên, kể cả việc quay về từ trang của Stripe, làm ai đó được ghi danh. `course.enrol` của core-api từ chối khóa học có giá ("This course must be purchased"), và webhook là nơi duy nhất gọi `settleOrderPaid`.
+
+Có một trường hợp không có thanh toán: một [coupon](#coupon) giảm toàn bộ giá. Máy chủ tính ra tổng bằng không và ghi đơn hàng đã ở trạng thái `paid`, nên Stripe không bao giờ được gọi.
+
+## Giá
+
+Một khóa học có `priceAmount` và `priceCurrency`. Số tiền là một số nguyên theo đơn vị nhỏ nhất của tiền tệ (1999 là 19.99), nên không có giá nào là số dấu phẩy động. `0` là miễn phí, và mọi khóa học mới bắt đầu ở mức miễn phí.
+
+- Các tiền tệ được hỗ trợ là USD, EUR, GBP, AUD và CAD. Tất cả có hai chữ số thập phân. Tiền tệ không có hoặc có ba chữ số thập phân thì không được hỗ trợ.
+- Giá trên không nằm trong khoảng từ 1.00 đến 10,000.00.
+- Giảng viên đặt giá bằng `course.setPrice` của instructor-api, ở bất kỳ trạng thái khóa học nào. Đặt giá trên không cần một kết nối Stripe đang active. Quay về miễn phí thì không bao giờ cần.
+- Thay đổi giá áp dụng cho các lần mua mới. Nó không bao giờ đụng đến một đơn hàng hay một lượt ghi danh: học viên đã ghi danh giữ quyền truy cập.
+
+Các quy tắc và việc định dạng nằm trong `@discava/common-web-utils/price`, dùng chung bởi các cổng và các API.
+
+## Đơn hàng
+
+Một `order` là một lần thử của một học viên để mua một khóa học. Khi được tạo, nó sao chép tên khóa học, giá niêm yết (`listAmount`), số tiền cần thu (`amount`) và tiền tệ, cùng tài khoản Stripe và chế độ mà nó được bắt đầu. Một đơn hàng bắt đầu với coupon cũng sao chép `discountAmount`, `couponCode`, `couponType` và `couponValue`, và `amount` là giá niêm yết trừ đi khoản giảm.
+
+| Trạng thái | Ý nghĩa |
+| --- | --- |
+| `pending` | Một checkout đang mở |
+| `paid` | Stripe xác nhận thanh toán và học viên đã được ghi danh |
+| `expired` | Checkout bị bỏ dở, hoặc việc tạo nó thất bại |
+| `refunded` | Toàn bộ số tiền đã trả lại cho học viên |
+
+`helpers/order.ts` trong core-table là nơi duy nhất ghi `order` và `orderId` của một lượt ghi danh. Mỗi bước chuyển là một lần ghi có điều kiện theo trạng thái mà nó xuất phát, nên một lệnh gọi lặp lại hay đua nhau không thay đổi gì. Không cái nào gọi Stripe: bên gọi làm việc đó trước hoặc sau.
+
+## Bắt đầu một checkout
+
+`payment.checkout` của core-api nhận một ID khóa học và một `couponCode` tùy chọn. Số tiền và tiền tệ được tính trên máy chủ từ khóa học (và coupon), không bao giờ lấy từ đầu vào. Khi không có mã:
+
+1. Nó từ chối khóa học chưa xuất bản, khóa học miễn phí, và học viên đã ghi danh.
+2. Nếu học viên có một đơn hàng `pending` cho khóa học không có coupon và còn hơn năm phút, nó trả về trang của đơn hàng đó, nên chọn **Buy now** hai lần chỉ tạo một đơn hàng.
+3. Nếu không, `startOrder` tạo một đơn hàng `pending` trong một transaction cũng kiểm tra rằng kết nối Stripe là `active` và nâng `latestCheckoutExpiresAt` của kết nối lên để bao phủ checkout mới.
+4. Nó tạo một phiên Stripe Checkout với ID đơn hàng làm khóa idempotency, chỉ thanh toán thẻ, và các ID đơn hàng, học viên và khóa học trong metadata. Địa chỉ của phiên được lưu trên đơn hàng và trả về.
+
+Một checkout sống trong một giờ. Nếu không liên hệ được Stripe, đơn hàng bị đặt hết hạn và học viên thấy "Couldn't start the payment".
+
+Một checkout có mã theo cùng các bước với thêm một lần giữ chỗ (claim) cho mã: xem [Coupon](#coupon).
+
+`payment.available` cho cổng học viên biết một lần mua có thể bắt đầu hay không: chỉ cho biết kết nối đang active, không có gì về tài khoản hay khóa.
+
+## Webhook
+
+Stripe gửi đến `POST /stripe/webhook`, một API Gateway API riêng trong stack `Payments`, với WAF, giới hạn tốc độ và tên miền riêng. Handler nằm trong `packages/events/src/payments/`.
+
+- **Chữ ký là cổng duy nhất.** Thông điệp được xác minh theo đúng các byte của nó với signing secret đã lưu, và bị từ chối bằng 400 nếu cũ hơn năm phút hoặc không xác minh được. Khi chưa kết nối gì thì không có secret, nên mọi thông điệp đều thất bại.
+- **400** nghĩa là không có gì thay đổi. **500** nghĩa là việc xử lý thất bại và Stripe nên thử lại. **200** bao gồm sự kiện đã xử lý, trùng lặp, không khớp và bị bỏ qua.
+
+| Sự kiện | Chuyện gì xảy ra |
+| --- | --- |
+| `checkout.session.completed` | Đơn hàng được chốt, hoặc hoàn tiền nếu không giao được. Một phiên chưa được thanh toán thì bị bỏ qua |
+| `checkout.session.expired` | Một đơn hàng `pending` thành `expired`, và claim coupon của nó được giải phóng |
+| `charge.refunded` | Khoản hoàn tiền được ghi vào đơn hàng |
+| `refund.failed`, `charge.refund.updated` (`status: failed`) | `refundFailedAt` được đặt trên một đơn hàng `paid`; một đơn hàng mà `charge.refunded` đã chuyển sang `refunded` được đưa về `paid` và lượt ghi danh được khôi phục |
+
+Đây là những sự kiện duy nhất được đăng ký với Stripe. Danh sách này được ghi trên kết nối khi endpoint được đăng ký. Nếu nó khác danh sách này (một kết nối được lưu trước khi có thêm một sự kiện), trang thanh toán của admin yêu cầu lưu lại khóa, và lần lưu đó cập nhật các sự kiện của endpoint hiện có mà không đổi URL, ID hay signing secret của nó.
+
+### Giao đúng một lần
+
+`settleOrderPaid` chuyển đơn hàng từ `pending` sang `paid` và cấp cho học viên lượt ghi danh của họ trong **một transaction**, transaction này cũng kiểm tra khóa học vẫn đang được xuất bản. Lượt ghi danh được tạo, hoặc khôi phục nếu học viên có một lượt `dropped`. Nếu đơn hàng có coupon, cùng transaction xác nhận việc dùng coupon đó. Stripe giao ít nhất một lần và theo thứ tự bất kỳ, nên cùng một xác nhận đến năm lần cùng lúc vẫn chỉ để lại một đơn hàng đã thanh toán và một lượt ghi danh: mọi lệnh gọi sau lần đầu đều thấy đơn hàng không còn `pending`.
+
+### Một khoản thanh toán không giao được
+
+Tiền đã được thu, nên nó không bao giờ bị giữ lại. Webhook yêu cầu Stripe hoàn tiền toàn bộ, với khóa idempotency dựng từ ID đơn hàng, và `refundUndeliverable` đánh dấu đơn hàng `refunded` kèm một lý do. Không có lượt ghi danh nào được cấp, và claim coupon của đơn hàng được giải phóng.
+
+| Lý do | Khi nào |
+| --- | --- |
+| `duplicate` | Học viên đã ghi danh rồi |
+| `unavailable` | Khóa học không còn được xuất bản |
+| `mismatch` | Số tiền, tiền tệ, hoặc ID đơn hàng, học viên hay khóa học của phiên khác với của đơn hàng. Điều này cũng được ghi log là lỗi ("Paid session differs from its order; refunding"), và học viên đã được hoàn tiền vào lúc dòng đó xuất hiện |
+
+Một phiên đã thanh toán, phiên hết hạn hoặc khoản hoàn tiền mà đơn hàng của nó không có trong table được ghi log là lỗi ("Paid session for an unknown order", "Expired session for an unknown order", "Refund for an unknown order") và trả lời 200. Người vận hành nên theo dõi các dòng này: chúng nghĩa là Stripe đang giữ một khoản thanh toán mà Discava không có bản ghi.
+
+## Coupon
+
+Giảng viên tạo mã giảm giá cho một khóa học trả phí bằng `coupon.create`, `coupon.list`, `coupon.update` và `coupon.delete` của instructor-api. Học viên nhập một mã trên trang khóa học: `coupon.preview` của core-api hiển thị họ sẽ phải trả bao nhiêu và không ghi gì, và `payment.checkout` nhận mã dưới dạng `couponCode`. <Link path="guides/payments">Hướng dẫn thanh toán</Link> bao quát các màn hình.
+
+| Bản ghi | Khóa | Chứa |
+| --- | --- | --- |
+| `coupon` | Khóa học, rồi mã | `type` (`percent` hoặc `fixed`), `value`, `expiresAt` và `maxRedemptions` tùy chọn, `enabled`, và `redeemedCount` |
+| `couponRedemption` | Khóa học và mã, rồi học viên | Đơn hàng mà nó thuộc về, `status` (`reserved` hoặc `redeemed`), và `reservedUntil` khi đang reserved |
+
+Khóa của `couponRedemption` chính là quy tắc rằng một học viên dùng một mã một lần.
+
+### Mã và giá
+
+- Một mã gồm 4 đến 24 ký tự A-Z, 0-9 và `-`, lưu dạng chữ hoa. Một mã được tạo tự động gồm 8 ký tự viết dạng `XXXX-XXXX`.
+- Phần trăm là một số nguyên từ 1 đến 100. Số tiền cố định tính theo tiền tệ của khóa học, lớn hơn không và không vượt quá giá của khóa học khi mã được tạo.
+- Loại, giá trị và tiền tệ của một mã không bao giờ đổi. `coupon.update` chỉ đổi `enabled`, ngày hết hạn và giới hạn, và không thể hạ giới hạn xuống dưới `redeemedCount`. `coupon.delete` chỉ hoạt động khi `redeemedCount` là 0; một mã đã dùng thì bị vô hiệu hóa thay vì xóa.
+- `priceWithCoupon` trong `helpers/coupon-price.ts` của core-table là hàm tính giá duy nhất. Phần trăm được làm tròn xuống, và số tiền cố định không bao giờ lấy nhiều hơn giá niêm yết.
+- Một tổng lớn hơn không nhưng dưới mức thu tối thiểu của Stripe (0.50, hoặc 0.30 cho GBP) không thể thanh toán, nên mã bị từ chối.
+
+`coupon.preview` và `payment.checkout` chạy cùng một phép kiểm tra (`checkCoupon`), nên chúng từ chối cùng các mã với cùng các thông báo. Một mã không biết, mã của khóa học khác và mã cố định ở tiền tệ khác đều nhận "This code is not valid for this course", nên học viên không phân biệt được chúng.
+
+### Claim, confirm, release
+
+`helpers/coupon-redemption.ts` trong core-table là nơi duy nhất ghi `redeemedCount` và `couponRedemption`. Nó dựng ba tập lần ghi, mỗi tập chạy bên trong transaction của thay đổi đơn hàng gây ra nó:
+
+| Bước | Khi nào | Nó ghi gì |
+| --- | --- | --- |
+| **Claim** | `payment.checkout` tạo đơn hàng | Cộng một vào `redeemedCount`, với điều kiện coupon đang bật, chưa hết hạn và dưới giới hạn. Tạo lượt dùng của học viên ở trạng thái `reserved`, và thất bại nếu họ đã có một lượt cho mã đó |
+| **Confirm** | `settleOrderPaid` đánh dấu đơn hàng đã thanh toán | `reserved` thành `redeemed` |
+| **Release** | Đơn hàng hết hạn, bị thay bằng một checkout mới, hoặc bị hoàn tiền vì không giao được | Xóa lượt dùng `reserved` và trừ một khỏi `redeemedCount` |
+
+Vì vậy `redeemedCount` đếm cả lượt dùng reserved và redeemed. Vì claim là một điều kiện trong transaction riêng của đơn hàng, giới hạn vẫn đúng khi nhiều học viên bắt đầu checkout cùng một lúc. Một transaction bị hủy không ghi gì; checkout đọc lại để đưa ra lời từ chối chính xác, và bỏ cuộc với "Too many people are checking out; try again" sau ba lần xung đột.
+
+Một lần giữ chỗ kéo dài đến năm phút sau khi checkout của nó hết hạn (`reservedUntil`). Khi một mã trông như đã hết lượt, checkout trước tiên giải phóng các lần giữ chỗ đã quá thời điểm đó và có phiên Stripe đã kết thúc, rồi kiểm tra lại một lần. Một phiên mà Stripe báo là đã hoàn tất thì giữ lại lần giữ chỗ của nó: sự kiện đã thanh toán của nó có thể vẫn đang trên đường.
+
+### Một checkout đang sống
+
+Một học viên có một checkout đang sống cho mỗi khóa học. Bắt đầu một checkout với mã khác, hoặc không có mã sau một checkout có mã, sẽ thay thế đơn hàng `pending` trước đó:
+
+1. Phiên Stripe của đơn hàng trước được cho hết hạn trước, nên nó không bao giờ có thể được thanh toán.
+2. Transaction của đơn hàng mới chuyển đơn hàng trước sang `expired` và giải phóng claim của nó.
+
+Nếu Stripe nói phiên trước đã được thanh toán, câu trả lời là "You are already enrolled in this course". Bắt đầu lại với cùng mã và còn hơn năm phút sẽ trả về trang của checkout đang mở.
+
+### Một mã giảm toàn bộ giá
+
+Khi tổng bằng không, `startFreeOrder` ghi đơn hàng đã ở `paid` với số tiền 0, lượt ghi danh và lượt dùng ở `redeemed`, trong một transaction. Stripe không bao giờ được gọi và `payment.checkout` trả về `enrolled: true` thay cho địa chỉ trang. Nó vẫn cần một kết nối Stripe đang active. Một đơn hàng như vậy không phải một lần bán, nên nó không ghi <Link path="design/instructor-payouts">thu nhập</Link> nào.
+
+### Coupon và hoàn tiền
+
+Một lần hoàn tiền toàn bộ sau khi giao để lượt dùng ở `redeemed`, nên học viên không thể dùng lại cùng mã.
+
+## Hoàn tiền
+
+Một lần hoàn tiền bắt đầu trong Stripe: từ bảng điều khiển Stripe, hoặc từ `payment.requestRefund` của core-api thay mặt học viên. `charge.refunded` mang tổng số đã hoàn cho đến nay, và `refundOrder` áp dụng nó:
+
+- **Dưới số tiền của đơn hàng**, chỉ `refundedAmount` tăng. Học viên giữ quyền truy cập.
+- **Bằng số tiền của đơn hàng**, một transaction chuyển đơn hàng sang `refunded` và đặt lượt ghi danh thành `dropped`, nhưng chỉ khi lượt ghi danh vẫn nêu tên đơn hàng này. Một thông báo hoàn tiền bị trễ qua lần mua thứ hai không thể kết thúc lượt ghi danh mới.
+
+Sau một lần hoàn tiền toàn bộ, webhook xuất bản một thông báo `order.refunded` ("Your refund for … is complete"), gửi qua email cũng như hiển thị trong cổng. Nó chỉ được gửi khi đơn hàng là `refunded` với lý do `requested` (mọi lần hoàn tiền toàn bộ được ghi từ `charge.refunded`, dù từ bảng điều khiển hay từ yêu cầu của học viên) và lượt ghi danh vẫn nêu tên đơn hàng. Khóa loại trùng của nó là ID đơn hàng, nên một thông báo được giao lại không lặp lại, và một lần xuất bản thất bại sẽ được thử lại khi Stripe giao lại. Không có thông báo cho một lần hoàn tiền một phần, hay cho việc hoàn tiền tự động một khoản thanh toán không giao được.
+
+### Yêu cầu hoàn tiền
+
+`payment.requestRefund` của core-api cho phép học viên hoàn tiền lần mua của chính mình, và `payment.myOrder` cho trang khóa học biết họ có thể hay không. `refundEligibility` trong core-table chỉ cho phép khi:
+
+- đơn hàng là `paid` và lượt ghi danh của học viên nêu tên nó và không phải `dropped`;
+- đơn hàng được thanh toán qua tài khoản Stripe đang kết nối hiện nay, và thanh toán đang được kết nối;
+- chưa có yêu cầu hoàn tiền nào cho nó;
+- học viên chưa hoàn thành khóa học;
+- học viên đã hoàn thành ít hơn `REFUND_PROGRESS_LIMIT_PERCENT` (50) của nó, tính khi yêu cầu được đưa ra từ các lần hoàn thành của họ và chương trình học hiện tại (`readRefundLimits`), không đọc từ `progressPercent` đã lưu;
+- không đơn hàng trước đó nào của học viên cho khóa học này đã được hoàn tiền theo yêu cầu của chính họ (`refundRequestedAt` được đặt; một lần hoàn tiền của người vận hành hay hoàn tiền tự động không tính);
+- còn trong `REFUND_WINDOW_DAYS` (14) kể từ lúc thanh toán.
+
+`requestRefund` yêu cầu Stripe hoàn số tiền còn lại, với khóa idempotency dựng từ ID đơn hàng, rồi đặt `refundRequestedAt` trên đơn hàng. Nó không bao giờ tự chuyển đơn hàng hay lượt ghi danh: `charge.refunded` theo sau mới làm. Stripe được gọi trước khi đánh dấu, nên một sự cố giữa hai bước để lại một khoản hoàn tiền mà thông báo vẫn ghi nhận, không bao giờ là một dấu đánh dấu mà không có hoàn tiền.
+
+Stripe gửi `charge.refunded` ngay khi một khoản hoàn tiền được tạo, kể cả khi nó vẫn đang `pending`, và có thể làm khoản hoàn tiền thất bại sau đó nếu ngân hàng trả tiền lại. Vì vậy một lần thất bại thường đến với một đơn hàng đã `refunded` và một lượt ghi danh đã `dropped`. Một khoản hoàn tiền thất bại được hoàn tác, để học viên không mất cả tiền lẫn khóa học. Nếu Stripe báo khoản hoàn tiền thất bại (`refund.failed`, hoặc `charge.refund.updated` với `status: failed`):
+
+- Với đơn hàng `refunded` có lý do `requested`, `reverseRefund` chạy một transaction: đơn hàng quay về `paid`, `refundedAt` và `refundedAmount` bị xóa, `refundFailedAt` được đặt và `refundRequestedAt` được giữ; lượt ghi danh chuyển từ `dropped` về `active` (`completed` nếu có `completedAt`), nhưng chỉ khi nó vẫn nêu tên đơn hàng này. Nếu học viên đã mua lại khóa học sau lần hoàn tiền, lượt ghi danh nêu tên đơn hàng mới và `reverseRefund` không đổi gì, cả đơn hàng lẫn lượt ghi danh: đơn hàng cũ quay về `paid` sẽ là đơn hàng đã trả tiền thứ hai của khóa học. Không có thông báo nào được gửi, và khoản hoàn tiền thất bại được để cho bộ phận hỗ trợ. Nó có điều kiện là đơn hàng đang `refunded`, nên một sự kiện thất bại lặp lại không đổi gì. `refundOrder` bỏ qua một `charge.refunded` mà Stripe tạo trước `refundFailedAt` của đơn hàng (một thông báo bị giao lại hoặc đến trễ về khoản hoàn tiền đã thất bại), nên nó không thể kết thúc quyền truy cập lần thứ hai; một khoản hoàn tiền được tạo sau đó được áp dụng như một khoản mới. Học viên nhận thông báo `order.refund_failed` ("Hoàn tiền của bạn không thành công; quyền truy cập của bạn đã được khôi phục. Hãy liên hệ bộ phận hỗ trợ về khoản hoàn tiền"), loại trùng theo ID đơn hàng. Chứng chỉ không bị đụng đến: chỉ admin mới thu hồi một chứng chỉ vì hoàn tiền.
+- **Earnings:** thay đổi của đơn hàng đến bộ ghi earnings dưới dạng một đơn hàng `paid` có `refundFailedAt` và không có `refundedAmount`, và `recordRefundReversal` ghi nhận khoản hoàn tiền bị lấy lại: một bút toán `refund` cho mỗi giảng viên với các số liệu của khoản hoàn tiền được đổi dấu (ID bút toán `refund-reversal-<orderId>-<total>`), ghi ngày tại `refundFailedAt`, và `earningOrder.refundedMinor` về lại 0, trong một transaction. Các bút toán hoàn tiền gốc không bao giờ bị sửa, nên một khoản hoàn tiền mà một đợt chi trả đã trừ sẽ được trả lại ở đợt chi trả kế tiếp, và earnings của lần bán giống như trước yêu cầu hoàn tiền. Thời điểm đảo ngược được giữ trên `earningOrder.reversedAt`, kể cả khi sổ cái chưa có khoản hoàn tiền nào, và `recordRefund` bỏ qua một khoản hoàn tiền có ngày bằng hoặc trước nó. Vì vậy một lần lặp lại, một refund image được giao sau khi đảo ngược, hoặc được giao trước đó, không ghi gì, còn một khoản hoàn tiền sau đó của cùng đơn hàng (hỗ trợ hoàn tiền lại) được ghi như mới và có thể bị đảo ngược lần nữa.
+- Với đơn hàng vẫn còn `paid`, `markRefundFailed` đặt `refundFailedAt`.
+
+Đơn hàng là `paid` với `refundRequestedAt` được giữ, nên không có yêu cầu thứ hai nào được đưa ra; `payment.myOrder` trả về `refundFailedAt` và trang khóa học báo cho học viên rằng hoàn tiền thất bại và hãy liên hệ bộ phận hỗ trợ, không có nút "Request a refund". Trang khóa học thăm dò một khoản hoàn tiền đang chờ trong một thời gian giới hạn (2 phút), rồi báo rằng nó vẫn đang được xử lý và đưa ra một nút để kiểm tra lại.
+
+Một lượt ghi danh đã dropped giữ tiến độ và các lần hoàn thành của nó. Học viên có thể quay lại:
+
+- **Bằng cách mua lại.** Chốt đơn hàng mới khôi phục lượt ghi danh, là `completed` nếu họ đã học xong khóa học, cùng tiến độ của họ.
+- **Bằng cách ghi danh, nếu khóa học nay miễn phí.** `course.enrol` gọi `restoreFreeEnrolment`, hàm khôi phục lượt ghi danh và xóa `orderId` của nó. Không có đơn hàng nào được ghi.
+
+### Rời một khóa học
+
+`course.unenrol` kết thúc một lượt ghi danh chưa được trả tiền: `unenrolFromCourse` đặt nó thành `dropped` chỉ khi nó không có `orderId`, và từ chối với `EnrolmentPaidForError` nếu ngược lại. Một lượt ghi danh đã mua chỉ kết thúc bằng hoàn tiền, nên một khóa học trả phí không thể rời bỏ nếu không có hoàn tiền. Tiến độ và các lần hoàn thành được giữ, và `course.enrol` khôi phục lượt ghi danh khi khóa học miễn phí. Trạng thái và giá của khóa học không được kiểm tra, nên học viên có thể rời một khóa học đã lưu trữ hoặc sau đó được định giá.
+
+### Điều khoản
+
+- Hai giới hạn là các hằng số trong `helpers/order.ts` của core-table: `REFUND_WINDOW_DAYS` (14) và `REFUND_PROGRESS_LIMIT_PERCENT` (50).
+- `payment.myOrder` và `course.publicView` trả về chúng dưới dạng `refundWindowDays` và `refundProgressLimitPercent`, nên dòng điều khoản trên trang khóa học nêu đúng những gì API áp dụng.
+- `course.myEnrolment` trả về `refundedBefore`, nên trang cảnh báo một học viên từng được hoàn tiền theo yêu cầu của chính họ trước khi họ mua lại.
+- Một lần hoàn tiền của người vận hành trong Stripe không chịu bất kỳ điều khoản nào trong số này.
+- Các yêu cầu được hoàn tiền tự động, không xét duyệt.
+- Chứng chỉ vẫn còn sau hoàn tiền.
+
+## Kết nối Stripe
+
+Stripe không được cấu hình lúc deploy. Quản trị viên dán một secret key vào trang **Payments** của cổng quản trị.
+
+- **`paymentConnection`** là một bản ghi chứa các thông tin không bí mật: trạng thái, chế độ test hay live, ID và tên của tài khoản, bốn ký tự cuối của khóa và địa chỉ webhook đã đăng ký.
+- **Khóa và webhook signing secret** nằm trong Secrets Manager. Hàm `PaymentsConnect` chuyên dụng của admin-api là mã duy nhất có thể ghi chúng. Hàm checkout đọc khóa, webhook đọc cả hai, và không cái nào ghi được.
+- **`paymentChange`** là một hàng kiểm toán chỉ thêm vào cho mỗi lần thử: ai, khi nào, tài khoản nào và bốn ký tự cuối của khóa. Nó không bao giờ chứa khóa hay văn bản lỗi của Stripe.
+
+Lưu một khóa sẽ kiểm tra hình dạng của nó, hỏi Stripe xem nó của ai, đăng ký địa chỉ webhook của stage cho ba sự kiện, và lưu khóa cùng signing secret mà Stripe trả về.
+
+| Lưu | Nó làm gì |
+| --- | --- |
+| **Rotation** (cùng tài khoản, cùng địa chỉ) | Chỉ thay khóa. Đăng ký và signing secret giữ nguyên, nên các checkout đang mở vẫn hoàn tất |
+| **Switch** (tài khoản hoặc chế độ khác, hoặc địa chỉ mới) | Lấy một lease, đăng ký bằng khóa mới, lưu cả hai secret, rồi gỡ đăng ký cũ |
+| **Disconnect** | Lấy một lease, đánh dấu bản ghi `disconnected` và xóa các secret |
+
+Một lần switch hoặc disconnect lấy một **lease** hai phút: trạng thái của bản ghi thành `changing`, mà checkout và việc định giá coi là chưa kết nối. Lease bị từ chối khi một checkout có thể vẫn đang mở ("Checkouts are open until …"), nên không có khoản thanh toán nào đang diễn ra trong lúc các secret được thay. Một rotation không lấy lease, nhưng có điều kiện theo `revision` của bản ghi, nên nó thua gọn gàng trước một switch đồng thời. Một thay đổi thất bại sẽ đặt lại bản ghi và các secret.
+
+## Invariant
+
+Hai tệp trong `helpers/invariants/` của core-table kiểm tra các quy tắc trải qua nhiều bản ghi, sau mỗi kịch bản end-to-end:
+
+- `payments.ts`: các trường của một đơn hàng khớp với trạng thái của nó, giá niêm yết trừ khoản giảm là số tiền đã thu, một đơn hàng đã thanh toán có lượt ghi danh của nó, `orderId` của một lượt ghi danh nêu tên một đơn hàng của cùng học viên và khóa học, và một lượt ghi danh không có đơn hàng trong khóa học có giá có từ lúc khóa học còn miễn phí.
+- `coupons.ts`: `redeemedCount` bằng số lượt dùng của coupon và nằm trong giới hạn, mỗi lượt dùng có đơn hàng của nó (pending khi reserved, paid khi redeemed), và một đơn hàng miễn phí tạo bởi một mã có lượt ghi danh của nó.
+
+## Phát triển cục bộ
+
+Event runner có một Stripe stand-in (`packages/events/src/local/stripe-stand-in.ts`): API của Stripe, một trang checkout được host với **Pay**, **Decline card** và **Cancel**, và các lần giao webhook có chữ ký đến `/stripe/webhook` trên cổng 2024. Kết nối nó với tư cách Carol bằng khóa `sk_test_local`. Khóa được giữ trong `tmp/local-dev/secrets/` bị git bỏ qua thay cho Secrets Manager.
+
+Các điều khiển dưới `/stripe/test/` điều khiển những gì một tài khoản Stripe thật sẽ làm: `refund`, `refunds` (liệt kê các lần hoàn tiền của một khoản thanh toán), `fail-next-refund` (khoản hoàn tiền kế tiếp được báo bằng `charge.refunded`, rồi ít lâu sau được báo là thất bại, và khoản thu không còn ở trạng thái đã hoàn), `hold-next-refund` (được báo bằng `charge.refunded`, không bao giờ được chốt), `replay` (giao lại một xác nhận), `expire`, `forge` (một thông điệp ký sai) và `endpoints`.
+
+`LOCAL_CHECKOUT_TTL_SECONDS` rút ngắn vòng đời một giờ của checkout, chỉ trong phát triển cục bộ.
+
+## Hạn chế
+
+- Chỉ thanh toán thẻ, không xử lý thuế và không quy đổi tiền tệ.
+
+<Link path="design/instructor-payouts">Thanh toán cho giảng viên</Link> bao quát chuyện xảy ra với số tiền sau khi một đơn hàng được thanh toán.

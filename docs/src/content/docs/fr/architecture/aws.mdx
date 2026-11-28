@@ -1,0 +1,162 @@
+---
+title: Déploiement sur AWS
+description: Les stacks CloudFormation qui composent un stage Discava, les ressources AWS de chacune et leurs dépendances.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+Une installation déployée s'appelle un **stage**. Un stage est un groupe de stacks CloudFormation, toutes nommées `<stage>-<Stack>`, comme `discava-production-Data`. Plusieurs stages peuvent cohabiter dans un même compte AWS sans interférer.
+
+## Les stacks
+
+L'application est découpée en dix stacks. Une seule stack dépasserait la limite de 500 ressources de CloudFormation, et séparer les ressources à état du code garde les déploiements courants loin des données.
+
+```d2 title="Stacks and their dependencies (an arrow points at what a stack needs)"
+direction: up
+
+websites: "Websites"
+data: "Data"
+payments: "Payments"
+media: "MediaPipeline"
+core: "CoreApi"
+router: "StreamRouter"
+payouts: "Payouts"
+instr: "InstructorApi"
+admin: "AdminApi"
+rc: "PortalConfig"
+
+data -> websites
+payments -> data
+payouts -> data
+admin -> payments
+media -> data
+core -> data
+core -> media
+core -> websites
+router -> data
+router -> core
+router -> websites
+instr -> data
+instr -> media
+instr -> core
+instr -> websites
+admin -> data
+admin -> core
+admin -> websites
+rc -> core
+rc -> instr
+rc -> admin
+```
+
+`PortalConfig` dépend de toutes les autres stacks. Seules ses flèches vers les trois API sont dessinées.
+
+Elles se déploient dans cet ordre :
+
+```
+Websites → Data → Payments → MediaPipeline → CoreApi → StreamRouter → Payouts → InstructorApi → AdminApi → PortalConfig
+```
+
+| Stack | Contient | Pourquoi elle est séparée |
+| --- | --- | --- |
+| **Websites** | Les trois portails : un bucket S3 et une distribution CloudFront chacun. Le portail étudiant a aussi la fonction page renderer | Ne dépend de rien. Les autres ont besoin des adresses des portails pour le CORS et les redirections de connexion |
+| **Data** | Le pool d'utilisateurs Cognito et ses déclencheurs, la core table, les buckets de médias de leçon et de médias publics avec leurs distributions CloudFront, le bucket de téléversement, la collection de recherche et la fonction qui crée ses index, les secrets du lien de désabonnement et de Stripe | Tout ce qui a un état. Change rarement, et toutes les autres stacks backend en dépendent |
+| **Payments** | La Stripe webhook API : son API Gateway et sa fonction | Appelée par Stripe, pas par des utilisateurs connectés, donc son pare-feu, ses limites de requêtes et son domaine sont distincts des autres API |
+| **MediaPipeline** | Le pipeline MediaConvert, les fonctions qui réagissent aux transcodages et transcriptions terminés, les planifications de nettoyage, les files d'échec | Traitement vidéo, utilisé à la fois par core-api et instructor-api |
+| **CoreApi** | L'API Gateway et les fonctions de core-api, la fonction de réindexation de la recherche, la route de désabonnement par e-mail | L'API que tous les utilisateurs appellent |
+| **StreamRouter** | La fonction routeur du flux de la table, une file et une file d'échec par fonctionnalité, les gestionnaires de fonctionnalités, la fonction de rappel de certificat et la fonction de réindexation des transcriptions | Réactions en arrière-plan aux changements de données, gardées hors du budget de ressources de CoreApi |
+| **Payouts** | L'exécution quotidienne des versements et sa planification | Séparée pour qu'aucune stack n'approche la limite de ressources. Elle lit seulement la table et la clé Stripe |
+| **InstructorApi** | L'API Gateway et les fonctions de instructor-api, avec leurs permissions média et de transcodage | L'API des instructeurs |
+| **AdminApi** | L'API Gateway et les fonctions de admin-api, dont celle qui enregistre la clé Stripe | L'API des administrateurs |
+| **PortalConfig** | Le `runtime-config.json` de chaque portail | Lit des valeurs de toutes les autres stacks, donc se déploie en dernier |
+
+Quand une distribution de portail ou de médias a le WAF activé, sa web ACL est une petite stack supplémentaire dans `us-east-1`, où CloudFront l'exige.
+
+## Ce que contient chaque couche
+
+### Périphérie : CloudFront et API Gateway
+
+| Point d'entrée | Service | Origine |
+| --- | --- | --- |
+| Chaque portail | CloudFront | Un bucket S3 privé de fichiers statiques |
+| Pages publiques du portail étudiant (`/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml`, `/robots.txt`) | La distribution CloudFront du portail étudiant | La fonction page renderer, via une URL de fonction que seul CloudFront peut appeler |
+| Médias de leçon | CloudFront, requêtes signées uniquement | Un bucket S3 privé |
+| Médias publics | CloudFront | Un bucket S3 privé |
+| Chaque API | API Gateway (REST, régional) | Lambda |
+| Webhook Stripe | API Gateway (REST, régional) | Lambda |
+
+Aucun bucket S3 n'est public. CloudFront atteint chacun via Origin Access Control.
+
+### Calcul : Lambda
+
+Tout le code tourne dans Lambda sur Node.js 24.
+
+- **Fonctions d'API.** Chaque API sert la plupart des procédures depuis une fonction partagée. Une procédure qui demande plus que l'accès de base (la table, plus la lecture de la recherche dans core-api) tourne dans une fonction dédiée, ce qui garde les permissions puissantes à l'écart de la fonction qui traite toutes les autres requêtes :
+
+  | API | Fonctions dédiées |
+  | --- | --- |
+  | core-api | Signature des requêtes de médias, téléversements de devoirs, démarrage d'un paiement ou d'un remboursement (lit la clé Stripe) |
+  | instructor-api | Signature des requêtes de médias, écriture des médias de leçon et envoi des transcodages, images de cours et photos de profil, comptes de versement (lit la clé Stripe) |
+  | admin-api | Enregistrement des secrets Stripe (le seul écrivain), images de marque |
+
+- **Fonctions d'événements.** Une par tâche : les deux déclencheurs Cognito, le stream router et ses gestionnaires de fonctionnalités, les gestionnaires de fin, de reprise et de nettoyage du pipeline média, le rappel de certificat, le webhook Stripe, l'exécution quotidienne des versements et le lien de désabonnement par e-mail.
+- **Le page renderer.** Le second gestionnaire de core-api, déployé avec le portail étudiant. Il ne fait que lire la table.
+- **Fonctions d'exploitation.** Trois n'ont pas de déclencheur et s'exécutent quand un déploiement ou un opérateur les invoque : celle qui crée ou met à jour les index de recherche à chaque déploiement, et les deux qui reconstruisent les index des cours et des transcriptions.
+
+### Données
+
+| Ressource | Service | Notes |
+| --- | --- | --- |
+| Core table | DynamoDB, à la demande avec un plafond de débit | Un flux de modifications alimente le stream router |
+| Recherche | OpenSearch Serverless | Deux index : cours et transcriptions. Peut descendre à zéro sur un stage de développement |
+| Médias | S3 | Trois buckets : médias de leçon, téléversements, médias publics |
+| Utilisateurs | Pool d'utilisateurs Cognito | Groupes : `student`, `instructor`, `admin` |
+| Configuration | Variables d'environnement Lambda | Noms de ressources et adresses, définis au déploiement et lus par les fonctions depuis leur environnement. Le page renderer lit un paramètre Systems Manager |
+| Secrets | Secrets Manager | La clé qui signe les requêtes de médias de leçon, la clé qui signe les liens de désabonnement, ainsi que la clé secrète Stripe et le secret de signature du webhook qu'un administrateur enregistre |
+
+### Traitement des médias
+
+| Service | Utilisé pour |
+| --- | --- |
+| MediaConvert | Transcoder une vidéo téléversée en rendus HLS |
+| Transcribe | Sous-titres automatiques pour chaque vidéo |
+| Translate | Traduire les sous-titres dans les autres langues de sous-titres d'un cours |
+
+### Messagerie et planification
+
+| Service | Utilisé pour |
+| --- | --- |
+| DynamoDB Streams | Chaque modification de la core table |
+| SQS | Une file et une file d'échec par fonctionnalité du flux, plus des files d'échec pour le pipeline média et le rappel de certificat |
+| EventBridge | Des règles qui se déclenchent quand une tâche MediaConvert ou Transcribe se termine, une planification qui repère les vidéos bloquées et la planification quotidienne de l'exécution des versements |
+| EventBridge Scheduler | Des planifications ponctuelles : nettoyages différés des médias retirés et rappels de certificat |
+| SES | E-mails de notification |
+
+## Configuration à l'exécution
+
+Le code déployé n'a jamais de noms de ressources codés en dur.
+
+- **Les fonctions backend** lisent les noms de tables, de buckets et les points de terminaison depuis leurs propres **variables d'environnement** (`DISCAVA_*`), définies au déploiement de la stack. Rien n'est récupéré à l'exécution, et une fonction ne reçoit que les réglages que son code lit. Le page renderer fait exception : il lit le nom de la table et l'adresse des médias publics depuis un paramètre Systems Manager, parce qu'il se déploie dans `Websites`, avant la stack `Data` qui les possède.
+- **Les portails** récupèrent `runtime-config.json` depuis leur propre origine au chargement. Il contient les adresses des API, les identifiants Cognito et les adresses des autres portails.
+
+Le fichier des portails est écrit par la stack `PortalConfig` à partir de valeurs que les autres stacks exportent, ce qui explique qu'elle se déploie en dernier.
+
+## Stages partageant un compte
+
+Trois mécanismes séparent les stages :
+
+- **Noms.** Chaque nom de stack et de ressource générée commence par le nom du stage, et les permissions IAM sont limitées à ce préfixe.
+- **Assets.** Chaque stage téléverse le résultat de son build sous son propre préfixe dans le bucket CDK partagé, donc un stage ne peut pas écraser ce qu'un autre s'apprête à déployer.
+- **Limite de permissions.** Chaque rôle IAM créé par un stage porte la politique de limite de ce stage, ce qui plafonne ce que le code du stage peut recevoir.
+
+## Comment c'est défini dans le code
+
+| Quoi | Où |
+| --- | --- |
+| Quels stages existent et leurs réglages | `packages/common/infra-config/src/stages.config.ts` |
+| L'application CDK : un `ApplicationStage` par stage configuré | `packages/infra/src/main.ts` |
+| Comment les stacks sont composées et reliées | `packages/infra/src/stages/application-stage.ts` et `packages/infra/src/stacks/` |
+| Les briques de base (une API, un bucket, un site web) | `packages/common/constructs` |
+
+Un **construct** possède les ressources d'un composant et expose des helpers comme `grantRead`. Une **stack** relie des constructs entre eux et transforme les réglages du stage en options de construct. Voir <Link path="deploy/configuration">Configuration d'un stage</Link> pour les réglages.

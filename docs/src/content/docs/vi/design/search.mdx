@@ -1,0 +1,317 @@
+---
+title: Tìm kiếm
+description: "Cách tìm kiếm khóa học hoạt động: collection OpenSearch Serverless, quy trình lập chỉ mục, và cách quyền hiển thị được thực thi."
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Core table (`packages/databases/core-table`) được xây cho truy cập theo khóa, không phải cho việc "tìm một khóa học có tiêu đề hoặc mô tả khớp với đoạn văn bản này". [Amazon OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html) là lớp tìm kiếm cho việc đó, được đặt bên ngoài core table thay vì thêm nhiều GSI.
+
+## Phạm vi
+
+Hai chỉ mục trong cùng một collection:
+
+| Chỉ mục | Chứa | Ai có thể tìm |
+|---|---|---|
+| `courses` | Mọi khóa học đang được **xuất bản**. Một khóa học chưa xuất bản bị xóa document thay vì giữ lại kèm một cờ | Bất kỳ ai, đã đăng nhập hay chưa (`course.publicSearch`, `course.publicSuggest`) |
+| `transcripts` | Các đoạn của track phụ đề của những video mà một học viên đã ghi danh có thể xem | Học viên đã ghi danh, trong phạm vi một khóa học (`transcript.search`) |
+
+Các loại nội dung khác (giảng viên, thông báo) sẽ đến sau, mỗi loại có chỉ mục riêng và procedure riêng thay vì một truy vấn trộn lẫn chúng. Mapping type đã bị loại bỏ từ OpenSearch 2.0, nên mỗi loại một chỉ mục. Mỗi loại cũng có quy tắc hiển thị riêng, dễ đọc và dễ kiểm thử nhất khi tách biệt.
+
+## Chi phí: NextGen, không phải zero-ETL
+
+Hai lựa chọn thay thế gốc AWS đã bị loại, cả hai vì chi phí:
+
+- **Đồng bộ**: [tích hợp zero-ETL của OpenSearch Ingestion cho DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/OpenSearchIngestionForDynamoDB.html) chạy một pipeline được quản lý, tính phí theo giờ OCU với mức tối thiểu cố định, dù bảng có thay đổi hay không, và không có bản tương đương cho local dev. DynamoDB Streams và một Lambda (bên dưới) không tốn gì giữa các lần ghi và dùng lại bộ chạy sự kiện cục bộ.
+- **Dung lượng collection**: thế hệ cổ điển có mức sàn cố định 2 OCU, tính phí liên tục. Thay vào đó collection nằm trong một collection group NextGen (`AWS::OpenSearchServerless::CollectionGroup`, `Generation: NEXTGEN`), có mức sàn là lựa chọn theo từng stage (`min{Indexing,Search}CapacityInOcu` trong cấu hình `search` của stage).
+
+| Stage | OCU tối thiểu (lập chỉ mục / tìm kiếm) | Tác động |
+|---|---|---|
+| `discava-development` | 0 / 0 | Co về không giữa các lần có người thử. Lần tìm kiếm đầu tiên sau một lúc im ắng phải chờ khoảng 10 đến 30 giây cho cold start |
+| `discava-production` | 1 / 1 | Không bao giờ phục vụ từ trạng thái nguội, và vẫn thấp hơn mức sàn của thế hệ cổ điển |
+
+NextGen chỉ có ở một số region (tại thời điểm viết: US East N. Virginia/Ohio, US West Oregon, Asia Pacific Mumbai/Singapore/Sydney/Tokyo, Europe Frankfurt/Ireland/Spain/Stockholm). Hãy xác nhận region triển khai của stage nằm trong số đó.
+
+## Các package
+
+| Package | Chứa |
+|---|---|
+| `packages/databases/search` | Client (`getOpenSearchClient`, `resolveIndexName`), zod schema và mapping của từng chỉ mục (`src/indices`), bộ sinh indices manifest, và index-sync (`src/index-sync`) |
+| `packages/common/constructs` | `OpenSearchCollection` (tổng quát: một collection group NextGen, collection, các security policy của nó, `grantRead`/`grantWrite`, custom resource index-sync) và `SearchCollection` (bản dựng của Discava từ nó) |
+| `packages/events` | `src/search/search-indexing.ts` giữ chỉ mục `courses` đồng bộ với bảng, và `search-reindex.ts` dựng lại nó. `transcript-indexing.ts` và `transcript-reindex.ts` làm tương tự cho `transcripts` (xem [Tìm kiếm bản ghi lời thoại](#tìm-kiếm-bản-ghi-lời-thoại)) |
+| `packages/apis/core-api` | `course.publicSearch` và `course.publicSuggest` (`procedures/search.ts`, với `helpers/search-query.ts` và `suggest-query.ts`). `transcript.search` (`procedures/transcript.ts`, với `helpers/transcript-access.ts`, `transcript-query.ts` và `transcript-snippet.ts`) |
+| `packages/common/web-utils` | `webvtt`: bộ phân tích WebVTT dùng chung bởi bảng bản ghi lời thoại và bộ lập chỉ mục bản ghi lời thoại |
+
+**Index-sync** tạo một chỉ mục còn thiếu và áp dụng mapping cho chỉ mục đã có (`putMapping`). Nó không bao giờ xóa một chỉ mục. Nó chạy ở mỗi lần deploy, nên một chỉ mục bị xóa bằng tay sẽ quay lại.
+
+Package search cố ý mô phỏng hình dạng của `packages/databases/core-table`. Nó được dựng tay để khớp với bộ sinh `ts#opensearch` được đề xuất trong [awslabs/nx-plugin-for-aws#1267](https://github.com/awslabs/nx-plugin-for-aws/issues/1267) (chưa có trong `@aws/nx-plugin`), để có thể đóng góp ngược lên upstream và sau này thay lại bằng một diff nhỏ.
+
+## Quy trình lập chỉ mục
+
+```d2 title="A course change reaches the search index through the stream router"
+direction: right
+
+table: "Core table" {shape: cylinder}
+router: "Stream router"
+queue: "search-indexing queue"
+index: "Search indexing"
+search: "courses index" {shape: cylinder}
+
+table -> router: "stream"
+router -> queue: "SEARCH_STREAM_FILTERS"
+queue -> index
+index -> table: "read course and rating"
+index -> search: "index / delete"
+```
+
+Stream của core table có một bộ đọc duy nhất, <Link path="design/stream-event-router">stream router</Link>, bộ này gửi mỗi thay đổi đến hàng đợi của mọi tính năng đăng ký nhận nó. Lập chỉ mục tìm kiếm là một tính năng như vậy (`search-indexing`), với hàng đợi và hàng đợi lỗi riêng, nên một lỗi trong đó không bao giờ chặn tính năng khác.
+
+Bộ lọc của nó, `SEARCH_STREAM_FILTERS` (`core-table/src/helpers/search-stream.ts`), cho qua mọi lần chèn và thay đổi của bản ghi `course` hoặc `courseRating`, và việc xóa một `course`. Các chỉnh sửa chương trình học và từng đánh giá riêng lẻ không thể đổi một document, nên chúng không được định tuyến.
+
+`search-indexing.ts` dùng một thay đổi chỉ để biết khóa học nào đã đổi, rồi đọc khóa học đó như bảng đang giữ hiện tại:
+
+- Mỗi `courseId` khác nhau trong batch được đọc một lần theo khóa, với tính nhất quán, cùng bảng tổng hợp đánh giá của nó.
+- Nếu khóa học là `'published'`, document của nó được ghi (dựng bởi `toCourseDocument`, được xác thực theo `CourseDocumentSchema`). Nếu nó chưa xuất bản hoặc đã biến mất, document của nó bị xóa.
+- Id của document là `courseId` của khóa học, nên một bản ghi được phát lại, thử lại hoặc sai thứ tự sẽ hội tụ về cùng một document, không bao giờ trùng lặp.
+
+Một chỉ mục mới tạo bắt đầu trống. Stream chỉ mang các thay đổi được thực hiện sau khi chỉ mục tồn tại, nên một khóa học đã xuất bản trước đó sẽ không tìm được cho đến khi nó được ghi lần tiếp theo hoặc chỉ mục được dựng lại.
+
+### Document khóa học
+
+Bên cạnh `courseId`, `title`, `description`, `imageKey`, `status`, `publishedAt` và `updatedAt`, một document mang ba nhóm trường tùy chọn:
+
+| Nhóm | Trường | Được ánh xạ thành |
+|---|---|---|
+| Danh mục | `categoryId`, `tags`, `level`, `language`, `durationHours` | `keyword` (`tags` là mảng), `durationHours` là `integer` |
+| Đánh giá | `ratingCount`, `ratingAverage`, `ratingScore`, `ratingBoost` | `integer` và `float`. Một khóa học chưa có đánh giá chỉ có `ratingBoost`, đặt là 1 |
+| Giá | `priceAmount` (đơn vị nhỏ nhất), `priceCurrency` | `integer`, `keyword` |
+
+`title` và `description` là `text` với analyzer `english`, nên "design" tìm được "designing".
+
+Document lưu `categoryId`, không phải tên hay slug của danh mục. Nhờ đó đổi tên không đụng đến document nào, và một phản hồi phân giải tên và slug từ các bản ghi `category` khi nó được dựng.
+
+### Lập chỉ mục lại một stage đã triển khai
+
+`src/search/search-reindex.ts` là một Lambda riêng tư không có event source và không có route API. Nó duyệt qua từng trang các khóa học đã xuất bản, ghi chúng bằng `_bulk` dùng cùng `toCourseDocument` mà bộ lập chỉ mục stream dùng, rồi xóa các document của những khóa học không còn được xuất bản. Chạy nó sau khi chỉ mục được tạo lại, sau một lỗi lập chỉ mục, hoặc sau một lần deploy thêm trường:
+
+```sh
+pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development
+```
+
+Nó in ra số khóa học đã được lập chỉ mục và số document cũ đã bị xóa. Chạy hai lần để lại cùng các document.
+
+- Nó chạy dưới role riêng vì chính sách truy cập dữ liệu của collection chỉ nêu các role Lambda của stack. Đăng nhập AWS của một người nhận 403 ở data plane.
+- `aoss:WriteDocument` của `grantWrite` bao gồm cả việc xóa.
+- Timeout của nó là 5 phút. Một danh mục quá lớn cho một lần gọi sẽ cần Lambda tự chuyển giao cho chính nó.
+
+Ở local, `pnpm nx run @discava/e2e:seed-local-courses` tạo và xuất bản các khóa học qua instructor API, và stream lập chỉ mục chúng.
+
+### Triển khai các trường danh mục
+
+Thêm một trường vào mapping `courses` là thay đổi cộng thêm: `putMapping` của index-sync áp dụng nó vào chỉ mục đang chạy tại chỗ khi deploy, không cần chỉ mục mới. Các trường danh mục đã được thêm theo cách này. Đổi hoặc xóa một thuộc tính hiện có là thay đổi phá vỡ và cần chỉ mục có phiên bản của #270.
+
+Một khóa học được xuất bản trước một lần deploy như vậy không có giá trị cho trường mới cho đến khi nó được ghi lần tiếp theo, nên sau khi deploy hãy **chạy lập chỉ mục lại một lần** (lệnh ở trên).
+
+## Procedure tìm kiếm
+
+`course.publicSearch` được xây trên `publicSearchProcedure` (`src/init.ts`), thêm một plugin tìm kiếm viết tay (`createSearchPlugin`, trong `src/middleware/search.ts`) và plugin core-table. Plugin được viết tay vì bộ sinh `connection` chưa có tổ hợp tRPC đến OpenSearch.
+
+Nó công khai, như `course.publicList`: người gọi chưa đăng nhập cũng có thể tìm. Quyền hiển thị được thực thi hai lần: lúc lập chỉ mục (ở trên), và lại trong truy vấn, luôn lọc theo `status: 'published'` dù mọi khóa học đã lập chỉ mục vốn đều như vậy. Khi đó một lỗi ở một nơi không phải là thứ duy nhất ngăn giữa người gọi và một khóa học nháp hay đã lưu trữ.
+
+`buildSearchRequest` (`helpers/search-query.ts`) dựng một yêu cầu:
+
+- **Văn bản**: một `multi_match` trên `title` và `description`. Từ nào cũng có thể khớp, và càng nhiều từ khớp thì xếp hạng càng cao. Không có văn bản, mọi khóa học đã xuất bản đều khớp.
+- **Xếp hạng**: với cách sắp xếp mặc định, điểm của một truy vấn văn bản được nhân với `ratingBoost` của khóa học, nên một khóa học được đánh giá tốt xếp trên một khóa học liên quan ngang nhau nhưng đánh giá kém. Không có văn bản thì thứ tự là mới xuất bản nhất trước. Các cách sắp xếp `rating` và `newest` thay thế cả hai.
+- **Bộ lọc**: danh mục, tag, cấp độ, ngôn ngữ và thời lượng nằm trong `post_filter`, nên các kết quả được lọc đầy đủ. Đánh giá tối thiểu nằm ngay trong truy vấn, nên mọi số đếm facet đều tôn trọng nó.
+- **Facet**: một aggregation `filter` cho mỗi facet, áp dụng mọi bộ lọc trừ của chính nó, nên số đếm của nó cho thấy việc chọn một giá trị khác sẽ cho kết quả gì.
+
+Phản hồi nêu danh mục của từng kết quả từ các bản ghi `category`, đọc song song với việc tìm kiếm. Một yêu cầu mất hơn 8 giây trở thành tRPC `TIMEOUT`, nên một collection nguội cho ra một lỗi rõ ràng, có thể thử lại trước timeout của chính Lambda.
+
+## Gợi ý
+
+**Spec:** [`specs/20261119-195009-search-suggestions/`](https://github.com/AlexTo/discava/tree/main/specs/20261119-195009-search-suggestions/)
+
+Ô tìm kiếm của cổng học viên (`site-search.tsx`) hiển thị tối đa 10 khóa học khớp khi bạn gõ. `course.publicSuggest` (vào `{ q }`, ra `{ items: [{ courseId, title, imageKey? }] }`) được xây trên `publicSearchProcedure`, trong cùng tệp với `publicSearch`. Yêu cầu của nó được dựng bởi `buildSuggestRequest` (`helpers/suggest-query.ts`).
+
+### Vì sao không dùng `publicSearch`
+
+`publicSearch` luôn chạy năm aggregation facet, đọc mọi danh mục từ core table và trả về các thẻ kết quả đầy đủ. Gợi ý không cần gì trong đó, và được gọi thường xuyên hơn nhiều. Một procedure riêng cũng có giới hạn đầu vào riêng (3 đến 200 ký tự) và timeout ngắn hơn mà không nới lỏng của `publicSearch`. Một cờ `mode` trên `publicSearch` đã bị loại: một procedure với hai dạng đầu ra khó định kiểu và khó kiểm thử hơn.
+
+### Truy vấn
+
+Một `match_bool_prefix` trên `title`, bên trong cùng `function_score` với `ratingBoost` và cùng bộ lọc `status: 'published'` như tìm kiếm đầy đủ.
+
+- Mọi term trừ term cuối được khớp như một term nguyên (đã stem), và term cuối như một tiền tố. "pyth" tìm được "Python for Data Analysis".
+- Yêu cầu không đặt `operator`, nên các term được OR với nhau. Một term khớp là đủ, và khóa học khớp nhiều term hơn thì điểm cao hơn: "java zzzz" vẫn gợi ý các khóa học Java.
+- Kết quả sắp theo điểm, rồi `publishedAt` giảm dần, rồi `courseId`.
+- Không có aggregation, `track_total_hits` tắt, và chỉ lấy `courseId`, `title` và `imageKey`.
+
+Nó truy vấn trên trường `title` hiện có, nên mapping không đổi và không stage nào cần lập chỉ mục lại.
+
+Giới hạn đã biết: term cuối được stem trước khi áp dụng tiền tố, nên một từ gõ dở mà stem của nó không phải tiền tố của stem đã lập chỉ mục có thể trượt cho đến khi ký tự kế tiếp được gõ. Nếu điều này hóa ra quá phổ biến, bước tiếp theo là một trường con `title.suggest` kiểu `search_as_you_type` với analyzer `standard`, truy vấn bằng `multi_match` `bool_prefix`. Nó là thay đổi cộng thêm (`putMapping`) nhưng cần một lần lập chỉ mục lại cho mỗi stage.
+
+### Gõ, debounce và tái sử dụng
+
+- Không gửi gì khi dưới **3 ký tự** (sau khi cắt khoảng trắng) hoặc trên 200.
+- Văn bản đã cắt được **debounce 300 ms** (`useDebouncedValue`), nên một loạt phím gõ chỉ gửi một yêu cầu, cho văn bản cuối cùng.
+- Truy vấn được khóa theo văn bản, nên một câu trả lời chậm cho "javas" rơi vào mục cache của "javas" và không bao giờ thay danh sách của "javascript". Gõ lại một văn bản gần đây trong `staleTime` (60 giây) dùng lại câu trả lời của nó và không gửi gì.
+- Gửi biểu mẫu hoặc chọn một hàng sẽ hủy debounce đang chờ, nên không có yêu cầu nào bắn ra cho văn bản đã được gửi.
+
+### Lỗi, timeout và throttle
+
+Yêu cầu có **timeout 3 giây** (`SUGGEST_REQUEST_TIMEOUT_MS`), ngắn hơn 8 giây của `publicSearch`, để một collection nguội không giữ concurrency của Lambda ở mỗi lần dừng gõ. Một `TimeoutError` trở thành tRPC `TIMEOUT`, như trong `publicSearch`. Cổng coi mọi lỗi, kể cả 429, là "không có gợi ý": nó không hiển thị cảnh báo và không thử lại, vì lần dừng gõ kế tiếp dù sao cũng thay yêu cầu.
+
+`course.publicSuggest` nằm trong `PUBLIC_OPERATIONS`, nhưng nó không dùng `publicThrottle` dùng chung. Giới hạn đó dùng chung cho mọi người gọi, không đếm theo từng khách, và quá chặt cho yêu cầu thường xuyên nhất mà core-api nhận: trên `discava-development`, hai người gõ cùng lúc sẽ khiến danh sách thả xuống âm thầm ngừng hoạt động. Nó có throttle riêng, đặt bởi hai khóa stage `coreApi`, `publicSuggestThrottleRateLimit` và `publicSuggestThrottleBurstLimit`:
+
+| Stage | Throttle gợi ý (rate / burst) | Các thao tác công khai khác |
+|---|---|---|
+| `discava-development` | 5 / 10 | 1 / 3 |
+| `discava-production` | 100 / 200 | 20 / 40 |
+| Mặc định (stage không đặt khóa nào) | 100 / 200 | 20 / 40 |
+
+Một người gõ đều đặn tốn khoảng 1 yêu cầu/giây.
+
+- 5 / 10 của development đủ cho khoảng năm người thử cùng lúc và giữ cho phạm vi mà một đợt dồn dập ẩn danh có thể chạm tới ở mức nhỏ. WAF tắt ở đó, và reserved concurrency 10 của core-api vẫn giới hạn các yêu cầu đồng thời.
+- 100 / 200 của production đủ cho khoảng 100 người gõ cùng một lúc. Một yêu cầu là truy vấn 10 kết quả không đọc core-table, nên nó giữ Lambda trong thời gian ngắn. Hãy tăng nó theo lưu lượng thực, như các giới hạn khác của stage.
+
+Không có quy tắc rate theo IP ở stage nào, nên một người gọi nặng vẫn có thể dùng hết toàn bộ giới hạn, như các thao tác công khai khác.
+
+## Tìm kiếm bản ghi lời thoại
+
+**Spec:** [`specs/20261120-002950-transcript-search/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002950-transcript-search/)
+
+Một học viên đã ghi danh có thể tìm những gì được nói trong các video của khóa học và mở video tại thời điểm đó. Bảng hiển thị bản ghi lời thoại của một video được mô tả ở trang <Link path="design/video-player">trình phát video</Link>.
+
+### Vì sao cần chỉ mục riêng
+
+Chỉ mục `transcripts` nằm bên cạnh `courses`, không nằm trong nó:
+
+- **Đơn vị**: một bên là khóa học, bên kia là một đoạn.
+- **Vòng đời**: document khóa học tồn tại khi khóa học được xuất bản. Một đoạn tồn tại khi video của nó còn xem được, kể cả trong khóa học nháp hay đã lưu trữ.
+- **Hiển thị**: `courses` là công khai, bản ghi lời thoại dành cho học viên đã ghi danh. Giữ nội dung khóa học trả phí ra khỏi chỉ mục mà người gọi ẩn danh truy vấn nghĩa là một lỗi trong một truy vấn công khai không thể trả về nó.
+- **Kích thước**: bản ghi lời thoại nặng cỡ megabyte. Nếu nằm trên document khóa học, mỗi lần sửa khóa học sẽ ghi lại chúng và mỗi lần tìm kiếm danh mục sẽ chấm điểm trên chúng.
+
+Index-sync tạo chỉ mục khi deploy mà không đổi mapping hiện có nào.
+
+### Một đoạn, và cách một kết quả trở thành thời gian
+
+Một document là một **đoạn** của một track phụ đề: các cue liên tiếp được nối bằng dấu cách đơn. Một đoạn đóng lại khi cue kế tiếp sẽ đưa nó vượt quá 30 giây tính từ lúc bắt đầu cue đầu, hoặc vượt quá 600 ký tự. Mỗi đoạn sau đoạn đầu bắt đầu bằng cue cuối của đoạn trước, nên một cụm từ nằm vắt qua hai cue luôn được tìm thấy bên trong một đoạn.
+
+Một document lưu văn bản, thời gian bắt đầu và kết thúc của nó, và với mỗi cue là thời gian bắt đầu và offset ký tự trong văn bản (được lưu, không lập chỉ mục). Đó là khoảng 130 document cho mỗi giờ video mỗi track.
+
+Để biến một kết quả thành thời gian:
+
+1. Truy vấn yêu cầu đánh dấu nổi bật toàn bộ đoạn, với hai ký tự private-use làm thẻ (`MATCH_START` và `MATCH_END` trong `transcript-query.ts`).
+2. Procedure tìm kết quả khớp có thẻ đầu tiên, lấy offset của nó, và tra cue mà nó rơi vào. Thời điểm bắt đầu của cue đó là thời gian của kết quả.
+3. Đoạn trích được cắt từ cùng văn bản đó và trả về dưới dạng các phần `{ text, match }`, không bao giờ là HTML.
+
+Phần chồng lấn nghĩa là một kết quả khớp trong cue dùng chung được tìm thấy hai lần. Procedure yêu cầu 40 kết quả và bỏ các bản lặp theo video, track và thời điểm bắt đầu cue, để trả về tối đa 20.
+
+### Tính năng `transcript-indexing`
+
+Một tính năng stream riêng (xem <Link path="design/stream-event-router">stream router</Link>), với hàng đợi và hàng đợi lỗi riêng. Nó đọc bucket media bài học, điều mà bộ lập chỉ mục khóa học không nên làm, và một tệp phụ đề hỏng không được làm chậm việc lập chỉ mục khóa học. Như `search-indexing`, nó dùng một thay đổi chỉ để biết mục nào đã đổi (`transcript-actions.ts`), rồi đọc mục đó như bảng đang giữ hiện tại (`transcript-sync.ts`).
+
+| Bản ghi | Tác động |
+|---|---|
+| `contentItem` INSERT | Một video đã có `captionTracks` được đồng bộ |
+| `contentItem` MODIFY | Một video có `captionTracks`, `captionTracksRev`, `status`, `s3Key`, `previousS3Key`, `visibility` hoặc `archivedAt` thay đổi được đồng bộ. Mọi thay đổi khác (như một bộ đếm của học viên) không làm gì và không đọc gì |
+| `contentItem` REMOVE | Mọi document của `contentItemId` đó bị xóa |
+| `lesson` hoặc `module` MODIFY | Nếu việc nó có được hiển thị hay không thay đổi, mọi mục video bên dưới nó được đồng bộ |
+| `lesson` hoặc `module` REMOVE | Mọi document của `lessonId` hoặc `moduleId` đó bị xóa |
+
+**Đồng bộ một mục** (`syncItemTranscripts`):
+
+1. Đọc mục, bài học và module của nó với tính nhất quán.
+2. Xác định các document cần có. Nếu cả ba đều được hiển thị và mục là một video có phiên bản phát được, đó là các đoạn của mọi track của phiên bản đó, dựng từ các tệp WebVTT trong bucket media bài học. Nếu không thì không cần document nào.
+3. Liệt kê các id mà chỉ mục đang giữ cho mục đó, ghi những cái cần có bằng `_bulk` và xóa phần còn lại.
+4. Đọc lại ba bản ghi. Nếu thứ mà các document phụ thuộc đã đổi, nó đồng bộ thêm một lần (tối đa 3 vòng trước khi thất bại để thử lại), nên hai lần đồng bộ chồng nhau của một mục vẫn kết thúc ở trạng thái hiện tại.
+
+Id của document là `<contentItemId>.<trackId>.<seq>` (`transcriptDocumentId`). Do đó một lần giao trùng lặp, trễ hoặc sai thứ tự ghi cùng các document, và một track bị thay, vốn nhận một `trackId` mới, không thể bị nhầm với track cũ.
+
+**Trường hợp còn sót đã biết.** OpenSearch Serverless hiển thị một lần ghi cho các lần tìm kiếm sau vài giây và không có `refresh=wait_for`. Nếu một track được thêm rồi bị thay trong vòng vài giây, lần đồng bộ thứ hai có thể không thấy document của lần đầu khi nó liệt kê id, và để chúng lại. Chúng không bao giờ được hiển thị, vì tìm kiếm chỉ trả về các kết quả có track và phiên bản mà bảng đang liệt kê (bên dưới). Việc dựng lại sẽ xóa chúng. Không có gì dựa vào `_delete_by_query`.
+
+Các bên ghi (việc hoàn tất của Transcribe, các procedure phụ đề của instructor-api, việc hoán đổi phiên bản) không đổi và không thể thất bại vì tìm kiếm.
+
+### Dựng lại
+
+Chỉ mục bắt đầu trống ở mọi stage và chỉ biết các thay đổi về sau, nên các video đã có phụ đề trước lần deploy cần một lần chạy. Việc dựng lại cũng là cách sửa cho các trường hợp còn sót ở trên, cho một chỉ mục được tạo lại, và cho một thay đổi analyzer trong tương lai.
+
+```sh
+pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development
+pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development --course=<courseId>
+```
+
+`transcript-reindex.ts` là một Lambda riêng tư không có event source, như `search-reindex.ts`. Với mỗi khóa học (một khóa, hoặc mọi khóa học theo `course.query.byStatus` cho từng trạng thái) nó đọc chương trình học, đồng bộ mọi mục video, rồi xóa các document của khóa học đó mà mục của chúng không có trong chương trình học.
+
+Khi sắp hết thời gian, nó trả về một cursor, và script gọi lại cho đến khi không còn, rồi in tổng. Không có `--stage`, nó chạy trong tiến trình hiện tại trên stack cục bộ. Chạy hai lần để lại cùng các document.
+
+### Procedure tìm kiếm
+
+`transcript.search` chỉ dành cho người đã đăng nhập (`courseSearchProcedure`) và nhận `{ courseId, q, language? }`, với `q` dài 2 đến 200 ký tự. Ở mỗi lần gọi nó:
+
+1. đọc chương trình học của khóa học và lượt ghi danh của người gọi rồi gọi `requireEnrolment`, hàm mà `contentItem.videoUrl` dùng;
+2. dựng **tập xem được** từ bảng (`watchableVideos`): các mục video đang hiển thị thực sự có phiên bản phát được, mỗi mục kèm id phiên bản và track của nó;
+3. truy vấn chỉ mục với các bộ lọc do chính nó dựng: `courseId` từ đầu vào đã kiểm tra, `contentItemId` nằm trong tập xem được, và quy tắc ngôn ngữ bên dưới. Với tập rỗng, nó không trả gì mà không truy vấn;
+4. bỏ mọi kết quả có phiên bản hoặc track không nằm trong tập xem được;
+5. lấy tiêu đề từ chương trình học mà nó đã đọc, không phải từ chỉ mục.
+
+Chỉ mục chậm hơn bảng vài giây và có thể giữ các phần còn sót, nên một bộ lọc tin vào một cờ đã lập chỉ mục sẽ trả về văn bản của một video vừa bị ẩn trong những giây đó. Dựng bộ lọc từ bảng đóng khoảng trống đó, và không gì trình duyệt gửi lên có thể thêm một video vào nó. Đây lại là quy tắc "thực thi hai lần": bộ lập chỉ mục chỉ giữ các đoạn của mục xem được, và truy vấn chỉ cho phép mục xem được.
+
+Cái giá là một truy vấn chương trình học cho mỗi lần tìm kiếm, thứ mà `course.view` vốn đã trả ở mỗi trang của trình phát khóa học. Một yêu cầu mất hơn 8 giây trở thành `TIMEOUT`, như trong tìm kiếm khóa học.
+
+### Track nào được tìm
+
+Các đoạn được dựng cho mọi track của phiên bản mà học viên phát (tối đa 10), mỗi đoạn mang `language`, `isDefault` và `trackLanguages` của nó.
+
+Một lần tìm kiếm xem, theo từng video, trong track của ngôn ngữ mà trình duyệt gửi (ngôn ngữ phụ đề đã ghi nhớ của người học) khi video có track đó, nếu không thì trong track mặc định. Khi đó một thời điểm không bao giờ được liệt kê hai lần ở hai ngôn ngữ, và kết quả khớp với bản ghi lời thoại mà người học mở. Đổi ngôn ngữ phụ đề không cần lập chỉ mục lại.
+
+`text` được phân tích bằng `standard` và có một trường con `english`. Mọi truy vấn khớp cả hai và yêu cầu mọi từ, nên các track tiếng Anh có việc stem mà tìm kiếm khóa học có, còn các ngôn ngữ khác khớp theo từ nguyên. Khớp cụm từ xếp hạng cao hơn. Tiếng Trung, Nhật và Thái được tách theo từng ký tự, vẫn tìm được cụm từ nhưng xếp hạng yếu hơn. Các trường con theo từng ngôn ngữ sẽ là một thay đổi cộng thêm.
+
+### Chi phí
+
+Không có cấu hình stage nào đổi: chỉ mục thứ hai không thêm mức sàn dung lượng cho collection group.
+
+- **Lập chỉ mục** diễn ra theo các đợt ngắn khi một video có phụ đề hoặc một track đổi: một `_bulk` khoảng 130 document nhỏ cho mỗi giờ video mỗi track.
+- **Tìm kiếm** khi gửi, không phải mỗi phím gõ, được lọc theo một khóa học, không có aggregation.
+- **Lưu trữ** là khoảng 150 KB nguồn cho mỗi giờ video mỗi track, nên một khóa học 20 giờ với hai track là khoảng 5,000 document và 6 MB.
+- **Xung quanh nó**: một thông điệp SQS cho mỗi thay đổi `contentItem`, `lesson` hoặc `module` được định tuyến, một S3 GET cho mỗi track mỗi lần đồng bộ, và một truy vấn chương trình học cho mỗi lần tìm kiếm.
+
+Ở một stage có mức sàn dung lượng là 0, lần tìm kiếm đầu tiên sau một lúc im ắng có thể gặp cold start và hết thời gian. Ở phía lập chỉ mục, năm lần nhận của hàng đợi nên kéo dài hơn một cold start.
+
+### Nó khớp với #270 thế nào
+
+Thêm chỉ mục là trường hợp mà index-sync đã xử lý, nên không có gì ở đây mâu thuẫn với #270 (đổi mapping của một chỉ mục hiện có).
+
+- Mọi nơi gọi đều dùng `resolveIndexName('transcripts')`, nên khi các tên logic trở thành alias trên các chỉ mục có phiên bản, những nơi gọi không phải đổi.
+- Các thay đổi cộng thêm về sau đi qua `putMapping`.
+- Một thay đổi phá vỡ (analyzer của `text`, kiểu của một trường) là trường hợp của #270, và việc dựng lại ở trên là "rebuild job" mà nó cần. Bộ bảo vệ chống ghi cũ của nó nên dùng `captionTracksRev` của mục cùng với phiên bản: các document mang `versionId`, và `captionTracksRev` có thể được thêm làm một trường khi đó.
+- Trước khi ra mắt, một thay đổi phá vỡ là "xóa chỉ mục, deploy, chạy việc dựng lại".
+
+### AI tutor (#289) có thể dựa vào gì
+
+Một document là một đoạn khoảng 30 giây cùng khóa học, module, bài học, video, phiên bản, track, ngôn ngữ và khoảng thời gian của nó. Do đó việc truy xuất có thể giới hạn theo một bài học, một video hay một khóa học và có thể trích dẫn "bài học X tại 12:40".
+
+`watchableVideos` cho ra các video mà người học có thể xem và `buildTranscriptSearchRequest` dựng yêu cầu được lọc theo chúng. Tutor gọi cùng hai hàm đó, nên nó không thể truy xuất thứ mà người học không xem được.
+
+Việc truy xuất là theo từ vựng (BM25). Việc tutor có muốn truy xuất vector hay không còn để ngỏ cho #289: nó cần một embedding cho mỗi đoạn và một trường `knn_vector`, và một collection tìm kiếm NextGen có chấp nhận nó hay không phải được xác minh trước. Nếu nó cần một cài đặt khi tạo, chỉ mục được tạo lại và dựng lại, việc này không tốn gì trước khi ra mắt.
+
+## Local dev
+
+`pnpm dev` chạy một container `opensearchproject/opensearch` trên cổng 9200 (`packages/tooling/local-dev/src/opensearch`, cùng mẫu `runLocalContainer` như DynamoDB local và S3Mock), một node, với security plugin tắt và bộ nhớ bị giới hạn. Target `dev` của `@discava/search` khởi động nó và đồng bộ các chỉ mục cục bộ.
+
+- Bộ chạy sự kiện cục bộ (`packages/events/src/local/event-runner.ts`) chạy cùng stream router, các tính năng và các handler lập chỉ mục như một stage đã triển khai.
+- `pnpm nx run @discava/tooling-local-dev:reset-local-data` cũng xóa sạch các chỉ mục.
+
+Image được ghim trong `packages/databases/search/config.json` ở một bản phát hành 3.x, không phải `latest`. [OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-overview.html) tự động nâng cấp các collection lên các bản phát hành mã nguồn mở mới và yêu cầu client tương thích với OpenSearch 3.x, nên local dev ở lại nhánh đó mà không di chuyển mỗi khi có bản phát hành. Nó là bản phát hành mới nhất khi được ghim, được chọn để khớp với Serverless, nên không như các image cục bộ khác, nó không bị giữ lại hai tuần. Hãy ghim lại khi Serverless chuyển sang một phiên bản minor mới hơn, và kiểm tra lại các lệnh gọi trong `sync-indices.ts` và các procedure theo [danh sách thao tác được hỗ trợ](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-genref.html) của nó.
+
+## Các điểm khác với #1267
+
+Được giữ ở đây để đề xuất `ts#opensearch` của upstream (hoặc một PR áp dụng nó) có thể đối chiếu từng điểm:
+
+- CDK chưa có construct L2 cho `AWS::OpenSearchServerless::*`, chỉ có các resource L1 `Cfn*`; `OpenSearchCollection` tự dựng chính sách truy cập dữ liệu và `grantRead`/`grantWrite` trên chúng.
+- Một mục chính sách truy cập dữ liệu của người được cấp quyền cần ARN principal nguyên văn của nó (OpenSearch Serverless cấp quyền theo ARN ở đó, không qua IAM policy của chính người được cấp). Mỗi lần cấp quyền tạo chính sách riêng trong stack của người được cấp, đặt tên theo đường dẫn construct của người được cấp, thay vì một chính sách dùng chung trong một stack phụ thuộc vào mọi người được cấp: một chính sách dùng chung sẽ import ARN của mọi role, và CloudFormation khi đó từ chối deploy một stack ngừng export một role đã chuyển sang stack khác.
+- Quyền truy cập dữ liệu của chính custom resource index-sync là một chính sách riêng, eager, cùng stack, tách khỏi cái mà `grantRead`/`grantWrite` điền vào: nó phải tồn tại trước khi custom resource chạy lần đầu, trong lúc deploy stack của chính collection, điều mà một chính sách liên stack bị hoãn không thể đảm bảo.
+- Mỗi collection được tạo bên trong `AWS::OpenSearchServerless::CollectionGroup` NextGen riêng của nó (xem [Chi phí](#chi-phí-nextgen-không-phải-zero-etl)), một resource ra đời sau #1267; một bộ sinh viết theo #1267 nguyên trạng sẽ tạo ra một collection cổ điển luôn bật.
+- Target sinh indices manifest là `generate-indices-manifest`, không phải `indices`: mọi target khác trong workspace này là một động từ (`compile`, `bundle`, `pull-image`), và `indices` đọc như thể nó tạo hoặc liệt kê các chỉ mục thay vì ghi tệp manifest.

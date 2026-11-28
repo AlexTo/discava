@@ -1,0 +1,120 @@
+---
+title: 首次部署
+description: 运行 Deploy 工作流，找到你的门户，并创建第一批用户和分类。
+sidebar:
+  order: 3
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+完成<Link path="deploy/setup">安装</Link>后，部署只需运行一次工作流。
+
+## 1. 运行 Deploy 工作流
+
+在你的 fork 的 **Actions** 标签页中，选择 **Deploy → Run workflow**，输入阶段名称并运行。或者在终端中执行：
+
+```sh
+gh workflow run deploy.yml -f stage=discava-development
+gh run watch
+```
+
+首次部署会创建所有资源，包括多个 CloudFront 分发和一个 OpenSearch Serverless 集合，所以比之后的部署慢得多。
+
+### 工作流做了什么
+
+<Steps>
+
+1. **检查阶段是否存在**于 `stages.config.ts` 中，这样拼写错误会在接触 AWS 之前就失败。
+
+2. **转发配置覆盖。** 阶段的 GitHub 环境（或仓库）中，名称以该阶段前缀开头的每个变量（`discava-development` 对应 `DISCAVA_DEVELOPMENT_`）都会传给构建。自定义域名就是这样传入的。
+
+3. **用 Trivy 扫描。** 如果存在已有修复的严重已知漏洞，或有已提交的密钥，部署会停止。
+
+4. **登录 AWS**，以部署角色的身份，使用短期有效的 OIDC 令牌。
+
+5. **合成** CloudFormation 模板，使用 CDK，并对每个角色应用该阶段的权限边界。
+
+6. **部署**每个堆栈，按依赖顺序进行。CloudFormation 以执行角色的身份创建资源。如果此时 `main` 上已有更新的提交，自动运行会跳过这一步。
+
+</Steps>
+
+## 2. 找到你的门户
+
+每个门户都是一个 CloudFront 分发。它们的地址是 `Websites` 堆栈的输出。把你的 AWS CLI 设置为该阶段的区域，然后执行：
+
+```sh
+aws cloudformation describe-stacks \
+  --stack-name discava-development-Websites \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `DistributionDomainName`)].[OutputKey,OutputValue]' \
+  --output table
+```
+
+学生门户、讲师门户和管理员门户各有一个 `*.cloudfront.net` 地址。打开学生门户：你应该能看到课程目录，目前是空的。
+
+## 3. 创建你的第一批用户
+
+用户存在于 Cognito 用户池中，分为三个组，决定用户可以使用哪个门户和 API：
+
+| 组 | 可使用 |
+| --- | --- |
+| `student` | 学生门户 |
+| `instructor` | 讲师门户 |
+| `admin` | 管理员门户 |
+
+`discava-development` **关闭了自助注册**，所以陌生人无法在你的测试阶段创建账户。你需要自己添加用户：
+
+<Steps>
+
+1. 在该阶段的区域打开 **Cognito** 控制台，选择该阶段的用户池。它的 id 是 `discava-development-Data` 堆栈的输出。
+
+2. 选择 **Create user**，填写电子邮件地址和临时密码。密码至少 8 个字符，包含大写字母、小写字母、数字和符号。临时密码 3 天后过期。
+
+3. 打开该用户，选择 **Add user to group**，添加他需要的每个组。把自己加入全部三个组，就能看到所有内容。
+
+4. 用该电子邮件地址在门户上登录。Cognito 会要求你设置永久密码。
+
+</Steps>
+
+在 `discava-production` 上，自助注册是开启的，并且要求 MFA。注册的人会自动加入 `student` 和 `instructor` 组。管理员在每个阶段都必须手动添加。
+
+## 4. 添加分类
+
+课程按分类组织，分类由管理员管理。你可以登录管理员门户创建分类，也可以从你的克隆中写入初始分类（Science、Technology、Mathematics、Communication、Business）：
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+
+DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE pnpm nx run @discava/tooling-deploy:seed-categories
+```
+
+它使用你 shell 中的 AWS 凭证和区域，这些必须属于该阶段，并且会跳过已存在的分类。如果没有 `DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME`，它会改为写入本地开发表。
+
+## 5. 完整试用一遍
+
+<Steps>
+
+1. 在**讲师门户**中创建一门课程，添加一节带视频的课时并发布。视频由 MediaConvert 转码，上传几分钟后即可播放。
+
+2. 在**学生门户**中找到这门课程，报名并播放课时。
+
+3. 在**管理员门户**中查看分类列表。
+
+</Steps>
+
+管理员在管理员门户中设置的两件事，无需部署：
+
+- 平台的名称、徽标和颜色：<Link path="guides/branding">品牌设置</Link>
+- Stripe 账户，用于销售课程：<Link path="guides/payments">付费课程与支付</Link>
+
+## 后续部署
+
+- **自动：** 如果你设置了 `AUTO_DEPLOY_STAGE`，每次推送到 `main` 并通过 CI 就会部署该阶段。如果期间 `main` 上有了更新的提交，则跳过该次部署。
+- **手动：** 再次运行 Deploy 工作流。它部署你运行它所在的提交，回滚也是这样做：从更早的提交运行它。
+
+同一阶段的部署不会重叠。第二次运行会等待第一次完成。
+
+拉取新版本的 Discava 之后，部署前请<Link path="deploy/setup">再次运行安装脚本</Link>，这样阶段的角色才允许新版本创建的内容。
+
+下一步：<Link path="deploy/configuration">配置你的阶段</Link>，包括自定义域名和电子邮件。

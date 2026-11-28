@@ -1,0 +1,131 @@
+---
+title: Stream event router
+description: "Cách một tính năng phản ứng với thay đổi trong core table: phần đăng ký, hàng đợi và hàng đợi lỗi của nó, nghĩa vụ của handler, hành vi cục bộ và redrive."
+sidebar:
+  order: 7
+---
+
+**Spec:** [`specs/20261116-183449-stream-event-router/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-183449-stream-event-router/)
+
+DynamoDB stream của core table có **một bộ đọc duy nhất**: stream router. Nó gửi mỗi thay đổi đến hàng đợi của mọi tính năng cần nó, và handler của mỗi tính năng đọc hàng đợi của chính mình.
+
+Một tính năng phản ứng với thay đổi của bảng thêm một phần đăng ký, một handler và phần nối dây cho handler (bên dưới). Nó không thêm hàng đợi, cảnh báo hay stream mapping riêng. Hiện có tám tính năng được đăng ký; [bảng bên dưới](#các-chỉ-số-cần-theo-dõi) liệt kê chúng.
+
+```d2 title="One stream reader, one queue and failure queue per feature"
+table: "Core table"
+stream: "DynamoDB Stream"
+router: "Stream router"
+pq: "progress-recalculation queue"
+sq: "search-indexing queue"
+pf: "progress failure queue"
+sf: "search failure queue"
+ph: "progress handler"
+sh: "search handler"
+
+table -> stream
+stream -> router
+router -> pq: "filters match"
+router -> sq: "filters match"
+pq -> ph
+sq -> sh
+pq -> pf: "after maxReceiveCount"
+sq -> sf: "after maxReceiveCount"
+```
+
+## Phần đăng ký
+
+`STREAM_FEATURES` trong `packages/databases/core-table/src/helpers/stream-features.ts` là định nghĩa duy nhất mà stack được triển khai và bộ chạy sự kiện cục bộ cùng đọc.
+
+| Trường | Ý nghĩa |
+|---|---|
+| `name` | Duy nhất, kebab-case. Đặt tên cho hàng đợi, hàng đợi lỗi, cảnh báo và handler |
+| `filters` | Những bản ghi mà tính năng muốn: một `eventName` (`INSERT`, `MODIFY` hoặc `REMOVE`), `image` cần xem (`NewImage` hoặc `OldImage`) và các `entities` (tên entity ElectroDB). Một bản ghi qua được bất kỳ bộ lọc nào sẽ đến tính năng đó |
+| `handler` | Hàm `events-*` đọc hàng đợi của tính năng |
+| `batch` | `maxRecords` và `windowSeconds`: mỗi lần chạy handler nhận bao nhiêu thay đổi, và chờ bao lâu để gom chúng |
+| `maxReceiveCount` | Một thông điệp được nhận bao nhiêu lần trước khi chuyển sang hàng đợi lỗi |
+| `maxConcurrency` | Giới hạn tùy chọn cho số lần chạy handler đồng thời (ít nhất 2, mức tối thiểu của event source mapping) |
+
+`featuresFor(record)` là logic khớp duy nhất. Router và bộ chạy cục bộ đều gọi nó, nên chúng không thể bất đồng. Một bản ghi đến mọi tính năng có bộ lọc khớp, dưới dạng bản sao riêng, và không đến tính năng nào khác. Một bản ghi không khớp tính năng nào thì không tạo ra gì.
+
+Bộ lọc và bộ so khớp của mỗi tính năng nằm trong module riêng bên cạnh registry (`progress-stream.ts` với `PROGRESS_STREAM_FILTERS` và `matchesProgressStreamFilters`, `search-stream.ts`, v.v.), và `featuresFor` gọi các bộ so khớp đó.
+
+Test thất bại khi một tên bị lặp, một bộ lọc nêu entity mà core table không định nghĩa, một bộ lọc không khớp gì trong các bản ghi mẫu (`stream-features.test.ts`), hoặc một `handler` không trỏ đến hàm nào (`handlers.test.ts` trong `packages/events`).
+
+## Thêm một tính năng
+
+1. Thêm một mục vào `STREAM_FEATURES`.
+2. Viết handler trong `packages/events` và wrapper `events-*` của nó bằng `ts#lambda-function`. Đọc các bản ghi của nó qua `sqsToStreamRecords` (`src/router/sqs-stream-records.ts`), hàm này mở các thông điệp của hàng đợi thành các bản ghi stream.
+3. Thêm handler vào `HANDLERS` trong `packages/events/src/router/handlers.ts`, nơi bộ chạy cục bộ điều phối qua. `handlers.test.ts` thất bại khi `handler` của một phần đăng ký thiếu trong đó, hoặc khi nó chứa một handler mà không tính năng nào dùng.
+4. Dựng Lambda của handler trong `StreamRouterStack` (`packages/infra/src/stacks/stream-router-stack.ts`), như cách `createProgressRecalculationLambda` và `createSearchIndexingLambda` làm: tạo hàm `events-*`, cấp cho nó những gì nó đọc và ghi (core table, các cài đặt lúc deploy của nó, v.v.), và thêm nó vào đối tượng `handlers` truyền cho `StreamRouter`, với khóa là tên của tính năng. Thiếu nó, `StreamRouter` ném `No handler given for stream feature '<name>'` lúc synth.
+5. Khi handler đã được truyền vào, construct `StreamRouter` dựng hàng đợi, hàng đợi lỗi, cảnh báo và event source mapping từ mục đăng ký, và bộ chạy cục bộ dựng phần tương đương của nó.
+6. Viết các test giao trùng lặp và giao sai thứ tự cho handler (bên dưới).
+7. Thêm các chỉ số hàng đợi của tính năng vào [danh sách bên dưới](#các-chỉ-số-cần-theo-dõi).
+
+## Construct dựng gì cho mỗi tính năng
+
+- Một **hàng đợi**, với visibility timeout bằng sáu lần timeout của handler.
+- Một **hàng đợi lỗi**, giữ một thông điệp sau `maxReceiveCount` lần nhận và lưu nó 14 ngày.
+- Một **cảnh báo** ở trạng thái báo động bất cứ khi nào hàng đợi lỗi có thông điệp nào. Nó không có đích thông báo: nó hiện trong bảng điều khiển CloudWatch.
+- Một **event source mapping** từ hàng đợi đến handler, dùng `batch` và `maxConcurrency` của phần đăng ký.
+
+Mọi hàng đợi dùng chung một khóa KMS do khách hàng quản lý có xoay vòng. Một stage có thể chuyển sang mã hóa do SQS quản lý bằng `enableKmsEncryption: false`, như core table. Các thông điệp chứa nguyên bản ghi của bảng, nên hãy coi chúng là dữ liệu của bảng.
+
+Router có hàng đợi lỗi và cảnh báo riêng (`StreamRouterFailures`) cho một bản ghi mà nó không bao giờ gửi được: quá lớn cho một thông điệp, hoặc bị hàng đợi từ chối. Nó giữ mô tả của bản ghi (event id, khóa, entity, tính năng, kích thước và lý do; không phải nội dung) để có thể tìm trong bảng. Các batch lỗi của chính stream mapping (số shard và sequence) cũng vào đó. Một lần gửi thất bại vì lý do tạm thời được stream mapping thử lại, chỉ cho bản ghi đó.
+
+## Nghĩa vụ của handler
+
+Router không hứa hẹn thứ tự theo từng bản ghi hay giao đúng một lần. Mọi handler PHẢI an toàn khi chạy hai lần với cùng các bản ghi, và với các bản ghi theo bất kỳ thứ tự nào, và PHẢI nói trong chú thích đầu tệp của nó là bằng cách nào:
+
+- **Suy ra kết quả từ dữ liệu hiện tại** khi thứ tự quan trọng, không bao giờ chỉ từ bản ghi. Việc lập chỉ mục tìm kiếm chỉ đọc danh tính của khóa học từ thay đổi và đọc lại khóa học từ core table, rồi lập chỉ mục nếu đã xuất bản và xóa nếu chưa xuất bản hoặc đã biến mất. Việc tính lại tiến độ tính lại tiến độ của từng học viên từ chương trình học và các lượt hoàn thành ở mỗi lần chạy.
+- Một thay đổi không xử lý được (chẳng hạn không nêu khóa học nào) **thất bại** thay vì bị bỏ qua, để nó vào hàng đợi lỗi nơi có người thấy được.
+- Các bộ đếm và giá trị khác tích lũy từ chính các bản ghi (áp dụng một thay đổi hai lần hoặc sai thứ tự làm chúng lệch) cần một kiểm tra riêng rằng giao trùng lặp và sai thứ tự cho cùng kết quả, hoặc phải được tính lại từ bảng.
+
+Test của một tính năng mới gồm một lần giao trùng lặp và một lần giao sai thứ tự.
+
+## Lỗi và redrive
+
+Một handler ném lỗi trả thông điệp của nó về hàng đợi sau visibility timeout. Sau `maxReceiveCount` lần nhận, thông điệp chuyển sang hàng đợi lỗi của tính năng đó và không còn chặn các thay đổi sau. Các tính năng khác không bị ảnh hưởng.
+
+Khi nguyên nhân đã được sửa, phát lại các thông điệp bằng redrive của chính dịch vụ hàng đợi. Không có công cụ phát lại nào được xây dựng, vì các handler an toàn khi chạy lại.
+
+Với một stage đã triển khai, trong bảng điều khiển SQS mở hàng đợi lỗi và chọn **Start DLQ redrive** về hàng đợi của tính năng (hoặc dùng `aws sqs start-message-move-task --source-arn <failure queue ARN> --destination-arn <feature queue ARN>`). Kiểm tra cảnh báo của hàng đợi lỗi trở về OK.
+
+## Các chỉ số cần theo dõi
+
+Mọi hàng đợi SQS đều xuất bản các chỉ số độ sâu và độ tuổi dưới namespace `AWS/SQS`, với chiều `QueueName`:
+
+- **`ApproximateNumberOfMessagesVisible`** trên hàng đợi của một tính năng: các thay đổi đang chờ. Nó nên trở về gần không giữa các đợt tăng đột biến.
+- **`ApproximateAgeOfOldestMessage`** trên hàng đợi của một tính năng: handler đang chậm bao nhiêu. Độ tuổi tăng với độ sâu phẳng nghĩa là handler bị kẹt hoặc bị throttle.
+- **`ApproximateNumberOfMessagesVisible`** trên hàng đợi lỗi của một tính năng: bất cứ giá trị nào trên không là công việc bị gác lại, và kích hoạt cảnh báo của tính năng.
+
+| Tính năng | Hàng đợi | Hàng đợi lỗi |
+|---|---|---|
+| `progress-recalculation` | `ProgressRecalculationQueue` | `ProgressRecalculationFailures` |
+| `search-indexing` | `SearchIndexingQueue` | `SearchIndexingFailures` |
+| `transcript-indexing` | `TranscriptIndexingQueue` | `TranscriptIndexingFailures` |
+| `analytics-update` | `AnalyticsUpdateQueue` | `AnalyticsUpdateFailures` |
+| `earnings-recording` | `EarningsRecordingQueue` | `EarningsRecordingFailures` |
+| `notification-delivery` | `NotificationDeliveryQueue` | `NotificationDeliveryFailures` |
+| `caption-translation` | `CaptionTranslationQueue` | `CaptionTranslationFailures` |
+| `brand-publishing` | `BrandPublishingQueue` | `BrandPublishingFailures` |
+
+Các tên là logical id của construct (tên hàng đợi được triển khai mang tiền tố của stack và một hậu tố). Một tính năng mới thêm một hàng vào đây.
+
+## Hành vi cục bộ
+
+`pnpm dev` chạy cùng router đó trong bộ chạy sự kiện (`packages/events/src/local`), với ElasticMQ làm hàng đợi (tương thích SQS API, trong Docker, trong bộ nhớ) và một bộ chạy tính năng cho mỗi phần đăng ký. Nó dùng cùng `STREAM_FEATURES` và `featuresFor` như router được triển khai và giữ kích thước batch và cửa sổ của mỗi tính năng. Một thông điệp được nhận `maxReceiveCount` lần sẽ chuyển sang hàng đợi lỗi của tính năng và được ghi log. Không cần tài khoản AWS nào.
+
+Bộ chạy (cổng 2024) có các route để xem và phát lại các hàng đợi cục bộ:
+
+```sh
+# queue and failure queue counts per feature
+curl http://localhost:2024/router/queues
+
+# move a feature's failed messages back to its queue
+curl -X POST http://localhost:2024/router/redrive/search-indexing
+
+# make a feature's next 5 batches fail, to reproduce a failure end to end
+curl -X POST http://localhost:2024/router/fail/search-indexing -d '{"batches": 5}'
+```
+
+Redrive là một helper nhỏ của bộ chạy, không phải redrive của dịch vụ hàng đợi, thứ mà ElasticMQ không ghi tài liệu. Các hàng đợi nằm trong bộ nhớ, nên dừng `pnpm dev` làm chúng trống.

@@ -1,0 +1,78 @@
+---
+title: Notation et retours sur les devoirs
+description: Comment les instructeurs rendent les devoirs à téléverser avec des points et un retour, demandent une nouvelle remise, voient le travail en attente, ainsi que les enregistrements et les règles qui sous-tendent le tout.
+sidebar:
+  order: 12
+---
+
+**Spec :** [`specs/20261120-230057-assignment-grading/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-230057-assignment-grading/)
+
+Un étudiant remet un fichier pour un devoir à téléverser et peut le remplacer tant qu'il n'a pas été rendu. Un instructeur du cours liste le travail de chaque étudiant inscrit, ouvre une remise, puis la rend comme définitive avec des points et un retour, ou demande une nouvelle remise avec un retour seulement. Seuls les instructeurs du cours peuvent lister, lire ou rendre des remises.
+
+| Qui | API | Procédures |
+|---|---|---|
+| Étudiant | core-api | `assignment.uploadUrl`, `submit`, `mySubmission`, `submissionFileUrl` |
+| Instructeur | instructor-api | `assignmentSubmission.list`, `get`, `fileUrl`, `return`, `requestResubmission`, `amendGrade`, et `gradingQueue.list` |
+
+## Remises et notation
+
+Une remise est un enregistrement `assignmentSubmission` par étudiant et par devoir. Son `status` évolue ainsi :
+
+| Transition | Qui | Condition | Effet |
+|---|---|---|---|
+| Remise (première) | Étudiant | Aucune remise pour l'instant | `submitted`, `version` 1, entre dans l'index d'attente |
+| Nouvelle remise | Étudiant | `version` inchangée et statut `submitted` ou `resubmission_requested` | `submitted`, `version` + 1, retour dans l'index d'attente |
+| Demander une nouvelle remise | Instructeur | `version` et `reviewRevision` inchangées, statut `submitted` | `resubmission_requested`, quitte l'index d'attente |
+| Rendre comme définitif | Instructeur | `version` et `reviewRevision` inchangées, statut `submitted` ou `resubmission_requested` | `returned`, fixe les points, empêche l'étudiant de remettre à nouveau |
+| Corriger la note | Instructeur | `reviewRevision` inchangée, statut `returned` | Les points et le retour changent, le statut reste `returned` |
+
+- **Concurrence.** Chaque action d'un instructeur ajoute un à `reviewRevision`, et chaque écriture est conditionnée par la `version` et la `reviewRevision` que l'instructeur avait sous les yeux. Un retour ne peut pas porter sur un fichier que l'étudiant a remplacé entre-temps, et quand deux instructeurs agissent en même temps, un seul l'emporte.
+- **Les points** sont un nombre de 0 à `maxPoints` du devoir, avec au plus deux décimales. `pointsOutOf` conserve le maximum sur lequel le travail a été noté, au cas où `maxPoints` changerait plus tard.
+- **Étudiants partis.** Rendre ou corriger est refusé pour un étudiant qui n'est plus inscrit. L'instructeur peut toujours lire son travail.
+- **La complétion n'est pas touchée.** La notation ne change jamais la complétion de l'étudiant ni le `studentActivityCount` de l'élément de contenu. Une demande de nouvelle remise n'annule pas la complétion, et une nouvelle remise ne compte pas l'étudiant une seconde fois.
+
+## Tours de retour
+
+Chaque action d'un instructeur écrit un enregistrement `submissionFeedback` : une demande de nouvelle remise, un retour définitif ou une correction. Le retour est obligatoire pour une demande de nouvelle remise et facultatif pour un retour définitif.
+
+- Les tours sont en ajout seul et indexés par remise et par date, de sorte que l'historique d'un étudiant se lit en une requête, du plus récent au plus ancien. L'étudiant voit les retours précédents à travers les nouvelles remises, donc il sait ce qui lui a été demandé.
+- La remise ne conserve que la note actuelle. Les tours sont des enregistrements séparés, car chacun peut contenir 20 000 caractères de JSON Tiptap et leur nombre n'est pas borné : une liste sur la remise pourrait atteindre la limite de taille d'élément de DynamoDB.
+
+L'étudiant est notifié dans l'application et par e-mail (activé par défaut) de chaque action : `assignment.returned`, `assignment.resubmission_requested` et `assignment.grade_updated`, chacune dédupliquée sur le `feedbackId` du tour. La notification et le tour sont écrits dans la même transaction que le changement de la remise.
+
+## L'index d'attente et l'inscription
+
+Les remises qui attendent un instructeur (statut `submitted`) portent `waitingCourseId` et `waitingSince`, qui forment la clé d'un index épars (`byWaiting`) avec le cours comme partition et l'heure de remise comme clé de tri. Chaque écriture qui change `status` pose ou retire les deux attributs ensemble via `waitingKeys`.
+
+La file de notation de la page d'accueil de l'instructeur (`gradingQueue.list`) est donc une requête par cours enseigné, chacune déjà triée du plus ancien au plus récent, puis fusionnées en mémoire. Elle lit chaque entrée en attente, son total est donc exact.
+
+**L'inscription est appliquée à la lecture.** La file lit en lot les inscriptions des étudiants listés et écarte ceux dont l'inscription est `dropped` ou absente. Stocker l'inscription dans l'index obligerait les remboursements et le paiement à réécrire chaque remise d'un étudiant dans le cours, au sein de leurs propres transactions. La lire à la place laisse le code de paiement intact, et un étudiant qui se réinscrit réapparaît dans la file sans aucune écriture.
+
+Comme une inscription absente masque un étudiant, une lecture partielle ne doit pas passer pour une lecture complète. Quand DynamoDB laisse des clés non traitées sous limitation, la file les redemande, jusqu'à trois fois avec une pause croissante, puis fait échouer la requête plutôt que de renvoyer une file plus courte.
+
+La liste par devoir lit chaque remise et chaque inscription du cours (deux requêtes sur une seule partition), les fusionne et pagine en mémoire, 50 lignes à la fois, avec un curseur qui encode la position de tri de la dernière ligne. Les étudiants sans remise apparaissent comme « not submitted », et ceux qui sont partis comme « no longer enrolled ».
+
+## L'avis quotidien
+
+Les instructeurs sont prévenus des nouvelles remises par `assignment.submissions_received`, au plus une fois par devoir et par jour (UTC) et par instructeur, dans l'application, avec l'e-mail désactivé par défaut. Un petit enregistrement `submissionNotice` (un par devoir et par jour, expirant deux jours plus tard) sert de marqueur. `submit` le lit d'abord ; s'il est absent, la même transaction le crée et écrit une notification par instructeur, plafonnée pour que la transaction reste sous la limite de 100 éléments de DynamoDB. Si une autre remise gagne la course, la nouvelle tentative existante repart sans le marqueur ni les notifications. Cela fait de « au plus une fois par jour » un fait de base de données plutôt qu'un espoir lié au timing.
+
+## Aperçu d'un fichier remis
+
+La page de correction affiche les PDF et les images (png, jpg, jpeg, gif, webp) à côté du formulaire de notation ; tout autre type de fichier affiche ses détails et un bouton Download.
+
+- **Les images** sont un `<img>` qui utilise la même URL CloudFront signée de cinq minutes qu'un téléchargement. Les navigateurs ignorent `Content-Disposition` pour les images.
+- **Les PDF** sont récupérés depuis l'URL signée et dessinés sur un canvas par `react-pdf` (PDF.js), chargé uniquement sur la page de correction. Les fichiers stockés sont servis avec `Content-Disposition: attachment` et la CSP du portail bloque `<iframe>` et `<embed>`, donc dessiner sur un canvas ne demande aucun changement de la distribution, de la CSP ni des objets stockés.
+
+**Limite connue : JPEG 2000 et JBIG2.** PDF.js décode ces formats d'image intégrés avec WebAssembly, que la CSP du portail (`script-src 'self'`, sans `'wasm-unsafe-eval'`) bloque. Ces images peuvent ne pas s'afficher, mais le reste de la page s'affiche et Download fonctionne toujours. Assouplir une CSP partagée pour cela a été jugé inutile.
+
+Les points et le retour non envoyés d'un instructeur sont conservés dans son propre navigateur, par remise, et ne sont pas enregistrés sur le serveur.
+
+## Règles que les vérifications appliquent
+
+Les helpers partagés de `helpers/assignment-grading.ts` dans core-table sont les seuls à écrire les champs de note et `submissionFeedback`. La remise de l'étudiant, dans `helpers/assignment-submission.ts`, pose les clés d'attente via le même `waitingKeys`. Les vérifications de `helpers/invariants/assignment-grading.ts` couvrent :
+
+- la forme de la note : `returned` a des points dans `pointsOutOf`, un auteur du retour et des dates, et aucun autre statut n'en a ;
+- les clés d'attente cohérentes avec `status` ;
+- chaque tour appartenant à une remise, et la forme des tours ;
+- le tour le plus récent correspondant à l'état de la remise et à sa `reviewRevision` ;
+- la forme du marqueur d'avis quotidien.

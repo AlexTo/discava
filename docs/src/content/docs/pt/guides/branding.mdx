@@ -1,0 +1,60 @@
+---
+title: Identidade visual
+description: Como um administrador define logotipo, ícone, nome, imagem de compartilhamento e cor da plataforma, as regras de cada arquivo, quanto tempo uma mudança leva para chegar aos visitantes e o que não recebe a identidade.
+sidebar:
+  order: 7
+---
+
+Um administrador pode dar à plataforma uma aparência própria sem fazer deploy. No portal admin, abra o menu da conta e escolha **Branding**, ou escolha o cartão **Branding** na Home. A identidade se aplica aos portais do aluno, do instrutor e admin, e às páginas públicas de cursos e perfis.
+
+## O que você pode definir
+
+| Parte | Onde os visitantes a veem |
+|---|---|
+| **Logo** | O cabeçalho de todos os portais e das páginas públicas |
+| **Name** | O cabeçalho (ao lado do logotipo, se você mantiver isso ligado), o título da aba do navegador, as prévias de links e os textos que citam a plataforma |
+| **Icon** | A aba do navegador e o ícone da tela inicial em celulares |
+| **Share image** | A imagem nas prévias de link de um curso ou perfil que não tem imagem própria |
+| **Colour** | Botões, anéis de foco e links nos portais e nas páginas públicas |
+
+Toda parte é opcional. Uma parte deixada vazia mantém a identidade padrão do Discava. O rodapé da página diz "Using the default Discava brand" quando nada foi personalizado e, caso contrário, quem alterou a identidade por último e quando.
+
+A **Preview** na página mostra suas mudanças antes de salvar. Nada é aplicado até você escolher **Save**.
+
+## Regras dos arquivos
+
+A página verifica cada arquivo ao escolhê-lo e diz qual regra ele quebrou. O servidor verifica de novo ao salvar.
+
+| Parte | Tipos | Maior tamanho | Formato |
+|---|---|---|---|
+| Logo | PNG, JPEG, WebP ou SVG | 1 MB | Largura de no máximo 4 vezes a altura, e não mais alto que largo |
+| Icon | PNG | 1 MB | Quadrado, de pelo menos 192 × 192 pixels. Sugerimos 512 × 512 |
+| Share image | PNG, JPEG ou WebP | 2 MB | Pelo menos 1200 × 630 pixels, de 1,8 a 2 vezes mais largo que alto |
+
+Um logotipo SVG não pode conter scripts, páginas incorporadas, manipuladores de eventos nem links para outros arquivos. Um arquivo que contenha isso é recusado, e o seu arquivo nunca é reescrito.
+
+O nome deve ter de 1 a 50 caracteres. Desligue **Show the name beside the logo** se o logotipo já escreve o nome: o nome continua nos títulos de abas e nas prévias de links.
+
+## A cor e a legibilidade
+
+Escolha a cor com o seletor de cores, ou digite um valor hexadecimal como `#1d4ed8`.
+
+- O texto dos botões é escolhido por você, claro ou escuro, o que ler melhor.
+- Uma cor em que nenhum dos dois ficaria legível é recusada, com uma nota para escolher um tom mais escuro ou mais claro.
+- Os links usam sua cor apenas onde ela é legível em uma página branca, e a cor de texto padrão nos demais casos. Uma cor de marca clara nunca deixa os links difíceis de ler.
+- As cores de erro e de status não mudam.
+
+## Quanto tempo as mudanças levam
+
+O portal admin mostra a mudança assim que você salva. Todos os outros a veem em até 5 minutos: um navegador guarda a identidade publicada por até um minuto, e a rede de entrega de conteúdo por até quatro. Na primeira visita, a identidade padrão pode aparecer por cerca de um segundo; as visitas seguintes mostram a identidade na hora.
+
+Se dois administradores editam ao mesmo tempo, o segundo a salvar é avisado de que outra pessoa alterou a identidade e deve recarregar para ver as mudanças dela.
+
+## Redefinir
+
+Cada parte tem seu próprio botão de redefinição, como **Reset the logo to default**. **Reset all to default** redefine tudo e pergunta antes. Uma redefinição vale quando você salva. As imagens substituídas deixam de ser servidas do endereço antigo em até 5 minutos e são excluídas um dia depois.
+
+## O que não recebe a identidade
+
+- As páginas de login hospedadas pelo Amazon Cognito mantêm a aparência padrão.
+- Este site de documentação.

@@ -1,0 +1,136 @@
+---
+title: Paiements aux instructeurs
+description: Comment les gains des instructeurs sont enregistrés à partir des commandes, le registre et ses résumés par jour, l'exécution quotidienne des paiements et sa reprise, et la règle du compte de paiement.
+sidebar:
+  order: 11
+---
+
+import Link from '@components/link.astro';
+
+**Spec :** [`specs/20261116-013137-instructor-payouts/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013137-instructor-payouts/)
+
+## La règle
+
+**Chaque vente et chaque remboursement est enregistré une fois, et aucun gain n'est payé deux fois.** Les gains forment un registre en ajout seul construit à partir des <Link path="design/payments">commandes</Link>, et un paiement prend des entrées du registre, jamais un montant calculé à côté.
+
+## Les règles de revenus
+
+`helpers/revenue.ts` dans core-table est de l'arithmétique entière pure dans la plus petite unité d'une devise.
+
+- **Commission.** La plateforme garde une commission sur le montant payé, fixée par stage en points de base (2000 font 20 %) et arrondie à la hausse à partir de la moitié. Une vente garde la commission avec laquelle elle a été enregistrée : changer le réglage n'affecte que les ventes suivantes.
+- **Partage.** Les instructeurs d'un cours se partagent une vente à parts égales. Le partage est appliqué séparément au prix catalogue, au montant payé et à la commission, et les unités restantes vont une par une aux premiers instructeurs par ID, de sorte que les parts totalisent toujours le tout.
+- **Net.** Le net d'un instructeur est sa part du montant payé moins sa part de la commission.
+- **Remboursement.** Un remboursement rend la part de l'instructeur sur le montant remboursé, moins la commission restituée sur celui-ci. Chaque étape est calculée comme la part du nouveau total remboursé moins la part du total enregistré, de sorte que, quelle que soit la façon dont un remboursement est découpé en étapes, les entrées totalisent exactement le bon montant une fois la commande entièrement remboursée. Un remboursement est plafonné au montant payé.
+
+## Le registre
+
+| Enregistrement | Contenu |
+| --- | --- |
+| `earningOrder` | L'instantané du registre pour une vente, et le total remboursé enregistré jusqu'ici |
+| `earningEntry` | Une ligne par instructeur et par vente ou étape de remboursement : brut, remise, remboursement, commission et net, quand elle est libérée, et le paiement qui l'a prise |
+| `earningDay` | La somme des entrées d'un instructeur pour un cours, une devise et un jour UTC |
+
+`helpers/earning.ts` dans core-table est le seul écrivain des trois, avec une exception : `helpers/payout.ts` est le seul code qui définit ou efface le `payoutId` d'une entrée. Une vente, et chaque étape de remboursement, forme **une transaction** contenant les entrées, les ajouts à leurs lignes de jour et le compteur de la commande, de sorte que le rapport et le registre ne peuvent pas diverger.
+
+Une entrée ne nomme jamais l'acheteur. Elle porte aussi le compte Stripe et le mode sous lesquels sa commande a été payée : voir [la règle du compte de paiement](#la-règle-du-compte-de-paiement).
+
+## Enregistrement
+
+L'enregistrement est une <Link path="design/stream-event-router">fonctionnalité de flux</Link>, `earnings-recording`. Elle reçoit chaque changement d'une `order` et agit sur ceux qui sont des ventes. Une commande est une vente quand les deux conditions sont vraies :
+
+- elle est `paid`, ou `refunded` avec la raison `requested` ;
+- son montant est supérieur à zéro.
+
+Une commande remboursée automatiquement car non livrable n'a jamais été une vente, pas plus que la commande à montant zéro d'un coupon qui prend tout le prix. Pour une commande avec remise, le brut de l'entrée est le prix catalogue et sa remise est la différence avec le montant payé.
+
+Le routeur livre au moins une fois et dans n'importe quel ordre, et le gestionnaire est conçu pour cela :
+
+- **Chaque image de commande porte tout ce qu'il faut**, donc n'importe laquelle suffit à enregistrer la vente et à mettre à jour son total remboursé. Aucun enregistrement n'en attend un autre.
+- **Les doublons ne changent rien.** Les entrées d'une vente sont créées à condition qu'elles n'existent pas, et un total remboursé déjà atteint par le registre n'enregistre rien.
+- **L'ordre n'a pas d'importance.** Une image plus ancienne qui arrive en retard trouve un total enregistré plus élevé et ne fait rien.
+- **Un échec relance le lot.** Tout ce qui peut être appliqué l'est, puis le lot lève une erreur, et ce qui a été appliqué est sans effet la seconde fois.
+
+L'entrée d'une vente est libérée `holdDays` après le paiement de la commande. L'entrée d'un remboursement est libérée tout de suite, de sorte qu'elle réduit le prochain paiement.
+
+## Les lectures de la page Earnings
+
+instructor-api sert les chiffres propres à l'appelant et ne prend aucun ID d'instructeur en entrée.
+
+- `earnings.report` additionne les lignes de jour sur une période d'au plus 366 jours : une requête par plage, groupée par devise et par cours.
+- `earnings.lines` parcourt page par page les entrées d'un cours, construites champ par champ pour que rien d'autre de l'enregistrement n'atteigne l'appelant.
+- `payout.overview` range les entrées qu'aucun paiement n'a prises en **on hold** [en attente], **waiting for account setup** [en attente de configuration du compte], **ready** [prêtes] et **held** [retenues], par devise, et liste les paiements de l'instructeur.
+
+## Comptes de paiement
+
+Un instructeur est payé sur un compte Stripe Connect Express.
+
+- `payout.startOnboarding` crée le compte, de façon idempotente, et renvoie le lien d'intégration de Stripe.
+- `payout.account` lit l'état du compte depuis Stripe et le stocke dans `payoutAccount` quand il a changé. Si Stripe est injoignable, il renvoie le statut stocké marqué `stale`.
+- `payout.dashboardLink` renvoie un lien de connexion au tableau de bord Stripe Express de l'instructeur, une fois l'intégration terminée.
+
+| Statut | Signification |
+| --- | --- |
+| `not_started` | Pas encore de compte. Rien n'est stocké |
+| `in_progress` | Le formulaire Stripe n'est pas terminé |
+| `active` | Stripe peut y envoyer des transferts et des paiements |
+| `restricted` | Stripe a besoin d'autre chose |
+
+Rien ici n'appelle Stripe sauf si la connexion de la plateforme est active. Sans elle, `payout.account` répond `unavailable`.
+
+## L'exécution des paiements
+
+Une fonction Lambda, dans la pile `Payouts`, s'exécute une fois par jour selon un calendrier EventBridge. Elle peut lire la clé Stripe et rien d'autre parmi les secrets.
+
+1. **Se lier au compte de paiement.** L'exécution travaille pour le compte et le mode actuels de la connexion, et seulement avec une clé dont il est établi qu'elle lui appartient.
+2. **Reprendre.** Les paiements qu'une exécution précédente a laissés non réglés sont terminés d'abord : un paiement encore `collecting` ou `releasing` rend ses entrées, et un paiement `pending` est réglé comme décrit plus bas.
+3. **Pour chaque instructeur avec un compte actif,** relire le compte depuis Stripe. Un compte qui n'est plus actif voit son nouveau statut stocké et est ignoré.
+4. **Par devise,** additionner les entrées libérées qu'aucun paiement n'a prises. Une somme inférieure au minimum du stage, ou non supérieure à zéro, attend.
+5. **Collecter, sceller et envoyer.** Un paiement est créé `collecting`, ses entrées y sont rattachées par lots de 99 (une transaction contient 100 éléments), et il est scellé `pending`. Ensuite le transfert est créé dans Stripe, avec l'ID du paiement comme clé d'idempotence et groupe de transfert, et le paiement est marqué `sent`.
+
+| Statut | Signification |
+| --- | --- |
+| `collecting` | Les entrées sont en cours de rattachement |
+| `pending` | Scellé. Son transfert peut exister ou non |
+| `sent` | Stripe a accepté le transfert |
+| `releasing` | Ses entrées sont en cours de restitution |
+| `failed` | Stripe a refusé le transfert. Ses entrées sont de nouveau ouvertes |
+
+### Pourquoi rien n'est payé deux fois
+
+- Une entrée est rattachée à condition qu'elle n'ait pas de paiement, donc deux exécutions qui se chevauchent ne peuvent pas la prendre toutes les deux.
+- Un paiement est marqué `failed`, et ses entrées rouvertes, **uniquement quand Stripe a refusé sans ambiguïté** le transfert : une requête invalide ou une erreur de permission. Un délai dépassé, une erreur 5xx, une limite de débit ou tout ce qui n'est pas reconnu laisse le paiement `pending`.
+- La reprise cherche le transfert d'un paiement `pending` par son groupe de transfert avant de réessayer. S'il existe, le paiement est marqué envoyé. Sinon, la même clé d'idempotence est réutilisée.
+- Une exécution revendique un paiement non réglé avant d'y toucher, et laisse tranquille celui sur lequel une autre exécution a travaillé dans les 15 dernières minutes.
+
+L'échec d'un instructeur n'arrête pas les autres, mais l'exécution se termine quand même en échec pour qu'un opérateur le voie. Si Stripe refuse la clé enregistrée, l'exécution s'arrête aussitôt, puisqu'aucun appel suivant ne pourrait réussir.
+
+## La règle du compte de paiement
+
+Un gain appartient au compte Stripe et au mode sous lesquels sa commande a été payée, et l'argent ne circule qu'à l'intérieur de ce compte. Après qu'un administrateur change de compte ou de mode :
+
+- Les gains non payés de l'ancien compte sont **held** [retenus]. L'exécution n'envoie rien pour eux, et la page Earnings demande à l'instructeur de contacter la plateforme.
+- Le compte de paiement de chaque instructeur est propre à chaque compte de paiement, donc ils configurent à nouveau les paiements.
+- Revenir en arrière rend les anciens gains payables comme avant.
+
+## Réglages
+
+Par stage, sous `payouts` dans `stages.config.ts`. Voir <Link path="deploy/configuration">Configuration des stages</Link>.
+
+## Invariants
+
+`helpers/invariants/earnings.ts` dans core-table vérifie, après chaque scénario de bout en bout, que les entrées correspondent à leur commande, que les remboursements ne dépassent jamais ce qui a été payé, que les lignes de jour égalent la somme de leurs entrées, que le montant d'un paiement égale ses entrées, et que chaque compte de paiement est bien formé.
+
+## Développement local
+
+Le substitut de Stripe couvre la partie Connect : comptes Express, liens d'intégration, liens de tableau de bord et transferts.
+
+- `POST http://localhost:2024/payout-run` lance l'exécution des paiements une fois. Un corps facultatif `{ "graceSeconds": n }` remplace le délai de grâce de reprise de 15 minutes.
+- `LOCAL_PAYOUT_RUN_INTERVAL_SECONDS` la lance sur un minuteur.
+- `GET /stripe/test/transfers` liste les transferts effectués, et `POST /stripe/test/transfers/fail-next` fait échouer le prochain transfert d'une façon choisie (par exemple `rejected` ou `timeout`).
+
+## Limites
+
+- Pas de gestion des taxes, de factures ni de formulaires fiscaux.
+- Pas de conversion de devises : chaque devise a son propre solde et ses propres paiements.
+- Les litiges et les rétrofacturations ne sont pas enregistrés.
+- Les gains retenus sont payés à la main par la plateforme. Rien ne les déplace vers le nouveau compte.

@@ -1,0 +1,145 @@
+---
+title: Cours payants et paiements
+description: Connecter Stripe en tant qu'administrateur, fixer le prix d'un cours en tant qu'instructeur, en acheter un en tant qu'étudiant, et les remboursements.
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+Un cours est gratuit tant que son instructeur ne lui donne pas de prix. Les paiements sont pris par Stripe, sur un compte Stripe que l'administrateur de la plateforme connecte.
+
+## Pour les administrateurs : connecter Stripe
+
+Rien concernant Stripe n'est défini au déploiement de Discava. Tant qu'un administrateur n'a pas connecté de compte, chaque cours est gratuit et aucun prix ne peut être fixé.
+
+1. Dans le tableau de bord Stripe, ouvrez Developers, puis API keys, et copiez l'une de ces clés :
+   - Une **secret key** (elle commence par `sk_`).
+   - Une **restricted key** (elle commence par `rk_`) avec accès en écriture à Checkout Sessions, Refunds et Webhook Endpoints, et accès en lecture à Accounts, Events et PaymentIntents. Sans Refunds et PaymentIntents, les paiements qui ne peuvent pas être livrés ne sont pas remboursés et les remboursements faits dans le tableau de bord ne sont pas enregistrés.
+2. Ouvrez **Payments** dans le portail admin.
+3. Collez la clé dans **Stripe secret key** et choisissez **Connect Stripe**.
+
+Discava vérifie la clé, enregistre sa propre adresse de confirmation (un endpoint webhook) dans votre compte Stripe, et stocke la clé. Vous ne créez jamais de webhook et ne copiez jamais de secret de signature à la main.
+
+La page affiche alors **Connected**, le nom du compte, les quatre derniers caractères de la clé, et **Test mode** ou **Live mode**. Le mode vient de la clé. En mode test, les étudiants paient avec les cartes de test de Stripe et sont inscrits sans qu'aucun vrai argent ne circule, donc utilisez une clé live avant l'arrivée de vrais étudiants.
+
+Pour payer les instructeurs, le compte Stripe doit aussi avoir **Connect** activé. Voir <Link path="guides/earnings-and-payouts">Gains et versements</Link>.
+
+### Remplacer la clé
+
+Choisissez **Replace key**, collez la nouvelle clé et choisissez **Save key**. Confirmez avec **Replace the key**.
+
+- **Une nouvelle clé pour le même compte** est une rotation. Les paiements continuent, et les paiements déjà ouverts aboutissent encore.
+- **Une clé d'un autre compte, ou de l'autre mode,** est un changement : les paiements vont à ce compte à partir de maintenant. Un changement attend qu'aucun paiement ne soit ouvert. Un paiement dure jusqu'à une heure, et la page vous indique quand le dernier se termine. Avant de changer, vérifiez les livraisons de webhook de l'ancien compte dans le tableau de bord Stripe : une confirmation que Stripe n'a pas encore livrée ne peut plus être acceptée ensuite.
+
+Un changement affecte aussi les gains non versés des instructeurs. Lisez d'abord <Link path="guides/earnings-and-payouts">Gains et versements</Link>.
+
+### Déconnecter
+
+Choisissez **Disconnect** et confirmez avec **Disconnect Stripe**. Cela arrête les nouveaux achats : les étudiants voient « Payments are unavailable right now » et les instructeurs ne peuvent pas fixer de prix. Les prix déjà fixés restent, et les étudiants qui ont payé gardent leur accès. Comme un changement, cela attend les paiements ouverts.
+
+### L'historique des changements
+
+**Recent changes** liste les derniers changements : quand, qui, ce qui s'est passé (connecté, clé remplacée, compte changé, déconnecté, ou échec avec la raison) et le mode. D'une clé, il n'affiche que les quatre derniers caractères.
+
+« Confirmation address changed » signifie que l'adresse de webhook du stage n'est plus celle enregistrée chez Stripe, par exemple après l'ajout d'un domaine personnalisé. Enregistrez de nouveau la clé pour enregistrer la nouvelle adresse.
+
+### Rembourser un étudiant
+
+Remboursez le paiement dans le tableau de bord Stripe.
+
+- **Un remboursement intégral** met fin à l'inscription de l'étudiant en quelques secondes et l'en informe, dans la cloche et par e-mail. Sa progression est conservée.
+- **Un remboursement partiel** laisse son accès inchangé.
+
+Un étudiant dont le paiement ne peut pas être livré est remboursé automatiquement : le cours a été dépublié pendant qu'il payait, ou il était déjà inscrit. Il ne reçoit pas de notification de remboursement.
+
+## Pour les instructeurs : fixer le prix d'un cours
+
+1. Ouvrez le cours depuis **My Courses** et allez à sa section **Price**.
+2. Saisissez un **Price** : `0` pour gratuit, ou un montant de 1,00 à 10 000,00.
+3. Choisissez une **Currency** : USD, EUR, GBP, AUD ou CAD.
+4. Choisissez **Save price**.
+
+- Vous pouvez changer le prix quand vous le souhaitez. Le nouveau prix s'applique aux nouveaux achats.
+- Les étudiants déjà inscrits gardent leur accès, qu'ils aient payé un autre prix ou se soient inscrits quand le cours était gratuit.
+- Si vous voyez « Payments aren't set up yet; ask an administrator », Stripe n'est pas connecté. Vous pouvez quand même remettre un cours en gratuit.
+
+Le prix s'affiche sur la page publique du cours et sur sa carte du catalogue, ou « Free ».
+
+## Pour les étudiants : acheter un cours
+
+Un cours payant affiche son prix et **Buy now** à la place de **Enrol now**. Si vous n'êtes pas connecté, le bouton indique **Sign in to buy** et vous mène d'abord à la connexion.
+
+1. **Buy now** vous mène à la page de paiement de Stripe, qui affiche le cours et le montant.
+2. Après avoir payé, vous revenez au cours. Il indique « Confirming your payment », puis vous êtes inscrit, en général en quelques secondes, et la première leçon que vous n'avez pas terminée s'ouvre avec la ligne « You're enrolled in » suivie du nom du cours. Si le cours n'a pas encore de leçons visibles par les étudiants, la page du cours s'ouvre à la place.
+3. Si vous annulez, vous revenez au cours avec « Payment cancelled » et rien n'est facturé. Choisir de nouveau Buy now dans l'heure rouvre le même paiement.
+
+S'inscrire à un cours gratuit ouvre la même leçon, sans étape de paiement. Voir <Link path="guides/finding-and-taking-courses">Trouver et suivre des cours</Link>.
+
+Vous êtes facturé une seule fois, quel que soit le nombre de clics.
+
+Si votre paiement est remboursé intégralement, votre inscription prend fin et la page du cours propose de nouveau Buy now. Votre progression est conservée : achetez de nouveau le cours et vous reprenez là où vous vous étiez arrêté. Si le cours est devenu gratuit entre-temps, vous inscrire rétablit aussi votre progression.
+
+### Demander un remboursement
+
+La page du cours indique les conditions de remboursement à côté du prix. Vous pouvez être remboursé :
+
+- dans les 14 jours suivant le paiement,
+- tant que vous avez terminé moins de la moitié du cours,
+- une fois par cours.
+
+Tant que vous remplissez ces conditions, la page du cours affiche **Request a refund** et la date jusqu'à laquelle vous pouvez le demander.
+
+1. Choisissez **Request a refund**.
+2. Confirmez avec **Request refund**. La page indique « Refund requested » avec la date, et que votre accès prend fin quand il est confirmé.
+3. Stripe rembourse la totalité du montant. Votre inscription prend fin et la page du cours propose de nouveau **Buy now**.
+4. Vous recevez une notification dans la cloche et un e-mail. Cet e-mail ne peut pas être désactivé.
+
+Quand vous ne remplissez plus les conditions, le bouton est remplacé par la raison : la période de remboursement est terminée, vous avez terminé la moitié du cours, ou vous avez déjà été remboursé pour ce cours.
+
+Si vous avez été remboursé pour un cours à votre demande, la page vous en avertit à côté de **Buy now**, et un second achat de ce cours ne peut pas être remboursé. Un remboursement fait par un opérateur dans Stripe, ou automatiquement pour un paiement qui n'a pas pu être livré, ne joue pas contre vous.
+
+Votre progression et tout certificat sont conservés.
+
+### Quitter un cours
+
+Pour un cours auquel vous vous êtes inscrit sans payer, la page du cours affiche **Leave course**. Confirmez et l'inscription prend fin : le cours quitte My Learning, et votre progression est conservée. Inscrivez-vous de nouveau pour continuer. Un cours que vous avez payé n'a pas de **Leave course** : demandez plutôt un remboursement.
+
+## Codes de réduction
+
+### Pour les instructeurs : créer des codes
+
+Ouvrez un cours payant depuis **My Courses** et choisissez **Coupons** en haut de sa page. Un cours gratuit n'a rien à réduire, donc la page vous demande d'abord de fixer un prix. Choisissez **Create code** et donnez-lui :
+
+- **Un code**, de 4 à 24 lettres, chiffres ou tirets, insensible à la casse. Laissez-le vide, ou choisissez **Generate**, et Discava en crée un comme `K7QD-2MXP`.
+- **Un type et une valeur** : **Percent off**, un nombre entier de 1 à 100, ou **Fixed amount** dans la devise du cours, de 1,00 jusqu'au prix.
+- **Une date d'expiration** (facultative). Le code fonctionne jusqu'à la fin de ce jour, en UTC.
+- **Un nombre maximal d'utilisations** (facultatif).
+
+Choisissez ensuite **Create**. Chaque code s'affiche comme **Active**, **Disabled**, **Expired** ou **Used up**.
+
+Chaque code appartient à un seul cours. Il n'existe pas de codes couvrant plusieurs cours ou tout le site, ni d'import en masse.
+
+**Disable** désactive un code immédiatement et **Enable** le réactive. **Edit limits** change l'expiration et le maximum, mais jamais en dessous des utilisations que le code a déjà. **Delete** n'est proposé que tant que personne n'a utilisé le code ; désactivez plutôt un code utilisé. Le type et la valeur d'un code ne peuvent pas être modifiés : désactivez-le et créez-en un nouveau.
+
+Un remboursement ne rend pas d'utilisation.
+
+### Pour les étudiants : utiliser un code
+
+1. Sur un cours payant, choisissez **Have a code?**.
+2. Saisissez le code et choisissez **Apply**. La page affiche le prix catalogue, la réduction et le total, et le bouton d'achat indique **Pay** avec le total.
+3. Payez comme d'habitude.
+
+**Remove code** revient au prix catalogue. Rien n'est consommé tant que vous n'avez pas payé.
+
+- Chaque étudiant peut utiliser un code une fois.
+- Un code qui ne peut pas être utilisé en donne la raison : désactivé, expiré, utilisé le nombre maximal de fois, déjà utilisé par vous, ou laissant un prix trop bas pour être payé. Un code qui n'existe pas et un code d'un autre cours donnent le même message.
+- Si un code couvre tout le prix, le bouton indique **Enrol for free** : vous êtes inscrit tout de suite, sans page de paiement.
+
+## Limites
+
+- Cartes uniquement.
+- Les codes de réduction appartiennent chacun à un seul cours : pas de codes pour tout le site ni en masse.
+- Aucune taxe n'est calculée ni collectée.
+
+<Link path="design/payments">Paiements</Link> décrit comment cela fonctionne.

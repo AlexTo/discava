@@ -1,0 +1,76 @@
+---
+title: Modelo de seguridad
+description: Quién puede acceder a qué en Discava, las protecciones que puede activar una etapa y cómo se mantienen los despliegues dentro de sus límites.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+## Quién puede hacer qué
+
+El acceso se decide por capas, y cada capa asume que la anterior podría fallar.
+
+| Capa | Hace cumplir |
+| --- | --- |
+| **Grupos de Cognito** | El rol de un usuario: `student`, `instructor` o `admin` |
+| **APIs separadas** | Los procedimientos de instructor y de administrador son despliegues separados. instructor-api rechaza el token de un estudiante antes de que se ejecute cualquier procedimiento |
+| **Reglas de procedimiento** | La regla concreta: este instructor es dueño de este curso, este estudiante está inscrito en él |
+| **Medios firmados** | Un video o archivo se sirve solo a una solicitud firmada para él. La firma se emite tras una comprobación de acceso, como la inscripción |
+
+Un curso en borrador o archivado responde "no encontrado" a cualquiera que no deba verlo, así que no se revela su existencia.
+
+## Protecciones por etapa
+
+Cada protección está **activada por defecto**. La configuración de una etapa solo puede desactivar cosas, como hace `discava-development` para mantenerse barata.
+
+| Protección | Qué hace | Producción | Desarrollo |
+| --- | --- | --- | --- |
+| **WAF** | Firewall de aplicaciones web en los portales, las APIs, los medios y el grupo de usuarios | Activado | Desactivado |
+| **Cifrado KMS** | Claves administradas por el cliente, con rotación, para la tabla, los buckets, las colas, los registros y la búsqueda | Activado | Desactivado (cifrado administrado por AWS) |
+| **MFA** | Un segundo factor al iniciar sesión | Activado | Desactivado |
+| **Protección contra eliminación** | Impide eliminar el grupo de usuarios y la tabla | Activado | Desactivado |
+| **Conservar al eliminar** | Mantiene los datos si se elimina un stack | Activado | Desactivado |
+| **Registro propio** | Permite que cualquiera cree una cuenta | Activado | Desactivado |
+| **Trazado** | Trazado de solicitudes con X-Ray | Activado | Desactivado |
+
+Los datos siempre se cifran en reposo y en tránsito. El ajuste de KMS decide si las claves las controlas y auditas tú.
+
+En una etapa de desarrollo con WAF desactivado, los límites de solicitudes, la concurrencia de funciones y los topes de rendimiento de la tabla de la configuración de la etapa acotan lo que puede costar una avalancha de solicitudes. Con el registro propio desactivado, un extraño no puede obtener una cuenta para llegar a los procedimientos que requieren sesión.
+
+## Mínimo privilegio dentro del sistema
+
+- Cada función Lambda tiene su propio rol con solo los permisos que necesita su tarea.
+- Las capacidades sensibles están aisladas en funciones dedicadas. La clave que firma las solicitudes de medios de lecciones la puede leer una función de core-api y una de instructor-api, no la función que atiende todos los demás procedimientos.
+- La clave de Stripe y el secreto de firma del webhook están en Secrets Manager. Una función de admin-api puede escribirlos. Las funciones de pago, webhook, cuenta de pagos y ejecución de pagos leen solo lo que necesitan, y ninguna respuesta, línea de registro o registro de auditoría contiene ninguno de los dos.
+- El webhook de Stripe acepta un mensaje solo si su firma se verifica con el secreto de firma almacenado. Un pago nunca se da por bueno a partir del navegador.
+- Ningún bucket de S3 es público. Los portales y los medios solo son accesibles a través de sus distribuciones de CloudFront.
+- El renderizador de páginas sirve páginas públicas con acceso de solo lectura a la tabla, y solo la distribución de CloudFront del portal del estudiante puede invocarlo.
+- Cada API responde a solicitudes de origen cruzado solo desde los portales que la llaman: los tres para core-api, el portal del instructor para instructor-api, el portal de administración para admin-api. También se permiten las direcciones de desarrollo local.
+- Los índices de búsqueda solo los escriben las funciones de indexación. Las APIs solo pueden leerlos.
+- Las funciones obtienen los nombres de recursos de variables de entorno definidas al desplegar, y las credenciales nunca aparecen en el código ni en archivos de entorno.
+
+## Comprobaciones antes de desplegar el código
+
+| Comprobación | Dónde | Detecta |
+| --- | --- | --- |
+| **Checkov** | Cada compilación | Ajustes de infraestructura inseguros en las plantillas generadas |
+| **Trivy** | CI y antes de cada despliegue | Vulnerabilidades conocidas en dependencias y secretos incluidos en el código |
+| **git-secrets** | Antes de cada commit | Credenciales a punto de subirse |
+| **Invariantes de la tabla** | Pruebas de extremo a extremo | Datos que quedan en un estado que rompe una regla que abarca varios registros |
+
+## Mantener los despliegues dentro de sus límites
+
+El pipeline de despliegue es en sí una superficie de ataque, así que está restringido:
+
+- **Sin credenciales de AWS almacenadas.** GitHub Actions inicia sesión con un token emitido para una sola ejecución.
+- **El rol de despliegue confía en un entorno** de un repositorio. Proteger ese entorno con revisores obligatorios controla el despliegue.
+- **El rol de despliegue no puede crear recursos.** Solo puede pedir a CloudFormation que despliegue stacks con el nombre de su etapa.
+- **El rol de ejecución está acotado** a los recursos de la etapa por nombre.
+- **Un permissions boundary** limita cada rol que crea una etapa, así que un cambio desplegado no puede concederse más de lo que permite el límite.
+
+<Link path="deploy/ci-cd">Referencia de CI/CD</Link> explica el inicio de sesión y los dos roles.
+
+## Informar de una vulnerabilidad
+
+Por favor, no abras un issue público. Sigue el proceso de notificación de seguridad de [CONTRIBUTING.md](https://github.com/AlexTo/discava/blob/main/CONTRIBUTING.md#security-issue-notifications).

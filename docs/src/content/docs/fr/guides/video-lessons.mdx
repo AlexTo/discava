@@ -1,0 +1,77 @@
+---
+title: Leçons vidéo
+description: Les vitesses et les raccourcis clavier du lecteur vidéo, les sous-titres et les sous-titres traduits automatiquement, la transcription, la recherche de ce qui a été dit dans un cours et les questions dans une vidéo.
+---
+
+import Link from '@components/link.astro';
+
+## Le lecteur
+
+Les commandes du lecteur règlent la vitesse de lecture, les sous-titres, le volume et le plein écran, et ouvrent la transcription. Les vitesses vont de 0,5 à 2 par pas de 0,25. Le lecteur mémorise votre vitesse, votre volume et vos choix de sous-titres pour la vidéo suivante.
+
+Les raccourcis clavier fonctionnent quand le lecteur a le focus et que vous ne saisissez pas de texte dans un champ :
+
+| Touche | Ce qu'elle fait |
+| --- | --- |
+| Espace ou K | Lecture ou pause |
+| J | Reculer de 10 secondes |
+| L | Avancer de 10 secondes |
+| Flèche gauche | Reculer de 5 secondes |
+| Flèche droite | Avancer de 5 secondes |
+| Flèche haut, flèche bas | Augmenter le volume, baisser le volume |
+| M | Couper ou rétablir le son |
+| C | Activer ou désactiver les sous-titres |
+| F | Plein écran |
+| `<` et `>` | Plus lent, plus rapide |
+| 0 à 9 | Aller à ce dixième de la vidéo : 5 correspond à la moitié |
+
+## Sous-titres et transcription
+
+Des sous-titres sont ajoutés automatiquement à chaque vidéo. Le menu des sous-titres liste les langues disponibles pour la vidéo, et **Off**.
+
+- Une langue marquée « (auto-translated) » est une traduction automatique. Elle peut contenir des erreurs.
+- **Transcript** ouvre le texte de la vidéo. **Jump to current line** le ramène à l'endroit où en est la vidéo.
+
+Les instructeurs choisissent les langues dans lesquelles les sous-titres sont traduits, et peuvent téléverser leurs propres sous-titres. Voir le <Link path="guides/instructor-guide">Guide de l'instructeur</Link>.
+
+## Rechercher ce qui a été dit
+
+Vous pouvez rechercher dans les sous-titres de toutes les vidéos d'un cours auquel vous êtes inscrit.
+
+1. Dans le lecteur du cours, repérez **Search transcripts**.
+2. Saisissez au moins 2 caractères dans « Search what was said ».
+3. Choisissez **Search**.
+4. Choisissez un résultat pour ouvrir cette leçon à ce moment précis.
+
+La page liste les moments correspondants, jusqu'aux 20 meilleurs. S'il y en a davantage, ajoutez un mot pour affiner la recherche. Si rien ne correspond, vérifiez l'orthographe ou essayez les mots dans la langue des sous-titres.
+
+## Questions dans une vidéo
+
+Un instructeur peut faire s'arrêter une vidéo pour poser une question, à un moment de la vidéo ou à la fin.
+
+### Pour les étudiants
+
+1. Quand la vidéo s'arrête, lisez la question. Une question à choix multiples indique « Select all that apply ».
+2. Choisissez votre réponse puis **Submit answer**, ou choisissez **Skip**.
+3. Lisez si vous aviez raison (« Correct » ou « Not quite »), la bonne réponse et l'**Explanation**, s'il y en a une.
+4. Choisissez **Continue** pour poursuivre le visionnage.
+
+- Une seule réponse par question est enregistrée. Une question à choix multiples n'est juste que si chaque choix est juste.
+- **Try again** sert à s'entraîner : « Practice: this answer isn't recorded ».
+- Les réponses ne comptent jamais dans votre progression, les quiz du cours ou un certificat.
+- Un cours archivé ne pose aucune question.
+- Si l'instructeur a modifié une question depuis votre dernière lecture, elle indique « This question was updated. Check it before answering. »
+
+### Pour les instructeurs
+
+1. Dans **Course content**, ouvrez la boîte de dialogue **Questions** d'une vidéo.
+2. Lisez la vidéo ou faites glisser le curseur jusqu'au moment voulu, puis choisissez **Add a question here**. Pour une question après la vidéo, choisissez **Add an end question**.
+3. Rédigez la question, ses options et indiquez lesquelles sont correctes.
+4. Ajustez **Ask at** si besoin : un temps comme 1:30, ou **At the end**.
+5. Enregistrez.
+
+- Une vidéo accepte jusqu'à 20 questions.
+- **Preview as student** lit la vidéo avec ses questions. Les réponses sont vérifiées et non enregistrées. **Stop previewing** revient à l'édition.
+- Vous pouvez modifier les questions après que des étudiants y ont répondu. Les réponses déjà enregistrées sont conservées et ne sont pas corrigées de nouveau.
+
+Les résultats s'affichent sur la page d'analyse du cours, sous **Video questions**. Voir <Link path="guides/course-analytics">Analyse du cours</Link>.

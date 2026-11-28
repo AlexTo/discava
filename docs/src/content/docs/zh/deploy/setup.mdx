@@ -1,0 +1,141 @@
+---
+title: Fork 与安装
+description: Fork Discava，准备 fork 的 GitHub 设置，并运行把它连接到你的 AWS 账户的安装脚本。
+sidebar:
+  order: 2
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+本页把 Discava 的 fork 连接到你的 AWS 账户。完成后，你的 fork 具备 Deploy 工作流所需的一切，但尚未部署任何内容。
+
+## 1. Fork 并克隆
+
+<Steps>
+
+1. 在 GitHub 上 fork [AlexTo/discava](https://github.com/AlexTo/discava)。除非有理由，请保留名称 `discava`。
+
+2. 克隆**你的 fork**，而不是原仓库。安装脚本从 `origin` 远程读取要信任的仓库。
+
+   ```sh
+   git clone https://github.com/<you>/discava.git
+   cd discava
+   ```
+
+3. 安装依赖。安装脚本需要它们来读取阶段列表。
+
+   ```sh
+   corepack enable
+   pnpm i
+   ```
+
+</Steps>
+
+## 2. 在 GitHub 上准备 fork
+
+你的 fork 中有三项设置，都在它的 **Settings** 或 **Actions** 标签页下。
+
+<Steps>
+
+1. **启用工作流。** GitHub 会在新 fork 上禁用工作流。打开 **Actions** 标签页，选择 **I understand my workflows, go ahead and enable them**。
+
+2. **启用 GitHub Pages。** 进入 **Settings → Pages**，把 **Source** 设为 **GitHub Actions**。
+
+   CI 工作流会在每次推送到 `main` 时把本文档站点发布到 Pages。如果 Pages 关闭，该作业会失败，CI 被标记为失败，等待 CI 的自动部署就不会启动。手动部署不受影响。
+
+3. **可选：添加 `CODECOV_TOKEN`。** CI 会把测试覆盖率上传到 Codecov。要查看你的 fork 的覆盖率，请在 **Settings → Secrets and variables → Actions** 下，把 Codecov 的令牌添加为仓库密钥。
+
+</Steps>
+
+:::note[文档站点的地址]
+CI 会为你的 fork 的 GitHub Pages 地址 `https://<owner>.github.io/<repository>` 构建文档站点，所以无需修改。如果要发布到别处，例如自定义域名，请设置仓库变量 `DOCS_SITE`（例如 `https://docs.example.com`）和 `DOCS_BASE_PATH`（例如 `/my-lms`，域名根路径则用 `/`）。
+:::
+
+## 3. 运行安装脚本
+
+脚本是 `scripts/setup-stage.sh`。对你部署的每个阶段运行一次。
+
+```sh
+./scripts/setup-stage.sh discava-development
+```
+
+它会问一系列问题，每个问题都有检测到的默认值，按 Enter 即可接受。在你确认最后的摘要之前不会创建任何内容。可以安全地重复运行：每一步都会创建缺少的内容，并更新已存在的内容。
+
+### 它会问什么
+
+按以下顺序：
+
+| 提示 | 如何回答 |
+| --- | --- |
+| **Stage** | 要安装的阶段。阶段来自 `packages/common/infra-config/src/stages.config.ts` |
+| **GitHub** | 如果 `origin` 是你的 fork，则无需回答。它会打印将要信任的仓库：请确认那是你的 |
+| **AWS credentials** | 目标账户的 AWS CLI profile，留空则使用默认凭证。它会打印你当前登录的身份 |
+| **Region** | 阶段的主区域。如果 `stages.config.ts` 已设置则不会询问 |
+| **CDK bootstrap** | 对每个报告为未 bootstrap 的区域回答 Yes |
+| **GitHub environment** | 回答 Yes 以创建以阶段命名的环境并设置其变量。没有 GitHub CLI 时不会询问 |
+| **Deploy automatically?** | 回答 Yes，则每当 CI 在 `main` 上通过就部署该阶段。回答 No（默认）则仅在你运行工作流时部署。只有一个阶段可以自动部署 |
+| **Root domain** | 暂时留空。之后可以再次运行脚本，用它在 ACM 中找到的证书，让每个组件使用该域名的子域名提供服务（见 <Link path="deploy/configuration">阶段配置</Link>） |
+| **Continue?** | 摘要显示出你的仓库、账户、区域和阶段后，回答 Yes |
+
+### 它会创建什么
+
+在 **AWS** 中：
+
+| 资源 | 名称 | 用途 |
+| --- | --- | --- |
+| OIDC provider | `token.actions.githubusercontent.com` | 让 GitHub Actions 登录此账户。所有阶段共用 |
+| Deploy role | `github-deploy-<stage>` | 由 Deploy 工作流假设。只信任你仓库中名为 `<stage>` 的环境。可以发布资产并管理该阶段的 CloudFormation 堆栈 |
+| Execution role | `cfn-execution-<stage>` | CloudFormation 用它创建该阶段的资源。它的权限在一个内联策略和三个托管策略中：`cfn-execution-<stage>-data`、`-edge` 和 `-compute` |
+| Permissions boundary | `permissions-boundary-<stage>` | 该阶段创建的每个 IAM 角色都必须带有它，从而限制已部署堆栈能授予自己的权限 |
+| Docker login role | `github-docker-login-<repo>` | 让你仓库中的工作流登录 Amazon ECR Public，这样拉取镜像不会被限流。所有阶段共用 |
+| CDK bootstrap stack | `CDKToolkit` | CDK 所需的资产存储桶和角色，在你同意的每个区域中创建 |
+
+门户或媒体启用了 WAF 的阶段（例如 `discava-production`）还会在 `us-east-1` 做 bootstrap。
+
+在 **GitHub** 上：
+
+| 位置 | 变量 | 值 |
+| --- | --- | --- |
+| Environment `<stage>` | `AWS_REGION` | 阶段的区域 |
+| Environment `<stage>` | `AWS_DEPLOY_ROLE_ARN` | 部署角色 |
+| Environment `<stage>` | `AWS_EXECUTION_ROLE_ARN` | 执行角色 |
+| Repository | `AWS_DOCKER_LOGIN_ROLE_ARN` | Docker 登录角色 |
+| Repository | `AUTO_DEPLOY_STAGE` | 阶段名称，仅当你选择了自动部署 |
+
+这些是**变量，不是密钥**。角色 ARN 不敏感：部署角色只能被运行在你仓库对应环境中的工作流假设，Docker 登录角色只能被你仓库中的工作流假设。
+
+### 没有 GitHub CLI
+
+如果 `gh` 没有安装或没有登录，脚本仍会在 AWS 中创建所有内容，然后打印环境和变量，供你在 **Settings → Environments** 和 **Settings → Secrets and variables → Actions → Variables** 下手动创建。
+
+### 无人值守运行
+
+```sh
+AWS_PROFILE=my-profile AWS_REGION=eu-west-1 ./scripts/setup-stage.sh --yes discava-development
+```
+
+`--yes` 接受所有默认值，所以不会开启自动部署。`./scripts/setup-stage.sh --help` 会列出可预设每个回答的环境变量。
+
+### 何时再次运行
+
+- 添加或更改自定义域名或通知发件人时（见 <Link path="deploy/configuration">阶段配置</Link>）
+- 拉取新版本的 Discava 之后、部署它之前。脚本保存着执行角色和权限边界的权限，使用新类型 AWS 资源的版本会扩展它们。不更新的话，部署会因拒绝访问错误而失败
+
+## 4. 保护生产环境
+
+任何能在你的 fork 中运行工作流的人都可以部署阶段。对于 `discava-production`，或任何有真实用户的阶段，请打开 **Settings → Environments → `<stage>`**，然后：
+
+- 添加 **required reviewers**，让每次部署都等待批准
+- 把 **deployment branches** 限制为 `main`
+
+## 检查你的成果
+
+```sh
+gh variable list --env discava-development
+gh variable list
+```
+
+第一条应列出三个 `AWS_*` 变量。第二条应列出 `AWS_DOCKER_LOGIN_ROLE_ARN`，如果你选择了自动部署，还有 `AUTO_DEPLOY_STAGE`。
+
+下一步：<Link path="deploy/first-deploy">你的首次部署</Link>。

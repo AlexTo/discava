@@ -1,0 +1,85 @@
+---
+title: 查找和学习课程
+description: 学生如何搜索和浏览目录，公开的课程页面，免费预览和讲师简介，报名免费课程和退出课程，以及 My Learning。
+---
+
+import Link from '@components/link.astro';
+
+无需账户就能搜索、浏览和阅读课程页面。报名时需要登录。
+
+## 搜索
+
+页头的搜索框显示 "What do you want to learn?"。
+
+1. 至少输入 3 个字符。输入时会推荐匹配的课程。
+2. 用方向键和 Enter，或直接选择，来选定一个推荐项并打开该课程。
+3. 或者不选任何推荐项直接按 Enter，查看所有结果。
+
+在结果页面上你可以：
+
+- 用 **Sort by** 按 Relevance、Highest rated 或 Newest 排序。
+- 按分类、级别、语言、时长和标签筛选。
+- 设置 **Minimum rating**：4.5、4.0、3.5 或 3.0 及以上。
+- 选择 **Clear filters** 重新开始。
+
+<Link path="guides/reviews">评分和评价</Link>解释了评分如何影响排序。
+
+## 浏览
+
+- 位于 `/courses` 的 **Browse courses** 列出目录。选择一个分类来缩小范围，或选择 **All**。
+- 每个分类有自己的页面，带有针对该分类的搜索框。
+- 平台已归档的分类会说明它已不可用，并带有指向 **Browse all courses** 的链接。
+
+## 课程页面
+
+已发布课程的页面是公开的。它显示课程涵盖的内容、课程大纲、价格或 "Free"、评分和评价，以及讲师。
+
+- **Play preview** 播放课程的预览视频（如果有）。
+- 标记为 **Free preview** 的课时无需登录或报名即可打开。你可以观看它的视频、阅读它的文字并下载它的文件。它的测验仍然锁定："Enrol to take this quiz"。在你报名之前不会为你保存任何内容。
+- 讲师卡片上的 **View profile** 会打开他们的简介，以及他们教授的课程。
+
+如果讲师不再提供某个预览，它的地址会显示 "This preview is no longer available."，并带有 **View the course**。
+
+## 报名免费课程
+
+1. 在课程页面上选择 **Enrol now**。
+2. 如果你还没登录，选择 **Continue to sign in** 并登录。你会回到该课程。
+3. 你尚未完成的第一个课时会打开，并显示 "You're enrolled in" 和课程名称。
+
+如果你从免费预览课时报名，你会留在该课时，并可以选择 **Start this lesson**。
+
+有价格的课程会改为显示 **Buy now**。参见<Link path="guides/payments">付费课程和支付</Link>。
+
+## 退出课程
+
+对于你没有付费的课程，课程页面会显示 **Leave course**。
+
+1. 选择 **Leave course**。
+2. 用 **Leave course** 确认。
+
+你的报名会结束，你的进度会保留。你可以随时重新报名并继续，除非该课程此后被设置了价格：那样你就需要购买它。
+
+你已付费的课程没有 **Leave course**。请改为申请退款。
+
+## My Learning
+
+页头中的 **My Learning** 用两个标签页列出你的课程，**In progress** 和 **Completed**。每张卡片显示你的进度和一个按钮：
+
+| 按钮 | 何时 |
+| --- | --- |
+| **Start** | 你还没有完成任何内容 |
+| **Continue** | 你学到了一半 |
+| **Review** | 你已完成课程 |
+| **See what's new** | 你已完成课程，而讲师此后又添加了内容 |
+
+登录后，首页会欢迎你回来，显示用于继续你上次所学课程的 **Continue learning**、你的其他课程，以及可以开始的课程。
+
+你已报名的课程的课程页面会以百分比显示你的进度，并带有 **Start learning** 或 **Continue learning**。已完成的课程显示 **Completed**、日期和 **Review course**。
+
+## 更多
+
+- <Link path="guides/video-lessons">视频课时</Link>：播放器、字幕和搜索所说的内容。
+- <Link path="guides/quizzes-and-assignments">测验和作业</Link>。
+- <Link path="guides/lesson-discussions">课时讨论</Link>：在课时中提问。
+- <Link path="guides/certificates">证书</Link>。
+- <Link path="guides/notifications">通知</Link>：铃铛和电子邮件设置。

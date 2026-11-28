@@ -1,0 +1,50 @@
+---
+title: Categorías del catálogo
+description: "La taxonomía de categorías que gestionan los administradores, los campos de catálogo de un curso y cómo alimentan las facetas de búsqueda."
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/_archive/20261115-000000-catalogue-categories/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-000000-catalogue-categories/)
+
+Los cursos se pueden organizar con una **categoría** (una por curso, de una taxonomía que gestionan los administradores) y describirse con otros cuatro campos opcionales. Los estudiantes filtran el catálogo por todos ellos.
+
+## Campos de catálogo del curso
+
+| Campo | Regla |
+|---|---|
+| `categoryId` | Una categoría existente y **activa** al definirla o cambiarla |
+| `tags` | Como máximo 8, cada una de 1 a 30 caracteres. Se guardan sin espacios sobrantes y en minúsculas, sin duplicados |
+| `level` | `beginner`, `intermediate` o `advanced` |
+| `language` | Un código de una lista fija |
+| `durationHours` | Un número entero de 1 a 500 |
+
+Los cinco son opcionales. Los instructores los definen desde el portal del instructor con `course.updateCatalogue` de instructor-api, y eligen la categoría desde `category.listActive`. `courseCatalogueWrites` en `helpers/course-catalogue.ts` de core-table es el único escritor de los cinco campos, así que todos los escritores los validan de la misma manera.
+
+## La taxonomía de categorías
+
+Una categoría tiene:
+
+- un `name`: de 1 a 60 caracteres, único sin distinguir mayúsculas ni espacios;
+- un `slug`: seguro para URL, derivado del nombre al crearla y nunca modificado. Si el slug ya existe, se agrega un número (`design`, `design-2`);
+- un `status`: `active` o `archived`.
+
+Toda la taxonomía vive en una sola partición de core-table, así que listarla es una consulta. Las categorías nunca se eliminan: archivar una la oculta de las opciones para nuevas asignaciones, mientras que los cursos que ya la usan la conservan.
+
+La unicidad se hace cumplir con registros `categoryClaim` escritos en la misma transacción que la categoría, uno para el slug y otro para el nombre normalizado. Un cambio de nombre mueve la reserva del nombre y deja el slug, así que la URL de la página de destino de una categoría nunca cambia. `helpers/category.ts` en core-table es el único escritor de ambos registros.
+
+Las comprobaciones de invariantes `course-category-exists` y `category-claims-consistent` garantizan que un curso solo apunte a una categoría que existe, y que cada categoría tenga exactamente sus dos reservas.
+
+## El portal de administración y `admin-api`
+
+Los administradores (el grupo `admin` de Cognito) gestionan las categorías en el portal de administración, que llama a **`admin-api`**: una API tRPC aparte con su propia Lambda y API Gateway, construida como instructor-api, de modo que solo los administradores pueden llegar a sus procedimientos. Los procedimientos son `category.list`, `create`, `rename` y `archive`.
+
+Los estudiantes y visitantes leen las categorías mediante `category.list` y `category.bySlug` públicos de core-api, que usan las páginas de destino de categorías.
+
+Una etapa nueva no tiene categorías. `pnpm nx run @discava/tooling-deploy:seed-categories` escribe un conjunto inicial y omite las que ya existen.
+
+## Facetas de búsqueda
+
+La categoría, las etiquetas, el nivel, el idioma y la duración se indexan en el índice de búsqueda `courses`, y la búsqueda devuelve un conteo de facetas para cada uno. Consulta <Link path="design/search">Búsqueda</Link> para ver la consulta de facetas y la reindexación única que se debe ejecutar tras desplegar.

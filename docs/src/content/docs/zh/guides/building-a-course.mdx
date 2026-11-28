@@ -1,0 +1,77 @@
+---
+title: 构建课程
+description: 在讲师门户中创建课程，添加模块、课时和内容，发布和隐藏，修改已发布的课程，以及目录详情。
+---
+
+import Link from '@components/link.astro';
+
+课程由模块组成。模块包含课时，课时包含其内容：视频、文本、测验和文件。这一切都在讲师门户的课程页面上构建。
+
+## 创建课程
+
+1. 在讲师门户中打开 **My Courses**。
+2. 选择 **Create a course**。
+3. 输入 **Course title**（最多 200 个字符）和 **Course summary**。
+4. 创建课程。它起初是 **Draft**，学生看不到。
+
+课程卡片上的 **Open course** 会打开其页面。
+
+## 添加内容
+
+在课程页面的 **Course content** 部分操作。
+
+1. 选择 **New module** 并命名。
+2. 在模块中选择 **New lesson**。如果是需要评分的作业，则改选 **New assignment**。
+3. 在课时中添加内容：**Video**、**Text**、**Quiz** 或 **File**。
+4. 拖动模块、课时或内容项的抓手来移动它。
+
+每个视频都会自动添加字幕。
+
+- <Link path="guides/quizzes-and-assignments">测验和作业</Link> 涵盖测验设置、作业和评分。
+- <Link path="guides/video-lessons">视频课程</Link> 涵盖字幕和视频中的提问。
+
+## 为目录描述课程
+
+在 **Catalogue details** 部分设置：
+
+| 字段 | 选项 |
+| --- | --- |
+| Category | 平台的某个分类，或“No category” |
+| Level | Beginner、Intermediate 或 Advanced |
+| Language | 课程所用的授课语言 |
+| Duration | 小时数，最多 500 |
+| Tags | 最多 8 个，每个最多 30 个字符 |
+
+学生通过这些筛选目录和搜索。也请添加课程图片：它会显示在课程卡片和页面上。
+
+**Landing page** 部分、你的公开个人资料和免费试看课时见 <Link path="guides/instructor-guide">讲师指南</Link>。
+
+## 发布
+
+选择课程页面顶部的 **Publish** 并确认。学生现在可以看到课程及其中的所有内容。
+
+课程发布后有两点变化：
+
+- **新内容起初是隐藏的。** 你添加的模块、课时或内容项会显示 **Hidden** 徽章，直到你在其上选择 **Publish**。**Hide** 会把内容从学生的视野中撤回。
+- **移除即归档。** 移除模块、课时或内容项时，会将其归档而不是删除。
+
+你修改已发布的课程时学生看到什么，参见 <Link path="design/live-course-editing">课程实时编辑</Link>。
+
+## 已归档内容
+
+课程页面底部的 **Archived** 部分列出你从已发布课程中移除的内容。
+
+- **Restore** 会把条目放回它原来位置的末尾。
+- **Delete permanently** 会将其彻底删除。对学生已经使用过的内容会被拒绝：“Students have used it, so it stays archived.”
+
+## 已归档的课程
+
+已归档的课程无法编辑。其页面显示“This course is archived, so it can't be edited. Restore it to make changes.”选择页面顶部的 **Restore** 即可重新编辑。
+
+讲师门户没有归档整门课程的按钮。
+
+## 下一步
+
+- 设置价格：<Link path="guides/payments">付费课程和支付</Link>。
+- 提供证书：<Link path="guides/certificates">证书</Link>。
+- 查看课程表现：<Link path="guides/course-analytics">课程分析</Link>。

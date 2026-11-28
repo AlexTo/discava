@@ -1,0 +1,82 @@
+---
+title: Certificati
+description: Attivare i certificati per un corso e impostare cosa ne dà diritto, la scheda dei requisiti dello studente, vedere, scaricare e condividere un certificato, la pagina pubblica, la revoca e il ripristino.
+---
+
+import Link from '@components/link.astro';
+
+Un corso può rilasciare un certificato di completamento a ogni studente che soddisfa i suoi requisiti. Ogni certificato ha un ID e una pagina pubblica che chiunque può usare per verificarlo.
+
+## Per gli istruttori: offrire un certificato
+
+1. Apri il corso da **My Courses** e vai alla sezione **Certificates**.
+2. Attiva **Issue a certificate on completion**.
+3. Facoltativamente spunta **Require passing every quiz**. Un quiz con soglia 0% non conta.
+4. Facoltativamente spunta **Require graded assignments to be returned with at least** una percentuale e inserisci un numero intero da 1 a 100.
+
+Completare ogni elemento del corso è sempre richiesto.
+
+Cambiare i requisiti riguarda solo gli studenti che non hanno ancora un certificato. Gli studenti che poi si qualificano ricevono il loro automaticamente e nessuno ne perde uno.
+
+**Issued certificates**, nella stessa sezione, elenca ogni studente, l'ID del certificato, la data di completamento e lo stato.
+
+## Per gli studenti: ottenerlo
+
+La scheda **Certificate** del corso elenca cosa ti serve ancora:
+
+| Requisito | Cosa mostra |
+| --- | --- |
+| Complete every item | Se hai finito tutto |
+| Pass every quiz | Ogni quiz come Passed, Not attempted o Not passed yet |
+| Graded assignments returned with at least a percentage | Ogni compito come Done, Not submitted o Waiting to be graded, oppure il punteggio con cui è stato restituito |
+
+Un quiz senza tentativi rimasti dice "Not passed, no attempts left. Ask your instructor for another attempt."
+
+Quando tutto è soddisfatto la scheda dice "Your certificate is being prepared." e poi offre:
+
+- **View**: apre la pagina del certificato.
+- **Download PDF**.
+- **Copy link**: copia l'indirizzo della pagina del certificato.
+- **Add to LinkedIn**.
+
+Vieni avvisato anche nella campanella e via email, con un successivo promemoria per aggiungerlo a LinkedIn. Vedi <Link path="guides/notifications">Notifiche</Link>.
+
+## La pagina del certificato
+
+La pagina su `/certificates/<certificate ID>` è pubblica. Mostra "Certificate of completion", il nome dello studente, il corso, la data, ciò che il certificato attesta e l'ID del certificato. Chiunque abbia il link può leggerla senza accedere.
+
+Un ID che non esiste mostra "Certificate not found".
+
+## Aggiungerlo a LinkedIn
+
+1. Scegli **Add to LinkedIn**, nella scheda **Certificate** del corso o nella pagina del tuo certificato mentre sei autenticato.
+2. Scegli **Continue to LinkedIn**.
+3. Salva la voce su LinkedIn.
+
+La pagina del tuo certificato elenca anche ciò che LinkedIn chiede, nel caso compili il modulo a mano: organizzazione emittente, data di rilascio, ID della credenziale e URL della credenziale.
+
+## Revocare e ripristinare
+
+Un certificato revocato non è più valido. La sua pagina pubblica dice "This certificate has been revoked and is no longer valid." Lo studente viene avvisato e la scheda del suo corso mostra la data e il motivo. Il ripristino lo rende di nuovo valido con lo stesso ID e lo studente viene avvisato di nuovo.
+
+| Chi | Dove | Motivi che può indicare |
+| --- | --- | --- |
+| Un istruttore del corso | **Issued certificates** nella sezione **Certificates** del corso | Academic integrity, Issued in error, Other |
+| Un amministratore | **Certificates** nel portale admin | Gli stessi, e Order refunded |
+
+**Per gli istruttori:** scegli **Revoke** su un certificato, scegli un **Reason**, aggiungi una **Note** se vuoi e conferma. **Restore** annulla l'operazione. **History** mostra chi lo ha revocato e ripristinato, e quando.
+
+**Per gli amministratori:**
+
+1. Apri **Certificates** nel portale admin.
+2. Inserisci il **Certificate ID** e scegli **Look up**. Il certificato appare come **Valid** o **Revoked**.
+3. Scegli **Revoke**, scegli un **Reason** e conferma con **Revoke certificate**. Il motivo Other richiede una **Note**.
+
+**Restore**, confermato con **Restore certificate**, annulla l'operazione.
+
+Chi può annullare cosa di chi:
+
+- Un amministratore può ripristinare qualsiasi certificato.
+- Un istruttore può ripristinare un certificato revocato da un istruttore, ma non uno revocato da un amministratore. Appare come "Revoked by an administrator".
+
+Un rimborso completo di un corso a pagamento non toglie da solo un certificato. Vedi <Link path="guides/payments">Corsi a pagamento e pagamenti</Link>.

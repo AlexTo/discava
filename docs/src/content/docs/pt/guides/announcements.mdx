@@ -1,0 +1,37 @@
+---
+title: Avisos
+description: Como publicar, editar e excluir avisos para os alunos de um curso, quem pode lê-los e quem é notificado.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+Um aviso é uma mensagem curta de um instrutor para os alunos matriculados em um curso. Ele tem um título (até 120 caracteres) e texto formatado.
+
+## Para instrutores
+
+Abra o curso em **My Courses** e vá até a seção **Announcements**, perto do fim da página.
+
+- **Publicar**: informe um título e o texto, depois escolha **Post announcement**. Só um curso publicado aceita novos avisos. Um curso em rascunho mostra "Publish the course to post announcements."
+- **Editar**: escolha **Edit** em um aviso, altere o título ou o texto e depois **Save changes**. Os alunos veem o novo texto com a marca "edited".
+- **Excluir**: escolha **Delete** e confirme. O aviso desaparece da página inicial do curso. Isso não pode ser desfeito.
+
+O que os alunos recebem:
+
+- Publicar notifica cada aluno matriculado uma vez, no sino e, a menos que tenham desativado, por e-mail.
+- Editar não envia nada.
+- Excluir não desfaz a notificação que os alunos já receberam.
+- Publicar o mesmo aviso duas vezes, por exemplo com um clique duplo, ainda o publica uma só vez.
+
+Em um curso arquivado você ainda pode editar e excluir avisos, mas não publicar novos.
+
+## Quem pode lê-los
+
+- Os alunos matriculados no curso leem os avisos na página inicial do curso, do mais recente para o mais antigo. Isso continua funcionando depois que o curso é arquivado.
+- Um aluno que saiu do curso, um aluno de outro curso e visitantes não podem lê-los.
+- Os instrutores do curso os leem no portal do instrutor.
+
+## Para desenvolvedores
+
+Os avisos não adicionam nenhuma entrega própria. Publicar grava o aviso e um pedido para notificar os alunos do curso em uma única transação, por meio do contrato de produtor de notificações (`notifyCourseStudents`, o tipo `announcement.posted`). A distribuição de notificações então o entrega. Veja <Link path="guides/notifications">Notificações</Link> para saber como isso funciona.

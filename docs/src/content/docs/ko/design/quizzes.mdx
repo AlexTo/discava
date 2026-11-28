@@ -1,0 +1,228 @@
+---
+title: 퀴즈
+description: "퀴즈 콘텐츠 항목: 데이터 모델, 채점, 응시, 응시 도중 편집, 그리고 학생과 강사의 경험."
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+**스펙:** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/) (동영상 안의 질문)
+
+퀴즈는 동영상, 텍스트, 파일 항목과 함께 레슨의 순서에 놓이는 콘텐츠 항목(`type: 'quiz'`)입니다. 하나 이상의 질문이 있으며, 각 질문은 **단일 선택** 또는 **다중 선택**입니다.
+
+퀴즈는 과제 레슨(`kind: 'assignment'`인 레슨)의 유일한 항목일 수도 있습니다. `lesson.createQuizAssignment`로 만들며, 이후에는 다른 퀴즈처럼 편집하고 응시합니다. 동영상 안에서 묻는 짧은 질문은 퀴즈 질문의 형태를 재사용합니다. [동영상 안의 질문](#동영상-안의-질문)을 참고하세요.
+
+## 데이터 모델
+
+### 퀴즈 콘텐츠 항목
+
+퀴즈 전용 `contentItem` 속성입니다. 다른 유형과 마찬가지로, 유형이 어떤 속성을 요구하는지는 ElectroDB가 아니라 instructor-api의 zod 스키마(`schema/quiz.ts`)가 강제합니다.
+
+| 속성 | 형태 |
+|---|---|
+| `questions` | `[{ questionId, kind: 'single' \| 'multiple', prompt, options: [{ optionId, text }] }]`. `prompt`는 Tiptap JSON입니다. 학생에게 보내도 안전합니다 |
+| `answerKey` | `{ [questionId]: { correctOptionIds: string[], explanation? } }`. `explanation`은 Tiptap JSON입니다. **채점할 때를 제외하고 core-api는 절대 읽지 않습니다** |
+| `settings` | `{ passMarkPercent, attemptsAllowed /* null = unlimited */, shuffleOptions, revealAnswers: 'after_each_attempt' \| 'after_final_attempt' \| 'never' }` |
+| `quizVersion` | 숫자이며 저장할 때마다 증가합니다. 저장 요청은 편집기가 로드한 버전을 명시하며, 퀴즈가 그 사이에 바뀌었다면 거부됩니다([퀴즈 저장](#퀴즈-저장) 참고) |
+| `questionsHash` | `questions`만의 해시(키나 `settings`는 제외)이며 저장할 때마다 다시 계산됩니다(`hashQuizQuestions`) |
+
+`questions`와 `answerKey`를 별도의 속성으로 두는 이유는 콘텐츠 항목을 학생에게 그대로 전달해도 정답이 새어 나가지 않게 하기 위해서입니다. 강의 읽기(`course.view`, `course.publicView`)는 퀴즈를 제목과 위치만으로 나열합니다. `questions`나 `answerKey`는 절대 포함하지 않습니다.
+
+`questionId`와 `optionId`는 클라이언트가 제공하며 저장할 때마다 같은 값을 유지해야 합니다. 정답 키, 학생의 답, 아래의 조정 단계가 모두 이 값들을 참조하기 때문입니다.
+
+### `quizAttempt`
+
+- pk `userId`, sk `courseId / contentItemId / attemptId`. `attemptId`는 UUIDv7이므로 학생의 한 퀴즈에 대한 응시는 제출 순서대로 정렬됩니다.
+- `answers`(`{ [questionId]: optionId[] }`), `correctQuestionIds`, `scorePercent`, `passed`, `quizVersion`, `questionsHash`, `submittedAt`, 그리고 `moduleId`와 `lessonId`를 담습니다. `correctQuestionIds`는 키가 나중에 바뀔 수 있으므로 그 시점에 어떤 질문이 맞게 채점되었는지 기록합니다.
+- 한 번 기록되면 절대 갱신되지 않습니다.
+
+### 사용자별 퀴즈 요약(`quizSummary`)
+
+- pk `userId`, sk `courseId / contentItemId`. `attemptsUsed`, `bestScore`, `bestAttemptId`, `passedAt`, 그리고 `moduleId`와 `lessonId`를 담습니다.
+- 각 응시와 같은 트랜잭션에서 기록됩니다. 첫 응시가 이를 만들고, 이후의 응시는 읽은 `attemptsUsed`를 조건으로 하므로 두 제출이 경합해도 응시 횟수 제한이 지켜집니다. 진 쪽은 다시 읽고 거부됩니다.
+- `bestScore`는 오르기만 합니다. `passedAt`은 처음 통과한 응시가 설정하며 지워지지 않습니다.
+- 학생의 요약을 만들면 퀴즈의 `studentActivityCount`가 증가합니다(<Link path="design/live-course-editing">라이브 강의 편집</Link> 참고).
+- 통과한 응시나 마지막 응시는 이미 완료가 없는 한 같은 트랜잭션에서 퀴즈의 `itemCompletion`도 기록합니다(<Link path="design/progress-and-completion">진행률과 완료</Link> 참고).
+- `quiz-summary-matches-attempts` 불변 조건(`core-table/src/helpers/invariants/student-activity.ts`)은 모든 요약이 해당 응시와 일치하고 모든 응시에 요약이 있는지 확인합니다.
+
+## 채점
+
+- core-api의 서버 측에서만 수행합니다. 클라이언트는 제출하기 전에는 `answerKey`를 받지 않습니다.
+- 각 질문은 전부 맞아야 점수를 받습니다. 선택한 옵션이 `correctOptionIds`와 정확히 같아야 합니다.
+- 점수는 맞힌 질문의 비율이며 정수로 내림하므로 학생에게 실제 점수보다 높게 보이는 일이 없습니다. `passed`는 `score >= passMarkPercent`입니다.
+- 모든 응시와 모든 퀴즈 버전을 통틀어 **최고** 점수가 인정됩니다.
+- 기록된 통과는 통과 기준이 나중에 올라가거나 퀴즈가 편집되더라도 영구적입니다.
+- 지난 응시는 자동으로 다시 채점되지 않습니다.
+
+## 학생 API
+
+core-api에는 세 가지 프로시저(`procedures/quiz.ts`)가 있으며, 각각 퀴즈의 `courseId`, `moduleId`, `lessonId`, `contentItemId`를 받습니다. 세 가지 모두 다음을 요구합니다.
+
+- `dropped`가 아닌 수강 등록(게시된 강의에서 없으면 `FORBIDDEN`, 그렇지 않으면 `NOT_FOUND`)
+- 실질적으로 보이는 퀴즈: 퀴즈, 그 레슨, 그 모듈이 보이고 보관되지 않았을 것. 그렇지 않으면 `NOT_FOUND` "This quiz is no longer available".
+
+**`quiz.view`**는 질문, 설정, `quizVersion`, `questionsHash`를 반환하며 정답 키는 반환하지 않습니다. 보관된 강의에서도 강의의 나머지 부분과 같이 동작합니다.
+
+**`quiz.submitAttempt`**는 `answers`와 학생이 답한 `questionsHash`를 받습니다. 서버에서 채점하고 응시와 요약을 한 트랜잭션으로 기록합니다. 같은 트랜잭션에서 다음을 확인합니다.
+
+- 강의가 여전히 게시되어 있습니다.
+- 모듈, 레슨, 퀴즈가 여전히 보이고 보관되지 않았습니다.
+- 퀴즈가 여전히 채점에 사용한 `quizVersion`입니다.
+- 수강 등록이 여전히 dropped가 아닙니다.
+
+그 사이에 무언가 바뀌었다면 아무것도 기록하지 않고 제출을 다시 읽어 채점하며, `CONFLICT`가 되기 전까지 최대 세 번 반복합니다.
+
+| 거부 | 시점 |
+|---|---|
+| `PRECONDITION_FAILED` | 강의가 보관되었거나 남은 응시가 없음 |
+| `CONFLICT` | 학생이 로드한 이후 질문이 바뀌었거나([아래](#응시-도중-퀴즈-편집) 참고), 세 번 시도하는 동안 경합에서 짐 |
+| `BAD_REQUEST` | 답이 알 수 없는 질문이나 옵션을 지정하거나, 옵션을 반복하거나, 단일 선택 질문에 두 개 이상의 옵션을 줌 |
+
+**`quiz.myAttempts`**는 학생의 요약(또는 `null`)과 응시를 최신순으로 한 번에 한 페이지씩 반환합니다(`cursor`와 `limit`, 기본값 10, 최대 100). 응시 횟수가 무제한이면 기록에 상한이 없으므로 페이지로 나눕니다.
+
+각 응시의 결과는 어떤 질문이 맞았는지 보여 줍니다. 정답 옵션과 설명(`reveal`)은 `revealAnswers`가 허용할 때만 `submitAttempt`와 `myAttempts`에서 반환됩니다.
+
+| `revealAnswers` | `reveal`이 반환되는 시점 |
+|---|---|
+| `after_each_attempt` | 학생이 응시를 한 번 한 후 |
+| `after_final_attempt` | 남은 응시가 없을 때. 응시가 무제한인 동안에는 절대 반환되지 않음 |
+| `never` | 절대 반환되지 않음 |
+
+## 응시 도중 퀴즈 편집
+
+클라이언트는 제출할 때마다 보여 준 질문의 `questionsHash`를 함께 보냅니다.
+
+| 강사가 바꾼 것 | 제출 결과 |
+|---|---|
+| 정답 키나 설명만(해시 일치) | 승인되어 **현재** 키로 채점됩니다. 학생은 아무것도 알아채지 못합니다 |
+| 프롬프트, 질문 유형, 옵션의 문구, 개수, 순서 중 하나(해시 불일치) | `CONFLICT`이며 **응시 횟수는 사용되지 않습니다**. 클라이언트가 다시 가져와 조정합니다(아래) |
+| 통과 기준 | 승인되어 현재 통과 기준으로 채점됩니다. 이미 기록된 통과는 유지됩니다 |
+| `attemptsAllowed`를 `attemptsUsed` 이하로 낮춤 | 최고 점수를 보여 주며 "No attempts remaining"으로 거부됩니다 |
+| 퀴즈, 또는 그 레슨이나 모듈이 보관되거나 숨겨짐 | "This quiz is no longer available"로 거부되며 로컬 초안은 폐기됩니다 |
+
+"정답 키만"이란 학생의 화면이 전후로 동일해 보인다는 뜻입니다. 예는 다음과 같습니다.
+
+- 어떤 옵션이 맞는지 수정하는 경우: "Which service runs containers without managing servers?"의 키가 EC2였는데 Fargate로 수정합니다.
+- 다중 선택 질문에 정답 옵션을 하나 더 추가하는 경우. 화면은 항상 "Select all that apply"라고만 하고 정답이 몇 개인지는 알려 주지 않으므로 바뀌지 않습니다.
+- 설명을 추가하거나 다시 쓰는 경우.
+
+옵션의 순서를 바꾸는 것은 해가 없더라도 변경으로 취급하여 규칙을 단순하게 유지합니다. 화면이 달라 보일 수 있다면 학생이 검토합니다.
+
+### `CONFLICT` 후 조정
+
+클라이언트는 이전과 새 `questions`를 `questionId`로 비교합니다.
+
+- **변경 없음:** 답을 유지합니다.
+- **삭제됨:** 답을 버립니다.
+- **새로 추가됨:** 답이 없는 상태로 시작하며 **New**로 표시합니다.
+- **프롬프트, 옵션, 유형이 바뀜:** 여전히 존재하는 옵션을 가리키는 답은 유지하고(단일 선택으로 바뀐 질문은 정확히 하나만 남는 경우에 한함) 질문을 **Updated**로 표시합니다.
+
+`@discava/common-web-utils/quiz`의 `reconcile`이 이를 수행합니다. 학생은 "This quiz was updated. Check the marked questions before submitting."라는 안내와 함께 검토 화면으로 이동합니다. 퀴즈 쿼리는 검토 화면이 열릴 때와 창이 포커스를 얻을 때도 다시 가져오므로, 배너는 보통 학생이 Submit을 누르기 전에 나타납니다. `CONFLICT`가 그 보장입니다.
+
+## 학생 경험
+
+레슨은 항목이 `order` 순서로 있는 하나의 스크롤 페이지입니다. 위쪽의 단계 표시줄은 각 항목의 상태(✓ 완료, ⚠ 통과하지 못한 채 끝난 퀴즈, 그 외에는 항목 유형의 아이콘)를 보여 주며 해당 항목으로 스크롤합니다. **실패한 퀴즈가 다음으로 넘어가는 것을 막지는 않습니다.**
+
+퀴즈는 레슨 흐름 안의 카드입니다(`common/shadcn`의 `QuizCard`, 강사의 미리보기와 공유). 네 개의 화면으로 이동합니다.
+
+| 화면 | 표시 내용 | 버튼 |
+|---|---|---|
+| 개요 | "5 questions · Pass 80% · 1 of 3 attempts used", 최고 점수와 Passed 배지 | **Start quiz**, **Resume quiz**(저장된 초안), 또는 **Retake quiz**. 남은 응시가 없으면 "No attempts remaining" |
+| 질문 | 질문 하나. 다중 선택은 "Select all that apply"와 체크박스, 단일 선택은 라디오 | **Back**, **Next**, 마지막 질문에서는 **Review answers** |
+| 검토 | 모든 답과 답하지 않은 질문 표시 | **Back**, **Submit answers** |
+| 결과 | "This attempt: 60% · Not passed", 각 질문의 정오, 그리고 `revealAnswers`가 허용할 때 정답 옵션과 설명 | **Done**, **Retake quiz** |
+
+- **질문 탐색기.** 질문이 둘 이상인 퀴즈는 옵션 위에 번호가 매겨진 버튼 행을 보여 줍니다. 각 버튼은 해당 질문으로 이동하고, 답하면 채워지며, 스크린 리더에 상태를 알려 줍니다("Question 2, answered").
+- 피드백은 질문별이 아니라 제출 후에만 주어지므로 옵션을 하나씩 찔러 보면서 키를 알아낼 수 없습니다.
+- 진행 중인 답은 퀴즈별로 localStorage에 저장됩니다(`readQuizDraft`, `writeQuizDraft`). 응시는 제출할 때만 서버에서 만들어집니다.
+- 더 낮은 점수로 재응시하면 "Your best score of 80% still counts."가 표시됩니다.
+- 접근성: 질문마다 번호와 프롬프트로 라벨이 붙은 `fieldset`, 정답과 오답을 색상만이 아니라 아이콘과 텍스트로 표시, 완전한 키보드 지원.
+- 프롬프트와 설명은 `common/shadcn`에서 공유하는 읽기 전용 Tiptap 렌더러를 사용합니다.
+
+## 퀴즈 저장
+
+퀴즈를 만들 때와 이후의 모든 저장은 퀴즈 전체를 하나의 문서로 기록합니다. `quizVersion`은 두 편집자나 오래된 탭이 서로를 덮어쓰지 않게 하는 수단입니다.
+
+```d2 title="What happens when an instructor saves a quiz: access and archive checks, the version check, then one conditional write"
+direction: down
+
+start: "contentItem.updateQuiz\n(sends the quizVersion\nthe editor loaded)" {shape: oval}
+access: "Instructor of this\ncourse, and the item\nis a quiz?" {shape: diamond}
+archived: "Quiz, its lesson, module\nor course archived?" {shape: diamond}
+stale: "Stored quizVersion\n= the one sent?" {shape: diamond}
+write: "One transaction: course, module and lesson\nstill exist and aren't archived, quiz isn't\narchived and is still at that quizVersion.\nWrites the new content, quizVersion + 1\nand the recomputed questionsHash"
+landed: "Did a condition fail?" {shape: diamond}
+
+forbidden: "FORBIDDEN or BAD_REQUEST"
+frozen: "PRECONDITION_FAILED:\nrestore it first"
+conflict: "CONFLICT: the quiz changed since it\nwas loaded; reload and retry.\nNothing written"
+done: "Saved as quizVersion + 1" {shape: oval}
+
+start -> access
+access -> forbidden: no
+access -> archived: yes
+archived -> frozen: yes
+archived -> stale: no
+stale -> conflict: no
+stale -> write: yes
+write -> landed
+landed -> conflict: "yes, and nothing is archived"
+landed -> frozen: "yes, and something was archived"
+landed -> done: no
+```
+
+- 같은 버전에서 만든 두 저장 중 정확히 하나만 반영되며 다른 하나는 `CONFLICT`를 받습니다. 이 확인은 쓰기의 트랜잭션 안에서도 반복되므로, 한쪽이 다른 쪽을 뒤따를 때뿐 아니라 저장이 동시에 일어날 때도 지켜집니다.
+- 저장에 성공하면 새 `quizVersion`을 반환하며, 편집기는 다음 저장에 이를 사용합니다.
+- `questionsHash`는 `questions`만으로 다시 계산되므로 정답 키, 설명, 설정만 바꾸는 저장은 같은 해시를 유지합니다.
+- 퀴즈를 만들면 `quizVersion` 1로 시작합니다. 다른 새 콘텐츠처럼 초안 강의에서는 `visible`, 그 외에는 `hidden`으로 시작하며, 보관된 모듈이나 레슨 아래 또는 보관된 강의에서는 만들거나 편집할 수 없습니다(<Link path="design/live-course-editing">라이브 강의 편집</Link> 참고).
+
+## 강사 경험
+
+- 레슨의 콘텐츠 행에서 **Video**, **Text**, **File** 버튼 옆에 **Quiz** 버튼이 있습니다. 새 퀴즈를 위한 빌더를 열며, 퀴즈는 첫 저장에서 만들어지고 이후 저장은 이를 갱신합니다.
+- 빌더는 Text와 Video 대화상자처럼 새 퀴즈와 퀴즈의 **Edit** 버튼 모두에서 큰 대화상자로 열립니다. 저장하지 않은 변경이 있는 상태로 닫으면 먼저 확인을 요청합니다.
+  - 설정: 제목, 설명, 통과 기준, 허용 응시 횟수, 옵션 섞기, 정답을 공개할 시점.
+  - 질문마다 카드: Tiptap 프롬프트(편집기는 펼쳐진 카드에만 마운트됨), Single/Multiple 토글, 정답 표시(단일은 라디오, 다중은 체크박스)가 있는 옵션 행, 옵션 추가/삭제/순서 변경, 선택 사항인 설명.
+  - 드래그로 질문 순서 변경.
+  - 질문 옆의 목차 패널은 질문을 번호와 각 프롬프트의 앞부분과 함께 나열하며 수정이 필요한 것을 표시합니다. 하나를 클릭하면 그 질문이 열리고 스크롤됩니다.
+  - **Preview as student**는 빌더에 있는 그대로의 퀴즈(저장 여부와 무관)에 실제 학생 컴포넌트(`QuizCard`)를 사용합니다. core-api와 같은 규칙으로 브라우저에서 채점되며, 아무것도 전송되거나 저장되지 않고, 정답과 설명이 항상 표시됩니다. 응시는 열려 있는 동안에만 계산됩니다.
+  - 퀴즈 전체가 하나의 문서로 저장됩니다. `contentItem.updateQuiz`는 빌더가 로드한 `quizVersion`을 기준으로 질문, 키, 설정을 함께 교체합니다. `CONFLICT`가 나면 빌더가 최신 버전을 다시 로드하도록 제안합니다.
+  - 퀴즈나 그 위의 무언가가 보관된 동안에는 이유와 함께 읽기 전용입니다.
+- 검증은 폼과 zod에서 수행합니다(폼이 무엇을 하든 API가 모든 것을 강제합니다).
+  - 질문은 1~50개이며 각 질문에 옵션이 2~10개 있습니다. 옵션 텍스트는 1~500자입니다.
+  - 단일 선택: 정답이 정확히 1개. 다중 선택: 정답이 1개 이상. 모든 정답 ID는 그 질문의 옵션 중 하나여야 합니다.
+  - 모든 질문에 정답 키 항목이 있고, 키에는 다른 질문의 항목이 없습니다. 질문 ID는 고유하며 옵션 ID는 질문 안에서 고유합니다.
+  - 프롬프트와 설명은 편집기의 스키마(같은 `StarterKit` 노드와 마크)를 따르는 Tiptap 문서이며 JSON 문자열로 저장됩니다.
+  - 통과 기준은 0에서 100 사이의 정수입니다. 허용 응시 횟수는 1 이상의 정수이거나 무제한입니다.
+  - 질문과 정답 키를 합쳐 최대 300 KB이며, DynamoDB의 400 KB 항목 제한보다 한참 작습니다.
+  - Multiple에서 Single로 바꿀 때 정답이 둘 이상이면 어느 것을 유지할지 묻습니다.
+- 응시 기록이 있는 퀴즈를 편집하면 "N students have attempted this quiz"라는 경고가 표시됩니다.
+
+강사를 위한 퀴즈 통계(점수 분포, 질문별 결과)는 `analytics-update` 스트림 기능이 응시 기록으로부터 만듭니다. <Link path="design/course-analytics">강의 분석</Link>을 참고하세요.
+
+## 동영상 안의 질문
+
+강사는 동영상 항목에 최대 20개의 질문을 둘 수 있으며, 각각 동영상의 특정 시점이나 끝에 나옵니다. 이는 부담이 적은 질문입니다. 통과 기준도, 응시 횟수 제한도, 저장되는 점수도 없으며 진행을 막지 않습니다. 플레이어가 질문하는 방식은 <Link path="design/video-player">동영상 플레이어와 자막</Link>에 있습니다.
+
+- **저장 위치:** 동영상 자체의 `contentItem`에서, 퀴즈가 사용하는 `questions`, `answerKey`, `quizVersion` 속성에 저장됩니다. 각 질문은 퀴즈 질문에 `atSeconds`(정수 초, 끝 질문은 `null`)와 서버가 설정하는 `contentHash`를 더한 것입니다. 동영상에는 `settings`나 `questionsHash`가 없습니다.
+- **버전 있는 저장:** `contentItem.updateVideoQuestions`는 `updateQuiz`처럼 편집기가 로드한 `quizVersion`을 기준으로 전체 집합을 교체합니다. 버전 0은 저장된 적이 없다는 뜻입니다. 같은 버전에서 만든 두 저장 중 정확히 하나만 반영되고 다른 하나는 `CONFLICT`를 받습니다. 이는 `contentItem.updateVideo`와 별개이므로 미디어를 건드리지 않고 질문을 바꿀 수 있습니다. 작성은 강의의 강사로 제한되며 보관된 동영상, 레슨, 모듈, 강의 아래에서는 거부됩니다.
+- **질문별 해시:** `contentHash`는 질문 하나의 ID, 유형, 프롬프트, 옵션을 포함하며 시점이나 키는 포함하지 않습니다. 퀴즈에서 `questionsHash`가 하는 역할을 질문별로 수행하므로, 한 질문을 편집해도 다른 질문에 답하고 있는 학습자를 방해하지 않으며 질문의 시점을 옮겨도 아무것도 바뀌지 않습니다.
+- **답안지:** 학습자가 한 동영상에 한 답은 하나의 `videoAnswerSheet` 레코드(pk `userId`, sk `courseId / contentItemId`)입니다. 답한 각 질문에 대해 선택한 옵션, 그 시점의 키 기준으로 맞았는지, 그리고 시각을 담습니다. `answerCount`가 모든 쓰기의 조건이므로 두 탭이 모두 반영될 수는 없습니다. 답안지에는 항목이 추가되기만 합니다.
+- **첫 답만:** 질문에 대한 첫 답이 기록되며 절대 바뀌거나, 교체되거나, 다시 채점되지 않습니다. 다시 제출하면 기록된 답을 반환합니다. 키와 설명은 학습자의 답이 기록된 후에만 학습자에게 전달됩니다. **Try again**은 연습이며 이미 표시된 키에 대해 브라우저에서 채점되고 아무것도 기록하지 않습니다. 건너뛰기도 아무것도 기록하지 않습니다.
+- **부담이 적음:** 답은 `itemCompletion`을 만들지 않으며 진행률, 퀴즈 결과, 수료증을 바꾸지 않습니다. 학습자를 동영상을 사용한 사람으로(<Link path="design/live-course-editing">라이브 강의 편집</Link> 참고), 그리고 그날 활동한 사람으로 계산합니다.
+
+### 답하는 도중 동영상 질문 편집
+
+클라이언트는 답할 때마다 보여 준 질문의 `contentHash`를 함께 보냅니다.
+
+| 강사가 바꾼 것 | 제출 결과 |
+|---|---|
+| 정답 옵션이나 설명만(해시 일치) | 승인되어 **현재** 키로 채점됩니다. 학습자는 아무것도 알아채지 못합니다 |
+| 프롬프트, 유형, 옵션의 문구, 개수, 순서(해시 불일치) | `CONFLICT`이며 아무것도 기록되지 않습니다. 학습자는 질문이 업데이트되었다는 안내를 받고 업데이트된 질문을 봅니다 |
+| 질문의 시점 | 승인됩니다. 기록된 답은 영향을 받지 않으며, 아직 답하지 않은 학습자는 새 시점에 질문을 받습니다 |
+| 질문 삭제 | 찾을 수 없음으로 거부되며 아무것도 기록되지 않습니다. 동영상이 재개됩니다. 이미 기록된 답은 유지되지만 질문은 더 이상 묻거나 결과에 나열되지 않습니다 |
+| 동영상, 레슨, 모듈, 강의가 보관되거나 숨겨짐 | "no longer available"로 거부됩니다 |
+
+기록된 답은 다시 채점되지 않습니다. 오답을 낸 학습자는 키가 수정된 뒤에도 "incorrect"로 남습니다. 답한 질문을 다시 연 학습자는 기록된 결과 옆에 현재 키와 설명을 봅니다.
+
+편집기는 학습자가 이미 사용한 동영상의 질문을 여는 강사에게 경고합니다. 그들의 답은 유지되며 다시 채점되지 않습니다. 편집기의 미리보기는 강사 자신의 키로 브라우저에서 채점하며 아무것도 기록하지 않습니다.

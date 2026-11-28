@@ -1,0 +1,227 @@
+---
+title: 결제
+description: Stripe Checkout으로 유료 강의를 구매하는 방법, 주문 레코드, 강의를 정확히 한 번만 전달하는 웹훅, 쿠폰, 환불, 그리고 관리자의 Stripe 연결을 설명합니다.
+sidebar:
+  order: 10
+---
+
+import Link from '@components/link.astro';
+
+**스펙:** [`specs/20261116-013315-stripe-checkout/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013315-stripe-checkout/) (결제)와 [`specs/20261116-013138-coupons-discount-codes/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013138-coupons-discount-codes/) (쿠폰)
+
+## 규칙
+
+**유료 강의는 결제된 주문으로만 수강할 수 있고, 주문은 Stripe의 서명된 확인으로만 결제 완료가 됩니다.** Stripe 페이지에서 돌아오는 요청을 포함해 브라우저가 보내는 어떤 것도 수강 등록을 만들지 않습니다. core-api의 `course.enrol`은 유료 강의를 거부하고("This course must be purchased"), `settleOrderPaid`를 호출하는 곳은 웹훅뿐입니다.
+
+결제 없이 진행되는 경우가 하나 있습니다. 전체 가격을 할인하는 [쿠폰](#쿠폰)입니다. 서버가 합계가 0이라고 계산하면 주문을 처음부터 `paid`로 기록하므로 Stripe는 호출되지 않습니다.
+
+## 가격
+
+강의에는 `priceAmount`와 `priceCurrency`가 있습니다. 금액은 통화의 최소 단위로 표현한 정수이므로(1999는 19.99) 가격이 부동 소수점 수가 되는 일은 없습니다. `0`은 무료이며, 모든 새 강의는 무료로 시작합니다.
+
+- 지원 통화는 USD, EUR, GBP, AUD, CAD입니다. 모두 소수점 두 자리를 씁니다. 소수점이 없거나 세 자리인 통화는 지원하지 않습니다.
+- 0보다 큰 가격은 1.00에서 10,000.00 사이여야 합니다.
+- 강사는 강의 상태와 관계없이 instructor-api의 `course.setPrice`로 가격을 설정합니다. 0보다 큰 가격을 설정하려면 활성 Stripe 연결이 필요합니다. 무료로 되돌릴 때는 필요하지 않습니다.
+- 가격 변경은 새 구매에만 적용됩니다. 기존 주문이나 수강 등록은 건드리지 않으므로 이미 등록한 학생은 접근 권한을 유지합니다.
+
+규칙과 서식은 `@discava/common-web-utils/price`에 있으며 포털과 API가 함께 사용합니다.
+
+## 주문
+
+`order`는 한 학생이 한 강의를 구매하려는 한 번의 시도입니다. 생성될 때 강의 제목, 정가(`listAmount`), 청구할 금액(`amount`), 통화, 그리고 시작 당시의 Stripe 계정과 모드를 복사합니다. 쿠폰으로 시작한 주문은 `discountAmount`, `couponCode`, `couponType`, `couponValue`도 복사하며, `amount`는 정가에서 할인액을 뺀 값입니다.
+
+| 상태 | 의미 |
+| --- | --- |
+| `pending` | 결제가 열려 있음 |
+| `paid` | Stripe가 결제를 확인했고 학생이 수강 등록됨 |
+| `expired` | 결제가 중단되었거나 생성에 실패함 |
+| `refunded` | 전액이 학생에게 돌아감 |
+
+core-table의 `helpers/order.ts`는 `order`와 수강 등록의 `orderId`를 쓰는 유일한 코드입니다. 모든 상태 변경은 이전 상태를 조건으로 하는 조건부 쓰기이므로, 반복되거나 경합하는 호출은 아무것도 바꾸지 않습니다. 이 코드는 Stripe를 호출하지 않으며, 호출자가 그 전이나 후에 호출합니다.
+
+## 결제 시작
+
+core-api의 `payment.checkout`은 강의 ID와 선택 사항인 `couponCode`를 받습니다. 금액과 통화는 입력값이 아니라 서버에서 강의(와 쿠폰)를 기준으로 계산합니다. 코드가 없을 때는 다음과 같이 진행합니다.
+
+1. 게시되지 않은 강의, 무료 강의, 이미 수강 중인 학생은 거부합니다.
+2. 학생에게 쿠폰이 없고 만료까지 5분 넘게 남은 `pending` 주문이 있으면 그 주문의 페이지를 반환합니다. 따라서 **Buy now**를 두 번 눌러도 주문은 하나만 만들어집니다.
+3. 그렇지 않으면 `startOrder`가 한 트랜잭션 안에서 `pending` 주문을 만듭니다. 이 트랜잭션은 Stripe 연결이 `active`인지 확인하고, 새 결제를 포함하도록 연결의 `latestCheckoutExpiresAt`을 늘립니다.
+4. 주문 ID를 멱등성 키로 사용해 Stripe Checkout 세션을 만듭니다. 카드 결제만 허용하며, 메타데이터에 주문, 학생, 강의 ID를 담습니다. 세션의 주소는 주문에 저장되고 반환됩니다.
+
+결제는 한 시간 동안 유지됩니다. Stripe에 연결할 수 없으면 주문은 만료되고 학생에게는 "Couldn't start the payment"가 표시됩니다.
+
+코드를 사용한 결제는 같은 단계를 따르되 코드에 대한 선점(claim)이 추가됩니다. [쿠폰](#쿠폰)을 참고하세요.
+
+`payment.available`은 구매를 시작할 수 있는지 학생 포털에 알려 줍니다. 연결이 활성 상태인지만 알려 주며, 계정이나 키에 대한 정보는 없습니다.
+
+## 웹훅
+
+Stripe는 `POST /stripe/webhook`으로 요청을 보냅니다. 이는 `Payments` 스택에 있는 별도의 API Gateway API이며, 자체 WAF, 스로틀링, 도메인을 가집니다. 핸들러는 `packages/events/src/payments/`에 있습니다.
+
+- **서명이 유일한 관문입니다.** 메시지는 정확한 바이트 그대로 저장된 서명 시크릿으로 검증하며, 5분보다 오래되었거나 검증에 실패하면 400으로 거부합니다. 연결된 것이 없으면 시크릿도 없으므로 모든 메시지가 실패합니다.
+- **400**은 아무것도 바뀌지 않았다는 뜻입니다. **500**은 처리에 실패했으니 Stripe가 재시도해야 한다는 뜻입니다. **200**은 처리됨, 중복, 일치하는 주문 없음, 무시된 이벤트를 모두 포함합니다.
+
+| 이벤트 | 동작 |
+| --- | --- |
+| `checkout.session.completed` | 주문이 결제 완료 처리되며, 전달할 수 없으면 환불됩니다. 아직 결제되지 않은 세션은 무시합니다 |
+| `checkout.session.expired` | `pending` 주문이 `expired`가 되고 쿠폰 선점이 해제됩니다 |
+| `charge.refunded` | 환불이 주문에 기록됩니다 |
+| `refund.failed`, `charge.refund.updated`(`status: failed`) | `paid` 주문에 `refundFailedAt`이 설정됩니다. `charge.refunded`가 이미 `refunded`로 바꾼 주문은 `paid`로 되돌아가고 수강 등록이 복원됩니다 |
+
+Stripe에 등록되는 이벤트는 이것들뿐입니다. 이 목록은 엔드포인트를 등록할 때 연결에 기록됩니다. 목록이 위와 다르면(이벤트가 추가되기 전에 저장된 연결) 관리자 결제 페이지가 키를 다시 저장하라고 안내하며, 그렇게 저장하면 기존 엔드포인트의 URL, ID, 서명 시크릿은 바꾸지 않고 이벤트만 갱신합니다.
+
+### 정확히 한 번 전달하기
+
+`settleOrderPaid`는 주문을 `pending`에서 `paid`로 바꾸고 학생에게 수강 등록을 부여하는 일을 **한 트랜잭션**으로 처리하며, 이때 강의가 여전히 게시 상태인지도 확인합니다. 수강 등록은 새로 만들어지거나, 학생에게 `dropped` 상태의 등록이 있었다면 복원됩니다. 주문에 쿠폰이 있으면 같은 트랜잭션에서 쿠폰 사용을 확정합니다. Stripe는 최소 한 번, 순서와 관계없이 전달하므로 같은 확인이 동시에 다섯 번 도착해도 결제된 주문과 수강 등록은 각각 하나만 남습니다. 첫 번째 이후의 모든 호출은 주문이 더 이상 `pending`이 아니라는 것을 발견합니다.
+
+### 전달할 수 없는 결제
+
+돈은 이미 받았으므로 절대 보관하지 않습니다. 웹훅은 주문 ID로 만든 멱등성 키와 함께 Stripe에 전액 환불을 요청하고, `refundUndeliverable`은 주문을 사유와 함께 `refunded`로 표시합니다. 수강 등록은 부여되지 않으며 주문의 쿠폰 선점은 해제됩니다.
+
+| 사유 | 시점 |
+| --- | --- |
+| `duplicate` | 학생이 이미 수강 등록되어 있음 |
+| `unavailable` | 강의가 더 이상 게시되어 있지 않음 |
+| `mismatch` | 세션의 금액, 통화, 또는 주문, 학생, 강의 ID가 주문과 다름. 이 경우 오류로도 기록되며("Paid session differs from its order; refunding"), 해당 로그 줄이 보일 때 학생은 이미 환불된 상태입니다 |
+
+테이블에 주문이 없는 결제 완료 세션, 만료 세션, 환불은 오류로 기록되고("Paid session for an unknown order", "Expired session for an unknown order", "Refund for an unknown order") 200으로 응답합니다. 운영자는 이 로그 줄을 지켜봐야 합니다. Stripe에는 결제가 있는데 Discava에는 기록이 없다는 뜻이기 때문입니다.
+
+## 쿠폰
+
+강사는 instructor-api의 `coupon.create`, `coupon.list`, `coupon.update`, `coupon.delete`로 유료 강의의 할인 코드를 만듭니다. 학생은 강의 페이지에서 코드를 입력합니다. core-api의 `coupon.preview`는 학생이 지불할 금액을 보여 주며 아무것도 기록하지 않고, `payment.checkout`은 코드를 `couponCode`로 받습니다. 화면은 <Link path="guides/payments">결제 가이드</Link>에서 다룹니다.
+
+| 레코드 | 키 | 내용 |
+| --- | --- | --- |
+| `coupon` | 강의, 그다음 코드 | `type`(`percent` 또는 `fixed`), `value`, 선택 사항인 `expiresAt`과 `maxRedemptions`, `enabled`, `redeemedCount` |
+| `couponRedemption` | 강의와 코드, 그다음 학생 | 소속된 주문, `status`(`reserved` 또는 `redeemed`), 예약 상태일 때의 `reservedUntil` |
+
+`couponRedemption`의 키가 학생은 코드를 한 번만 사용한다는 규칙입니다.
+
+### 코드와 가격
+
+- 코드는 A-Z, 0-9, `-`로 이루어진 4~24자이며 대문자로 저장됩니다. 생성된 코드는 `XXXX-XXXX` 형식의 8자입니다.
+- 퍼센트는 1에서 100 사이의 정수입니다. 고정 금액은 강의의 통화로 표시하며 0보다 크고, 코드를 만들 때 강의 가격을 넘지 않아야 합니다.
+- 코드의 유형, 값, 통화는 바뀌지 않습니다. `coupon.update`는 `enabled`, 만료일, 한도만 바꿀 수 있으며 한도를 `redeemedCount`보다 낮출 수 없습니다. `coupon.delete`는 `redeemedCount`가 0일 때만 동작하며, 사용된 코드는 대신 비활성화합니다.
+- core-table의 `helpers/coupon-price.ts`에 있는 `priceWithCoupon`이 유일한 가격 함수입니다. 퍼센트는 내림하며, 고정 금액은 정가보다 많이 차감하지 않습니다.
+- 합계가 0보다 크지만 Stripe의 최소 청구 금액(0.50, GBP는 0.30)보다 작으면 결제할 수 없으므로 코드를 거부합니다.
+
+`coupon.preview`와 `payment.checkout`은 같은 검사(`checkCoupon`)를 실행하므로 같은 코드를 같은 메시지로 거부합니다. 알 수 없는 코드, 다른 강의의 코드, 다른 통화의 고정 금액 코드는 모두 "This code is not valid for this course"를 받으므로 학생은 이들을 구별할 수 없습니다.
+
+### 선점, 확정, 해제
+
+core-table의 `helpers/coupon-redemption.ts`는 `redeemedCount`와 `couponRedemption`을 쓰는 유일한 코드입니다. 이 코드는 세 가지 쓰기 묶음을 만들며, 각 묶음은 그것을 일으키는 주문 변경의 트랜잭션 안에서 실행됩니다.
+
+| 단계 | 시점 | 기록하는 내용 |
+| --- | --- | --- |
+| **선점(Claim)** | `payment.checkout`이 주문을 만들 때 | 쿠폰이 활성화되어 있고, 만료되지 않았고, 한도 미만이라는 조건으로 `redeemedCount`에 1을 더합니다. 학생의 사용 내역을 `reserved`로 만들며, 학생이 이미 이 코드의 내역을 가지고 있으면 실패합니다 |
+| **확정(Confirm)** | `settleOrderPaid`가 주문을 결제 완료로 표시할 때 | `reserved`가 `redeemed`가 됩니다 |
+| **해제(Release)** | 주문이 만료되거나, 새 결제로 대체되거나, 전달 불가로 환불될 때 | `reserved` 사용 내역을 삭제하고 `redeemedCount`에서 1을 뺍니다 |
+
+따라서 `redeemedCount`는 예약된 사용과 확정된 사용을 합산한 값입니다. 선점이 주문 자체의 트랜잭션 안의 조건이므로, 많은 학생이 동시에 결제를 시작해도 한도가 지켜집니다. 취소된 트랜잭션은 아무것도 기록하지 않습니다. 결제는 정확한 거부 사유를 알리기 위해 다시 읽고, 세 번 충돌하면 "Too many people are checking out; try again"으로 포기합니다.
+
+예약은 결제 만료 5분 후(`reservedUntil`)까지 유지됩니다. 코드가 소진된 것처럼 보이면 결제는 먼저 그 시간이 지났고 Stripe 세션이 종료된 예약을 해제한 다음 한 번 더 확인합니다. Stripe가 완료되었다고 보고하는 세션은 예약을 유지합니다. 결제 완료 이벤트가 아직 오는 중일 수 있기 때문입니다.
+
+### 활성 결제는 하나
+
+학생은 강의당 활성 결제를 하나만 가집니다. 다른 코드로 결제를 시작하거나, 코드가 있던 결제 뒤에 코드 없이 시작하면 이전 `pending` 주문이 대체됩니다.
+
+1. 이전 주문의 Stripe 세션을 먼저 만료시키므로 그 세션은 다시 결제될 수 없습니다.
+2. 새 주문의 트랜잭션이 이전 주문을 `expired`로 바꾸고 선점을 해제합니다.
+
+Stripe가 이전 세션이 이미 결제되었다고 답하면 응답은 "You are already enrolled in this course"입니다. 같은 코드로 다시 시작했고 5분 넘게 남아 있으면 열려 있는 결제의 페이지를 반환합니다.
+
+### 전체 가격을 할인하는 코드
+
+합계가 0이면 `startFreeOrder`가 금액 0의 `paid` 주문, 수강 등록, `redeemed` 상태의 사용 내역을 한 트랜잭션으로 기록합니다. Stripe는 호출되지 않으며 `payment.checkout`은 페이지 주소 대신 `enrolled: true`를 반환합니다. 이 경우에도 활성 Stripe 연결이 필요합니다. 이런 주문은 판매가 아니므로 <Link path="design/instructor-payouts">수익</Link>을 기록하지 않습니다.
+
+### 쿠폰과 환불
+
+전달 후의 전액 환불은 사용 내역을 `redeemed`로 유지하므로 학생은 같은 코드를 다시 사용할 수 없습니다.
+
+## 환불
+
+환불은 Stripe에서 시작됩니다. Stripe 대시보드에서 하거나, 학생을 대신해 core-api의 `payment.requestRefund`로 시작합니다. `charge.refunded`는 지금까지 환불된 총액을 담고 있으며 `refundOrder`가 이를 적용합니다.
+
+- **주문 금액보다 적으면** `refundedAmount`만 늘어납니다. 학생은 접근 권한을 유지합니다.
+- **주문 금액과 같으면** 한 트랜잭션에서 주문을 `refunded`로 바꾸고 수강 등록을 `dropped`로 설정합니다. 단, 수강 등록이 여전히 이 주문을 가리킬 때만 그렇습니다. 두 번째 구매 이후에 늦게 도착한 환불 알림이 새 수강 등록을 끝낼 수는 없습니다.
+
+전액 환불 후 웹훅은 `order.refunded` 알림("Your refund for … is complete")을 게시하며, 포털에 표시될 뿐 아니라 이메일로도 전송됩니다. 이 알림은 주문이 사유 `requested`로 `refunded` 상태이고(`charge.refunded`로 기록된 모든 전액 환불이 해당하며, 대시보드에서 한 것이든 학생의 요청이든 같습니다) 수강 등록이 여전히 그 주문을 가리킬 때만 전송됩니다. 중복 방지 키는 주문 ID이므로 다시 전달된 알림이 반복되지 않으며, 게시에 실패하면 Stripe의 재전달로 재시도됩니다. 부분 환불이나 전달할 수 없는 결제의 자동 환불에는 알림이 없습니다.
+
+### 환불 요청
+
+core-api의 `payment.requestRefund`는 학생이 자신의 구매를 환불할 수 있게 하며, `payment.myOrder`는 강의 페이지에 환불 가능 여부를 알려 줍니다. core-table의 `refundEligibility`는 다음 조건을 모두 만족할 때만 허용합니다.
+
+- 주문이 `paid`이고 학생의 수강 등록이 그 주문을 가리키며 `dropped`가 아닙니다.
+- 주문이 현재 연결된 Stripe 계정으로 결제되었고, 결제가 연결되어 있습니다.
+- 이 주문에 대해 아직 환불이 요청되지 않았습니다.
+- 학생이 강의를 완료하지 않았습니다.
+- 학생이 강의의 `REFUND_PROGRESS_LIMIT_PERCENT`(50) 미만을 완료했습니다. 이는 저장된 `progressPercent`를 읽는 것이 아니라 요청 시점에 학생의 완료 내역과 현재 커리큘럼으로 계산합니다(`readRefundLimits`).
+- 이 강의에 대한 학생의 이전 주문 중 학생 본인의 요청으로 환불된 것이 없습니다(`refundRequestedAt`이 설정된 경우이며, 운영자의 환불이나 자동 환불은 포함하지 않습니다).
+- 결제 후 `REFUND_WINDOW_DAYS`(14) 이내입니다.
+
+`requestRefund`는 주문 ID로 만든 멱등성 키와 함께 Stripe에 금액 중 남은 부분의 환불을 요청한 다음 주문에 `refundRequestedAt`을 설정합니다. 주문이나 수강 등록을 직접 바꾸지는 않으며, 뒤이어 오는 `charge.refunded`가 바꿉니다. 표시보다 Stripe 호출이 먼저이므로 둘 사이에 충돌이 나더라도 알림이 기록하는 환불만 남을 뿐, 환불 없는 표시가 남는 일은 없습니다.
+
+Stripe는 환불이 만들어지는 즉시, 아직 `pending` 상태여도 `charge.refunded`를 보내며, 은행이 돈을 반환하면 이후에 환불을 실패 처리할 수 있습니다. 그래서 실패는 대개 이미 `refunded`인 주문과 이미 `dropped`인 수강 등록에 대해 도착합니다. 실패한 환불은 되돌려, 학생이 돈과 강의를 모두 잃지 않게 합니다. Stripe가 환불을 실패로 알리면(`refund.failed`, 또는 `status: failed`인 `charge.refund.updated`) 다음과 같이 처리합니다.
+
+- 사유 `requested`로 `refunded` 상태인 주문에는 `reverseRefund`가 한 트랜잭션을 실행합니다. 주문은 `paid`로 돌아가고, `refundedAt`과 `refundedAmount`는 제거되며, `refundFailedAt`이 설정되고 `refundRequestedAt`은 유지됩니다. 수강 등록은 `dropped`에서 `active`로(`completedAt`이 있으면 `completed`로) 돌아가지만, 여전히 이 주문을 가리킬 때만 그렇습니다. 학생이 환불 후 강의를 다시 구매했다면 수강 등록은 새 주문을 가리키므로 `reverseRefund`는 주문도 수강 등록도 바꾸지 않습니다. 이전 주문이 `paid`로 돌아가면 이 강의에 결제된 주문이 둘이 되기 때문입니다. 알림은 전송되지 않으며, 실패한 환불은 지원팀에 맡겨집니다. 주문이 `refunded`일 때만 실행되므로 실패 이벤트가 반복되어도 아무것도 바뀌지 않습니다. `refundOrder`는 주문의 `refundFailedAt`보다 먼저 Stripe가 만든 `charge.refunded`(실패한 환불에 대해 다시 전달되었거나 늦게 도착한 알림)를 무시하므로 접근 권한을 두 번 끝낼 수 없으며, 그 이후에 만들어진 환불은 새 환불로 적용됩니다. 학생에게는 주문 ID로 중복을 방지하는 `order.refund_failed` 알림("Your refund failed; your access is back. Contact support about your refund")이 전송됩니다. 수료증은 건드리지 않습니다. 환불로 인한 수료증 취소는 운영자만 할 수 있습니다.
+- **수익:** 주문 변경은 `refundFailedAt`이 있고 `refundedAmount`가 없는 `paid` 주문으로 수익 기록기에 전달되며, `recordRefundReversal`이 되돌려진 환불을 기록합니다. 강사별로 환불 수치를 부호만 바꾼 `refund` 항목(항목 ID `refund-reversal-<orderId>-<total>`)을 `refundFailedAt` 날짜로 만들고, `earningOrder.refundedMinor`를 다시 0으로 되돌리며, 이 모두를 한 트랜잭션으로 처리합니다. 원래의 환불 항목은 수정하지 않으므로, 정산이 이미 차감한 환불은 다음 정산에서 돌려받고, 판매 수익은 환불 요청 이전과 같아집니다. 되돌린 시각은 원장에 아직 환불이 없었더라도 `earningOrder.reversedAt`에 보관되며, `recordRefund`는 그 시각과 같거나 이전 날짜의 환불을 제외합니다. 따라서 반복 전달, 되돌린 뒤에 전달된 환불 이미지, 되돌리기 전에 전달된 환불 이미지는 아무것도 기록하지 않고, 같은 주문의 이후 환불(지원팀이 다시 환불하는 경우)은 새 환불로 기록되어 다시 되돌릴 수 있습니다.
+- 아직 `paid`인 주문에는 `markRefundFailed`가 `refundFailedAt`을 설정합니다.
+
+주문은 `refundRequestedAt`이 유지된 `paid` 상태이므로 두 번째 요청은 제공되지 않습니다. `payment.myOrder`는 `refundFailedAt`을 반환하며, 강의 페이지는 환불이 실패했으니 지원팀에 문의하라고 학생에게 안내하고 "Request a refund" 버튼은 표시하지 않습니다. 강의 페이지는 대기 중인 환불을 제한된 시간(2분) 동안 폴링한 뒤, 아직 처리 중이라고 안내하고 다시 확인하는 버튼을 제공합니다.
+
+`dropped` 수강 등록은 진행률과 완료 내역을 유지합니다. 학생은 다시 돌아올 수 있습니다.
+
+- **다시 구매하기.** 새 주문을 결제 완료 처리하면 수강 등록이 복원되며, 강의를 마쳤다면 `completed`로, 진행률과 함께 복원됩니다.
+- **강의가 이제 무료라면 수강 등록하기.** `course.enrol`이 `restoreFreeEnrolment`를 호출하여 수강 등록을 복원하고 `orderId`를 제거합니다. 주문은 기록되지 않습니다.
+
+### 강의 나가기
+
+`course.unenrol`은 결제하지 않은 수강 등록을 끝냅니다. `unenrolFromCourse`는 `orderId`가 없을 때만 등록을 `dropped`로 설정하고, 그렇지 않으면 `EnrolmentPaidForError`로 거부합니다. 구매한 수강 등록은 환불로만 끝나므로 유료 강의는 환불 없이는 나갈 수 없습니다. 진행률과 완료 내역은 유지되며, 강의가 무료인 동안에는 `course.enrol`이 수강 등록을 복원합니다. 강의의 상태와 가격은 확인하지 않으므로 학생은 보관된 강의나 이후에 유료가 된 강의에서도 나갈 수 있습니다.
+
+### 약관
+
+- 두 가지 한도는 core-table의 `helpers/order.ts`에 있는 상수입니다. `REFUND_WINDOW_DAYS`(14)와 `REFUND_PROGRESS_LIMIT_PERCENT`(50)입니다.
+- `payment.myOrder`와 `course.publicView`는 이를 `refundWindowDays`와 `refundProgressLimitPercent`로 반환하므로, 강의 페이지의 약관 문구는 API가 적용하는 내용을 그대로 안내합니다.
+- `course.myEnrolment`는 `refundedBefore`를 반환하므로, 페이지는 본인 요청으로 환불받은 적이 있는 학생이 다시 구매하기 전에 경고를 표시합니다.
+- Stripe에서 운영자가 하는 환불에는 이 약관이 적용되지 않습니다.
+- 요청은 검토 없이 자동으로 환불됩니다.
+- 수료증은 환불 후에도 유지됩니다.
+
+## Stripe 연결
+
+Stripe는 배포 시점에 설정하지 않습니다. 관리자가 관리자 포털의 **Payments** 페이지에 시크릿 키를 붙여 넣습니다.
+
+- **`paymentConnection`**은 비밀이 아닌 정보를 담은 단일 레코드입니다. 상태, 테스트 또는 라이브 모드, 계정의 ID와 이름, 키의 마지막 네 글자, 등록된 웹훅 주소가 들어 있습니다.
+- **키와 웹훅 서명 시크릿**은 Secrets Manager에 있습니다. 이를 쓸 수 있는 코드는 admin-api의 전용 `PaymentsConnect` 함수뿐입니다. 결제 함수는 키를 읽고, 웹훅은 둘 다 읽으며, 둘 다 쓸 수 없습니다.
+- **`paymentChange`**는 모든 시도에 대한 추가 전용 감사 행입니다. 누가, 언제, 어느 계정, 키의 마지막 네 글자를 담습니다. 키나 Stripe의 오류 텍스트는 담지 않습니다.
+
+키를 저장하면 형식을 확인하고, Stripe에 누구의 키인지 물어보고, 세 이벤트에 대해 해당 스테이지의 웹훅 주소를 등록하고, 키와 Stripe가 반환한 서명 시크릿을 저장합니다.
+
+| 저장 방식 | 동작 |
+| --- | --- |
+| **교체(Rotation)** (같은 계정, 같은 주소) | 키만 교체합니다. 등록과 서명 시크릿은 유지되므로 열려 있는 결제도 완료됩니다 |
+| **전환(Switch)** (다른 계정이나 모드, 또는 새 주소) | 리스를 잡고, 새 키로 등록하고, 두 시크릿을 저장한 다음 이전 등록을 제거합니다 |
+| **연결 해제(Disconnect)** | 리스를 잡고, 레코드를 `disconnected`로 표시하고, 시크릿을 지웁니다 |
+
+전환이나 연결 해제는 2분짜리 **리스(lease)**를 잡습니다. 레코드의 상태가 `changing`이 되며, 결제와 가격 책정은 이를 연결되지 않은 것으로 취급합니다. 결제가 아직 열려 있을 수 있는 동안에는 리스가 거부되므로("Checkouts are open until …") 시크릿을 교체하는 동안 진행 중인 결제가 없습니다. 교체는 리스를 잡지 않지만 레코드의 `revision`을 조건으로 하므로 동시에 일어난 전환에는 깔끔하게 밀립니다. 변경에 실패하면 레코드와 시크릿을 원래대로 되돌립니다.
+
+## 불변 조건
+
+core-table의 `helpers/invariants/`에 있는 두 파일은 모든 엔드 투 엔드 시나리오가 끝난 뒤 레코드에 걸친 규칙을 검사합니다.
+
+- `payments.ts`: 주문의 필드가 상태와 일치하고, 정가에서 할인액을 뺀 값이 청구 금액이며, 결제된 주문에는 수강 등록이 있고, 수강 등록의 `orderId`가 같은 학생과 강의의 주문을 가리키며, 유료 강의에서 주문이 없는 수강 등록은 강의가 무료였던 시기의 것입니다.
+- `coupons.ts`: `redeemedCount`가 쿠폰의 사용 내역 수와 같고 한도 이내이며, 각 사용 내역에는 해당 주문이 있고(예약 중에는 pending, 확정되면 paid), 코드로 만든 무료 주문에는 수강 등록이 있습니다.
+
+## 로컬 개발
+
+이벤트 러너에는 Stripe 대역(`packages/events/src/local/stripe-stand-in.ts`)이 포함되어 있습니다. Stripe의 API, **Pay**, **Decline card**, **Cancel**이 있는 호스팅 결제 페이지, 그리고 포트 2024의 `/stripe/webhook`으로 가는 서명된 웹훅 전달을 제공합니다. 키 `sk_test_local`로 Carol로서 연결하세요. 키는 Secrets Manager 대신 git에서 무시되는 `tmp/local-dev/secrets/`에 보관됩니다.
+
+`/stripe/test/` 아래의 컨트롤은 실제 Stripe 계정이 하는 일을 대신 수행합니다. `refund`, `refunds`(결제의 환불 목록), `fail-next-refund`(다음 환불을 `charge.refunded`로 알린 뒤 잠시 후 실패로 보고하며, 결제는 더 이상 환불된 상태가 아닙니다), `hold-next-refund`(`charge.refunded`로 알린 뒤 끝내 처리하지 않음), `replay`(확인을 다시 전달), `expire`, `forge`(잘못 서명된 메시지), `endpoints`가 있습니다.
+
+`LOCAL_CHECKOUT_TTL_SECONDS`는 결제의 한 시간 수명을 줄이며, 로컬 개발에서만 사용합니다.
+
+## 제한 사항
+
+- 카드 결제만 지원하며, 세금 처리와 통화 환산은 없습니다.
+
+주문이 결제된 이후 돈이 어떻게 되는지는 <Link path="design/instructor-payouts">강사 정산</Link>에서 다룹니다.

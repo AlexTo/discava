@@ -1,0 +1,199 @@
+---
+title: Lecteur vidéo et sous-titres
+description: Comment le lecteur vidéo des leçons reprend la lecture, change de vitesse, réagit au clavier et affiche les sous-titres, et comment les sous-titres sont générés ou téléversés.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+**Spécification :** [`specs/_archive/20261115-204517-video-player/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204517-video-player/)
+
+**Spécification :** [`specs/20261120-002950-transcript-search/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002950-transcript-search/)
+
+**Spécification :** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/)
+
+**Spécification :** [`specs/20261120-154712-caption-translation/spec.md`](https://github.com/AlexTo/discava/blob/main/specs/20261120-154712-caption-translation/spec.md) (sous-titres traduits)
+
+Les deux portails lisent les vidéos de leçon avec le même lecteur, `HlsVideo` dans `packages/common/shadcn`. Sa barre de commandes (`VideoControls`) remplace celle du navigateur : lecture, déplacement, volume, sourdine, vitesse, sous-titres, transcription, image dans l'image et plein écran. Les règles hors interface (vitesses, correspondance des touches, préférences enregistrées, quand signaler une position) sont dans `@discava/common-web-utils/video-player`.
+
+## Reprise
+
+Le lecteur enregistre la position de l'étudiant environ toutes les 10 secondes pendant la lecture, et quand il met en pause, termine un déplacement ou quitte la page. La prochaine fois qu'il ouvre la vidéo, elle saute à ce point, reste en pause, et affiche « Resumed at m:ss » avec un bouton **Start over** jusqu'à la lecture ou l'écoulement de 8 secondes.
+
+- `contentItem.saveVideoPosition` (core-api) écrit un enregistrement `videoPosition` par étudiant et par vidéo, écrasé à chaque sauvegarde. `contentItem.videoUrl` le renvoie comme point de reprise.
+- Une position appartient à une version de la vidéo. Après le remplacement de la vidéo, l'ancienne position est ignorée.
+- Une position n'est ni un achèvement, ni une activité d'étudiant, ni une progression.
+- L'aperçu de l'instructeur n'enregistre pas de position.
+
+## Vitesse, volume et préférences
+
+La vitesse va de 0,5x à 2x (0,5, 0,75, 1, 1,25, 1,5, 1,75, 2). La vitesse, le volume, la sourdine, le choix des sous-titres et l'ouverture ou non de la transcription sont mémorisés dans le localStorage du navigateur. Si le stockage n'est pas disponible, les valeurs par défaut s'appliquent silencieusement.
+
+## Raccourcis clavier
+
+Ils fonctionnent tant que le focus est n'importe où dans le lecteur. Ils sont ignorés dans les champs de texte et avec Ctrl, Alt ou Meta maintenu, et une touche que le contrôle ayant le focus utilise déjà (Espace sur un bouton, flèches sur un curseur) lui est laissée.
+
+| Touche | Action |
+|-----|--------|
+| Espace, K | Lecture ou pause |
+| J, L | Reculer, avancer de 10 secondes |
+| Gauche, Droite | Reculer, avancer de 5 secondes |
+| Haut, Bas | Volume +5 %, -5 % |
+| M | Sourdine |
+| C | Sous-titres activés ou désactivés |
+| F | Plein écran |
+| `<`, `>` | Vitesse précédente, suivante |
+| 0 à 9 | Aller à 0 % à 90 % de la vidéo |
+
+## Sous-titres
+
+Quand une vidéo a des pistes de sous-titres, le lecteur affiche un menu des sous-titres : **Off**, puis chaque piste par langue, la piste par défaut étant marquée. Une piste qui ne se charge pas est ignorée avec un court avis et la vidéo continue.
+
+- **Générés automatiquement :** quand une vidéo a fini son transcodage, Amazon Transcribe génère une piste en arrière-plan. Cela ne retarde jamais le moment où la vidéo est prête.
+- **Téléversés par un instructeur :** un instructeur peut joindre un fichier WebVTT (`.vtt`) à une vidéo prête (`contentItem.captionUploadUrl`, puis `attachCaption` ; `removeCaption` supprime une piste). Téléverser pour une langue qui a déjà une piste la remplace et conserve son statut par défaut, donc un téléversement qui remplace la piste générée automatiquement devient la piste par défaut. Un résultat ultérieur de Transcribe n'écrase jamais une piste téléversée.
+- **Limites :** un fichier fait au plus 1 Mo, une vidéo a au plus 10 pistes, et il y a une piste par langue, parmi une liste de dix langues (`CAPTION_LANGUAGES`).
+- **Où vivent les pistes :** sur le `contentItem` de la vidéo, dans `captionTracks`. Chaque écrivain calcule la nouvelle liste avec `applyCaptionChange` (`core-table/src/helpers/caption-tracks.ts`) et l'écrit sous condition sur `captionTracksRev`, donc deux écrivains ne peuvent pas s'écraser mutuellement.
+
+### État des sous-titres
+
+Le `captionsStatus` d'une vidéo est `pending` pendant que Transcribe s'exécute, puis `ready` ou `failed`. Un travail encore en attente après 2 heures est signalé comme `failed`. Un échec n'affecte que les sous-titres ; la vidéo reste lisible. La ligne de leçon de l'instructeur montre l'état et le nombre de pistes.
+
+## Sous-titres traduits
+
+Un instructeur choisit des **langues de sous-titres** pour un cours (jusqu'à 9, parmi les dix langues dans lesquelles un sous-titre peut être téléversé). Chaque vidéo du cours, et son aperçu, reçoit une piste de sous-titres dans chacune de ces langues, créée par Amazon Translate à partir de la **piste source** de la vidéo : sa piste par défaut, qu'elle ait été créée par Transcribe ou téléversée. Une piste traduite n'est jamais la piste par défaut, et le menu des sous-titres l'affiche comme « *langue* (auto-translated) ».
+
+Le [panneau de transcription](#transcription) (#590), une fonctionnalité liée, affiche la piste choisie dans le menu, donc une piste traduite donne aussi une transcription traduite.
+
+### Minutages
+
+Les minutages ne sont jamais envoyés au service :
+
+1. Le WebVTT source est analysé en repères (cues), et seuls les mots de chaque repère sont traduits.
+2. Le nouveau fichier copie chaque identifiant et chaque ligne de minutage de la source sans changement, dans le même ordre.
+3. Les balises de repère sont retirées avant la traduction et le texte est échappé de nouveau après, donc le texte traduit ne peut pas former une balise ni la flèche `-->`.
+4. Avant d'écrire, le handler vérifie que le nombre de repères et chaque ligne de minutage correspondent. Sinon, il enregistre un échec pour cette langue.
+
+Chaque repère est traduit isolément, donc une phrase répartie sur plusieurs repères peut se lire moins bien qu'une traduction au niveau de la phrase.
+
+### Ce qui démarre une traduction
+
+La fonctionnalité `caption-translation` du <Link path="design/stream-event-router">routeur de flux</Link> (`packages/events/src/media/caption-translation.ts`) s'exécute quand une entrée de traduction change, et pour rien d'autre. Une modification de titre, l'activité d'un étudiant et les propres écritures du handler ne routent rien.
+
+| Déclencheur | Changement qui atteint le handler |
+|---------|---------------------------------|
+| Vidéo nouvelle ou remplacée | les pistes non traduites de la vidéo (ou de l'aperçu du cours) changent |
+| Sous-titres source remplacés ou supprimés, ou piste téléversée supprimée | idem |
+| Langues de sous-titres, ou langue d'enseignement du cours, modifiées | l'enregistrement du cours ; le handler marque chaque vidéo du cours (et son aperçu) pour traduction, un message de file chacune |
+| **Translate again** | `captionTranslationRequestedAt` est défini sur la vidéo, ou sur chaque vidéo du cours |
+
+L'achèvement de Transcribe et l'API instructeur n'appellent jamais Amazon Translate et ne peuvent pas être mis en échec par lui.
+
+### Priorité
+
+Toutes les règles sont dans `applyCaptionChange` et `planCaptionTranslations`, dans les helpers `caption-tracks` de la table core. Une piste téléversée l'emporte toujours : le handler écrit via la même vérification de révision que tout autre écrivain de sous-titres, donc quel que soit l'ordre d'arrivée d'un téléversement et d'une traduction, c'est le téléversement qui reste.
+
+| Situation | Résultat |
+|-----------|--------|
+| Une piste traduite arrive pour une langue qui contient une piste automatique ou téléversée | Abandonnée |
+| Une piste traduite arrive et sa source n'est pas la piste par défaut actuelle de la version | Abandonnée |
+| Une piste automatique ou téléversée arrive pour une langue qui contient une piste traduite | La remplace |
+| Un téléversement à la limite de 10 pistes | Évince une piste traduite : celle dont la langue est la dernière de la liste du cours |
+| La piste par défaut est remplacée ou supprimée | Chaque piste traduite de cette version est abandonnée dans la même écriture, et refaite à partir de la nouvelle source |
+| La piste par défaut est supprimée | La plus ancienne piste non traduite devient la piste par défaut |
+| La piste source automatique n'est pas dans la langue d'enseignement du cours | Non traduite (`language-mismatch`) ; une source téléversée est toujours traduite |
+
+### Échec et « Translate again »
+
+Un échec est enregistré sur la vidéo (`captionTranslation`), jamais sur `status`, `captionsStatus` ni aucune piste, et la lecture n'attend jamais la traduction.
+
+- La raison est `failed` ou `too-long` (une source de plus de 300 000 caractères).
+- Les erreurs qu'une nouvelle tentative ne peut pas corriger sont enregistrées sans faire échouer le message de file, donc elles ne remplissent pas la file d'échecs.
+- Les messages qui échouent vraiment sont reçus jusqu'à cinq fois puis atteignent la file d'échecs et l'alarme de la fonctionnalité.
+
+La boîte de dialogue Captions montre l'état de chaque langue : translated, uploaded, translating, failed, too long, no room, ou not translated avec la raison.
+
+- **Translate again** (`contentItem.retryCaptionTranslation`) efface le résultat enregistré et redemande la vidéo.
+- **Translate missing captions again** dans les paramètres du cours (`course.retryCaptionTranslations`) le fait pour chaque vidéo.
+- Un message perdu avant l'exécution du handler laisse « Translating » affiché, et **Translate again** est le remède.
+
+### Développement local
+
+Avec `LOCAL_DEV=true`, le client Translate appelle `translateLocally` (`packages/events/src/local/translator.ts`) au lieu du SDK.
+
+- Chaque texte revient sous la forme `[<target tag>] <text>`, par exemple `[es-ES] Hello`, donc on voit clairement quelle piste est affichée.
+- Une source contenant `[[fail-translation]]`, ou `[[fail-translation:es-ES]]` pour une seule langue, fait échouer cette requête comme une paire de langues refusée, ce qui est enregistré comme un échec sans nouvelle tentative.
+- Tout le reste (routeur de flux, file, handler, règles de pistes, S3Mock) est le vrai code.
+
+La vraie sortie d'Amazon Translate, son comportement face aux sauts de ligne, sa limitation de débit et ses métriques ne s'exécutent que sur un stage déployé.
+
+### Coût
+
+Amazon Translate facture par caractère envoyé, espaces compris. Le coût d'une vidéo est ses caractères source multipliés par le nombre de langues traduites ; rien n'est facturé pour une langue qui a déjà une piste traduite récente ou un téléversement, ni quand la fonctionnalité est désactivée. Cette page ne cite aucun prix : voir la <a href="https://aws.amazon.com/translate/pricing/">page de tarification d'Amazon Translate</a> et confirmez-la pour la région du stage.
+
+- **Métriques :** le handler émet des métriques `CaptionTranslation` avec les dimensions `Stage` et `TargetLanguage` : `TranslatedCharacters`, `TranslatedTracks`, `TranslationFailures` et `ChunkFallbacks` (des blocs dont le nombre de lignes ne correspondait pas et qui ont été renvoyés un repère par requête). `Stage` sépare les stages qui partagent un compte. Les métriques propres de Translate sont par compte et par région, donc la fonctionnalité ne s'y fie pas.
+- **Ligne de journal :** une par piste traduite, avec le cours, la vidéo, la langue, les caractères et le nombre de requêtes. Logs Insights peut répondre à « quel cours a coûté le plus ».
+- **Paramètres du stage :** `captionTranslation.enabled` (quand c'est `false`, les instructeurs ne peuvent pas choisir de langues, rien n'est traduit et les pistes traduites existantes restent) et `maxLanguagesPerCourse` (9 par défaut ; 3 sur `discava-development`).
+- **Bornes :** la même source n'est pas traduite deux fois dans la même langue, un stage peut réduire les langues par cours ou désactiver la fonctionnalité, et une source de plus de 300 000 caractères n'est pas traduite. Il n'y a pas de quota de dépense par cours ou par instructeur, ni encore de tableau de bord ou d'alarme sur les caractères par jour.
+
+## Transcription
+
+Un bouton **Transcript** dans la barre de commandes ouvre un panneau (`TranscriptPanel`) avec chaque ligne des sous-titres de la vidéo, chacune avec son horaire.
+
+- Il n'existe que dans le lecteur de leçon étudiant, et seulement quand la vidéo a au moins une piste de sous-titres. L'aperçu et le portail instructeur ne l'affichent pas.
+- Le panneau se place sous le lecteur à toutes les largeurs, d'une hauteur d'au plus 20rem ou la moitié de la fenêtre. À côté du lecteur, il laisserait la vidéo trop étroite pour sa barre de commandes.
+- Il est masqué quand le lecteur est en plein écran.
+- Rien ne défile latéralement en largeur de téléphone.
+
+- **Quelle piste :** celle que le menu des sous-titres a choisie. Choisir une autre langue change les lignes et le nom du panneau, « Transcript (language) ». Avec les sous-titres sur **Off**, le panneau affiche quand même la piste mémorisée, ou la piste par défaut. Si le fichier d'aucune piste ne se charge, le panneau indique « This transcript couldn't be loaded. » et la vidéo continue.
+- **Choisir une ligne :** cliquer ou toucher une ligne se déplace à son début et lance la lecture.
+- **Suivi :** la ligne courante est marquée (une bordure gauche et une graisse plus forte, plus `aria-current="true"`) et le panneau défile de lui-même pour la garder visible. Il ne fait jamais défiler la page et ne déplace jamais le focus. Défiler, utiliser la molette, toucher ou déplacer le focus dans le panneau met le suivi en pause et affiche **Jump to current line** ; ce bouton, ou le choix d'une ligne, le reprend. Avec la réduction des animations activée, le défilement n'est pas animé.
+- **Lecteurs d'écran :** il n'y a pas de région live, car les sous-titres et l'audio portent déjà le contenu en direct. Chaque ligne se lit comme son horaire en toutes lettres (« 12 minutes 40 seconds ») puis son texte.
+- **État ouvert mémorisé :** ouvert ou fermé est mémorisé dans le navigateur avec les autres préférences du lecteur (`transcriptOpen`, fermé par défaut).
+
+### Touches de la transcription
+
+Le panneau est en dehors du conteneur de raccourcis du lecteur, donc les raccourcis ci-dessus ne s'y appliquent pas : Espace, les flèches et les lettres ne changent jamais la vidéo depuis ce panneau.
+
+| Touche | Action |
+|-----|--------|
+| Tab | Entre dans la liste, sur la ligne courante (la première ligne avant tout repère) ; un Tab de plus la quitte |
+| Bas, Haut | Donne le focus à la ligne suivante, précédente |
+| Début, Fin | Donne le focus à la première, dernière ligne |
+| Entrée, Espace | Se déplace à la ligne ayant le focus et lance la lecture ; le focus y reste |
+
+### Construite dans le navigateur
+
+Il n'y a pas d'API de transcription. Le lecteur récupère déjà le fichier WebVTT de chaque piste pour la superposition des sous-titres. Le panneau analyse le même texte une fois (`parseWebVtt`, dans `@discava/common-web-utils/webvtt`) en repères, donc il ne fait aucune requête supplémentaire et a exactement l'accès qu'ont les sous-titres.
+
+- Le texte des repères est réduit à du texte brut (paramètres de repère, balises `<v>`, `<c>`, `<i>` et d'horodatage supprimés, les cinq entités WebVTT décodées) et rendu en nœuds de texte.
+- Toute la transcription est rendue, sans liste virtuelle, donc la recherche dans la page et les commandes de lecture d'un lecteur d'écran fonctionnent dessus.
+- L'indexeur de la <Link path="design/search">recherche dans les transcriptions</Link> utilise le même analyseur, donc le panneau et l'index s'accordent sur ce qu'est une ligne.
+
+### Rechercher dans les transcriptions d'un cours
+
+Le lecteur de cours a une zone de recherche, « Search what was said ». Soumettre au moins 2 caractères ouvre la page de résultats du cours (`/learn/<courseId>/search`), qui appelle `transcript.search` avec la langue de sous-titres mémorisée de l'apprenant. Chaque résultat nomme le module, la leçon et la vidéo, montre les mots correspondants dans un extrait, et renvoie vers la leçon à ce moment (ci-dessous). La construction de l'index et l'application des accès sont décrites dans <Link path="design/search">Recherche</Link>.
+
+### Ouvrir une leçon à un moment précis
+
+L'adresse d'une leçon accepte deux paramètres facultatifs : `?item=<contentItemId>&t=<seconds>`. Un résultat de recherche dans les transcriptions renvoie ainsi.
+
+- Avec `item` nommant une vidéo de la leçon, la leçon défile jusqu'à elle, déplace le focus sur son lecteur, se positionne à `t`, reste en pause, et affiche « Starting at m:ss » sans bouton **Start over**.
+- `t` remplace la position enregistrée pour cette visite, et le déplacement n'enregistre rien.
+- Tout autre contenu des paramètres est ignoré et la leçon s'ouvre comme d'habitude.
+- Les paramètres n'accordent rien : la leçon se charge toujours par les vérifications habituelles d'inscription et de visibilité.
+
+## Questions
+
+Un instructeur peut placer des questions sur une vidéo (voir <Link path="design/quizzes">Quiz</Link> pour leur stockage et leur sauvegarde). Le lecteur les lit avec `videoQuestion.view` et enregistre une réponse avec `videoQuestion.answer` (core-api) ; la carte de question est `VideoQuestionCard`, pilotée par le hook `useVideoQuestions`. Une vidéo sans question se lit exactement comme ci-dessus et ne fait aucune requête de question.
+
+- **Quand une question est posée :** quand la lecture normale atteint le moment d'une question que l'apprenant n'a ni répondue ni ignorée pendant cette visite, la vidéo se met en pause et la question apparaît par-dessus dans le lecteur, donc le plein écran est conservé. Le focus clavier se déplace sur la question et son titre est annoncé. Plusieurs questions au même moment sont posées l'une après l'autre, dans l'ordre de l'instructeur. Une question à 0:00 est posée au démarrage de la lecture.
+- **Répondre :** l'apprenant choisit une option et appuie sur **Submit answer**, puis voit si elle était juste (une icône et des mots, pas la couleur seule), les options correctes et l'explication s'il y en a une, annoncée à son arrivée. **Continue** reprend la vidéo là où elle s'est arrêtée, en lecture si elle l'était. **Skip** (ou Échap) ferme la question, n'enregistre rien et ne la repose pas pendant cette visite. Une question à choix multiples indique « Select all that apply » et est notée en tout ou rien. Si l'enregistrement échoue, la question reste ouverte avec le choix conservé et **Skip** fonctionne toujours.
+- **Raccourcis pendant qu'une question est ouverte :** la barre de commandes est inerte et les raccourcis du lecteur (Espace, flèches, touches numériques et les autres) n'agissent pas sur la vidéo en dessous. En image dans l'image, la vidéo revient dans la page pour que la question soit visible.
+- **Déplacement :** se déplacer n'ouvre jamais une question, que ce soit en faisant glisser, par un raccourci ou en reprenant à une position enregistrée, y compris à un premier visionnage. Une question n'est posée que quand la lecture atteint son moment, ou quand l'apprenant choisit son repère.
+- **Repères :** la barre de progression a un repère par question minutée et un à la fin quand il y a une vérification de fin. Chacun est un bouton qui nomme son horaire et son état (« Question at 1:30, not answered »), et répondu et non répondu diffèrent par une coche et un point autant que par la couleur. Choisir un repère se déplace à ce moment, met en pause et ouvre la question : une question sans réponse pour y répondre, une question répondue pour la revoir avec la réponse enregistrée, la correction et l'explication. **Try again** y sert à s'entraîner, noté dans le navigateur et non enregistré.
+- **La vérification de fin :** quand la vidéo se termine et a des questions de fin sans réponse, la première apparaît d'elle-même (« Question 1 of 2 »), puis la suivante, et un récapitulatif indique combien de questions de fin l'apprenant a répondues correctement. Chacune peut être ignorée et la vérification peut être fermée. Une fois chaque question de fin répondue, elle ne démarre plus d'elle-même, et le repère de fin ouvre les réponses. Une question minutée après la fin de la vidéo en cours de lecture est posée avec la vérification de fin.
+- **Reprendre avant une question ouverte :** un apprenant qui part avec une question ouverte revient juste avant elle, donc elle est posée de nouveau. Un apprenant dont la position enregistrée est après une question sans réponse n'y est pas confronté à la reprise ; son repère la montre sans réponse.
+- **Enregistré, et non :** la première réponse à chaque question est enregistrée, et rien d'autre. Les ignorées et **Try again** ne le sont pas. Une réponse ne change jamais si la vidéo est terminée (cela reste **Mark as done**), ni la progression ni les certificats.
+- **Échecs :** si les questions ne se chargent pas, la vidéo se lit comme si elle n'en avait pas. Dans un cours archivé, les vidéos se lisent sans leurs questions.
+- **Petits écrans et animations :** une question plus haute que la vidéo s'étend en dessous et défile avec la page, sans défilement latéral à 375 px. Avec la réduction des animations activée, elle apparaît sans animation.

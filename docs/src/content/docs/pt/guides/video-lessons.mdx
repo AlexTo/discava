@@ -1,0 +1,77 @@
+---
+title: Aulas em vídeo
+description: As velocidades e os atalhos de teclado do player, as legendas e legendas traduzidas automaticamente, a transcrição, a busca no que foi dito em um curso e as perguntas dentro de um vídeo.
+---
+
+import Link from '@components/link.astro';
+
+## O player
+
+Os controles do player ajustam a velocidade de reprodução, as legendas, o volume e a tela cheia, e abrem a transcrição. As velocidades vão de 0,5 a 2 em passos de 0,25. O player lembra sua velocidade, seu volume e suas escolhas de legenda para o próximo vídeo.
+
+Os atalhos de teclado funcionam enquanto o player tem o foco e você não está digitando em um campo:
+
+| Tecla | O que faz |
+| --- | --- |
+| Espaço ou K | Reproduzir ou pausar |
+| J | Voltar 10 segundos |
+| L | Avançar 10 segundos |
+| Seta para a esquerda | Voltar 5 segundos |
+| Seta para a direita | Avançar 5 segundos |
+| Seta para cima, seta para baixo | Aumentar o volume, diminuir o volume |
+| M | Silenciar ou reativar o som |
+| C | Ligar ou desligar as legendas |
+| F | Tela cheia |
+| `<` e `>` | Mais devagar, mais rápido |
+| 0 a 9 | Pular para essa décima parte do vídeo: 5 é a metade |
+
+## Legendas e a transcrição
+
+As legendas são adicionadas a todo vídeo automaticamente. O menu de legendas lista os idiomas que o vídeo tem, e **Off**.
+
+- Um idioma marcado "(auto-translated)" é uma tradução automática. Ela pode estar errada.
+- **Transcript** abre o texto do vídeo. **Jump to current line** o traz de volta ao ponto em que o vídeo está.
+
+Os instrutores escolhem para quais idiomas as legendas são traduzidas e podem enviar suas próprias legendas. Veja o <Link path="guides/instructor-guide">Guia do instrutor</Link>.
+
+## Pesquisar o que foi dito
+
+Você pode pesquisar nas legendas de todos os vídeos de um curso em que está matriculado.
+
+1. No player do curso, encontre **Search transcripts**.
+2. Digite pelo menos 2 caracteres em "Search what was said".
+3. Escolha **Search**.
+4. Escolha um resultado para abrir essa aula nesse momento.
+
+A página lista os momentos que correspondem, até os 20 melhores. Se houver mais, acrescente uma palavra para restringir a busca. Se nada corresponder, confira a ortografia ou tente as palavras no idioma das legendas.
+
+## Perguntas em um vídeo
+
+Um instrutor pode fazer um vídeo parar e fazer uma pergunta, em um momento do vídeo ou no fim.
+
+### Para alunos
+
+1. Quando o vídeo parar, leia a pergunta. Uma pergunta de múltipla escolha diz "Select all that apply".
+2. Escolha sua resposta e escolha **Submit answer**, ou escolha **Skip**.
+3. Veja se você acertou ("Correct" ou "Not quite"), a resposta correta e a **Explanation**, se houver.
+4. Escolha **Continue** para seguir assistindo.
+
+- Uma resposta por pergunta é registrada. Uma pergunta de múltipla escolha só está certa quando todas as escolhas estão certas.
+- **Try again** é prática: "Practice: this answer isn't recorded".
+- As respostas nunca contam para o seu progresso, os quizzes do curso nem um certificado.
+- Um curso arquivado não faz perguntas.
+- Se o instrutor mudou uma pergunta desde a última vez que você a viu, ela diz "This question was updated. Check it before answering."
+
+### Para instrutores
+
+1. Em **Course content**, abra a janela **Questions** em um vídeo.
+2. Reproduza ou arraste o vídeo até o momento que você quer e escolha **Add a question here**. Para uma pergunta depois do vídeo, escolha **Add an end question**.
+3. Escreva a pergunta, suas opções e quais estão corretas.
+4. Ajuste **Ask at** se precisar: um tempo como 1:30, ou **At the end**.
+5. Salve.
+
+- Um vídeo comporta até 20 perguntas.
+- **Preview as student** reproduz o vídeo com suas perguntas. As respostas são verificadas e não registradas. **Stop previewing** volta à edição.
+- Você pode alterar as perguntas depois que os alunos responderam. As respostas já registradas são mantidas e não recorrigidas.
+
+Os resultados aparecem na página de análises do curso, em **Video questions**. Veja <Link path="guides/course-analytics">Análises do curso</Link>.

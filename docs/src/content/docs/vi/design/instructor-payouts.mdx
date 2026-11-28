@@ -1,0 +1,136 @@
+---
+title: Thanh toán cho giảng viên
+description: Cách thu nhập của giảng viên được ghi nhận từ các đơn hàng, sổ cái và các bản tóm tắt theo ngày, lần chạy thanh toán hằng ngày và cách khôi phục, và quy tắc tài khoản thanh toán.
+sidebar:
+  order: 11
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261116-013137-instructor-payouts/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013137-instructor-payouts/)
+
+## Quy tắc
+
+**Mỗi lần bán và mỗi lần hoàn tiền được ghi đúng một lần, và không khoản thu nhập nào được trả hai lần.** Thu nhập là một sổ cái chỉ thêm vào, được xây từ các <Link path="design/payments">đơn hàng</Link>, và một đợt thanh toán lấy các dòng của sổ cái, không bao giờ là một số tiền tính riêng bên ngoài.
+
+## Các quy tắc doanh thu
+
+`helpers/revenue.ts` trong core-table là phép tính số nguyên thuần túy theo đơn vị nhỏ nhất của tiền tệ.
+
+- **Phí.** Nền tảng giữ một khoản phí trên số tiền đã trả, đặt theo từng stage bằng basis point (2000 là 20%) và làm tròn nửa lên. Một lần bán giữ khoản phí mà nó được ghi nhận: đổi thiết lập chỉ ảnh hưởng các lần bán sau.
+- **Chia.** Các giảng viên của một khóa học chia đều một lần bán. Việc chia được áp dụng riêng cho giá niêm yết, số tiền đã trả và khoản phí, và các đơn vị dư được chia mỗi người một đơn vị cho các giảng viên đầu tiên theo ID, nên các phần luôn cộng lại đúng bằng tổng.
+- **Ròng.** Số ròng của một giảng viên là phần của họ trong số tiền đã trả trừ phần của họ trong khoản phí.
+- **Hoàn tiền.** Một lần hoàn tiền trả lại phần của giảng viên trong số tiền được hoàn, trừ khoản phí được trả lại trên đó. Mỗi bước được tính bằng phần của tổng hoàn mới trừ phần của tổng đã ghi, nên dù một lần hoàn tiền được cắt thành các bước thế nào, các dòng vẫn cộng lại đúng một lần khi đơn hàng được hoàn toàn bộ. Một lần hoàn tiền bị chặn ở số tiền đã trả.
+
+## Sổ cái
+
+| Bản ghi | Chứa |
+| --- | --- |
+| `earningOrder` | Ảnh chụp của sổ cái về một lần bán, và tổng hoàn tiền đã ghi cho đến nay |
+| `earningEntry` | Một dòng cho mỗi giảng viên mỗi lần bán hoặc mỗi bước hoàn tiền: gộp, giảm giá, hoàn tiền, phí và ròng, khi nào nó được giải phóng, và đợt thanh toán đã lấy nó |
+| `earningDay` | Tổng các dòng của một giảng viên cho một khóa học, một loại tiền tệ và một ngày UTC |
+
+`helpers/earning.ts` trong core-table là nơi duy nhất ghi cả ba, với một ngoại lệ: `helpers/payout.ts` là mã duy nhất đặt hoặc xóa `payoutId` của một dòng. Một lần bán, và mỗi bước hoàn tiền, là **một transaction** chứa các dòng, các phép cộng vào hàng theo ngày của chúng và bộ đếm của đơn hàng, nên báo cáo và sổ cái không thể bất đồng.
+
+Một dòng không bao giờ nêu tên người mua. Nó cũng mang theo tài khoản Stripe và chế độ mà đơn hàng của nó được thanh toán: xem [quy tắc tài khoản thanh toán](#quy-tắc-tài-khoản-thanh-toán).
+
+## Ghi nhận
+
+Việc ghi nhận là một <Link path="design/stream-event-router">tính năng stream</Link>, `earnings-recording`. Nó nhận mọi thay đổi của một `order` và xử lý những đơn là một lần bán. Một đơn hàng là một lần bán khi cả hai điều sau đúng:
+
+- nó là `paid`, hoặc `refunded` với lý do `requested`;
+- số tiền của nó lớn hơn không.
+
+Một đơn hàng bị hoàn tiền tự động vì không giao được chưa bao giờ là một lần bán, và đơn hàng có số tiền bằng không của một coupon giảm toàn bộ giá cũng vậy. Với đơn hàng có giảm giá, khoản gộp của dòng là giá niêm yết và khoản giảm giá là chênh lệch so với số tiền đã trả.
+
+Router giao ít nhất một lần và theo thứ tự bất kỳ, và handler được xây để chịu được điều đó:
+
+- **Mọi ảnh chụp của đơn hàng đều mang đủ những gì cần thiết**, nên chỉ một ảnh là đủ để ghi nhận lần bán và cập nhật tổng hoàn tiền. Không bản ghi nào phải chờ bản ghi khác.
+- **Trùng lặp không thay đổi gì.** Các dòng của một lần bán được tạo với điều kiện chúng chưa tồn tại, và một tổng hoàn tiền mà sổ cái đã đạt thì không ghi gì.
+- **Thứ tự không quan trọng.** Một ảnh cũ hơn đến muộn sẽ thấy tổng đã ghi cao hơn và không làm gì.
+- **Một lỗi sẽ thử lại cả lô.** Mọi thứ áp dụng được đều được áp dụng, rồi lô báo lỗi, và những gì đã áp dụng là no-op ở lần thứ hai.
+
+Dòng của một lần bán được giải phóng `holdDays` sau khi đơn hàng được thanh toán. Dòng của một lần hoàn tiền được giải phóng ngay, nên nó làm giảm đợt thanh toán kế tiếp.
+
+## Các lần đọc của trang Earnings
+
+instructor-api phục vụ các con số của chính người gọi và không nhận ID giảng viên làm đầu vào.
+
+- `earnings.report` cộng các hàng theo ngày trong một khoảng tối đa 366 ngày: một truy vấn theo khoảng, nhóm theo loại tiền tệ và khóa học.
+- `earnings.lines` phân trang qua các dòng của một khóa học, được dựng từng trường để không có gì khác trên bản ghi đến được người gọi.
+- `payout.overview` xếp các dòng chưa đợt thanh toán nào lấy vào **on hold**, **waiting for account setup**, **ready** và **held**, theo từng loại tiền tệ, và liệt kê các đợt thanh toán của giảng viên.
+
+## Tài khoản thanh toán
+
+Giảng viên được trả vào một tài khoản Stripe Connect Express.
+
+- `payout.startOnboarding` tạo tài khoản, theo kiểu idempotent, và trả về liên kết onboarding của Stripe.
+- `payout.account` đọc trạng thái tài khoản từ Stripe và lưu vào `payoutAccount` khi nó thay đổi. Nếu không liên hệ được Stripe, nó trả về trạng thái đã lưu được đánh dấu `stale`.
+- `payout.dashboardLink` trả về liên kết đăng nhập vào bảng điều khiển Stripe Express của giảng viên, sau khi onboarding hoàn tất.
+
+| Trạng thái | Ý nghĩa |
+| --- | --- |
+| `not_started` | Chưa có tài khoản. Không có gì được lưu |
+| `in_progress` | Biểu mẫu của Stripe chưa hoàn tất |
+| `active` | Stripe có thể gửi transfer và payout đến đó |
+| `restricted` | Stripe cần thêm điều gì đó |
+
+Không có gì ở đây gọi Stripe trừ khi kết nối của nền tảng đang active. Nếu không có, `payout.account` trả lời `unavailable`.
+
+## Lần chạy thanh toán
+
+Một hàm Lambda, trong stack `Payouts`, chạy mỗi ngày một lần theo lịch EventBridge. Nó chỉ đọc được khóa Stripe và không đọc gì khác trong các secret.
+
+1. **Gắn với tài khoản thanh toán.** Lần chạy làm việc cho tài khoản và chế độ hiện tại của kết nối, và chỉ với một khóa được chứng minh là thuộc về nó.
+2. **Khôi phục.** Các đợt thanh toán mà lần chạy trước để lại chưa chốt được hoàn tất trước: đợt nào còn `collecting` hoặc `releasing` thì trả lại các dòng của nó, và đợt `pending` được chốt như mô tả bên dưới.
+3. **Với mỗi giảng viên có tài khoản active,** đọc lại tài khoản từ Stripe. Tài khoản không còn active sẽ được lưu trạng thái mới và bị bỏ qua.
+4. **Theo từng loại tiền tệ,** cộng các dòng đã được giải phóng mà chưa đợt thanh toán nào lấy. Một tổng thấp hơn mức tối thiểu của stage, hoặc không lớn hơn không, sẽ chờ.
+5. **Thu, niêm phong và gửi.** Một đợt thanh toán được tạo ở trạng thái `collecting`, các dòng của nó được gắn vào theo lô 99 (một transaction chứa 100 item), và nó được niêm phong ở `pending`. Sau đó transfer được tạo trong Stripe, với ID đợt thanh toán làm khóa idempotency và transfer group, và đợt thanh toán được đánh dấu `sent`.
+
+| Trạng thái | Ý nghĩa |
+| --- | --- |
+| `collecting` | Các dòng đang được gắn vào |
+| `pending` | Đã niêm phong. Transfer của nó có thể có hoặc chưa có |
+| `sent` | Stripe đã chấp nhận transfer |
+| `releasing` | Đang trả lại các dòng của nó |
+| `failed` | Stripe từ chối transfer. Các dòng của nó được mở lại |
+
+### Vì sao không có gì được trả hai lần
+
+- Một dòng được gắn vào với điều kiện nó chưa có đợt thanh toán, nên hai lần chạy chồng lên nhau không thể cùng lấy nó.
+- Một đợt thanh toán chỉ được đánh dấu `failed`, và các dòng của nó được mở lại, **khi Stripe chắc chắn đã từ chối** transfer: một yêu cầu không hợp lệ hoặc lỗi quyền. Timeout, lỗi 5xx, giới hạn tốc độ hay bất cứ điều gì không nhận ra đều để đợt thanh toán ở `pending`.
+- Việc khôi phục tìm transfer của một đợt thanh toán `pending` theo transfer group của nó trước khi thử lại. Nếu nó tồn tại, đợt thanh toán được đánh dấu đã gửi. Nếu không, cùng khóa idempotency được dùng lại.
+- Một lần chạy giành lấy đợt thanh toán chưa chốt trước khi đụng vào nó, và bỏ qua đợt mà lần chạy khác đã xử lý trong 15 phút gần nhất.
+
+Lỗi của một giảng viên không chặn những người khác, nhưng lần chạy vẫn kết thúc ở trạng thái thất bại để người vận hành nhìn thấy. Nếu Stripe từ chối khóa đã lưu, lần chạy dừng ngay, vì không lệnh gọi nào sau đó có thể thành công.
+
+## Quy tắc tài khoản thanh toán
+
+Một khoản thu nhập thuộc về tài khoản Stripe và chế độ mà đơn hàng của nó được thanh toán, và tiền chỉ di chuyển bên trong tài khoản đó. Sau khi quản trị viên chuyển tài khoản hoặc chế độ:
+
+- Thu nhập chưa trả từ tài khoản cũ bị **held**. Lần chạy không gửi gì cho chúng, và trang Earnings bảo giảng viên liên hệ nền tảng.
+- Tài khoản thanh toán của mỗi giảng viên là theo từng tài khoản thanh toán, nên họ phải thiết lập lại việc nhận tiền.
+- Chuyển ngược lại làm thu nhập cũ trả được như trước.
+
+## Thiết lập
+
+Theo từng stage, dưới `payouts` trong `stages.config.ts`. Xem <Link path="deploy/configuration">Cấu hình stage</Link>.
+
+## Invariant
+
+`helpers/invariants/earnings.ts` trong core-table kiểm tra, sau mỗi kịch bản end-to-end, rằng các dòng khớp với đơn hàng của chúng, hoàn tiền không bao giờ vượt quá số đã trả, các hàng theo ngày bằng tổng các dòng của chúng, số tiền của một đợt thanh toán bằng các dòng của nó, và mỗi tài khoản thanh toán đúng định dạng.
+
+## Phát triển cục bộ
+
+Stripe stand-in bao phủ phần Connect: tài khoản Express, liên kết onboarding, liên kết bảng điều khiển và transfer.
+
+- `POST http://localhost:2024/payout-run` chạy lần chạy thanh toán một lần. Một body `{ "graceSeconds": n }` tùy chọn thay thế thời gian ân hạn khôi phục 15 phút.
+- `LOCAL_PAYOUT_RUN_INTERVAL_SECONDS` chạy nó theo bộ hẹn giờ.
+- `GET /stripe/test/transfers` liệt kê các transfer đã thực hiện, và `POST /stripe/test/transfers/fail-next` làm transfer kế tiếp thất bại theo cách đã chọn (ví dụ `rejected` hoặc `timeout`).
+
+## Hạn chế
+
+- Không xử lý thuế, hóa đơn hay biểu mẫu thuế.
+- Không quy đổi tiền tệ: mỗi loại tiền tệ có số dư riêng và các đợt thanh toán riêng.
+- Tranh chấp và chargeback không được ghi nhận.
+- Thu nhập bị held do nền tảng trả thủ công. Không có gì chuyển chúng sang tài khoản mới.

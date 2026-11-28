@@ -1,0 +1,65 @@
+---
+title: 배포 개요
+description: Discava 포크에서 시작해 GitHub Actions가 배포하는, 내 AWS 계정의 실행 중인 설치본까지의 과정입니다.
+sidebar:
+  order: 0
+  label: Overview
+---
+
+import Link from '@components/link.astro';
+
+이 섹션은 아무것도 없는 상태에서 GitHub Actions가 대신 배포해 주는 Discava 설치본까지 안내합니다. 터미널, GitHub, AWS의 기본에 익숙하다고 가정합니다.
+
+## 최종 결과
+
+- 내가 관리하는 GitHub의 Discava **포크**
+- 내 AWS 계정의 Discava **스테이지**: 포털 세 개, API 세 개, 데이터베이스, 동영상 처리, 검색, 결제
+- 직접 실행하거나 `main`에서 CI가 통과할 때마다 스테이지를 배포하는, 포크 안의 **Deploy 워크플로**
+- 어디에도 **장기 AWS 키가 없습니다**. GitHub는 단기 토큰(OIDC)으로 AWS에 로그인합니다
+
+## 구성 요소가 맞물리는 방식
+
+```d2 title="From a push to a deployed stage"
+direction: right
+you: "You"
+fork: "Your fork on GitHub" {
+  ci: "CI workflow"
+  deploy: "Deploy workflow"
+  env: "GitHub environment\n(one per stage)"
+}
+aws: "Your AWS account" {
+  oidc: "GitHub OIDC provider"
+  deployrole: "Deploy role"
+  execrole: "Execution role"
+  cfn: "CloudFormation"
+  stage: "Discava stage"
+}
+
+you -> fork.ci: "push to main"
+fork.ci -> fork.deploy: "passes"
+fork.env -> fork.deploy: "role ARNs, region"
+fork.deploy -> aws.oidc: "short-lived token"
+aws.oidc -> aws.deployrole: "assume"
+aws.deployrole -> aws.cfn: "cdk deploy"
+aws.execrole -> aws.cfn: "used by"
+aws.cfn -> aws.stage: "creates"
+```
+
+**스테이지**는 완전한 설치본 하나입니다. 기본으로 두 개가 정의되어 있습니다.
+
+| 스테이지 | 용도 | 보안 설정 |
+| --- | --- | --- |
+| `discava-development` | 저렴하게 시험해 보기 | 완화됨: WAF 없음, 고객 관리형 KMS 키 없음, 자체 가입 꺼짐, 낮은 요청 제한, 스택과 함께 모든 것이 삭제됨 |
+| `discava-production` | 실제 사용자 | 강화됨: WAF, 키 교체가 있는 KMS 암호화, MFA, 삭제 방지, 삭제 시 상태 리소스 보존 |
+
+`discava-development`로 시작하세요. 프로덕션도 단계는 같습니다.
+
+## 단계
+
+1. <Link path="deploy/prerequisites">사전 요구 사항</Link>: 필요한 AWS 계정, 도구, 접근 권한
+2. <Link path="deploy/setup">포크와 설정</Link>: 저장소를 포크하고 AWS 역할과 GitHub 환경을 만드는 설정 스크립트를 실행합니다
+3. <Link path="deploy/first-deploy">첫 배포</Link>: Deploy 워크플로를 실행한 뒤 첫 사용자를 만듭니다
+4. <Link path="deploy/configuration">스테이지 구성</Link>: 사용자 지정 도메인, 이메일, 정산, 제한, 새 스테이지
+5. <Link path="deploy/ci-cd">CI/CD 레퍼런스</Link>: 각 워크플로가 하는 일과 읽는 모든 변수
+
+필요할 때 볼 페이지가 둘 더 있습니다. 유지 관리 스크립트도 나열한 <Link path="deploy/from-your-machine">내 컴퓨터에서 배포하기</Link>와 <Link path="deploy/troubleshooting">문제 해결</Link>입니다.

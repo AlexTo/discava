@@ -1,0 +1,60 @@
+---
+title: Personalizzazione del brand
+description: Impostare logo, icona, nome, immagine di condivisione e colore della piattaforma come amministratore, le regole per ogni file, quanto tempo impiega una modifica ad arrivare ai visitatori e cosa non viene personalizzato.
+sidebar:
+  order: 7
+---
+
+Un amministratore può dare alla piattaforma un aspetto proprio senza un deploy. Nel portale admin, apri il menu dell'account e scegli **Branding**, oppure scegli la scheda **Branding** nella Home. Il brand si applica ai portali studenti, istruttori e admin e alle pagine pubbliche di corsi e profili.
+
+## Cosa puoi impostare
+
+| Parte | Dove la vedono i visitatori |
+|---|---|
+| **Logo** | L'intestazione di ogni portale e le pagine pubbliche |
+| **Name** | L'intestazione (accanto al logo, se lo lasci attivo), il titolo della scheda del browser, le anteprime dei link e i testi che nominano la piattaforma |
+| **Icon** | La scheda del browser e l'icona nella schermata iniziale dei telefoni |
+| **Share image** | L'immagine nelle anteprime dei link di un corso o di un profilo che non ha un'immagine propria |
+| **Colour** | Pulsanti, anelli di focus e link in tutti i portali e nelle pagine pubbliche |
+
+Ogni parte è facoltativa. Una parte che lasci vuota mantiene il brand Discava predefinito. In fondo alla pagina c'è scritto "Using the default Discava brand" quando nulla è personalizzato, altrimenti chi ha modificato il brand per ultimo e quando.
+
+La **Preview** nella pagina mostra le modifiche prima del salvataggio. Nulla viene applicato finché non scegli **Save**.
+
+## Regole sui file
+
+La pagina controlla ogni file mentre lo scegli e dice quale regola ha violato. Il server lo controlla di nuovo al salvataggio.
+
+| Parte | Tipi | Dimensione massima | Forma |
+|---|---|---|---|
+| Logo | PNG, JPEG, WebP o SVG | 1 MB | Larghezza al massimo 4 volte l'altezza e non più alto che largo |
+| Icona | PNG | 1 MB | Quadrata, almeno 192 × 192 pixel. Consigliamo 512 × 512 |
+| Immagine di condivisione | PNG, JPEG o WebP | 2 MB | Almeno 1200 × 630 pixel, larga da 1,8 a 2 volte l'altezza |
+
+Un logo SVG non può contenere script, pagine incorporate, gestori di eventi o link ad altri file. Un file che li contiene viene rifiutato e il tuo file non viene mai riscritto.
+
+Il nome deve avere da 1 a 50 caratteri. Disattiva **Show the name beside the logo** se il logo lo scrive già per intero: il nome resta nei titoli delle schede e nelle anteprime dei link.
+
+## Il colore e la leggibilità
+
+Scegli il colore con il selettore, oppure digita un valore esadecimale come `#1d4ed8`.
+
+- Il testo sui pulsanti viene scelto per te, chiaro o scuro, a seconda di quale si legge meglio.
+- Un colore su cui nessuno dei due si leggerebbe bene viene rifiutato, con l'indicazione di scegliere una tonalità più scura o più chiara.
+- I link usano il tuo colore solo dove è leggibile su una pagina bianca, altrimenti il colore del testo predefinito. Un colore di brand chiaro non rende mai i link difficili da leggere.
+- I colori di errore e di stato non cambiano.
+
+## Quanto tempo impiegano le modifiche
+
+Il portale admin mostra la modifica appena salvi. Tutti gli altri la vedono entro 5 minuti: un browser mantiene il brand pubblicato fino a un minuto e la rete di distribuzione dei contenuti fino a quattro. Alla prima visita il brand predefinito può comparire per circa un secondo; le visite successive mostrano subito il brand.
+
+Se due amministratori modificano contemporaneamente, al secondo che salva viene detto che qualcun altro ha cambiato il brand e che deve ricaricare per vedere le sue modifiche.
+
+## Ripristino
+
+Ogni parte ha un proprio pulsante di ripristino, come **Reset the logo to default**. **Reset all to default** ripristina tutto e chiede prima conferma. Un ripristino ha effetto quando salvi. Le immagini sostituite smettono di essere servite dal vecchio indirizzo entro 5 minuti e vengono eliminate un giorno dopo.
+
+## Cosa non viene personalizzato
+
+- Le pagine di accesso ospitate da Amazon Cognito mantengono l'aspetto predefinito.
+- Questo sito di documentazione.

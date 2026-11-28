@@ -1,0 +1,120 @@
+---
+title: Lần triển khai đầu tiên
+description: Chạy Deploy workflow, tìm các cổng của bạn, và tạo những người dùng và danh mục đầu tiên.
+sidebar:
+  order: 3
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+Khi <Link path="deploy/setup">thiết lập</Link> đã xong, việc triển khai chỉ là một lượt chạy workflow.
+
+## 1. Chạy Deploy workflow
+
+Từ tab **Actions** của fork, chọn **Deploy → Run workflow**, nhập tên stage và chạy. Hoặc từ terminal của bạn:
+
+```sh
+gh workflow run deploy.yml -f stage=discava-development
+gh run watch
+```
+
+Lần triển khai đầu tiên tạo mọi tài nguyên, gồm nhiều CloudFront distribution và một collection OpenSearch Serverless, nên mất nhiều thời gian hơn hẳn các lần sau.
+
+### Workflow làm gì
+
+<Steps>
+
+1. **Kiểm tra stage có tồn tại** trong `stages.config.ts`, để một lỗi gõ sai thất bại trước khi chạm vào AWS.
+
+2. **Chuyển tiếp các ghi đè cấu hình.** Mọi biến trên GitHub environment của stage (hoặc của repository) có tên bắt đầu bằng tiền tố của stage (`DISCAVA_DEVELOPMENT_` cho `discava-development`) đều được truyền cho bản build. Đây là cách các tên miền riêng đến được đó.
+
+3. **Quét bằng Trivy.** Việc triển khai dừng khi gặp một lỗ hổng nghiêm trọng đã biết mà có bản sửa, hoặc một secret bị commit.
+
+4. **Đăng nhập vào AWS** với vai trò deploy role, dùng một token OIDC ngắn hạn.
+
+5. **Synthesize** các template CloudFormation bằng CDK, với permissions boundary của stage được áp dụng cho mọi role.
+
+6. **Triển khai** từng stack theo thứ tự phụ thuộc. CloudFormation tạo các tài nguyên với vai trò execution role. Một lượt chạy tự động bỏ qua bước này nếu lúc đó `main` đã có commit mới hơn.
+
+</Steps>
+
+## 2. Tìm các cổng của bạn
+
+Mỗi cổng là một CloudFront distribution. Địa chỉ của chúng là các output của stack `Websites`. Với AWS CLI của bạn đặt ở region của stage:
+
+```sh
+aws cloudformation describe-stacks \
+  --stack-name discava-development-Websites \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `DistributionDomainName`)].[OutputKey,OutputValue]' \
+  --output table
+```
+
+Bạn nhận được mỗi cổng học viên, giảng viên và quản trị một địa chỉ `*.cloudfront.net`. Hãy mở cổng học viên: bạn sẽ thấy danh mục, hiện còn trống.
+
+## 3. Tạo những người dùng đầu tiên
+
+Người dùng nằm trong một Cognito user pool, thuộc ba nhóm quyết định người dùng được dùng cổng và API nào:
+
+| Nhóm | Có thể dùng |
+| --- | --- |
+| `student` | Cổng học viên |
+| `instructor` | Cổng giảng viên |
+| `admin` | Cổng quản trị |
+
+`discava-development` **tắt tự đăng ký**, nên người lạ không thể tạo tài khoản trên stage thử nghiệm của bạn. Bạn tự thêm người dùng:
+
+<Steps>
+
+1. Mở console **Cognito** ở region của stage và chọn user pool của stage. Id của nó là một output của stack `discava-development-Data`.
+
+2. **Create user**, với một địa chỉ email và một mật khẩu tạm thời. Mật khẩu cần ít nhất 8 ký tự, gồm một chữ hoa, một chữ thường, một chữ số và một ký hiệu. Mật khẩu tạm thời hết hạn sau 3 ngày.
+
+3. Mở người dùng, chọn **Add user to group**, và thêm từng nhóm họ cần. Hãy thêm chính bạn vào cả ba để thấy mọi thứ.
+
+4. Đăng nhập trên một cổng bằng địa chỉ email. Cognito sẽ yêu cầu bạn đặt mật khẩu vĩnh viễn.
+
+</Steps>
+
+Trên `discava-production`, tự đăng ký được bật và MFA là bắt buộc. Những người đăng ký được tự động thêm vào các nhóm `student` và `instructor`. Quản trị viên luôn được thêm thủ công, trên mọi stage.
+
+## 4. Thêm danh mục
+
+Các khóa học được tổ chức theo danh mục do quản trị viên quản lý. Bạn có thể đăng nhập vào cổng quản trị và tạo chúng, hoặc ghi bộ khởi đầu (Science, Technology, Mathematics, Communication, Business) từ bản clone của bạn:
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+
+DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE pnpm nx run @discava/tooling-deploy:seed-categories
+```
+
+Nó dùng thông tin xác thực AWS và region trong shell của bạn, vốn phải là của stage, và bỏ qua các danh mục đã tồn tại. Nếu không có `DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME`, nó ghi vào bảng phát triển cục bộ.
+
+## 5. Thử từ đầu đến cuối
+
+<Steps>
+
+1. Trong **cổng giảng viên**, tạo một khóa học, thêm một bài học có video và xuất bản nó. Video được MediaConvert transcode và phát được vài phút sau khi tải lên.
+
+2. Trong **cổng học viên**, tìm khóa học, ghi danh và phát bài học.
+
+3. Trong **cổng quản trị**, kiểm tra danh sách danh mục.
+
+</Steps>
+
+Hai thứ mà quản trị viên đặt trong cổng quản trị, không cần triển khai:
+
+- Tên, logo và màu của nền tảng: <Link path="guides/branding">Thương hiệu</Link>
+- Tài khoản Stripe, để bán khóa học: <Link path="guides/payments">Khóa học trả phí và thanh toán</Link>
+
+## Các lần triển khai sau
+
+- **Tự động:** nếu bạn đặt `AUTO_DEPLOY_STAGE`, mỗi lần push vào `main` vượt qua CI sẽ triển khai stage đó. Một lần triển khai bị bỏ qua khi trong lúc đó có commit mới hơn đã đến `main`.
+- **Thủ công:** chạy lại Deploy workflow. Nó triển khai commit mà bạn chạy từ đó, cũng là cách bạn rollback: hãy chạy từ một commit cũ hơn.
+
+Các lần triển khai tới một stage không bao giờ chồng lên nhau. Lượt chạy thứ hai chờ lượt đầu.
+
+Sau khi kéo một phiên bản Discava mới hơn, hãy <Link path="deploy/setup">chạy lại script setup</Link> trước khi triển khai, để các role của stage cho phép những gì phiên bản mới tạo ra.
+
+Tiếp theo: <Link path="deploy/configuration">cấu hình stage của bạn</Link> với tên miền riêng và email.

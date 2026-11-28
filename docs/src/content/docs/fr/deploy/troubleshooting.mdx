@@ -1,0 +1,69 @@
+---
+title: Dépannage
+description: Les raisons courantes d'échec d'une configuration ou d'un déploiement, et comment corriger chacune.
+sidebar:
+  order: 7
+---
+
+## Le script de configuration
+
+**"Couldn't authenticate with AWS."** Votre AWS CLI n'a pas d'identifiants valides. Connectez-vous (`aws sso login --profile <profile>` ou `aws configure`) et relancez le script.
+
+**"`<stage>` is configured for account … ; switch credentials and re-run."** Le stage nomme un compte dans `stages.config.ts` et vous êtes connecté à un autre.
+
+**"Unknown stage."** Le stage n'est pas dans `stages.config.ts`. Ajoutez-le d'abord.
+
+**"The origin remote isn't a GitHub repository."** Affiché avec `--yes` ; sans lui, le script demande le dépôt. Définissez-le vous-même : `GITHUB_REPOSITORY=<you>/discava ./scripts/setup-stage.sh`.
+
+**"stdin isn't a terminal."** Le script ne peut pas poser de questions. Lancez-le dans un terminal, ou passez `--yes` pour accepter les valeurs par défaut.
+
+**"uses a custom OIDC subject claim template."** Votre dépôt ou organisation personnalise le sujet du jeton OIDC. Définissez `GITHUB_OIDC_SUBJECT_PREFIX` avec la partie du sujet qui précède `:environment:` et relancez le script.
+
+**"no issued certificate in … covers …" ou "… is for exactly …"** Avec un domaine racine, le script a besoin d'un certificat émis pour chaque composant. Il liste chacun de ceux qu'il n'a pas trouvés et s'arrête avant de rien changer. Demandez-les dans ACM, dans la région que le message nomme : la région du stage pour les deux API, `us-east-1` pour les portails et les médias. Attendez que chacun soit **Issued**, puis relancez le script. Chaque API a besoin d'un certificat nommant exactement son propre domaine (`core-api.<root>`, `instructor-api.<root>`), pas un joker. Les portails et les médias peuvent partager un certificat pour `<root>` et `*.<root>`. Pour déployer sans domaines personnalisés, laissez le domaine racine vide.
+
+## Le workflow Deploy
+
+**Le workflow ne démarre jamais après un push sur `main`.** Les déploiements automatiques demandent trois choses : la variable de dépôt `AUTO_DEPLOY_STAGE`, les workflows activés sur le fork, et une exécution de CI qui a **réussi**. Vérifiez l'exécution de la CI : un job **Deploy Docs** en échec (GitHub Pages non activé) ou un job **Trivy** en échec fait échouer la CI dans son ensemble.
+
+**"Unknown stage".** Le stage que vous avez saisi n'est pas dans `stages.config.ts` sur le commit déployé.
+
+**"Not authorized to perform sts:AssumeRoleWithWebIdentity".** AWS a refusé le jeton du workflow. Les causes habituelles :
+
+- Le nom de l'environnement GitHub n'est pas exactement celui du stage
+- Le script de configuration a été lancé depuis un clone d'un autre dépôt (l'original au lieu de votre fork), donc le rôle fait confiance à celui-là
+- Le fork a été renommé ou transféré après la configuration
+
+Relancez le script de configuration depuis un clone du dépôt qui exécute le workflow.
+
+**"Credentials could not be loaded" ou un rôle vide.** L'environnement n'a pas de variable `AWS_DEPLOY_ROLE_ARN`. Lancez le script de configuration, ou créez les variables qu'il a affichées.
+
+**"Invalid value for `<STAGE>_INFRA_…`".** Une surcharge de configuration a une valeur du mauvais type. Les booléens sont `true` ou `false`, les nombres sont entiers, et un niveau de journal est `DEBUG`, `INFO`, `WARN` ou `ERROR`. Corrigez la variable sur l'environnement GitHub et déployez de nouveau.
+
+**"SSM parameter /cdk-bootstrap/hnb659fds/version not found".** CDK n'est pas initialisé dans une région où le stage se déploie. Relancez le script de configuration et acceptez l'initialisation, en pensant à `us-east-1` pour les stages avec WAF.
+
+**Accès refusé pendant que CloudFormation crée une ressource.** CloudFormation s'exécute avec le rôle d'exécution, `cfn-execution-<stage>`. Ce rôle ne peut faire que ce que Discava crée, et seulement sur des ressources dont le nom commence par celui du stage (`discava-development-…`, ou `discavadevelopment…` pour certains types).
+
+Si vous venez de récupérer une version plus récente de Discava, relancez d'abord le script de configuration : il met à jour les permissions du rôle avec ce dont cette version a besoin. Si l'erreur persiste, ou si vous avez ajouté une ressource vous-même, regardez qui l'erreur nomme :
+
+- **`cfn-execution-<stage>` est refusé.** Ajoutez l'action aux politiques du rôle d'exécution dans `scripts/setup-stage.sh`. Si le nom de la ressource ne commence pas par celui du stage, donnez-lui plutôt un nom explicite qui le fait : `Names.uniqueResourceName` de CDK en construit un à partir du chemin du construct. Puis relancez le script.
+- **Le rôle d'une fonction est refusé à l'exécution.** Ajoutez l'action à la limite de permissions dans le même script, puis relancez-le. Chaque rôle créé par le stage porte cette limite. Le rôle d'exécution ne la porte pas, donc ajouter une action à la limite ne corrige jamais un déploiement.
+
+Un déploiement depuis votre propre machine utilise les rôles par défaut de CDK, qui peuvent tout faire. Une stack qui se déploie en local peut donc quand même échouer dans le workflow Deploy.
+
+**L'étape Trivy échoue.** Une dépendance a une vulnérabilité critique connue avec un correctif disponible, ou un secret a été commité. Mettez à jour la dépendance. Un constat que vous avez examiné et accepté va dans `.trivyignore`, un identifiant par ligne.
+
+**Une stack est bloquée en `ROLLBACK_COMPLETE`.** Une stack qui a échoué à sa première création ne peut pas être mise à jour. Supprimez-la dans la console CloudFormation et déployez de nouveau.
+
+## Après le déploiement
+
+**Un portail affiche une erreur de connexion.** Vérifiez que l'utilisateur est dans le groupe dont ce portail a besoin (`student`, `instructor` ou `admin`).
+
+**Un domaine personnalisé ne se résout pas.** Les enregistrements DNS ne sont pas créés pour vous. Faites pointer le domaine vers sa distribution CloudFront ou son domaine personnalisé API Gateway.
+
+**Les appels d'API échouent avec des erreurs CORS après l'ajout d'un domaine de portail.** Déployez de nouveau. Les origines autorisées des API sont tirées des domaines des portails au moment du déploiement.
+
+**La première recherche est lente.** Sur `discava-development`, la recherche descend à zéro. La première requête après une période calme attend 10 à 30 secondes la capacité.
+
+**Aucun e-mail n'arrive.** Vérifiez que les deux variables `NOTIFICATIONS` sont définies, que l'identité SES est vérifiée dans la région du stage, et si votre compte SES est encore en sandbox.
+
+**Une vidéo reste en « processing ».** Regardez la liste des tâches de la console MediaConvert dans la région du stage pour trouver une tâche en échec et son erreur.

@@ -1,33 +1,46 @@
 ---
-title: docs
-description: Tài liệu cho docs.
+title: Discava
+description: Tài liệu về Discava, hệ thống quản lý học tập (LMS) serverless, chạy native trên AWS.
 template: splash
 hero:
-  title: docs
-  tagline: Tài liệu dự án được xây dựng với Astro và Starlight.
-  actions:
-    - text: Bắt đầu
-      link: /vi/guides/getting-started
-      icon: right-arrow
+  title: Discava
+  tagline: Hệ thống quản lý học tập serverless chạy ngay trong tài khoản AWS của bạn.
 ---
 
 import { CardGrid, Card } from '@astrojs/starlight/components';
 import { ContributorList } from 'astro-contributors';
+import Link from '@components/link.astro';
+
+## Chọn hướng đi của bạn
 
 <CardGrid>
-  <Card title="Guides" icon="open-book">
-    Tài liệu tham khảo cho docs.
+  <Card title="Tôi muốn dùng thử" icon="laptop">
+    Chạy toàn bộ hệ thống trên máy của bạn bằng Docker. Không cần tài khoản AWS.
+
+    <Link path="guides/getting-started">Chạy Discava trên máy</Link>
   </Card>
-  <Card title="Blog" icon="pencil">
-    Tin tức và cập nhật từ nhóm phát triển.
+  <Card title="Tôi muốn triển khai" icon="rocket">
+    Fork repository, kết nối với tài khoản AWS của bạn và để GitHub Actions triển khai.
+
+    <Link path="deploy">Hướng dẫn triển khai</Link>
   </Card>
-  <Card title="Snippets" icon="seti:config">
-    Các đoạn nội dung có thể tái sử dụng được sử dụng trong tài liệu.
+  <Card title="Tôi muốn hiểu cách nó hoạt động" icon="puzzle">
+    Các thành phần, cách chúng được triển khai trên AWS và một yêu cầu đi qua chúng như thế nào.
+
+    <Link path="architecture">Kiến trúc</Link>
   </Card>
-  <Card title="Localised" icon="translate">
-    Bản địa hóa được cấu hình sẵn — thêm các ngôn ngữ mục tiêu trong `astro.config.mjs`.
+  <Card title="Tôi muốn thay đổi nó" icon="pencil">
+    Từng tính năng hoạt động ra sao: mô hình dữ liệu, quy tắc và mã nguồn thực thi chúng.
+
+    <Link path="design">Thiết kế</Link>
   </Card>
 </CardGrid>
+
+## Discava là gì
+
+Discava là một nền tảng học tập mã nguồn mở, miễn phí. Giảng viên xây dựng khóa học từ video, văn bản, bài kiểm tra và bài tập. Học viên đăng ký, hoặc mua khóa học trả phí, rồi học và theo dõi tiến độ. Giảng viên nhận phần thu nhập của mình từ mỗi lượt bán. Quản trị viên quản lý các danh mục của catalogue, kiểm duyệt đánh giá, tùy biến thương hiệu cho nền tảng và kết nối tài khoản Stripe nhận thanh toán.
+
+Discava có chủ đích rõ ràng: một nhà cung cấp đám mây (AWS), một cách triển khai (CDK), và mọi thành phần đều serverless, nên một bản cài đặt không hoạt động gần như không tốn chi phí.
 
 ## Cảm ơn những người đóng góp tuyệt vời của chúng tôi!
 

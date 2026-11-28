@@ -1,0 +1,77 @@
+---
+title: コースを作る
+description: 講師ポータルでのコースの作成、モジュール、レッスン、コンテンツの追加、公開と非表示、公開済みコースの変更、カタログの詳細。
+---
+
+import Link from '@components/link.astro';
+
+コースはモジュールでできています。モジュールにはレッスンがあり、レッスンにはコンテンツ（動画、テキスト、クイズ、ファイル）があります。そのすべてを、講師ポータルのコースのページで作ります。
+
+## コースを作成する
+
+1. 講師ポータルで **My Courses** を開きます。
+2. **Create a course** を選びます。
+3. **Course title**（最大 200 文字）と **Course summary** を入力します。
+4. コースを作成します。コースは **Draft** として始まり、受講者には見えません。
+
+コースのカードの **Open course** で、そのページが開きます。
+
+## コンテンツを追加する
+
+コースのページの **Course content** セクションで作業します。
+
+1. **New module** を選び、名前を付けます。
+2. モジュールで **New lesson** を選びます。採点する課題の場合は、代わりに **New assignment** を選びます。
+3. レッスンにコンテンツ（**Video**、**Text**、**Quiz**、**File**）を追加します。
+4. モジュール、レッスン、コンテンツをグリップでドラッグして移動します。
+
+字幕はすべての動画に自動で追加されます。
+
+- <Link path="guides/quizzes-and-assignments">クイズと課題</Link> では、クイズの設定、課題、採点を扱います。
+- <Link path="guides/video-lessons">動画レッスン</Link> では、字幕と動画内の問題を扱います。
+
+## カタログ用に説明する
+
+**Catalogue details** セクションで次を設定します。
+
+| 項目 | 選択肢 |
+| --- | --- |
+| Category | プラットフォームのカテゴリの 1 つ、または「No category」 |
+| Level | Beginner、Intermediate、Advanced |
+| Language | コースを教える言語 |
+| Duration | 時間、最大 500 |
+| Tags | 最大 8 個、1 個あたり最大 30 文字 |
+
+受講者はこれらでカタログを絞り込み、検索します。コース画像も追加してください。コースのカードとページに表示されます。
+
+**Landing page** セクション、公開プロフィール、無料プレビューレッスンについては、<Link path="guides/instructor-guide">講師ガイド</Link> で扱っています。
+
+## 公開する
+
+コースのページ上部の **Publish** を選んで確定します。これで受講者はコースとその中のすべてを見られます。
+
+コースを公開すると、2 つのことが変わります。
+
+- **新しいコンテンツは非表示で始まります。** 追加したモジュール、レッスン、コンテンツには、それぞれ **Publish** を選ぶまで **Hidden** バッジが表示されます。**Hide** で受講者から見えない状態に戻せます。
+- **削除はアーカイブになります。** モジュール、レッスン、コンテンツを削除すると、完全に削除されずアーカイブされます。
+
+公開済みのコースを変更したときに受講者に何が見えるかは、<Link path="design/live-course-editing">ライブコース編集</Link> を参照してください。
+
+## アーカイブされたコンテンツ
+
+コースのページの下部にある **Archived** セクションには、公開済みコースから削除したものが一覧表示されます。
+
+- **Restore** は、項目を元の場所の末尾に戻します。
+- **Delete permanently** は、完全に削除します。受講者が利用したものには使えず、「Students have used it, so it stays archived.」と表示されます。
+
+## アーカイブされたコース
+
+アーカイブされたコースは編集できません。ページには「This course is archived, so it can't be edited. Restore it to make changes.」と表示されます。再び作業するには、ページ上部の **Restore** を選びます。
+
+講師ポータルには、コース全体をアーカイブするボタンはありません。
+
+## 次に読む
+
+- 価格を設定する: <Link path="guides/payments">有料コースと支払い</Link>。
+- 修了証を提供する: <Link path="guides/certificates">修了証</Link>。
+- コースの状況を見る: <Link path="guides/course-analytics">コース分析</Link>。

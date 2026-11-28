@@ -1,0 +1,83 @@
+---
+title: 내 컴퓨터에서 배포하기
+description: GitHub Actions 없이 내 AWS 자격 증명으로 스테이지를 배포, 갱신, 삭제합니다.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+배포에는 GitHub Actions를 권장합니다. 내 컴퓨터에서 배포하는 방법은 개인 테스트 스테이지나 배포 문제를 디버깅할 때 유용합니다.
+
+## 시작하기 전에
+
+- 의존성이 설치된(`pnpm i`) 클론과 AWS CLI
+- 대상 계정에 대한 셸의 AWS 자격 증명(`aws sts get-caller-identity`가 동작해야 함)
+- `AWS_REGION` 또는 AWS 프로필에 지정된 리전
+- 그 리전에서 부트스트랩된 CDK. 계정과 리전마다 한 번:
+
+  ```sh
+  pnpm exec cdk bootstrap aws://<account-id>/<region>
+  ```
+
+  포털이나 미디어에 WAF가 켜진 스테이지는 `us-east-1`도 부트스트랩해야 합니다.
+
+## 배포
+
+```sh
+pnpm nx deploy @discava/infra "discava-development/*"
+```
+
+`<stage>/*` 패턴은 스테이지의 모든 스택을 선택합니다. 포털과 Lambda 함수를 빌드하고, 템플릿을 합성하고, 승인을 묻지 않고 배포합니다.
+
+스테이지마다 항상 이름 있는 AWS 프로필을 쓰려면 `packages/common/infra-config/src/stages.config.ts`에서 그 스테이지의 `credentials`를 설정하세요. 이 페이지의 배포, 삭제, 재색인 명령이 그것을 사용합니다.
+
+```ts
+'discava-development': {
+  credentials: { type: 'profile', profile: 'my-profile' },
+  region: 'eu-west-1',
+  infra: { /* … */ },
+},
+```
+
+## GitHub 배포와의 차이
+
+| | GitHub Actions | 내 컴퓨터 |
+| --- | --- | --- |
+| 자격 증명 | 스테이지의 범위 제한된 배포 역할과 실행 역할 | 내 것, CDK의 부트스트랩 역할을 통해 |
+| 권한 경계 | 모든 역할에 적용 | 적용되지 않음 |
+| 구성 재정의 | GitHub 환경의 변수에서 읽음 | 셸에서 읽음: 배포 전에 `export DISCAVA_DEVELOPMENT_INFRA_…` |
+| 취약점 스캔 | 먼저 실행 | `pnpm trivy`를 직접 실행(Docker 필요) |
+
+재정의는 셸에서 오기 때문에, GitHub에서 사용자 지정 도메인을 쓰는 스테이지를 로컬에서 배포하면 같은 변수를 export하지 않는 한 도메인이 **제거됩니다**. 스테이지마다 배포 방식을 하나 정해서 그것만 쓰세요.
+
+## 유지 관리 스크립트
+
+배포된 스테이지에 대해 어떤 방식으로 배포했든 내 컴퓨터에서 실행합니다. 평소에는 필요 없습니다. 검색 인덱스와 분석은 스스로 최신 상태를 유지합니다.
+
+| 상황 | 명령 |
+| --- | --- |
+| 강좌 검색 인덱스를 다시 만들기. 예: 검색 필드를 추가하는 배포 후 | `pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development` |
+| 전사 검색 인덱스를 모든 강좌 또는 한 강좌에 대해 다시 만들기 | `pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development [--course=<courseId>]` |
+| 강좌의 분석 수치를 레코드에서 다시 계산 | `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` |
+| 기본 카테고리 쓰기 | `pnpm nx run @discava/tooling-deploy:seed-categories` |
+
+두 재색인 명령은 스테이지의 CloudFormation 스택에서 재색인 함수를 찾아 호출하므로, AWS 자격 증명과 스테이지 이름만 있으면 됩니다. `--stage`가 없으면 `reindex-transcripts`는 로컬 스택에 대해 실행됩니다.
+
+마지막 둘은 테이블에 직접 씁니다. 먼저 스테이지의 테이블을 가리키게 하세요. 그렇지 않으면 로컬 개발 테이블에 씁니다.
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+export DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE
+```
+
+## 삭제
+
+```sh
+pnpm nx destroy @discava/infra "discava-development/*"
+```
+
+CDK가 확인을 요청합니다. `discava-development`는 데이터를 포함해 모든 것을 삭제합니다. `discava-production`은 스택이 삭제되어도 상태를 가진 리소스(사용자 풀, 테이블, 미디어 버킷, 검색 컬렉션 등)를 유지하며 삭제 방지가 켜져 있습니다. 그것들을 제거하는 것은 의도적인 수동 작업입니다.
+
+<Link path="deploy/setup">설정 스크립트</Link>가 만든 역할과 정책은 어느 스택에도 속하지 않습니다. 더 이상 필요 없다면 IAM 콘솔에서 삭제하세요.

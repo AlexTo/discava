@@ -1,0 +1,60 @@
+---
+title: Marca
+description: Definir el logo, el icono, el nombre, la imagen para compartir y el color de la plataforma como administrador, las reglas de cada archivo, cuánto tarda un cambio en llegar a los visitantes y qué no lleva la marca.
+sidebar:
+  order: 7
+---
+
+Un administrador puede darle a la plataforma su propia imagen sin hacer un despliegue. En el portal de administración, abre el menú de la cuenta y elige **Branding**, o elige la tarjeta **Branding** en Home. La marca se aplica a los portales de estudiante, instructor y administración y a las páginas públicas de cursos y perfiles.
+
+## Qué puedes definir
+
+| Parte | Dónde la ven los visitantes |
+|---|---|
+| **Logo** | El encabezado de cada portal y de las páginas públicas |
+| **Name** | El encabezado (junto al logo, si lo dejas activado), el título de la pestaña del navegador, las vistas previas de enlaces y los textos que nombran la plataforma |
+| **Icon** | La pestaña del navegador y el icono de la pantalla de inicio en teléfonos |
+| **Share image** | La imagen en las vistas previas de enlaces de un curso o perfil que no tiene imagen propia |
+| **Colour** | Botones, anillos de foco y enlaces en los portales y las páginas públicas |
+
+Todas las partes son opcionales. Una parte que dejes vacía conserva la marca Discava por defecto. El pie de la página dice "Using the default Discava brand" cuando no hay nada personalizado y, en caso contrario, quién cambió la marca por última vez y cuándo.
+
+La **Preview** de la página muestra tus cambios antes de guardar. No se aplica nada hasta que eliges **Save**.
+
+## Reglas de los archivos
+
+La página revisa cada archivo al elegirlo e indica qué regla incumple. El servidor lo vuelve a revisar al guardar.
+
+| Parte | Tipos | Tamaño máximo | Forma |
+|---|---|---|---|
+| Logo | PNG, JPEG, WebP o SVG | 1 MB | Ancho de como máximo 4 veces el alto, y no más alto que ancho |
+| Icon | PNG | 1 MB | Cuadrado, de al menos 192 × 192 píxeles. Sugerimos 512 × 512 |
+| Share image | PNG, JPEG o WebP | 2 MB | Al menos 1200 × 630 píxeles, de 1,8 a 2 veces más ancha que alta |
+
+Un logo SVG no puede contener scripts, páginas incrustadas, controladores de eventos ni enlaces a otros archivos. Un archivo que los tenga se rechaza, y tu archivo nunca se reescribe.
+
+El nombre debe tener de 1 a 50 caracteres. Desactiva **Show the name beside the logo** si el logo ya lo escribe: el nombre se mantiene en los títulos de pestaña y las vistas previas de enlaces.
+
+## El color y la legibilidad
+
+Elige el color con el selector de color, o escribe un valor hexadecimal como `#1d4ed8`.
+
+- El texto de los botones se elige por ti, claro u oscuro, el que se lea mejor.
+- Un color sobre el que ninguno de los dos se leería bien se rechaza, con una nota para elegir un tono más oscuro o más claro.
+- Los enlaces usan tu color solo donde se lee bien sobre una página blanca, y el color de texto por defecto en los demás casos. Un color de marca pálido nunca hace que los enlaces sean difíciles de leer.
+- Los colores de error y de estado no cambian.
+
+## Cuánto tardan los cambios
+
+El portal de administración muestra tu cambio en cuanto guardas. El resto de las personas lo ve en un máximo de 5 minutos: el navegador conserva la marca publicada hasta un minuto, y la red de distribución de contenido hasta cuatro. En una primera visita puede verse la marca por defecto durante cerca de un segundo; las visitas posteriores muestran la marca de inmediato.
+
+Si dos administradores editan al mismo tiempo, al segundo que guarda se le avisa que otra persona cambió la marca y que debe recargar para ver sus cambios.
+
+## Restablecer
+
+Cada parte tiene su propio botón de restablecer, como **Reset the logo to default**. **Reset all to default** restablece todo y pide confirmación antes. Un restablecimiento surte efecto cuando guardas. Las imágenes reemplazadas dejan de servirse desde su dirección anterior en 5 minutos y se eliminan un día después.
+
+## Qué no lleva la marca
+
+- Las páginas de inicio de sesión alojadas por Amazon Cognito conservan su aspecto por defecto.
+- Este sitio de documentación.

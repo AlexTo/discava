@@ -1,0 +1,65 @@
+---
+title: Resumen del despliegue
+description: El camino desde un fork de Discava hasta una instalación en ejecución en tu cuenta de AWS, desplegada por GitHub Actions.
+sidebar:
+  order: 0
+  label: Overview
+---
+
+import Link from '@components/link.astro';
+
+Esta sección te lleva desde cero hasta una instalación de Discava en ejecución que GitHub Actions despliega por ti. Supone que te sientes cómodo con una terminal, GitHub y los conceptos básicos de AWS.
+
+## Con qué terminas
+
+- Un **fork** de Discava en GitHub que controlas
+- Una **etapa** (stage) de Discava en tu cuenta de AWS: tres portales, tres APIs, una base de datos, procesamiento de video, búsqueda y pagos
+- Un **workflow Deploy** en tu fork que despliega la etapa, ya sea cuando lo ejecutas o cada vez que CI pasa en `main`
+- **Sin claves de AWS de larga duración** en ningún sitio. GitHub inicia sesión en AWS con tokens de corta duración (OIDC)
+
+## Cómo encajan las piezas
+
+```d2 title="From a push to a deployed stage"
+direction: right
+you: "You"
+fork: "Your fork on GitHub" {
+  ci: "CI workflow"
+  deploy: "Deploy workflow"
+  env: "GitHub environment\n(one per stage)"
+}
+aws: "Your AWS account" {
+  oidc: "GitHub OIDC provider"
+  deployrole: "Deploy role"
+  execrole: "Execution role"
+  cfn: "CloudFormation"
+  stage: "Discava stage"
+}
+
+you -> fork.ci: "push to main"
+fork.ci -> fork.deploy: "passes"
+fork.env -> fork.deploy: "role ARNs, region"
+fork.deploy -> aws.oidc: "short-lived token"
+aws.oidc -> aws.deployrole: "assume"
+aws.deployrole -> aws.cfn: "cdk deploy"
+aws.execrole -> aws.cfn: "used by"
+aws.cfn -> aws.stage: "creates"
+```
+
+Una **etapa** es una instalación completa. Vienen dos definidas de fábrica:
+
+| Etapa | Para | Ajustes de seguridad |
+| --- | --- | --- |
+| `discava-development` | Probar cosas con poco gasto | Relajados: sin WAF, sin claves KMS administradas por el cliente, registro propio desactivado, límites de solicitudes bajos, todo se elimina con el stack |
+| `discava-production` | Usuarios reales | Reforzados: WAF, cifrado KMS con rotación de claves, MFA, protección contra eliminación, recursos con estado conservados al eliminar |
+
+Empieza con `discava-development`. Los pasos para producción son los mismos.
+
+## Los pasos
+
+1. <Link path="deploy/prerequisites">Requisitos previos</Link>: la cuenta de AWS, las herramientas y el acceso que necesitas
+2. <Link path="deploy/setup">Fork y configuración</Link>: haz un fork del repositorio y ejecuta el script de configuración, que crea los roles de AWS y el entorno de GitHub
+3. <Link path="deploy/first-deploy">Primer despliegue</Link>: ejecuta el workflow Deploy y luego crea tus primeros usuarios
+4. <Link path="deploy/configuration">Configuración de etapas</Link>: dominios personalizados, correo, pagos, límites y nuevas etapas
+5. <Link path="deploy/ci-cd">Referencia de CI/CD</Link>: qué hace cada workflow y cada variable que lee
+
+Hay dos páginas más para cuando las necesites: <Link path="deploy/from-your-machine">desplegar desde tu máquina</Link>, que también lista los scripts de mantenimiento, y <Link path="deploy/troubleshooting">solución de problemas</Link>.

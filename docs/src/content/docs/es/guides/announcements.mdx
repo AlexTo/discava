@@ -1,0 +1,37 @@
+---
+title: Anuncios
+description: Publicar, editar y eliminar anuncios para los estudiantes de un curso, quién puede leerlos y a quién se notifica.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+Un anuncio es un mensaje corto de un instructor para los estudiantes inscritos en un curso. Tiene un título (hasta 120 caracteres) y texto con formato.
+
+## Para instructores
+
+Abre el curso desde **My Courses** y ve a su sección **Announcements**, cerca del final de la página.
+
+- **Publicar**: escribe un título y el texto, y elige **Post announcement**. Solo un curso publicado admite anuncios nuevos. Un curso en borrador muestra "Publish the course to post announcements."
+- **Editar**: elige **Edit** en un anuncio, cambia el título o el texto y luego **Save changes**. Los estudiantes ven el texto nuevo con una marca de "edited".
+- **Eliminar**: elige **Delete** y confirma. El anuncio desaparece del inicio del curso. No se puede deshacer.
+
+Qué se le avisa a los estudiantes:
+
+- Publicar notifica una vez a cada estudiante inscrito, en la campana y, salvo que lo hayan desactivado, por correo electrónico.
+- Editar no envía nada.
+- Eliminar no retira la notificación que los estudiantes ya recibieron.
+- Publicar el mismo anuncio dos veces, por ejemplo con un doble clic, lo publica una sola vez.
+
+En un curso archivado todavía puedes editar y eliminar anuncios, pero no publicar nuevos.
+
+## Quién puede leerlos
+
+- Los estudiantes inscritos en el curso leen los anuncios en el inicio del curso, del más reciente al más antiguo. Esto sigue funcionando después de archivar el curso.
+- Un estudiante que dejó el curso, un estudiante de otro curso y los visitantes no pueden leerlos.
+- Los instructores que dictan el curso los leen en el portal del instructor.
+
+## Para desarrolladores
+
+Los anuncios no añaden una entrega propia. Al publicar se escribe el anuncio y una solicitud para notificar a los estudiantes del curso en una sola transacción, mediante el contrato de productor de notificaciones (`notifyCourseStudents`, el tipo `announcement.posted`). Después, la distribución de notificaciones lo entrega. Consulta <Link path="guides/notifications">Notifications</Link> para ver cómo funciona.

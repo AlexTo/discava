@@ -1,0 +1,120 @@
+---
+title: Premier déploiement
+description: Lancez le workflow Deploy, trouvez vos portails et créez les premiers utilisateurs et catégories.
+sidebar:
+  order: 3
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+Une fois la <Link path="deploy/setup">configuration</Link> faite, déployer revient à lancer un workflow.
+
+## 1. Lancer le workflow Deploy
+
+Depuis l'onglet **Actions** de votre fork, choisissez **Deploy → Run workflow**, saisissez le nom du stage et lancez-le. Ou depuis votre terminal :
+
+```sh
+gh workflow run deploy.yml -f stage=discava-development
+gh run watch
+```
+
+Le premier déploiement crée toutes les ressources, dont plusieurs distributions CloudFront et une collection OpenSearch Serverless, donc il est beaucoup plus long que les suivants.
+
+### Ce que fait le workflow
+
+<Steps>
+
+1. **Vérifie que le stage existe** dans `stages.config.ts`, pour qu'une faute de frappe échoue avant de toucher AWS.
+
+2. **Transmet les surcharges de configuration.** Chaque variable de l'environnement GitHub du stage (ou du dépôt) dont le nom commence par le préfixe du stage (`DISCAVA_DEVELOPMENT_` pour `discava-development`) est passée au build. C'est ainsi que les domaines personnalisés lui parviennent.
+
+3. **Analyse avec Trivy.** Le déploiement s'arrête sur une vulnérabilité critique connue qui a un correctif, ou sur un secret commité.
+
+4. **Se connecte à AWS** avec le rôle de déploiement, grâce à un jeton OIDC de courte durée.
+
+5. **Synthétise** les templates CloudFormation avec CDK, la limite de permissions du stage étant appliquée à chaque rôle.
+
+6. **Déploie** chaque stack dans l'ordre des dépendances. CloudFormation crée les ressources avec le rôle d'exécution. Une exécution automatique saute cette étape si `main` a entre-temps un commit plus récent.
+
+</Steps>
+
+## 2. Trouver vos portails
+
+Chaque portail est une distribution CloudFront. Leurs adresses sont des sorties de la stack `Websites`. Avec votre AWS CLI réglée sur la région du stage :
+
+```sh
+aws cloudformation describe-stacks \
+  --stack-name discava-development-Websites \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `DistributionDomainName`)].[OutputKey,OutputValue]' \
+  --output table
+```
+
+Vous obtenez une adresse `*.cloudfront.net` pour chacun des portails étudiant, instructeur et admin. Ouvrez le portail étudiant : vous devriez voir le catalogue, vide pour l'instant.
+
+## 3. Créer vos premiers utilisateurs
+
+Les utilisateurs vivent dans un pool d'utilisateurs Cognito, répartis en trois groupes qui décident du portail et de l'API qu'un utilisateur peut utiliser :
+
+| Groupe | Peut utiliser |
+| --- | --- |
+| `student` | Portail étudiant |
+| `instructor` | Portail instructeur |
+| `admin` | Portail admin |
+
+`discava-development` a l'**inscription libre désactivée**, donc un inconnu ne peut pas créer de compte sur votre stage de test. Vous ajoutez les utilisateurs vous-même :
+
+<Steps>
+
+1. Ouvrez la console **Cognito** dans la région du stage et choisissez le pool d'utilisateurs du stage. Son identifiant est une sortie de la stack `discava-development-Data`.
+
+2. **Create user**, avec une adresse e-mail et un mot de passe temporaire. Un mot de passe demande au moins 8 caractères, avec une majuscule, une minuscule, un chiffre et un symbole. Le mot de passe temporaire expire au bout de 3 jours.
+
+3. Ouvrez l'utilisateur, choisissez **Add user to group** et ajoutez chaque groupe nécessaire. Ajoutez-vous aux trois pour tout voir.
+
+4. Connectez-vous sur un portail avec l'adresse e-mail. Cognito vous demande de définir un mot de passe permanent.
+
+</Steps>
+
+Sur `discava-production`, l'inscription libre est active et la MFA est obligatoire. Les personnes qui s'inscrivent sont ajoutées automatiquement aux groupes `student` et `instructor`. Les admins sont toujours ajoutés à la main, sur chaque stage.
+
+## 4. Ajouter des catégories
+
+Les cours sont organisés en catégories qu'un admin gère. Connectez-vous au portail admin et créez-les, ou écrivez l'ensemble de départ (Science, Technology, Mathematics, Communication, Business) depuis votre clone :
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+
+DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE pnpm nx run @discava/tooling-deploy:seed-categories
+```
+
+Il utilise les identifiants AWS et la région de votre shell, qui doivent être ceux du stage, et saute les catégories qui existent déjà. Sans `DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME`, il écrit dans la table de développement locale.
+
+## 5. L'essayer de bout en bout
+
+<Steps>
+
+1. Dans le **portail instructeur**, créez un cours, ajoutez une leçon avec une vidéo et publiez-le. La vidéo est transcodée par MediaConvert et lisible quelques minutes après le téléversement.
+
+2. Dans le **portail étudiant**, trouvez le cours, inscrivez-vous et lisez la leçon.
+
+3. Dans le **portail admin**, vérifiez la liste des catégories.
+
+</Steps>
+
+Deux choses qu'un administrateur définit dans le portail admin, sans déploiement :
+
+- Le nom, le logo et la couleur de la plateforme : <Link path="guides/branding">Image de marque</Link>
+- Le compte Stripe, pour vendre des cours : <Link path="guides/payments">Cours payants et paiements</Link>
+
+## Déploiements suivants
+
+- **Automatiquement :** si vous avez défini `AUTO_DEPLOY_STAGE`, chaque push sur `main` qui passe la CI déploie ce stage. Un déploiement est sauté si un commit plus récent est arrivé sur `main` entre-temps.
+- **Manuellement :** relancez le workflow Deploy. Il déploie le commit depuis lequel vous le lancez, ce qui est aussi la façon de revenir en arrière : lancez-le depuis un commit plus ancien.
+
+Les déploiements vers un même stage ne se chevauchent jamais. Une seconde exécution attend la première.
+
+Après avoir récupéré une version plus récente de Discava, <Link path="deploy/setup">relancez le script de configuration</Link> avant de déployer, pour que les rôles du stage autorisent ce que la nouvelle version crée.
+
+Ensuite : <Link path="deploy/configuration">configurez votre stage</Link> avec des domaines personnalisés et l'e-mail.

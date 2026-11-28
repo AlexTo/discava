@@ -1,0 +1,131 @@
+---
+title: 证书
+description: 如何按课程的条件颁发结业证书，如何撤销与恢复、分享、添加到 LinkedIn 以及验证。
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+**规格：** [`specs/_archive/20261115-204447-certificates/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204447-certificates/)（颁发）和 [`specs/20261120-154550-certificate-criteria-revocation/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154550-certificate-criteria-revocation/)（条件、评估内容、撤销）
+
+**规格：** [`specs/20261120-003448-linkedin-certificate-sharing/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-003448-linkedin-certificate-sharing/)（将证书添加到 LinkedIn）
+
+## 规则
+
+**证书只会由进度重新计算在服务端写入，并且每个学生在每个课程中最多有一张。** 当学生已完成课程（见 <Link path="design/progress-and-completion">Progress and completion</Link>）**并且**满足了当时该课程生效的条件时，才会颁发证书。学生或讲师在浏览器中的任何操作都无法创建证书。
+
+条件不会改变完成本身：当每个可见条目都完成时，报名记录仍会变为 `completed`。"已完成，但还没有证书"是一种正常且可以持续的状态，课程首页会说明还需要满足什么。
+
+## 条件
+
+- **存放位置**：课程上的 `certificateCriteria` 映射，与每个课程的开关放在一起：`{ version, requireQuizPass }`。新课程为 `{ version: 1, requireQuizPass: false }`。创建之后，`setCertificateCriteria` 是它唯一的写入方，并且只在有内容变化时才让 `version` 加一。
+- **规则**：`core-table` 中的 `evaluateCertificateCriteria` 是一个纯函数，颁发方和读取方（`certificate.requirements`，课程首页会显示它）都使用它，所以页面和颁发方不会出现分歧。开启 `requireQuizPass` 后，每个被评估的测验都必须通过：它的 `passedAt` 已设置（并且 `passedAt` 是永久的），**并且**学生的最高分达到该测验*当前*的及格线。因此提高及格线可能会拦住尚未颁发的证书，降低及格线则可能放行。被评估的测验是指实际可见且及格线高于 0 的测验；及格线为 0% 的测验是练习，不被评估。
+- **在进行中的课程上修改条件**：以评估学生时读取到的条件为准。已颁发的证书不会被重新审查。放宽条件会给所有因此达标的人颁发证书；收紧条件只影响尚未达标的学生。讲师的控件会在保存前说明这一点。
+
+## 已评分的上传
+
+第二个条件 `minUploadScorePercent`（1 到 100 的整数，不要求时不存在）位于同一个映射中，并通过同一个 `setCertificateCriteria` 设置，传入 `null` 时会移除它。
+
+- **规则**：设置后，每个实际可见的作业都会被评估。当学生的提交为 `returned`，且 `floor(points / pointsOutOf * 100)` 不低于最低值时，该作业算达标，其中 `pointsOutOf` 是该作业的评分满分（没有评分可读时用作业的 `maxPoints`）。没有提交的是 "not submitted"，尚未返还的是 "waiting to be graded"，已返还但分数较低的是 "below the score"。没有可见作业的课程没有需要满足的内容。
+- **重新评分**：提交的 `status`、`points` 或 `returnedAt` 发生变化时，会重新计算该学生，所以上调分数后会颁发证书，而重新提交（不会改变其中任何一个）则什么都不会发生。
+- **记录的内容**：证书的 `assessment` 保存 `minUploadScorePercent`、`assessedUploadCount`，以及内部列表中每个作业一条的 `upload` 记录；分数段是针对测验和上传合并计算的。声明中会多出一句 "Graded assignments returned with at least 60%: 2."
+- 只有设置了该条件时才会读取提交。
+
+## 证书记录什么
+
+证书会把它颁发时所依据的条件连同其 `version` 复制到一个只读的 `assessment` 中，这样它所描述的内容不会随课程变化而漂移：
+
+- 两项设置、可见条目数、被评估条目数、最低和最高及格线、课程时长（小时）以及一个**分数段**（最高分平均值所在的十分档，从 0–9% 到 90–100%）。每一项都会在公开页面和 PDF 中以同样的文字行（`assessmentStatement`）显示。
+- 带有各自分数的**被评估条目列表**。它的存在是为了让不变量可以检查规则，任何 API 都不会返回它，也不会显示它。
+- 如果没有任何要求，就没有分数段，声明为 "No graded assessment was required for this certificate."。确切的分数从不显示。
+
+## 是什么让等待中的证书到来
+
+重新计算（见 <Link path="design/progress-and-completion">Progress and completion</Link>）的触发不止于条目完成。达标的学生会在以下情况发生后几秒内获得证书：
+
+- 在条目已完成之后通过了测验（用完尝试次数、提高了上限、后来的尝试通过了），或者已通过的测验有了更高的最高分：针对该学生；
+- 条件变化，或证书被开启：每一位未退出的已报名学生；
+- 测验的及格线变化（包括变为 0 或从 0 变回，这会改变它是否被评估）：每一位未退出的已报名学生；
+- 原本就会触发它的条目完成和可见性变化。
+
+所以开启证书或放宽条件，会给所有已经达标的人颁发证书。
+
+## 如何颁发
+
+- 进度重新计算 Lambda 在写入学生的进度和报名记录之后，如果学生未退出且报名记录为 `completed`，就调用 `issueCertificate`。
+- 它首先读取学生在该课程的 `certificate`。只有在没有时才会读取课程和用户，所以仍在学习的学生和已有证书的学生不会产生额外读取。
+- `issueCertificate` 是 `certificate` 的唯一写入方。它创建记录时带有"该键尚不存在"的条件，所以两次同时运行的重新计算仍然只留下一张证书、一个 ID，并且两者都会返回它。错误从不被吞掉：批次会重试。
+- 证书在颁发时复制它要打印的内容（学习者姓名、课程标题和完成日期）。之后重命名课程不会改变证书。
+- ID 是 16 个 Crockford base32 字符，显示为 `XXXX-XXXX-XXXX-XXXX`。查询时忽略短横线、空格和大小写，并把 `O` 视为 `0`，把 `I` 或 `L` 视为 `1`。
+
+## 每个课程的开关
+
+讲师可以在课程设置中，在任何课程状态下开启或关闭 **Issue a certificate on completion**。每个新课程默认开启。
+
+- 它从此刻起生效。关闭它不会移除或使已颁发的证书失效，而开启它会在几秒内给所有已经达标的学生颁发证书。
+- 开关关闭期间，已有证书仍可验证。
+
+## 公开页面显示什么
+
+学生门户中的 `/certificates/<ID>` 无需登录。它显示学习者姓名、课程标题、完成日期、证书 ID 和评估声明，除此之外没有别的：没有邮箱、没有用户 ID、没有每个条目的分数，也没有指向学习者账户的链接。格式错误或未知的 ID 会得到同样的 "Certificate not found"。
+
+**已撤销**的证书会显示 "This certificate has been revoked and is no longer valid"，以及 ID 和日期，不会显示学习者、课程、原因或操作者的任何信息。它与 "not found" 不同，这样原本能验证的 ID 不会看起来像平台故障。变化会在页面下次加载时显示，链接预览和 PDF 检查也会随之变化。`certificate.pdf` 会拒绝已撤销的证书（"This certificate has been revoked"）；已经下载的 PDF 无法召回，以页面为准。
+
+## 撤销与恢复
+
+- **谁来操作**：课程的讲师可以在课程的 Certificates 部分列出其证书，并用原因 `academic-integrity`、`issued-in-error` 或 `other`（附说明）撤销其中一张。管理员可以按 ID 查找任何证书，还可以使用 `refunded`。
+- **相关过程**：instructor-api 的 `certificate.list`、`history`、`revoke` 和 `restore`，以及 admin-api 的 `certificate.get`、`revoke` 和 `restore`。
+- **恢复**：管理员始终可以；讲师只能恢复由讲师做出的撤销。对另一种撤销，讲师会看到 "Revoked by an administrator"，并且没有 Restore。
+- **记录**：证书带有它当前的状态（`revokedAt`、`revocationReason`、`revokedByRole`），并且每次变更都会在同一个事务中追加一条 `certificateEvent`（`revoked` 或 `restored`、操作者、角色、原因、说明、时间）。`core-table` 中的 `revokeCertificate` 和 `restoreCertificate` 是这两者唯一的写入方。历史会保留下来用于审计；撤销、恢复再撤销会留下三条事件。
+- **竞争**：写入以它预期的状态为条件，所以两次同时的撤销只留下一次撤销和一条事件，两个请求都会得到响应。
+- **从不替换**：已撤销的证书保留它的 ID，永远不会重新颁发；重新计算遇到已有的证书就会停止，无论其状态如何。恢复会让同一个 ID 重新有效。
+- **通知学习者**：变更之后会发出 `certificate.revoked` 和 `certificate.restored` 通知，包含原因类别，去重键为证书 ID 加事件时间。
+- **没有任何东西会自动撤销。** 特别是退款不会：证书在退款后依然有效，需要时由管理员以原因 `refunded` 撤销。这是默认采取的决定（规格中的研究 R-8 列出了每次退款都撤销会带来的变化），有待维护者确认。
+- **已撤销的证书会隐藏它的操作**：LinkedIn 操作被隐藏，`recordLinkedInClick` 会拒绝它，也从不为它发送分享提醒。
+
+## 不变量
+
+不变量检查（见规格中的研究 R-10）保证：证书的 `assessment` 格式正确，其数量、及格线和分数段都能由列出的条目推出；列出的每个测验都是学生在颁发时间之前通过的，且不低于其及格线，列出的每个上传都至少达到记录的最低分并且仍有提交（`certificate-met-criteria`）；证书被撤销当且仅当它最新的事件是 `revoked`（`certificate-status-matches-history`）；每个课程都有格式正确的条件；并且无论是否被撤销，证书仍然需要一个已完成（或完成后退出）的报名记录。其他检查涵盖 LinkedIn 点击的形态、点击之后没有发送提醒，以及证书与其通知相匹配。不算违规的情况：有已完成的报名记录但没有证书、证书与课程当前条件不同，以及列出的测验后来被隐藏或被提高了及格线。
+
+## 分享与验证
+
+学生可以在 **My Learning** 的每个已完成课程上找到自己的证书，有四个操作：
+
+- **View** 打开公开页面。
+- **Download PDF** 保存一页 A4 的证书，带有相同的 ID 和页面地址。
+- **Copy link** 复制公开页面的地址。
+- **Add to LinkedIn profile** 打开 LinkedIn 的新建认证表单（见下文）。
+
+任何拥有链接或 ID 的人都可以在该页面上核实证书。
+
+## 添加到 LinkedIn
+
+学生门户在学习者的浏览器中构建链接（`lib/linkedin-add-to-profile.ts`，`buildLinkedInAddToProfileUrl`）并打开它。没有服务器构建或看到它，在学习者点击之前不会向 LinkedIn 发送任何内容。
+
+- **发送什么**：LinkedIn 的 `profile/add` 地址，带有 `startTask=CERTIFICATION_NAME`、`name`（证书上打印的课程标题）、颁发机构（来自管理门户 Branding 页面所设平台名称的 `organizationName`，或当阶段设置了 `linkedInOrganizationId` 时改用 `organizationId`，两者不会同时出现）、`issueYear` 和 `issueMonth`（来自按 UTC 计算的完成日期）、`certUrl`（公开页面的地址）和 `certId`（按显示的形式）。没有过期时间。每个值都经过百分号编码。
+- **绝不发送什么**：学习者的姓名、邮箱、用户 ID 或任何会话值。LinkedIn 知道会员是谁，我们不告诉它。链接带有 `rel="noopener noreferrer"`，这样浏览器不会透露来源页面，也不会加载或调用任何 LinkedIn 脚本或 API。
+- **点击记录什么**：第一次点击会调用公开的 `certificate.recordLinkedInClick({ certificateId, source })`，它会在证书上设置 `linkedInClickedAt` 和 `linkedInClickSource` 一次，之后不再更改。记录失败从不会阻止表单打开。该记录的含义是"学习者打开了表单"，而不是"证书已在 LinkedIn 上"：LinkedIn 不会回传任何信息。
+- **点击可能来自哪里**：`linkedInClickSource` 是 `my-learning`、`certificate-page`、`issued-email` 和 `reminder-email` 之一。两封邮件链接到 `/certificates/<ID>/linkedin?source=…`。该门户路由在未登录时也能工作，会记录使用并把页面替换为 LinkedIn 的地址。
+- **读取采用情况**：带有 `linkedInClickedAt` 的证书所占比例，按 `linkedInClickSource` 拆分。该数字由已存储的记录推导而来。
+- **如果 LinkedIn 忽略这些值**：链接仍会打开正确的表单，并且在公开页面的所有者视图中会列出每个值，方便手动复制。LinkedIn 自己的帮助说明，自定义链接可能不会自动填充；维护者在 2026-11-20 检查过，表单会带着这些值打开（规格中的研究 R-1 至 R-3）。
+
+## 通知学习者
+
+- **通知** `certificate.issued` 由 `issueCertificate` 在与证书相同的事务中写入，以证书 ID 作为去重键，所以不会出现没有通知的证书，重试也不会产生第二条。
+- **邮件**有两个链接：证书页面，以及 **Add to LinkedIn profile**（通知的可选 `action`，通知铃会忽略它）。
+- **设置**：通知设置中的一个开关 **Certificates** 同时控制颁发邮件和提醒。`certificate.reminder` 没有自己的设置（`emailPreferenceType` 指向 `certificate.issued`），退订第一封邮件也会停止提醒。
+- **提醒**：颁发三天后，一个一次性的 EventBridge Scheduler 计划（`cert-reminder-<ID>`）会调用 `certificate-reminder` Lambda。如果该邮件类型已关闭，它就会停止。否则它会通过对 `reminderSentAt` 的条件写入来认领提醒，仅当没有记录点击且没有发送过提醒时才会成功，然后用存储的时间发布 `certificate.reminder`。点击和发送彼此是安全的：谁的写入先落地谁说了算。之后的重新计算会修复已颁发但从未安排的证书，除非提醒已经过期：提醒从不会迟到发送（研究 R-4 至 R-7）。
+
+## 链接预览
+
+链接预览爬虫不运行脚本，所以页面渲染器（见 <Link path="design/public-pages">Public pages</Link>）会用基于 `certificate.verify` 构建的 head 来响应 `/certificates/<ID>`：标题为"学习者完成了课程"，加上完成日期、平台名称和 ID。它显示的内容从不多于页面本身。因为页面涉及个人，所以在每个阶段它始终是 `noindex`。更深的路径，例如 `/certificates/<ID>/linkedin`，使用普通模板（研究 R-8）。
+
+## 限制
+
+- 条件没有历史：只保留证书颁发时所依据的版本和设置，存放在证书上。
+- 测验按其自己的及格线评估；没有课程级的及格线，也不能按测验选择哪些算数。
+- 已经下载的已撤销证书的 PDF 仍然存在；只有页面会说明它已不再有效。
+- LinkedIn 不会回传任何信息，所以 Discava 无法知道证书是否被保存到了个人资料，只知道表单被打开过。
+- 任何持有证书 ID 的人都可以记录第一次使用。它唯一的影响是少发一次提醒。
+- PDF 使用标准字体，所以 Latin-1 之外的字符（例如中文、日文或 emoji）会打印成 `?`。公开页面会正确显示它们。

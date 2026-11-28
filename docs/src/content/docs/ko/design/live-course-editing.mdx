@@ -1,0 +1,327 @@
+---
+title: 라이브 강좌 편집
+description: 강사가 게시된 강좌에서 모듈, 레슨, 콘텐츠 항목을 추가, 삭제, 숨김, 복원, 편집할 때 일어나는 일을 설명합니다.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+강사는 강좌가 게시된 뒤에도 계속 편집합니다. 이 설계는 이미 수강 중인 학생에게 이러한 편집이 안전하도록 만듭니다. 덜 만들어진 것이 표시되지 않고, 학생이 한 어떤 것도 사라지지 않으며, 진행률은 계속 정확합니다.
+
+편집이 어떻게 동작하는지는 강좌의 상태가 결정합니다.
+
+| 강좌 상태 | 편집 |
+|---|---|
+| **Draft** [초안] | 즉시 적용되며 삭제는 완전 삭제입니다. 초안은 학생에게 공개된 적이 없으므로 그 안의 어떤 것도 학생에게 영향을 줄 수 없습니다 |
+| **Published** [게시됨] | 이 페이지의 규칙을 따릅니다. 학생에게 진행률과 응시 기록이 있을 수 있습니다 |
+| **Archived** [보관됨] | 커리큘럼은 읽기 전용입니다([강좌의 수명 주기](#강좌의-수명-주기) 참고) |
+
+프로시저는 instructor-api(`procedures/course.ts`, `module.ts`, `lesson.ts`, `content-item-*.ts` 파일)에 있습니다.
+
+## 워크플로
+
+### 강좌의 수명 주기
+
+```d2 title="Lifecycle of a course: a draft is published once it has content; archiving makes it read-only and keeps whether it was ever published, and restore returns it there"
+direction: right
+
+new: "Created" {shape: oval}
+draft: Draft
+published: Published
+archived_draft: "Archived, read-only\n(never published)" {style.stroke-dash: 3}
+archived_published: "Archived, read-only\n(was published)" {style.stroke-dash: 3}
+
+new -> draft
+draft -> published: "publish\n(needs visible content)"
+draft -> archived_draft: archive
+published -> archived_published: archive
+archived_draft -> draft: restore
+archived_published -> published: restore
+```
+
+**게시**
+
+- **초안**만 게시할 수 있으며, 학생에게 보일 콘텐츠 항목이 하나 이상 있어야 하므로 강좌가 빈 채로 공개되는 일은 없습니다. 숨겨졌거나 보관된 콘텐츠 항목, 또는 숨겨졌거나 보관된 모듈이나 레슨 아래의 항목은 포함되지 않습니다.
+- 보관된 강좌의 게시는 거부됩니다. 먼저 복원하세요.
+- 강좌를 게시해도 그 아래의 어떤 레코드도 바뀌지 않습니다. 초안에서 `visible`인 레코드는 강좌와 함께 학생에게 표시되고, 숨겨진 레코드는 게시되기 전까지 숨겨진 채로 남습니다.
+
+**복원**
+
+- 강좌는 처음 게시될 때 `publishedAt`을 기록하고 지우지 않습니다. 보관된 강좌가 학생에게 공개된 적이 있는지 기억하는 방법입니다.
+- **복원하면 게시된 적이 있던 강좌는 Published로, 없던 강좌는 Draft로 돌아갑니다.** 학생이 사용한 강좌는 삭제가 영구적인 초안으로 돌아가지 않습니다.
+
+**보관된 강좌는 읽기 전용입니다**
+
+- 커리큘럼에서 추가, 편집, 게시, 숨김, 보관, 순서 변경, 복원을 할 수 없으며 동영상도 업로드할 수 없습니다. 각각 `PRECONDITION_FAILED`("Restore the course first")를 반환합니다. 모듈, 레슨, 콘텐츠 항목, 퀴즈가 모두 해당합니다.
+- 가능한 것은 강좌 보기, 복원, 그리고 **이미 보관된 레코드의 영구 삭제**입니다. 그러면 보관된 강좌를 복원하지 않고도 정리할 수 있으며, 복원하면 다시 학생에게 보이게 됩니다. 이러한 삭제에는 자체 보호 장치가 유지됩니다([영구 삭제](#영구-삭제) 참고).
+- 강좌 자체의 설정(가격, 수료증 스위치와 기준, 첫 레슨 안내)은 어떤 상태에서든 변경할 수 있습니다.
+
+**반복과 경합**
+
+- 동작을 반복해도 아무것도 기록되지 않습니다. 게시된 강좌를 게시하거나 보관되지 않은 강좌를 복원하면 강좌를 그대로 반환합니다. 타임아웃 뒤의 재시도는 안전합니다.
+- 각 변경은 읽은 상태를 조건으로 합니다. 그사이 강좌가 바뀌었다면 요청은 `CONFLICT`를 반환합니다.
+- **동시 편집과의 게시.** 초안 강좌에서는 콘텐츠가 언제든 삭제, 숨김, 보관될 수 있습니다. 따라서 게시 트랜잭션은 집계한 표시되는 콘텐츠 항목 중 하나와 그 아래의 레슨과 모듈이 여전히 존재하고 표시되는지 확인합니다. 그렇지 않으면 아무것도 게시되지 않고 요청은 `CONFLICT`를 반환합니다. 다시 시도하면 다시 집계합니다.
+- **동시 게시와의 삭제.** 삭제가 영구적인지 보관인지는 요청이 읽은 시점의 강좌 상태에 달려 있습니다. 따라서 초안 강좌에서의 영구 삭제(모듈, 레슨, 콘텐츠 항목)는 강좌가 여전히 초안인지도 확인하는 트랜잭션에서 실행됩니다. 그사이 게시되었다면 아무것도 삭제되지 않고 요청은 `CONFLICT`를 반환합니다. 다시 시도하면 보관합니다.
+- **동시 보관과의 모든 쓰기.** 강좌가 보관되지 않았다는 확인은 모듈과 레슨에 대한 확인 옆에서 각 쓰기와 같은 트랜잭션의 일부입니다. 이 경합에서 진 요청은 "Restore the course first"를 반환합니다.
+
+### 모듈, 레슨, 콘텐츠 항목의 수명 주기
+
+```d2 title="Lifecycle of a module, lesson or content item: the course's status decides where a new record starts and what delete does; then publish, hide, archive, restore and delete"
+direction: down
+
+new_draft: "Created in a\nDraft course" {shape: oval}
+new_live: "Created in a\nPublished course" {shape: oval}
+
+live: "Not archived" {
+  visible: Visible
+  hidden: Hidden
+
+  hidden -> visible: publish
+  visible -> hidden: hide
+}
+
+archived: "Archived\n(frozen until restored,\nwith everything under it)" {
+  style.stroke-dash: 3
+}
+
+deleted: Deleted permanently {shape: oval}
+
+new_draft -> live.visible
+new_live -> live.hidden
+live -> archived: "delete\n(course not Draft)"
+archived -> live: restore
+live -> deleted: "delete\n(course Draft)"
+archived -> deleted: "delete permanently\n(see below)"
+```
+
+- 다이어그램은 모듈, 레슨, 콘텐츠 항목 하나를 따라갑니다. 강좌 자체의 상태는 별개이며(위 참고) 이 동작들 중 어느 것도 그것을 바꾸지 않습니다. 강좌 상태는 새 레코드가 어디서 시작하는지, 삭제가 레코드를 보관하는지 제거하는지를 결정합니다. 보관된 강좌에서는 보관된 레코드의 영구 삭제를 제외하고 이 동작들이 모두 허용되지 않습니다.
+- 학생은 레코드가 **Visible**이고 모든 상위 항목도 그럴 때만 레코드를 봅니다([유효 가시성](#유효-가시성) 참고).
+- 모듈이나 레슨을 게시하면 그 아래에서 한 번도 게시된 적이 없는 숨겨지고 보관되지 않은 모든 레코드도 함께 게시됩니다. 표시된 뒤에 의도적으로 숨긴 레코드는 숨겨진 채로 남습니다. 숨김, 보관, 복원은 레코드 자체만 바꿉니다.
+- 보관된 레코드는 가시성을 유지하므로, 복원하면 이전 그대로 **Visible** 또는 **Hidden**으로 돌아옵니다. 상위 모듈이나 레슨이 보관되지 않은 경우에만 복원할 수 있습니다.
+- 보관된 레코드와 그 아래의 모든 것은 고정됩니다. 그 안의 어떤 것도 게시, 숨김, 편집할 수 없고 아무것도 추가할 수 없습니다.
+- 초안 강좌가 아닐 때, 학생에게 보이는 것의 모든 변경은 수강 중인 모든 사람에 대한 진행률 재계산을 일으킵니다.
+
+### 영구 삭제 전의 확인
+
+```d2 title="Checks a permanent delete goes through before anything is removed, for a module or lesson and for a single content item"
+direction: down
+
+start: "Delete permanently\n(from the Archived view;\nallowed in an archived course)" {shape: oval}
+is_archived: "Is the record itself\narchived?" {shape: diamond}
+kind: "Module or lesson,\nor content item?" {shape: diamond}
+
+activity: "Student activity on any\nitem under it, or a\ndiscussion question on\na lesson?" {shape: diamond}
+limit: "More than 100 records\nincluding everything\nunder it?" {shape: diamond}
+transaction: "One transaction: each item\nconditioned on its checked\nupdatedAt and no student\nactivity, the parent on\nits checked archivedAt"
+
+item_activity: "Student activity\non the item?" {shape: diamond}
+item_delete: "One delete, conditioned on\nno student activity and the\nitem still being archived"
+
+changed: "Did a condition\nfail?" {shape: diamond}
+
+refused_archive: "PRECONDITION_FAILED:\narchive it first"
+refused_activity: "PRECONDITION_FAILED:\nit can stay archived,\nbut is never deleted"
+refused_limit: "PRECONDITION_FAILED:\ndelete some of its lessons\n(or content items) first,\nthen retry"
+conflict: "CONFLICT:\nnothing deleted"
+done: "Deleted; a video's transcode\ncanceled, and video and\nfile objects removed from S3" {shape: oval}
+
+start -> is_archived
+is_archived -> refused_archive: no
+is_archived -> kind: yes
+kind -> activity: module or lesson
+kind -> item_activity: content item
+activity -> refused_activity: yes
+activity -> limit: no
+limit -> refused_limit: yes
+limit -> transaction: no
+item_activity -> refused_activity: yes
+item_activity -> item_delete: no
+transaction -> changed
+item_delete -> changed
+changed -> conflict: yes
+changed -> done: no
+```
+
+## 데이터 모델
+
+라이브 편집을 지원하는 `curriculum` 엔티티의 속성입니다.
+
+| 속성 | 대상 | 목적 |
+|---|---|---|
+| `visibility: 'hidden' \| 'visible'` | 모듈, 레슨, 콘텐츠 항목 | 필수. 생성 프로시저는 초안 강좌에서는 `visible`, 게시된 강좌에서는 `hidden`으로 설정하므로 새 퀴즈, 레슨, 모듈이 덜 만들어진 채로 보이는 일이 없습니다. 강사가 **Publish**를 클릭하면 표시됩니다 |
+| `archivedAt` | 모듈, 레슨, 콘텐츠 항목 | 소프트 삭제. 보관된 레코드 자체에만 설정됩니다. 하위 항목은 스스로 보관되어서가 아니라 상위 항목이 보관되어서 숨겨집니다 |
+| `publishedAt` | 모듈, 레슨, 콘텐츠 항목 | 레코드가 처음 표시된 시점: 초안 강좌에서 생성될 때 또는 처음 게시될 때. 지워지지 않음([게시](#게시) 참고) |
+| `studentActivityCount` | 콘텐츠 항목 | 해당 항목에 데이터가 하나라도 있는 고유한 학생 수. 감소하지 않음 |
+| `lastChildOrder` | 강좌, 모듈, 레슨 | 하위 항목에 부여된 마지막 `order`. 하위 항목을 추가하거나 복원하면 같은 트랜잭션에서 다음 값을 선점하므로, 동시에 추가된 두 레코드가 `order`를 공유할 수 없습니다 |
+
+**학생 활동으로 집계되는 것.** `studentActivityCount`는 학생의 해당 항목에 대한 **첫** 레코드를 만드는 같은 트랜잭션에서 증가(`ADD 1`)합니다.
+
+| 항목 | 첫 레코드 |
+|---|---|
+| 퀴즈 | `quizSummary` |
+| 동영상 | `itemCompletion` 또는 `videoAnswerSheet` 중 먼저 생기는 것. 동영상 질문에 대한 응답도 완료와 마찬가지로 학생을 집계합니다 |
+| 업로드 과제 | `assignmentSubmission` 또는 `itemCompletion` |
+| 텍스트, 파일 | `itemCompletion` |
+
+모든 작성자는 `studentActivityWrites`(`core-table/src/helpers/student-activity.ts`)로 트랜잭션을 구성하며, `helpers/invariants/student-activity.ts`의 불변 조건이 카운트를 레코드와 대조합니다.
+
+`studentActivityCount`는 커리큘럼 파티션에 있으므로 모듈이나 레슨 아래 모든 것에 대해 합산하거나 검사하는 것이 쿼리 한 번입니다. 이것이 집계하는 학생 측 레코드는 사용자 기준 키이므로 스캔 없이는 "누가 이 항목을 사용했는가?"에 답할 수 없습니다.
+
+## 유효 가시성
+
+레코드는 자신과 모든 상위 항목이 `visible`이고 보관되지 않았을 때만 학생에게 표시됩니다. 이는 다음에서 확인됩니다.
+
+- 학생의 모든 읽기: core-api의 `course.view`, `course.publicView`, `quiz.view`
+- 학생의 모든 쓰기: 퀴즈 제출, 항목 완료 표시
+- 모든 진행률 계산
+
+따라서 모듈을 숨기거나 보관하면 그 안의 퀴즈도 제출할 수 없게 되고, 그 항목들은 모든 사람의 진행률에서 빠집니다.
+
+이 규칙은 `core-table/src/helpers/curriculum.ts`에서 한 번만 구현됩니다. 레코드 하나에는 `isShown`, 커리큘럼 전체에는 `filterEffectivelyVisible`입니다. core-api의 강좌 보기가 이를 사용하며, `packages/events`의 재계산 Lambda가 실행하는 core-table의 진행률 계산도 마찬가지입니다. 학생이 보는 것과 진행률이 집계하는 것은 어긋날 수 없습니다.
+
+강사는 instructor-api의 `course.view`로 편집하며, 이는 `visibility`, `archivedAt`, `studentActivityCount`가 있는 숨겨지거나 보관된 레코드를 포함한 커리큘럼 전체를 반환합니다. 강좌를 가르치는 강사로 제한됩니다. 강좌 편집기는 보관된 레코드를 기본 목록에서 빼고 숨겨진 레코드에 **Hidden**을 표시합니다.
+
+## 게시된 강좌에서의 동작
+
+| 동작 | 학생에게 보이는 것 | 학생의 데이터와 진행률 | 진행률을 재계산하는 대상 |
+|---|---|---|---|
+| **모듈 추가** | 게시되기 전까지 아무것도 보이지 않음. 게시하면 숨겨진 레슨과 항목도 함께 게시되므로 한꺼번에 나타남 | 게시되면 모든 사람의 `progressPercent`가 내려감. 완료된 레슨과 강좌는 완료 상태 유지 | 게시 시 수강 중인 모든 학생 |
+| **모듈 삭제** | 보관됨: 다음 로드에서 개요에서 사라짐. 그 페이지에 있던 학생은 "This lesson has been removed by your instructor"를 봄 | 유지됨(완료, 응시, 최고 점수). 더 이상 집계되지 않음. 나머지를 모두 마친 학생은 `completed`가 됨. 복원 가능하며 복원하면 다시 모두 집계됨 | 수강 중인 모든 학생 |
+| **모듈 편집**(제목, 설명) | 즉시 적용 | 영향 없음 | 없음 |
+| **레슨 추가** | 게시되기 전까지 아무것도 보이지 않음(숨겨진 항목과 함께) | 모듈 추가와 같음 | 게시 시 수강 중인 모든 학생 |
+| **레슨 삭제** | 모듈 삭제와 같음 | 모듈 삭제와 같음 | 수강 중인 모든 학생 |
+| **레슨 편집**(제목, 설명) | 즉시 적용 | 영향 없음 | 없음 |
+| **콘텐츠 항목 추가** | 게시되기 전까지, 그리고 레슨과 모듈도 게시된 경우에만 보임 | 게시되면 `progressPercent`가 내려감. 레슨이 이미 완료되었다면 레슨은 완료 상태를 유지하고 항목은 **New**로 표시됨 | 게시 시 수강 중인 모든 학생 |
+| **콘텐츠 항목 삭제** | 보관됨: 다음 로드에서 사라짐. 그 안의 퀴즈를 제출하거나 완료로 표시하면 "no longer available"로 거부됨 | 유지되며 집계되지 않음. 학생의 유일한 미완료 항목이었다면 레슨(그리고 경우에 따라 강좌)이 완료됨. 복원 가능 | 수강 중인 모든 학생 |
+| **콘텐츠 항목 편집**: 제목, 설명, 텍스트 본문 | 즉시 적용 | 완료 유지 | 없음 |
+| **콘텐츠 항목 편집**: 동영상 교체 | 동영상 교체 및 재트랜스코딩 흐름을 거침. 학생은 새 버전이 준비될 때까지, 그리고 트랜스코딩이 실패해도 이전 버전을 계속 재생하며, 이전 버전의 파일은 새 버전이 시청자의 서명된 쿠키 유효 기간보다 오래 준비된 상태가 된 뒤 삭제됨 | 완료 유지 | 없음 |
+| **콘텐츠 항목 편집**: 동영상 질문 | <Link path="design/quizzes">퀴즈</Link> 참고: 정답 키나 해설만 바꾸는 것은 보이지 않음. 질문의 프롬프트, 종류, 선택지를 바꾸면 진행 중인 응답이 `CONFLICT`를 반환하고 아무것도 기록하지 않음. 질문을 옮기거나 삭제해도 기록된 응답은 건드리지 않음 | 완료와 진행률은 영향 없음. 기록된 응답은 유지되며 다시 채점되지 않음 | 없음 |
+| **콘텐츠 항목 편집**: 퀴즈 | <Link path="design/quizzes">퀴즈</Link> 참고: 정답 키만 바꾸는 편집은 보이지 않음. 질문을 편집하면 진행 중인 제출이 `CONFLICT`를 반환 | 응시, 최고 점수, 통과는 유지되며 다시 채점되지 않음 | 없음 |
+| **숨김**(모든 수준) | 삭제처럼 사라지지만 Archived 보기에는 없음 | 유지되며 집계되지 않음. 다시 표시하면 집계됨 | 수강 중인 모든 학생 |
+| **순서 변경**(모든 수준) | 즉시 적용 | 영향 없음 | 없음 |
+
+"진행률 재계산"은 학생의 브라우저가 아니라 <Link path="design/progress-and-completion">진행률과 완료</Link>에 설명된 서버 측 Lambda가 수행합니다.
+
+## 게시
+
+모듈이나 레슨을 게시하면 그것과 **새로운** 숨겨진 모든 하위 항목이 **하나의 트랜잭션**에서 `visible`로 설정됩니다. 학생은 새 레슨을 모든 항목과 함께 한꺼번에 보며, 조각조각 보지 않습니다.
+
+부모와 함께 게시되는 하위 항목은 다음과 같습니다.
+
+| 하위 항목 | 부모와 함께 게시되는가? |
+|---|---|
+| 숨겨져 있고 `publishedAt`이 없음(새 콘텐츠) | 예 |
+| 숨겨져 있고 `publishedAt`이 있음(학생에게 보인 뒤 의도적으로 숨김) | 아니요, 숨겨진 채로 남음 |
+| 보관됨, 또는 보관된 레슨 아래의 콘텐츠 항목 | 아니요, 그대로 둠 |
+
+- 직접 게시하는 레코드는 이력과 관계없이 항상 게시됩니다.
+- 모든 모듈, 레슨, 콘텐츠 항목은 처음 표시될 때(초안 강좌에서 생성될 때 또는 처음 게시될 때) `publishedAt`을 기록하고 지우지 않습니다.
+- 이것으로 구별할 수 없는 한 가지 경우는 게시된 적이 없는 상태에서 숨긴 레코드입니다(예: 게시된 강좌에서 새 레슨을 만드는 동안 그 항목을 숨김). 이는 여전히 새것으로 간주되어 부모와 함께 게시됩니다.
+- **게시 도중 보관됨.** 게시가 바꾸는 모든 레슨과 항목(그리고 게시하는 모든 항목의 레슨)은 트랜잭션이 커밋될 때 여전히 보관되지 않은 상태여야 합니다. 그렇지 않으면 아무것도 게시되지 않고 요청은 `CONFLICT`를 반환합니다. 다시 시도하면 모듈이나 레슨을 다시 읽고 새로 보관된 레코드는 건너뜁니다.
+
+숨김은 전파되지 않습니다. 레코드 자체만 바꾸며 하위 항목은 자신의 `visibility`를 유지합니다. 레코드는 표시되는 상위 항목 아래에서만 표시되므로 학생은 어차피 하위 항목을 보지 못하게 됩니다.
+
+## 순서 변경
+
+모듈은 강좌 안에서, 레슨은 모듈 안에서, 콘텐츠 항목은 레슨 안에서 각각 `order`로 정렬됩니다. 각 수준에는 이를 바꾸는 방법이 하나씩 있습니다. `module.reorder`, `lesson.reorder`, `contentItem.reorder`입니다. `module.update`와 `lesson.update`는 `order`를 받지 않습니다.
+
+- 강사 포털에서 각 행의 그립은 드래그 핸들입니다(마우스, 터치, 키보드). 보관된 강좌이거나 정렬할 레코드가 하나뿐인 곳에는 핸들이 없습니다.
+- 순서 변경도 다른 편집과 같은 편집이므로 보관 규칙을 따릅니다. 보관된 강좌와 보관된 모듈이나 레슨 아래에서는 거부됩니다("Restore the course (module, lesson) first").
+- 모든 콘텐츠 항목 유형에 똑같이 적용됩니다.
+- 레슨을 다른 모듈로, 콘텐츠 항목을 다른 레슨으로 옮기는 것은 지원되지 않습니다. 키에 부모의 id가 포함되기 때문입니다.
+
+각 프로시저는 부모 안에서 **보관되지 않은 모든 레코드**의 id를 표시되어야 하는 순서대로 받고, 모든 `order`(1, 2, 3, ...)를 하나의 트랜잭션에 기록하므로 한 번의 드래그는 하나의 원자적 변경입니다.
+
+- 목록은 부모와 정확히 일치해야 합니다. 레코드를 빠뜨리거나, 보관되었거나 삭제된 레코드를 포함하거나, 알 수 없는 id가 있으면 요청은 `CONFLICT`를 반환하고 아무것도 기록하지 않습니다. 편집기가 오래된 목록으로 작업하고 있었으므로 다시 불러와서 재시도합니다. id가 두 번 나오면 `BAD_REQUEST`입니다.
+- 각 레코드는 상위 항목에 대한 확인과 같은 트랜잭션에서 여전히 보관되지 않았다는 조건을 가지므로, 요청이 실행되는 동안 보관된 레코드는 순서 변경 전체를 취소하며, 그 순간 보관된 상위 항목도 마찬가지입니다.
+- 보관된 레코드는 목록에 포함되지 않습니다. 이전의 `order`를 유지합니다.
+- 부모가 이미 가진 순서를 반복하면 아무것도 기록되지 않습니다.
+- 트랜잭션은 상위 항목에 대한 확인을 포함해 최대 100개의 레코드를 담으므로 한도는 다음과 같습니다.
+
+  | 프로시저 | 확인 | 최대 레코드 |
+  |---|---|---|
+  | `module.reorder` | 강좌 | 강좌당 모듈 99개 |
+  | `lesson.reorder` | 강좌, 모듈 | 모듈당 레슨 98개 |
+  | `contentItem.reorder` | 강좌, 모듈, 레슨 | 레슨당 콘텐츠 항목 97개 |
+
+  더 큰 부모는 다른 부모 전체 대상 작업과 마찬가지로 `PRECONDITION_FAILED`로 거부됩니다.
+- 순서 변경과 같은 순간에 추가된 레코드는 순서가 바뀐 레코드들 뒤에 놓이며, 편집기가 다시 불러오면 표시됩니다.
+- 복원된 레코드는 부모의 끝으로 가므로([복원](#복원) 참고) 다른 레코드와 `order`를 공유하지 않습니다.
+
+## 삭제(보관)
+
+초안 강좌가 아니면 삭제는 항상 보관이며, 강사 포털은 이 동작을 **Archive**로 표시합니다(초안 강좌에서는 모듈과 레슨은 **Delete**, 콘텐츠 항목은 **Remove**). 확인 대화상자는 `studentActivityCount`로 영향을 보여 줍니다.
+
+- 콘텐츠 항목: 몇 명의 학생이 사용했는지, 예를 들어 "12 students have used it".
+- 모듈이나 레슨: 그 아래 항목 중 학생이 사용한 항목이 몇 개인지, 예를 들어 "Students have used 3 items in it". 항목 전체의 학생을 합산하면 학생이 사용한 항목마다 한 번씩 집계되므로, 학생 수가 아니라 항목 수를 셉니다.
+
+어느 경우든 학생의 진행률은 유지되며 레코드가 복원되면 다시 집계된다는 안내가 덧붙습니다.
+
+### 학생이 학습하는 도중에 삭제된 경우
+
+| 학생의 위치 | 일어나는 일 |
+|---|---|
+| 강좌의 다른 곳 | 다음에 로드할 때 개요에서 모듈이나 레슨이 사라짐 |
+| 해당 레슨의 페이지 | 이미 화면에 있는 콘텐츠는 계속 읽을 수 있음. 다음 데이터 재요청(탐색, 창 포커스) 때 개요로 돌아가는 링크와 함께 **"This lesson has been removed by your instructor"**가 표시되며 단순한 404는 나오지 않음 |
+| 그 안의 퀴즈 도중 | 제출이 거부됨("This quiz is no longer available"). 로컬 초안은 폐기되고 응시 횟수는 소모되지 않음 |
+| 항목을 완료로 표시할 때 | 같은 방식으로 거부됨 |
+| 오래된 링크나 북마크 | 같은 "removed" 페이지 |
+
+보관은 수강 중인 모든 학생의 진행률 재계산을 일으키므로, 삭제된 콘텐츠는 아무도 새로고침하지 않아도 즉시 집계에서 빠집니다.
+
+### 보관된 레코드에 할 수 없는 것
+
+보관된 레코드와 그 아래의 모든 것은 복원될 때까지 보관된 그대로 유지되므로, 복원하면 학생이 보던 것이 돌아옵니다. 보관된 **강좌**도 같은 방식으로 고정되며([강좌의 수명 주기](#강좌의-수명-주기) 참고), 보관되었을 때 강좌가 가장 먼저 언급됩니다. "Restore the course first". 다음은 모두 `PRECONDITION_FAILED`로 거부됩니다.
+
+- 보관된 레코드 자체를 게시, 숨김, 편집: "Restore the module (lesson, content item) before publishing (hiding, editing) it".
+- 그 아래의 무엇이든 게시, 숨김, 편집. 예를 들어 보관된 모듈 안의 레슨이나 보관된 레슨 안의 콘텐츠 항목: "Restore the module first" 또는 "Restore the lesson first". 둘 다 보관된 경우 모듈이 먼저 언급됩니다.
+- 그 아래에 무엇이든 추가: 보관된 모듈에 새 레슨을 추가할 수 없고, 보관된 모듈이나 레슨에 새 콘텐츠를 추가할 수 없습니다.
+- 동영상 파일 업로드: 보관된 강좌, 모듈, 레슨, 또는 보관된 콘텐츠 항목의 파일을 교체하기 위한 업로드 URL은 발급되지 않습니다.
+
+보관된 모듈이나 레슨 아래의 레코드는 강좌가 보관되지 않은 한, 스스로 보관한 뒤 영구 삭제할 수 있습니다.
+
+이 규칙은 요청이 겹칠 때도 유지됩니다. 모듈이나 레슨 아래의 각 쓰기는 강좌, 모듈(그리고 레슨)이 여전히 존재하고 보관되지 않았으며 레코드 자체도 보관되지 않았다는 확인과 함께 DynamoDB 트랜잭션 하나로 실행됩니다. 그사이 다른 요청이 부모를 보관하거나 삭제하면 쓰기 전체가 같은 오류로 거부되고 아무것도 기록되지 않습니다. 따라서 보관되거나 영구 삭제되는 중인 모듈에 마지막 순간에 새 레슨이 생기거나, 레슨에 새 항목이 생기는 일은 없습니다.
+
+아직 트랜스코딩 중인 동영상이 보관되면 트랜스코딩은 계속됩니다. 작업이 끝나면 항목은 `archivedAt`이나 `visibility`를 건드리지 않고 `ready`(또는 `failed`)로 표시되므로, 복원하면 재생되고 그때까지는 숨겨진 채로 있습니다.
+
+## 복원
+
+강사 강좌 페이지에는 스스로 보관된 모든 레코드를 최신순으로 나열하는 **Archived** 섹션이 있습니다. 보관된 모듈, 활성 모듈에서 보관된 레슨, 활성 레슨에서 보관된 항목이 해당합니다. 보관된 부모 아래의 레코드는 부모와 함께 돌아오므로 따로 나열되지 않습니다. 각 행은 레코드가 있던 위치, 보관된 시점, 그 안에 있는 것, 학생이 사용했는지를 **Restore**와 **Delete permanently**와 함께 보여 줍니다.
+
+- 복원하면 `archivedAt`이 지워지고 레코드는 부모의 **끝**에 놓입니다(`writeAtEnd`). `order`는 보관된 것을 포함한 모든 형제 중 가장 큰 값, 그리고 부모의 `lastChildOrder`보다 하나 더 큰 값이 됩니다. 마지막으로 정렬되며 나중에 복원되는 다른 보관된 레코드와 충돌하지 않습니다. 강사는 원하는 곳으로 끌어서 옮깁니다.
+- 보관되기 전의 위치는 유지되지 않습니다. 그사이 다른 레코드의 순서가 바뀌었을 수 있어 그 위치가 이미 차지되었을 수 있기 때문입니다.
+- 레슨은 모듈이 보관되지 않은 경우에만, 콘텐츠 항목은 모듈과 레슨 모두 보관되지 않은 경우에만 복원할 수 있습니다. 그렇지 않으면 "Restore the module first" 또는 "Restore the lesson first"로 거부되며, 둘 다 보관된 경우 모듈이 먼저 언급됩니다.
+- 강좌 자체가 보관되어 있는 동안에는 아무것도 복원할 수 없으며 "Restore the course first"로 거부됩니다.
+- 복원된 퀴즈는 버전, 응시, 최고 점수를 유지합니다.
+- 복원은 진행률 재계산을 일으키며 모든 것이 이전처럼 다시 집계됩니다.
+
+## 영구 삭제
+
+Archived 보기에서만 제공되며, 다음이 모두 성립할 때만 가능합니다.
+
+- 레코드 자체가 보관되어 있습니다(보관된 부모 아래의 레코드는 먼저 보관해야 함).
+- 항목, 또는 레슨이나 모듈 아래의 모든 항목의 `studentActivityCount`가 0입니다.
+- 레슨이나 모듈의 경우, 레슨 또는 모듈의 어느 레슨에도 토론 질문이 없습니다. 질문도 학생 데이터입니다.
+
+학생이 사용한 것은 보관할 수는 있어도 영구 삭제할 수는 없습니다. 편집기는 그 이유와 함께 **Delete permanently**를 사용할 수 없음으로 표시합니다. 보관된 강좌에서도 동작하며, 그 강좌가 허용하는 유일한 커리큘럼 편집입니다.
+
+확인과 삭제는 별개의 호출이므로 삭제 자체에도 조건이 붙습니다.
+
+- **모듈이나 레슨**은 그 아래의 모든 것과 함께 하나의 트랜잭션으로 삭제됩니다. 각 콘텐츠 항목의 삭제는 확인한 `updatedAt`(어떤 쓰기든 이를 올림)과 `studentActivityCount = 0`을 조건으로 합니다. 모듈이나 레슨 자체의 삭제는 확인한 `archivedAt`을 조건으로 하므로, 그사이 복원이 일어나면 취소됩니다. 모듈 아래의 레슨은 자체 조건 없이 삭제됩니다.
+- **콘텐츠 항목 하나**는 `studentActivityCount = 0`이고 항목이 여전히 보관된 상태라는 조건의 삭제 한 번입니다.
+
+조건이 실패하면 삭제는 `CONFLICT`로 거부되고 아무것도 제거되지 않습니다. 트랜잭션의 다른 모든 실패는 `INTERNAL_SERVER_ERROR`로 보고되며 마찬가지로 아무것도 제거되지 않습니다.
+
+삭제 뒤에는 동영상의 진행 중인 트랜스코딩이 취소되고 동영상과 파일의 S3 객체가 제거됩니다. 이 정리는 최선 노력 방식이며, 실패는 기록될 뿐 예외로 던져지지 않습니다.
+
+## 한도와 반복 요청
+
+- **전체 집합만.** 모듈이나 레슨의 게시와 삭제(초안 강좌에서 또는 영구)는 첫 1 MB가 아니라 하위 항목의 모든 페이지를 읽으므로 게시되지 않거나 고아가 되는 것이 없습니다. 두 `course.view`도 커리큘럼의 모든 페이지를 읽습니다.
+- **100개 항목 트랜잭션.** 모듈이나 레슨의 게시와 삭제(초안 강좌에서 또는 영구)는 최대 100개의 레코드를 담는, 전부 아니면 전무인 단일 DynamoDB 트랜잭션에서 일어납니다. 강좌(그리고 레슨을 게시할 때는 모듈)에 대한 확인도 이 한도에 포함됩니다. 더 큰 모듈이나 레슨도 단계를 나누면 게시하거나 삭제할 수 있습니다.
+  - 먼저 그 레슨(또는 콘텐츠 항목) 일부를 게시한 다음 모듈(또는 레슨)을 게시합니다.
+  - 초안 강좌에서는 먼저 그 레슨(또는 콘텐츠 항목) 일부를 삭제한 다음 모듈(또는 레슨)을 삭제합니다.
+  - 그렇지 않으면 먼저 그 레슨(또는 콘텐츠 항목) 일부를 보관하고 영구 삭제한 다음 모듈(또는 레슨)을 삭제합니다.
+
+  작업이 한도를 넘으면 다음 단계를 알려 주는 메시지와 함께 `PRECONDITION_FAILED`로 거부됩니다. 보이지 않는 곳에서 여러 트랜잭션으로 나뉘는 일은 없습니다. 하나가 실패하면 모듈의 일부가 이미 사라져 부모 없는 레슨이나 항목이 남기 때문입니다.
+- **반복은 아무것도 기록하지 않습니다.** 이미 보관된 것을 보관하면 원래의 `archivedAt`이 유지됩니다. 이미 표시된 콘텐츠 항목을 게시하거나, 그 안과 아래에 숨겨진 것이 없는 모듈이나 레슨을 게시하거나, 숨겨진 것을 숨기거나, 보관되지 않은 것을 복원하면 모두 레코드를 그대로 반환합니다. 예를 들어 클라이언트 측 타임아웃 뒤의 재시도 요청은 무해합니다. 예외는 레코드를 제거하는 삭제(초안 강좌에서 또는 영구)이며, 이를 재시도하면 레코드가 이미 사라졌으므로 `NOT_FOUND`를 반환합니다.

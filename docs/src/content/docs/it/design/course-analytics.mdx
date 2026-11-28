@@ -1,0 +1,46 @@
+---
+title: Analisi del corso
+description: Cosa mostrano la dashboard del portale istruttore e la pagina di analisi del corso, come è definita ogni cifra, e perché le cifre sono in ritardo di qualche secondo rispetto ai record.
+sidebar:
+  order: 8
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261120-154551-first-lesson-start/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154551-first-lesson-start/) (attivazione e risposte e chiusure del suggerimento della prima lezione)
+
+La dashboard del portale istruttore mostra una scheda di riepilogo per corso, e ogni scheda apre la pagina di analisi di quel corso. Entrambe leggono cifre memorizzate che vengono tenute aggiornate dallo stream della core table. Nulla viene contato dai record durante una richiesta, quindi le pagine si caricano velocemente per quanti studenti siano iscritti.
+
+Il portale le legge tramite `analytics.courseSummaries` (le schede), `analytics.course`, `analytics.quiz` e `analytics.videoQuestions` di instructor-api.
+
+## Definizioni
+
+| Cifra | Definizione |
+|---|---|
+| **Enrolments** [Iscrizioni] | Ogni iscrizione che il corso ha avuto, inclusi gli studenti che hanno abbandonato. Il grafico della cronologia conta ciascuna nel giorno UTC in cui lo studente si è iscritto |
+| **Dropped** [Abbandonati] | Iscrizioni il cui stato è dropped. Restano nella cronologia delle iscrizioni ma escono da ogni altra cifra qui sotto |
+| **Active learner** [Studente attivo] | Uno studente iscritto che ha completato un elemento (il che include consegnare un compito), inviato un tentativo di quiz o risposto a una domanda video. Accedere o aprire una pagina non conta, perché nessuno dei due viene registrato |
+| **Active this week** [Attivi questa settimana] | Studenti attivi distinti nella settimana di calendario corrente, da lunedì a domenica, UTC. La pagina di analisi mostra anche gli studenti attivi distinti per giorno UTC, degli ultimi 30 o 90 giorni |
+| **Completion rate** [Tasso di completamento] | Iscrizioni completate divise per tutte le iscrizioni che non hanno abbandonato. Un corso senza tali iscrizioni mostra "No data", non 0% |
+| **Activated** [Attivati] | Iscrizioni che hanno fatto una prima cosa nel corso: l'iscrizione ha un'ora di ultima attività, impostata dal primo elemento completato, tentativo di quiz, consegna di compito o risposta a una domanda video. Conta ogni iscrizione, comprese quelle terminate. È contato dall'ora di ultima attività dell'iscrizione, quindi non viene tenuto alcun nuovo marcatore, ed è "finora": uno studente che non ha ancora iniziato può ancora diventare attivato. Il grafico della cronologia lo attribuisce al giorno UTC in cui lo studente si è iscritto |
+| **Activation rate** [Tasso di attivazione] | Iscrizioni attivate divise per tutte le iscrizioni, comprese in entrambi quelle terminate. È mostrato per tutto il periodo e per gli studenti iscritti negli ultimi 30 o 90 giorni. Un corso senza iscrizioni mostra "No data", non 0% |
+| **Prompt answers and dismissals** [Risposte e chiusure del suggerimento] | Quanti studenti hanno risposto al suggerimento della prima lezione, e quanti hanno premuto **Not now**. Ogni studente conta una volta per corso. Quante volte il suggerimento è stato mostrato non viene registrato, quindi non c'è un tasso |
+| **Drop-off** [Abbandono] | Per ogni lezione attualmente mostrata agli studenti, in ordine di corso: quanti studenti l'hanno iniziata, quanti l'hanno completata, e la quota di completamento tra quelli che l'hanno iniziata. Le lezioni nascoste o archiviate, e le lezioni di moduli nascosti o archiviati, sono escluse |
+| **Score bands** [Fasce di punteggio] | Il miglior punteggio di ogni studente per quiz, in fasce di dieci punti (0-9, 10-19, ... 90-100), così uno studente conta una volta per quanti tentativi abbia fatto |
+| **Most-missed questions** [Domande più sbagliate] | Ordinate per tasso di errore su tutti i tentativi. Una domanda ha bisogno di almeno 5 tentativi per essere in classifica, così un solo tentativo sbagliato non può metterla per prima |
+| **Video question results** [Risultati delle domande video] | Per ogni video mostrato agli studenti che ha domande, e per ogni domanda attuale: il suo momento (o "End of video"), l'inizio del suo testo, quanti studenti hanno risposto, quanti hanno sbagliato e il tasso di errore, ordinati come le domande dei quiz con lo stesso minimo di 5 risposte. Conta solo la prima risposta registrata di ogni studente: **Try again** e i salti non vengono registrati. Le domande rimosse non sono elencate. I risultati non contengono alcun identificativo dello studente |
+| **Modules without questions** [Moduli senza domande] | La vista dell'abbandono per lezione nomina anche ogni modulo mostrato agli studenti che ha un video mostrato e nessun quiz mostrato e nessun video mostrato con domande, suggerendo all'istruttore di aggiungerne. È letta dal curriculum attuale, quindi non è un conteggio e non può andare fuori sincrono |
+
+## Aggiornamento
+
+Le cifre sono in ritardo di qualche secondo rispetto ai record, come i progressi del corso. Una modifica (un'iscrizione, un completamento, un tentativo di quiz) di norma si vede al caricamento successivo entro 30 secondi. Sia le schede sia la pagina di analisi mostrano quando le cifre sono state aggiornate l'ultima volta.
+
+## Come vengono tenute le cifre
+
+Il gestore `analytics-update` è una funzione dello <Link path="design/stream-event-router">stream event router</Link>. Tiene contatori in cinque record di core-table: `courseStats`, `periodStats`, `lessonStats`, `quizScoreStats` e `quizQuestionStats`.
+
+- **Ogni modifica conta una volta.** I conteggi di una modifica sono scritti in una transazione con un `analyticsMarker` che prende il nome dal record dello stream. Un record consegnato di nuovo trova il suo marcatore e non conta nulla.
+- **Ogni studente conta una volta al giorno e alla settimana.** Un secondo marcatore per studente e periodo rende "attivo" un conteggio di studenti distinti.
+- **L'ordine non conta.** I contatori vengono solo incrementati, e le cifre di abbandono di una lezione sono definite dai record attuali dello studente, non dalla modifica arrivata.
+
+Se le cifre dovessero mai divergere dai record, l'invariante `analytics-matches-records` lo rileva, e `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId>` ricalcola le cifre di un corso dai suoi record.

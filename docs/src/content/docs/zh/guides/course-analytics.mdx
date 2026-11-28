@@ -1,0 +1,74 @@
+---
+title: 课程分析
+description: 讲师的 Dashboard 和每门课程的分析页面，每个数字的含义，30 天和 90 天视图，课时流失，激活情况，以及测验和视频问题的结果。
+---
+
+import Link from '@components/link.astro';
+
+讲师门户中的 **Dashboard** 显示你的课程表现如何。只有课程的讲师才能看到它的数据。
+
+## Dashboard
+
+你教授的每门课程都有一张卡片，无论它处于什么状态。
+
+| 数字 | 含义 |
+| --- | --- |
+| **Enrolments** | 所有已报名的人 |
+| **Active this week** | 本日历周（按 UTC，周一到周日）在课程中有过操作的学习者 |
+| **Completion rate** | 在仍在报名的学习者中，完成课程者所占的比例，以向下取整的整数百分比表示。在有人报名之前显示 "No data" |
+
+每张卡片还会显示其数据最后一次变化的时间，或 "No activity yet"。选择课程标题即可打开它的分析页面。
+
+## 课程的分析页面
+
+### 总计
+
+| 数字 | 含义 |
+| --- | --- |
+| **Enrolments** | 所有已报名的人 |
+| **Active** | 已报名，既未完成也未离开 |
+| **Completed** | 已完成课程 |
+| **Dropped** | 离开了课程，或报名已被终止 |
+| **Completion rate** | 与 Dashboard 相同 |
+| **Active this week** | 与 Dashboard 相同 |
+
+### 30 天或 90 天
+
+两张图表涵盖最近 90 天。选择页面顶部的 **30 days** 或 **90 days** 进行切换。
+
+- **New enrolments per day**
+- **Active learners per day**
+
+天数按 UTC 日计算。在有人报名之前，页面会显示 "No learners have enrolled yet"。
+
+### 课时流失
+
+对向学习者显示的每个课时：在开始该课时的学习者中，完成它的比例。比例最低的课时会标记为 **Lowest completion**。没有人开始过的课时会注明这一点。
+
+已离开课程的学习者不计入。
+
+### 激活情况
+
+已报名的学习者中有多少人已经开始，以数量和百分比表示。开始指的是完成了某一项或提交了测验尝试。近期报名的学习者可能还会开始，所以这些是目前为止的数字。
+
+卡片还会显示有多少学习者回答了第一课提示，有多少人关闭了它。参见<Link path="guides/lesson-discussions">课时讨论</Link>。
+
+### 测验
+
+每个测验都有一个面板。**Show analysis** 会打开：
+
+- **Most-missed questions**：每道题的尝试次数、答错次数和答错率，答错最多的排在最前。尝试次数少于 5 的题目不参与排名，显示 "Not enough attempts"。
+- **Best score per student**：一张图表，显示最高分的分布。
+
+### 视频问题
+
+**Video questions** 面板列出带有提问的视频。视频上的 **Show results** 会打开每个问题在视频中的时间点、答案、答错次数和答错率。回答太少的问题显示 "Not enough answers yet"。
+
+如何给视频添加问题，参见<Link path="guides/video-lessons">视频课时</Link>。
+
+## 如何阅读这些数字
+
+- 无论做了多少事，一名学习者在一天或一周内只计一次。
+- 如果课程页面显示 "Course not found"，说明该课程不存在，或你不是它的讲师。
+
+<Link path="design/course-analytics">课程分析</Link>介绍了这些数字是如何保存的。

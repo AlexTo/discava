@@ -1,0 +1,327 @@
+---
+title: Edição de curso ao vivo
+description: O que acontece quando instrutores adicionam, removem, ocultam, restauram ou editam módulos, aulas e itens de conteúdo em um curso publicado.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+Os instrutores continuam editando um curso depois de publicado. Este design torna essas edições seguras para os alunos que já estão matriculados: nada meio construído fica visível, nada do que um aluno fez se perde e o progresso continua correto.
+
+O status do curso decide como uma edição se comporta:
+
+| Status do curso | Edições |
+|---|---|
+| **Draft** [Rascunho] | Valem na hora, e apagar é uma exclusão definitiva. Um rascunho nunca esteve aberto aos alunos, então nada ali pode afetá-los |
+| **Published** [Publicado] | Seguem as regras desta página. Os alunos podem ter progresso e tentativas |
+| **Archived** [Arquivado] | O currículo é somente leitura (veja [Ciclo de vida de um curso](#ciclo-de-vida-de-um-curso)) |
+
+As procedures estão no instructor-api (`procedures/course.ts`, `module.ts`, `lesson.ts` e os arquivos `content-item-*.ts`).
+
+## Fluxo
+
+### Ciclo de vida de um curso
+
+```d2 title="Lifecycle of a course: a draft is published once it has content; archiving makes it read-only and keeps whether it was ever published, and restore returns it there"
+direction: right
+
+new: "Created" {shape: oval}
+draft: Draft
+published: Published
+archived_draft: "Archived, read-only\n(never published)" {style.stroke-dash: 3}
+archived_published: "Archived, read-only\n(was published)" {style.stroke-dash: 3}
+
+new -> draft
+draft -> published: "publish\n(needs visible content)"
+draft -> archived_draft: archive
+published -> archived_published: archive
+archived_draft -> draft: restore
+archived_published -> published: restore
+```
+
+**Publicação**
+
+- Só um **rascunho** pode ser publicado, e só depois de ter pelo menos um item de conteúdo que os alunos veriam, então um curso nunca é aberto vazio. Um item de conteúdo oculto ou arquivado, ou um sob um módulo ou aula oculto ou arquivado, não conta.
+- A publicação é recusada para um curso arquivado: restaure-o primeiro.
+- Publicar um curso não muda nenhum registro sob ele. Os registros `visible` no rascunho ficam visíveis aos alunos junto com o curso, e os ocultos continuam ocultos até serem publicados.
+
+**Restauração**
+
+- O curso registra `publishedAt` na primeira vez em que é publicado e nunca o apaga. É assim que um curso arquivado lembra se esteve aberto aos alunos.
+- **Restaurar devolve um curso que foi publicado para Publicado, e um que nunca foi para Rascunho.** Um curso que os alunos usaram nunca volta para rascunho, onde apagar é definitivo.
+
+**Um curso arquivado é somente leitura**
+
+- Nada em seu currículo pode ser adicionado, editado, publicado, ocultado, arquivado, reordenado ou restaurado, e nenhum vídeo pode ser enviado para ele. Cada uma dessas ações retorna `PRECONDITION_FAILED` ("Restore the course first"). Isso cobre módulos, aulas, itens de conteúdo e quizzes.
+- O que continua possível: ver o curso, restaurá-lo e **apagar definitivamente registros que já estão arquivados**. Assim, um curso arquivado pode ser limpo sem restaurá-lo, o que o mostraria de novo aos alunos. Essas exclusões mantêm suas próprias proteções (veja [Exclusão permanente](#exclusão-permanente)).
+- As configurações do próprio curso (preço, interruptor e critérios do certificado, o aviso da primeira aula) podem ser alteradas em qualquer status.
+
+**Repetições e corridas**
+
+- Repetir uma ação não grava nada: publicar um curso publicado, ou restaurar um curso que não está arquivado, devolve o curso como está. Uma nova tentativa após um timeout é segura.
+- Cada mudança é condicionada ao status que leu. Se o curso mudou nesse meio tempo, a requisição retorna `CONFLICT`.
+- **Publicar contra uma edição concorrente.** Em um curso em rascunho, o conteúdo pode ser apagado, ocultado ou arquivado a qualquer momento. A transação de publicação, portanto, verifica que um dos itens de conteúdo visíveis que ela contou, e a aula e o módulo sob os quais ele está, continuam lá e continuam visíveis. Se não, nada é publicado e a requisição retorna `CONFLICT`. Tentar de novo conta outra vez.
+- **Apagar contra uma publicação concorrente.** Se uma exclusão é definitiva ou um arquivamento depende do status do curso quando a requisição o leu. Uma exclusão definitiva em um curso em rascunho (de um módulo, aula ou item de conteúdo) roda, portanto, em uma transação que também verifica que o curso ainda é um rascunho. Se ele foi publicado nesse meio tempo, nada é apagado e a requisição retorna `CONFLICT`. Tentar de novo arquiva.
+- **Qualquer escrita contra um arquivamento concorrente.** A verificação de que o curso não está arquivado faz parte da mesma transação de cada escrita, junto às verificações do módulo e da aula. Uma requisição que perdeu essa corrida retorna "Restore the course first".
+
+### Ciclo de vida de um módulo, aula ou item de conteúdo
+
+```d2 title="Lifecycle of a module, lesson or content item: the course's status decides where a new record starts and what delete does; then publish, hide, archive, restore and delete"
+direction: down
+
+new_draft: "Created in a\nDraft course" {shape: oval}
+new_live: "Created in a\nPublished course" {shape: oval}
+
+live: "Not archived" {
+  visible: Visible
+  hidden: Hidden
+
+  hidden -> visible: publish
+  visible -> hidden: hide
+}
+
+archived: "Archived\n(frozen until restored,\nwith everything under it)" {
+  style.stroke-dash: 3
+}
+
+deleted: Deleted permanently {shape: oval}
+
+new_draft -> live.visible
+new_live -> live.hidden
+live -> archived: "delete\n(course not Draft)"
+archived -> live: restore
+live -> deleted: "delete\n(course Draft)"
+archived -> deleted: "delete permanently\n(see below)"
+```
+
+- O diagrama acompanha um módulo, aula ou item de conteúdo. O status do próprio curso é separado (veja acima), e nenhuma dessas ações o altera. Ele decide onde um novo registro começa e se apagar arquiva o registro ou o remove. Em um curso arquivado, nenhuma dessas ações é permitida, exceto apagar definitivamente um registro arquivado.
+- Os alunos só veem um registro enquanto ele está **Visible** e todos os seus ancestrais também (veja [Visibilidade efetiva](#visibilidade-efetiva)).
+- Publicar um módulo ou aula também publica todo registro oculto e não arquivado sob ele que nunca foi publicado. Um registro ocultado de propósito depois de ter sido visível continua oculto. Ocultar, arquivar e restaurar mudam apenas o próprio registro.
+- Um registro arquivado mantém sua visibilidade, então restaurá-lo o traz de volta **Visible** ou **Hidden**, como estava. Ele só pode ser restaurado quando o módulo ou aula pai não está arquivado.
+- Um registro arquivado, e tudo sob ele, fica congelado: nada nele pode ser publicado, ocultado ou editado, e nada pode ser adicionado a ele.
+- Fora de um curso em rascunho, toda mudança no que os alunos podem ver dispara um recálculo de progresso para todos os matriculados.
+
+### Verificações antes de uma exclusão permanente
+
+```d2 title="Checks a permanent delete goes through before anything is removed, for a module or lesson and for a single content item"
+direction: down
+
+start: "Delete permanently\n(from the Archived view;\nallowed in an archived course)" {shape: oval}
+is_archived: "Is the record itself\narchived?" {shape: diamond}
+kind: "Module or lesson,\nor content item?" {shape: diamond}
+
+activity: "Student activity on any\nitem under it, or a\ndiscussion question on\na lesson?" {shape: diamond}
+limit: "More than 100 records\nincluding everything\nunder it?" {shape: diamond}
+transaction: "One transaction: each item\nconditioned on its checked\nupdatedAt and no student\nactivity, the parent on\nits checked archivedAt"
+
+item_activity: "Student activity\non the item?" {shape: diamond}
+item_delete: "One delete, conditioned on\nno student activity and the\nitem still being archived"
+
+changed: "Did a condition\nfail?" {shape: diamond}
+
+refused_archive: "PRECONDITION_FAILED:\narchive it first"
+refused_activity: "PRECONDITION_FAILED:\nit can stay archived,\nbut is never deleted"
+refused_limit: "PRECONDITION_FAILED:\ndelete some of its lessons\n(or content items) first,\nthen retry"
+conflict: "CONFLICT:\nnothing deleted"
+done: "Deleted; a video's transcode\ncanceled, and video and\nfile objects removed from S3" {shape: oval}
+
+start -> is_archived
+is_archived -> refused_archive: no
+is_archived -> kind: yes
+kind -> activity: module or lesson
+kind -> item_activity: content item
+activity -> refused_activity: yes
+activity -> limit: no
+limit -> refused_limit: yes
+limit -> transaction: no
+item_activity -> refused_activity: yes
+item_activity -> item_delete: no
+transaction -> changed
+item_delete -> changed
+changed -> conflict: yes
+changed -> done: no
+```
+
+## Modelo de dados
+
+Atributos nas entidades `curriculum` que dão suporte à edição ao vivo:
+
+| Atributo | Em | Finalidade |
+|---|---|---|
+| `visibility: 'hidden' \| 'visible'` | Módulos, aulas, itens de conteúdo | Obrigatório. As procedures de criação definem `visible` em cursos em rascunho e `hidden` nos publicados, então um novo quiz, aula ou módulo nunca é visto meio construído. O instrutor clica em **Publish** para exibi-lo |
+| `archivedAt` | Módulos, aulas, itens de conteúdo | Exclusão lógica. Definido só no próprio registro arquivado. Seus filhos ficam ocultos porque o pai está arquivado, não por estarem arquivados eles mesmos |
+| `publishedAt` | Módulos, aulas, itens de conteúdo | Quando o registro ficou visível pela primeira vez: na criação em um curso em rascunho, ou quando foi publicado pela primeira vez. Nunca é apagado (veja [Publicação](#publicação)) |
+| `studentActivityCount` | Itens de conteúdo | Número de alunos distintos com algum dado do item. Nunca é decrementado |
+| `lastChildOrder` | Cursos, módulos, aulas | O último `order` entregue a um filho. Adicionar ou restaurar um filho reserva o próximo na mesma transação, então dois registros adicionados ao mesmo tempo não podem compartilhar um `order` |
+
+**O que conta como atividade do aluno.** `studentActivityCount` é incrementado (`ADD 1`) na mesma transação que cria o **primeiro** registro de um aluno para o item:
+
+| Item | Primeiro registro |
+|---|---|
+| Quiz | O `quizSummary` |
+| Vídeo | O `itemCompletion` ou o `videoAnswerSheet`, o que vier primeiro. Uma resposta a uma pergunta do vídeo conta o aluno tanto quanto uma conclusão |
+| Tarefa de upload | O `assignmentSubmission` ou o `itemCompletion` |
+| Texto, arquivo | O `itemCompletion` |
+
+Todo escritor monta sua transação a partir de `studentActivityWrites` (`core-table/src/helpers/student-activity.ts`), e as invariantes em `helpers/invariants/student-activity.ts` verificam a contagem contra os registros.
+
+`studentActivityCount` vive na partição do currículo, então somá-lo ou verificá-lo para tudo sob um módulo ou aula é uma única consulta. Os registros do lado do aluno que ele conta são indexados por usuário e não conseguem responder "quem usou este item?" sem uma varredura.
+
+## Visibilidade efetiva
+
+Um registro só é mostrado aos alunos se ele e todos os ancestrais estiverem `visible` e não arquivados. Isso é verificado em:
+
+- toda leitura do aluno: `course.view` e `course.publicView` do core-api, e `quiz.view`;
+- toda escrita do aluno: envio de quiz, marcar um item como concluído;
+- todo cálculo de progresso.
+
+Assim, ocultar ou arquivar um módulo também impede que um quiz dentro dele seja enviado, e remove seus itens do progresso de todos.
+
+A regra é implementada uma única vez, em `core-table/src/helpers/curriculum.ts`: `isShown` para um registro e `filterEffectivelyVisible` para um currículo inteiro. As visões de curso do core-api a usam, e o cálculo de progresso do core-table também, que a Lambda de recálculo em `packages/events` executa. O que os alunos veem e o que o progresso deles conta nunca podem divergir.
+
+Os instrutores editam pelo `course.view` do instructor-api, que devolve o currículo inteiro, incluindo registros ocultos e arquivados com seus `visibility`, `archivedAt` e `studentActivityCount`. Ele é limitado aos instrutores que lecionam o curso. O editor do curso deixa os registros arquivados fora da lista principal e marca os ocultos como **Hidden**.
+
+## Ações em um curso publicado
+
+| Ação | O que os alunos veem | Dados e progresso deles | Progresso recalculado para |
+|---|---|---|---|
+| **Add module** | Nada até ser publicado. Publicar também publica suas aulas e itens ocultos, então aparece tudo de uma vez | Uma vez publicado, `progressPercent` cai para todos. Aulas e cursos concluídos continuam concluídos | Todos os alunos matriculados, na publicação |
+| **Remove module** | Arquivado: some do sumário no próximo carregamento. Um aluno em uma de suas páginas recebe "This lesson has been removed by your instructor" | Mantidos (conclusões, tentativas, melhores notas), mas não contados. Um aluno que tinha terminado todo o resto passa a `completed`. Restaurável, e então tudo conta de novo | Todos os alunos matriculados |
+| **Edit module** (título, descrição) | Vale na hora | Sem efeito | Ninguém |
+| **Add lesson** | Nada até ser publicada (junto com seus itens ocultos) | Como ao adicionar um módulo | Todos os alunos matriculados, na publicação |
+| **Remove lesson** | Como ao remover um módulo | Como ao remover um módulo | Todos os alunos matriculados |
+| **Edit lesson** (título, descrição) | Vale na hora | Sem efeito | Ninguém |
+| **Add content item** | Nada até ser publicado, e só quando sua aula e seu módulo também estiverem publicados | Uma vez publicado, `progressPercent` cai. Se sua aula já estava concluída, ela continua concluída e o item aparece como **New** | Todos os alunos matriculados, na publicação |
+| **Remove content item** | Arquivado: some no próximo carregamento. Enviar um quiz nele ou marcá-lo como concluído é rejeitado com "no longer available" | Mantidos, não contados. Se era o único item não concluído de um aluno, a aula (e possivelmente o curso) passa a concluída. Restaurável | Todos os alunos matriculados |
+| **Edit content item**: título, descrição, corpo de texto | Vale na hora | Conclusão mantida | Ninguém |
+| **Edit content item**: substituir vídeo | Passa pelo fluxo de substituição e nova transcodificação do vídeo. Os alunos continuam assistindo a versão anterior até a nova ficar pronta, e também se a transcodificação dela falhar; os arquivos da versão anterior são apagados quando a nova está pronta há mais tempo do que duram os cookies assinados de um espectador | Conclusão mantida | Ninguém |
+| **Edit content item**: perguntas do vídeo | Veja <Link path="design/quizzes">Quizzes</Link>: uma mudança só no gabarito ou na explicação é invisível; uma mudança no enunciado, tipo ou opções de uma pergunta faz uma resposta em andamento retornar `CONFLICT` e não registrar nada; mover ou remover uma pergunta nunca toca nas respostas registradas | Conclusão e progresso não são afetados. Respostas registradas mantidas, nunca recorrigidas | Ninguém |
+| **Edit content item**: quiz | Veja <Link path="design/quizzes">Quizzes</Link>: edições só no gabarito são invisíveis; edições de pergunta fazem um envio em andamento retornar `CONFLICT` | Tentativas, melhores notas e aprovações mantidas, nunca recorrigidas | Ninguém |
+| **Hide** (qualquer nível) | Some como uma remoção, mas não aparece na visão Archived | Mantidos, não contados; voltam a contar quando exibidos | Todos os alunos matriculados |
+| **Reorder** (qualquer nível) | Vale na hora | Sem efeito | Ninguém |
+
+O "progresso recalculado" é feito pela Lambda do lado do servidor descrita em <Link path="design/progress-and-completion">Progresso e conclusão</Link>, nunca pelo navegador do aluno.
+
+## Publicação
+
+Publicar um módulo ou aula define ele e todos os seus descendentes ocultos **novos** como `visible` em **uma transação**. Os alunos veem uma aula nova com todos os seus itens de uma vez, não aos poucos.
+
+Quais descendentes são publicados com o pai:
+
+| Descendente | Publicado com o pai? |
+|---|---|
+| Oculto, sem `publishedAt` (conteúdo novo) | Sim |
+| Oculto, com `publishedAt` (ocultado de propósito depois de os alunos poderem vê-lo) | Não, continua oculto |
+| Arquivado, ou um item de conteúdo sob uma aula arquivada | Não, fica como está |
+
+- O registro que você mesmo publica é sempre publicado, qualquer que seja seu histórico.
+- Todo módulo, aula e item de conteúdo registra `publishedAt` na primeira vez em que fica visível (quando é criado em um curso em rascunho, ou quando é publicado pela primeira vez) e nunca o apaga.
+- O único caso que isso não consegue distinguir é um registro ocultado antes de ter sido publicado (por exemplo, ocultar o item de uma aula nova enquanto ainda a constrói em um curso publicado). Isso ainda conta como novo, e é publicado com o pai.
+- **Arquivado enquanto a publicação está em andamento.** Toda aula e item que a publicação altera (e a aula de todo item que ela publica) precisa ainda estar desarquivado quando a transação é confirmada. Caso contrário, nada é publicado e a requisição retorna `CONFLICT`. Tentar de novo relê o módulo ou aula e pula o registro recém-arquivado.
+
+Ocultar não é em cascata: muda apenas o próprio registro, e seus filhos mantêm a própria `visibility`. Os alunos deixam de ver os filhos de qualquer forma, já que um registro só é mostrado sob ancestrais visíveis.
+
+## Reordenação
+
+Os módulos são ordenados dentro do curso, as aulas dentro do módulo e os itens de conteúdo dentro da aula, cada um pelo seu `order`. Cada nível tem uma única forma de alterá-lo: `module.reorder`, `lesson.reorder` e `contentItem.reorder`. `module.update` e `lesson.update` não recebem um `order`.
+
+- No portal do instrutor, a alça de cada linha é um ponto de arraste (mouse, toque ou teclado). Não há alças em um curso arquivado, nem onde há só um registro para ordenar.
+- Reordenar é uma edição como qualquer outra, então segue as regras de arquivamento: é recusada em um curso arquivado, e sob um módulo ou aula arquivado ("Restore the course (module, lesson) first").
+- Vale igualmente para todos os tipos de item de conteúdo.
+- Mover uma aula para outro módulo, ou um item de conteúdo para outra aula, não é suportado: suas chaves incluem o id do pai.
+
+Cada procedure recebe os ids de **todos os registros do pai que não estão arquivados**, na ordem em que devem aparecer, e grava todo `order` (1, 2, 3, ...) em uma transação, então um único arraste é uma mudança atômica.
+
+- A lista precisa coincidir exatamente com o pai. Se faltar um registro, incluir um que foi arquivado ou removido, ou incluir um id desconhecido, a requisição retorna `CONFLICT` e não grava nada: o editor estava trabalhando com uma lista desatualizada, então recarrega e tenta de novo. Um id que aparece duas vezes é um `BAD_REQUEST`.
+- Cada registro é condicionado a continuar não arquivado, na mesma transação que as verificações dos ancestrais, então um registro arquivado enquanto a requisição roda cancela a reordenação inteira, assim como um ancestral arquivado nesse momento.
+- Os registros arquivados não fazem parte da lista. Eles mantêm o `order` que tinham.
+- Repetir uma ordem que o pai já tem não grava nada.
+- A transação contém no máximo 100 registros, incluindo as verificações dos ancestrais, então os limites são:
+
+  | Procedure | Verificações | Máximo de registros |
+  |---|---|---|
+  | `module.reorder` | curso | 99 módulos em um curso |
+  | `lesson.reorder` | curso, módulo | 98 aulas em um módulo |
+  | `contentItem.reorder` | curso, módulo, aula | 97 itens de conteúdo em uma aula |
+
+  Um pai maior é recusado com `PRECONDITION_FAILED`, como nas outras operações que abrangem o pai inteiro.
+- Um registro adicionado no mesmo instante de uma reordenação fica depois dos reordenados, e o editor o mostra quando recarrega.
+- Um registro restaurado vai para o fim do seu pai (veja [Restauração](#restauração)), então nunca compartilha um `order` com outro registro.
+
+## Remoção (arquivamento)
+
+Fora de um curso em rascunho, apagar sempre arquiva, e o portal do instrutor chama a ação de **Archive** (em um curso em rascunho é **Delete** para módulos e aulas, e **Remove** para itens de conteúdo). O diálogo de confirmação mostra o impacto a partir de `studentActivityCount`:
+
+- um item de conteúdo: quantos alunos o usaram, por exemplo "12 students have used it".
+- um módulo ou aula: quantos dos itens abaixo os alunos usaram, por exemplo "Students have used 3 items in it". Somar alunos entre itens contaria um aluno uma vez por item usado, então a contagem é de itens, não de alunos.
+
+Em ambos os casos acrescenta que o progresso deles é mantido, e volta a contar se o registro for restaurado.
+
+### Removido enquanto um aluno o estuda
+
+| Onde o aluno está | O que acontece |
+|---|---|
+| Em outra parte do curso | O módulo ou aula some do sumário na próxima vez que ele carrega |
+| Na página dessa aula | O conteúdo já na tela continua legível. A próxima nova busca de dados (navegação, foco da janela) mostra **"This lesson has been removed by your instructor"** com um link de volta ao sumário, nunca um 404 seco |
+| No meio de um quiz nela | O envio é rejeitado ("This quiz is no longer available"); o rascunho local é descartado; nenhuma tentativa é gasta |
+| Marcando um item como concluído | Rejeitado do mesmo modo |
+| Link antigo ou favorito | A mesma página de "removido" |
+
+O arquivamento dispara um recálculo de progresso para todo aluno matriculado, então o conteúdo removido deixa de contar imediatamente, sem que ninguém recarregue.
+
+### O que não pode ser feito com um registro arquivado
+
+Um registro arquivado, e tudo sob ele, fica exatamente como estava quando foi arquivado até ser restaurado, então uma restauração traz de volta o que os alunos viam. Um **curso** arquivado é congelado do mesmo modo (veja [Ciclo de vida de um curso](#ciclo-de-vida-de-um-curso)), e o curso é nomeado primeiro quando está arquivado: "Restore the course first". Tudo isto é recusado com `PRECONDITION_FAILED`:
+
+- Publicar, ocultar ou editar o próprio registro arquivado: "Restore the module (lesson, content item) before publishing (hiding, editing) it".
+- Publicar, ocultar ou editar qualquer coisa sob ele, por exemplo uma aula em um módulo arquivado ou um item de conteúdo em uma aula arquivada: "Restore the module first" ou "Restore the lesson first". O módulo é nomeado primeiro quando ambos estão arquivados.
+- Adicionar qualquer coisa sob ele: nenhuma aula nova em um módulo arquivado, e nenhum conteúdo novo em um módulo ou aula arquivado.
+- Enviar um arquivo de vídeo: nenhuma URL de upload é emitida para um curso, módulo ou aula arquivado, nem para substituir o arquivo de um item de conteúdo arquivado.
+
+Os registros sob um módulo ou aula arquivado ainda podem ser arquivados eles mesmos, e depois apagados definitivamente, desde que o curso não esteja arquivado.
+
+Essas regras valem mesmo quando as requisições se sobrepõem. Cada escrita sob um módulo ou aula roda em uma transação do DynamoDB, junto com verificações de que seu curso, módulo (e aula) ainda existem e não estão arquivados, e de que o próprio registro não está arquivado. Se outra requisição arquiva ou apaga o pai nesse meio tempo, a escrita inteira é recusada com o mesmo erro, e nada é gravado. Assim, um módulo que está sendo arquivado ou apagado definitivamente não pode ganhar uma aula nova, e uma aula não pode ganhar um item novo, no último instante.
+
+Um vídeo arquivado enquanto ainda está sendo transcodificado continua transcodificando. Quando o job termina, o item é marcado `ready` (ou `failed`) sem tocar em `archivedAt` nem em `visibility`, então ele toca se for restaurado e continua oculto até lá.
+
+## Restauração
+
+A página do curso do instrutor tem uma seção **Archived** que lista todo registro arquivado por conta própria, o mais recente primeiro: um módulo arquivado, uma aula arquivada em um módulo ativo, ou um item arquivado em uma aula ativa. Os registros sob um pai arquivado não são listados separadamente, já que voltam com ele. Cada linha mostra onde o registro estava, quando foi arquivado, o que há nele e se os alunos o usaram, com **Restore** e **Delete permanently**.
+
+- Restaurar limpa `archivedAt` e coloca o registro no **fim** do seu pai (`writeAtEnd`). Seu `order` passa a ser um acima do maior entre todos os irmãos, arquivados inclusive, e acima do `lastChildOrder` do pai. Ele fica por último e nunca colide com outro registro arquivado restaurado depois. O instrutor o arrasta para onde quiser.
+- Sua posição antes de ser arquivado não é guardada: outros registros podem ter sido reordenados desde então, então essa posição já poderia estar ocupada.
+- Uma aula só pode ser restaurada se seu módulo não está arquivado, e um item de conteúdo só se nem seu módulo nem sua aula estão. Caso contrário é recusada com "Restore the module first" ou "Restore the lesson first", nomeando o módulo primeiro quando ambos estão arquivados.
+- Nada pode ser restaurado enquanto o próprio curso está arquivado: é recusado com "Restore the course first".
+- Um quiz restaurado mantém sua versão, tentativas e melhores notas.
+- Restaurar dispara um recálculo de progresso, e tudo volta a contar como antes.
+
+## Exclusão permanente
+
+Oferecida só a partir da visão Archived, e só quando todas estas condições valem:
+
+- o próprio registro está arquivado (um sob um pai arquivado precisa ser arquivado primeiro);
+- `studentActivityCount` é 0 para o item, ou para todo item sob uma aula ou módulo;
+- para uma aula ou módulo, nenhuma pergunta de discussão foi feita na aula, ou em qualquer aula do módulo. As perguntas também são dados do aluno.
+
+Qualquer coisa que um aluno usou pode ser arquivada, mas nunca apagada definitivamente. O editor mostra **Delete permanently** como indisponível para ela, com esse motivo. Funciona também em um curso arquivado: é a única edição de currículo que esse curso permite.
+
+As verificações e a exclusão são chamadas separadas, então a própria exclusão leva condições:
+
+- **Um módulo ou aula** é apagado com tudo sob ele em uma transação. A exclusão de cada item de conteúdo é condicionada ao `updatedAt` que foi verificado (qualquer escrita o altera) e a `studentActivityCount = 0`. A exclusão do próprio módulo ou aula é condicionada ao `archivedAt` que foi verificado, então uma restauração que aconteça nesse meio tempo a cancela. As aulas sob um módulo são apagadas sem condição própria.
+- **Um único item de conteúdo** é uma exclusão, condicionada a `studentActivityCount = 0` e ao item ainda estar arquivado.
+
+Se uma condição falha, a exclusão é recusada com `CONFLICT` e nada é removido. Qualquer outra falha da transação é reportada como `INTERNAL_SERVER_ERROR`, também sem remover nada.
+
+Depois da exclusão, a transcodificação em andamento de um vídeo é cancelada e os objetos do S3 de vídeos e arquivos são removidos. Essa limpeza é de melhor esforço: uma falha é registrada no log, não lançada.
+
+## Limites e requisições repetidas
+
+- **Só conjuntos inteiros.** Publicar um módulo ou aula e apagar um (em um curso em rascunho ou definitivamente) leem todas as páginas de descendentes, não só o primeiro 1 MB, então nada fica sem publicar ou órfão. Os dois `course.view` também leem todas as páginas do currículo.
+- **Transações de 100 itens.** Publicar um módulo ou aula, e apagar um (em um curso em rascunho ou definitivamente), acontece em uma única transação do DynamoDB, tudo ou nada, que contém no máximo 100 registros. A verificação do curso (e do módulo, ao publicar uma aula) conta para esse limite. Um módulo ou aula maior ainda pode ser publicado ou apagado, só que em etapas:
+  - publique primeiro algumas de suas aulas (ou itens de conteúdo), depois o módulo (ou aula);
+  - em um curso em rascunho, apague primeiro algumas de suas aulas (ou itens de conteúdo), depois o módulo (ou aula);
+  - caso contrário, arquive algumas de suas aulas (ou itens de conteúdo) e apague-as definitivamente primeiro, depois o módulo (ou aula).
+
+  Quando uma operação passaria do limite, ela é recusada com `PRECONDITION_FAILED` e uma mensagem que nomeia o próximo passo. Ela nunca é dividida em várias transações por baixo dos panos: se uma delas falhasse, parte do módulo já teria sumido, deixando aulas ou itens sem pai.
+- **Repetições não gravam nada.** Arquivar algo já arquivado mantém o `archivedAt` original. Publicar um item de conteúdo que está visível, ou um módulo ou aula sem nada oculto nele ou sob ele, ocultar o que está oculto e restaurar o que não está arquivado devolvem o registro inalterado. Uma requisição repetida, por exemplo após um timeout do cliente, é inofensiva. A exceção é uma exclusão que remove o registro (em um curso em rascunho, ou definitivamente): repeti-la retorna `NOT_FOUND`, já que o registro já sumiu.

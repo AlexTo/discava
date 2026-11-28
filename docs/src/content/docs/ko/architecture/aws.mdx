@@ -1,0 +1,162 @@
+---
+title: AWS 배포
+description: Discava 스테이지를 구성하는 CloudFormation 스택, 각 스택의 AWS 리소스, 스택 간 의존 관계를 설명합니다.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+배포된 설치본을 **스테이지**(stage)라고 부릅니다. 스테이지는 CloudFormation 스택의 묶음이며, 모든 스택 이름은 `discava-production-Data`처럼 `<stage>-<Stack>` 형식입니다. 한 AWS 계정에 여러 스테이지를 두어도 서로 영향을 주지 않습니다.
+
+## 스택
+
+애플리케이션은 열 개의 스택으로 나뉩니다. 스택 하나로는 CloudFormation의 리소스 500개 제한을 넘고, 상태를 가진 리소스를 코드와 분리하면 일상적인 배포가 데이터를 건드리지 않습니다.
+
+```d2 title="Stacks and their dependencies (an arrow points at what a stack needs)"
+direction: up
+
+websites: "Websites"
+data: "Data"
+payments: "Payments"
+media: "MediaPipeline"
+core: "CoreApi"
+router: "StreamRouter"
+payouts: "Payouts"
+instr: "InstructorApi"
+admin: "AdminApi"
+rc: "PortalConfig"
+
+data -> websites
+payments -> data
+payouts -> data
+admin -> payments
+media -> data
+core -> data
+core -> media
+core -> websites
+router -> data
+router -> core
+router -> websites
+instr -> data
+instr -> media
+instr -> core
+instr -> websites
+admin -> data
+admin -> core
+admin -> websites
+rc -> core
+rc -> instr
+rc -> admin
+```
+
+`PortalConfig`는 다른 모든 스택에 의존합니다. 그림에는 세 API로 향하는 화살표만 그렸습니다.
+
+배포 순서는 다음과 같습니다.
+
+```
+Websites → Data → Payments → MediaPipeline → CoreApi → StreamRouter → Payouts → InstructorApi → AdminApi → PortalConfig
+```
+
+| 스택 | 포함하는 것 | 분리한 이유 |
+| --- | --- | --- |
+| **Websites** | 세 개의 포털: 각각 S3 버킷과 CloudFront 배포. 학생 포털에는 페이지 렌더러 함수도 있습니다 | 다른 것에 의존하지 않습니다. 다른 스택이 CORS와 로그인 리디렉션을 위해 포털 주소를 필요로 합니다 |
+| **Data** | Cognito 사용자 풀과 트리거, 코어 테이블, 강의 미디어 및 공개 미디어 버킷과 CloudFront 배포, 업로드 버킷, 검색 컬렉션과 인덱스를 만드는 함수, 구독 해지 링크 시크릿과 Stripe 시크릿 | 상태를 가진 모든 리소스. 거의 바뀌지 않으며 다른 모든 백엔드 스택이 의존합니다 |
+| **Payments** | Stripe 웹훅 API: API Gateway와 함수 | 로그인한 사용자가 아니라 Stripe가 호출하므로, 방화벽, 요청 제한, 도메인을 다른 API와 따로 설정합니다 |
+| **MediaPipeline** | MediaConvert 파이프라인, 트랜스코딩과 전사 완료에 반응하는 함수, 정리 스케줄, 실패 큐 | 동영상 처리. core-api와 instructor-api가 함께 사용합니다 |
+| **CoreApi** | core-api의 API Gateway와 함수, 검색 재색인 함수, 이메일 구독 해지 경로 | 모든 사용자가 호출하는 API |
+| **StreamRouter** | 테이블 스트림 라우터 함수, 기능별 큐와 실패 큐 하나씩, 기능 핸들러, 수료증 알림 함수, 전사 재색인 함수 | 데이터 변경에 대한 백그라운드 반응. CoreApi의 리소스 한도와 분리합니다 |
+| **Payouts** | 일일 정산 실행과 그 스케줄 | 어느 스택도 리소스 한도에 가까워지지 않게 따로 둡니다. 테이블과 Stripe 키만 읽습니다 |
+| **InstructorApi** | instructor-api의 API Gateway와 함수, 미디어 및 트랜스코딩 권한 | 강사용 API |
+| **AdminApi** | admin-api의 API Gateway와 함수, Stripe 키를 저장하는 함수 포함 | 관리자용 API |
+| **PortalConfig** | 각 포털의 `runtime-config.json` | 다른 모든 스택의 값을 읽으므로 마지막에 배포합니다 |
+
+포털이나 미디어 배포에 WAF를 켜면, 그 웹 ACL은 `us-east-1`의 작은 추가 스택으로 만들어집니다. CloudFront가 그 리전을 요구하기 때문입니다.
+
+## 계층별 구성
+
+### 엣지: CloudFront와 API Gateway
+
+| 진입점 | 서비스 | 오리진 |
+| --- | --- | --- |
+| 각 포털 | CloudFront | 정적 파일을 담은 비공개 S3 버킷 |
+| 학생 포털의 공개 페이지 (`/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml`, `/robots.txt`) | 학생 포털의 CloudFront 배포 | CloudFront만 호출할 수 있는 함수 URL을 통한 페이지 렌더러 함수 |
+| 강의 미디어 | CloudFront, 서명된 요청만 허용 | 비공개 S3 버킷 |
+| 공개 미디어 | CloudFront | 비공개 S3 버킷 |
+| 각 API | API Gateway (REST, 리전) | Lambda |
+| Stripe 웹훅 | API Gateway (REST, 리전) | Lambda |
+
+공개된 S3 버킷은 없습니다. CloudFront는 Origin Access Control로 각 버킷에 접근합니다.
+
+### 컴퓨팅: Lambda
+
+모든 코드는 Node.js 24의 Lambda에서 실행됩니다.
+
+- **API 함수.** 각 API는 대부분의 프로시저를 하나의 공유 함수에서 처리합니다. 기본 접근 권한(테이블, core-api에서는 검색 읽기 추가)보다 많은 권한이 필요한 프로시저는 전용 함수에서 실행되므로, 다른 모든 요청을 처리하는 함수에 강한 권한이 주어지지 않습니다.
+
+  | API | 전용 함수 |
+  | --- | --- |
+  | core-api | 미디어 요청 서명, 과제 업로드, 결제 또는 환불 시작 (Stripe 키를 읽음) |
+  | instructor-api | 미디어 요청 서명, 강의 미디어 쓰기와 트랜스코딩 제출, 강좌 이미지와 프로필 사진, 정산 계정 (Stripe 키를 읽음) |
+  | admin-api | Stripe 시크릿 저장 (유일한 쓰기 주체), 브랜드 이미지 |
+
+- **이벤트 함수.** 작업마다 하나씩 있습니다. Cognito 트리거 두 개, 스트림 라우터와 기능 핸들러, 미디어 파이프라인의 완료, 복구, 정리 핸들러, 수료증 알림, Stripe 웹훅, 일일 정산 실행, 이메일 구독 해지 링크.
+- **페이지 렌더러.** core-api의 두 번째 핸들러이며 학생 포털과 함께 배포됩니다. 테이블만 읽습니다.
+- **운영 함수.** 트리거가 없고 배포나 운영자가 호출할 때 실행되는 함수가 세 개 있습니다. 배포할 때마다 검색 인덱스를 만들거나 갱신하는 함수, 강좌 인덱스와 전사 인덱스를 다시 만드는 함수 두 개입니다.
+
+### 데이터
+
+| 리소스 | 서비스 | 비고 |
+| --- | --- | --- |
+| 코어 테이블 | DynamoDB, 처리량 상한이 있는 온디맨드 | 변경 스트림이 스트림 라우터로 들어갑니다 |
+| 검색 | OpenSearch Serverless | 인덱스 두 개: 강좌와 전사. 개발 스테이지에서는 0으로 줄일 수 있습니다 |
+| 미디어 | S3 | 버킷 세 개: 강의 미디어, 업로드, 공개 미디어 |
+| 사용자 | Cognito 사용자 풀 | 그룹: `student`, `instructor`, `admin` |
+| 구성 | Lambda 환경 변수 | 리소스 이름과 주소를 배포 시점에 설정하고, 함수가 환경에서 읽습니다. 페이지 렌더러는 Systems Manager 파라미터 하나를 읽습니다 |
+| 시크릿 | Secrets Manager | 강의 미디어 요청에 서명하는 키, 구독 해지 링크에 서명하는 키, 관리자가 저장하는 Stripe 시크릿 키와 웹훅 서명 시크릿 |
+
+### 미디어 처리
+
+| 서비스 | 용도 |
+| --- | --- |
+| MediaConvert | 업로드한 동영상을 HLS 렌디션으로 트랜스코딩 |
+| Transcribe | 각 동영상의 자동 자막 |
+| Translate | 자막을 강좌의 다른 자막 언어로 번역 |
+
+### 메시징과 스케줄링
+
+| 서비스 | 용도 |
+| --- | --- |
+| DynamoDB Streams | 코어 테이블의 모든 변경 |
+| SQS | 스트림 기능마다 큐와 실패 큐 하나씩, 그리고 미디어 파이프라인과 수료증 알림의 실패 큐 |
+| EventBridge | MediaConvert나 Transcribe 작업이 끝날 때 동작하는 규칙, 멈춘 동영상을 찾는 스케줄, 일일 정산 실행 스케줄 |
+| EventBridge Scheduler | 일회성 스케줄: 폐기된 미디어의 지연 정리, 수료증 알림 |
+| SES | 알림 이메일 |
+
+## 런타임 구성
+
+배포된 코드에는 리소스 이름이 하드코딩되어 있지 않습니다.
+
+- **백엔드 함수**는 스택을 배포할 때 설정된 자신의 **환경 변수**(`DISCAVA_*`)에서 테이블 이름, 버킷 이름, 엔드포인트를 읽습니다. 런타임에 가져오는 것은 없으며, 함수에는 코드가 읽는 설정만 주어집니다. 페이지 렌더러는 예외입니다. 이 함수는 테이블 이름과 공개 미디어 주소를 소유한 `Data` 스택보다 먼저 `Websites`에 배포되므로, Systems Manager 파라미터 하나에서 읽습니다.
+- **포털**은 로드될 때 자신의 오리진에서 `runtime-config.json`을 가져옵니다. 여기에는 API 주소, Cognito ID, 다른 포털의 주소가 들어 있습니다.
+
+포털용 파일은 다른 스택이 내보낸 값으로 `PortalConfig` 스택이 작성합니다. 그래서 이 스택이 마지막에 배포됩니다.
+
+## 계정을 공유하는 스테이지
+
+세 가지 장치가 스테이지를 서로 분리합니다.
+
+- **이름.** 모든 스택과 생성된 리소스 이름은 스테이지 이름으로 시작하고, IAM 권한은 그 접두사로 범위가 제한됩니다.
+- **자산.** 각 스테이지는 공유 CDK 버킷 안에서 자신만의 접두사 아래에 빌드 결과물을 업로드하므로, 한 스테이지가 다른 스테이지가 곧 배포할 것을 덮어쓸 수 없습니다.
+- **권한 경계.** 스테이지가 만드는 모든 IAM 역할에는 그 스테이지의 경계 정책이 붙어, 스테이지 자신의 코드에 부여할 수 있는 권한을 제한합니다.
+
+## 코드에서의 정의
+
+| 항목 | 위치 |
+| --- | --- |
+| 존재하는 스테이지와 그 설정 | `packages/common/infra-config/src/stages.config.ts` |
+| CDK 앱: 구성된 스테이지마다 `ApplicationStage` 하나 | `packages/infra/src/main.ts` |
+| 스택을 구성하고 연결하는 방식 | `packages/infra/src/stages/application-stage.ts`와 `packages/infra/src/stacks/` |
+| 구성 요소(API, 버킷, 웹사이트) | `packages/common/constructs` |
+
+**컨스트럭트**(construct)는 한 구성 요소의 리소스를 소유하고 `grantRead` 같은 도우미를 제공합니다. **스택**은 컨스트럭트를 연결하고 스테이지 설정을 컨스트럭트 옵션으로 바꿉니다. 설정은 <Link path="deploy/configuration">스테이지 구성</Link>을 참고하세요.

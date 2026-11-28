@@ -1,0 +1,77 @@
+---
+title: Lezioni video
+description: Le velocità e le scorciatoie da tastiera del player video, i sottotitoli e quelli tradotti automaticamente, la trascrizione, la ricerca di ciò che è stato detto in un corso e le domande dentro un video.
+---
+
+import Link from '@components/link.astro';
+
+## Il player
+
+I controlli del player impostano la velocità di riproduzione, i sottotitoli, il volume e lo schermo intero, e aprono la trascrizione. Le velocità vanno da 0,5 a 2 a passi di 0,25. Il player ricorda le tue scelte di velocità, volume e sottotitoli per il video successivo.
+
+Le scorciatoie da tastiera funzionano mentre il player ha il focus e non stai scrivendo in un campo:
+
+| Tasto | Cosa fa |
+| --- | --- |
+| Spazio o K | Riproduci o pausa |
+| J | Indietro di 10 secondi |
+| L | Avanti di 10 secondi |
+| Freccia sinistra | Indietro di 5 secondi |
+| Freccia destra | Avanti di 5 secondi |
+| Freccia su, freccia giù | Alza il volume, abbassa il volume |
+| M | Disattiva o riattiva l'audio |
+| C | Sottotitoli attivi o disattivi |
+| F | Schermo intero |
+| `<` e `>` | Più lento, più veloce |
+| Da 0 a 9 | Salta a quel decimo del video: 5 è la metà |
+
+## Sottotitoli e trascrizione
+
+I sottotitoli vengono aggiunti automaticamente a ogni video. Il menu dei sottotitoli elenca le lingue che il video ha e **Off**.
+
+- Una lingua contrassegnata "(auto-translated)" è una traduzione automatica. Può essere sbagliata.
+- **Transcript** apre il testo del video. **Jump to current line** lo riporta al punto in cui si trova il video.
+
+Gli istruttori scelgono in quali lingue tradurre i sottotitoli e possono caricare i propri. Vedi la <Link path="guides/instructor-guide">Guida per istruttori</Link>.
+
+## Cercare ciò che è stato detto
+
+Puoi cercare nei sottotitoli di ogni video di un corso a cui sei iscritto.
+
+1. Nel player del corso, trova **Search transcripts**.
+2. Scrivi almeno 2 caratteri in "Search what was said".
+3. Scegli **Search**.
+4. Scegli un risultato per aprire quella lezione in quel momento.
+
+La pagina elenca i momenti che corrispondono, fino ai 20 migliori. Se ce ne sono di più, aggiungi una parola per restringere la ricerca. Se nulla corrisponde, controlla l'ortografia oppure prova con le parole nella lingua dei sottotitoli.
+
+## Domande in un video
+
+Un istruttore può far fermare un video e porre una domanda, in un momento del video o alla fine.
+
+### Per gli studenti
+
+1. Quando il video si ferma, leggi la domanda. Una domanda a scelta multipla dice "Select all that apply".
+2. Scegli la tua risposta e scegli **Submit answer**, oppure scegli **Skip**.
+3. Leggi se hai risposto bene ("Correct" o "Not quite"), la risposta corretta e la **Explanation**, se c'è.
+4. Scegli **Continue** per continuare a guardare.
+
+- Viene registrata una risposta per domanda. Una domanda a scelta multipla è giusta solo quando ogni scelta è giusta.
+- **Try again** è un esercizio: "Practice: this answer isn't recorded".
+- Le risposte non contano mai per i tuoi progressi, per i quiz del corso o per un certificato.
+- Un corso archiviato non pone domande.
+- Se l'istruttore ha cambiato una domanda dall'ultima volta che l'hai vista, dice "This question was updated. Check it before answering."
+
+### Per gli istruttori
+
+1. In **Course content**, apri la finestra **Questions** su un video.
+2. Riproduci o trascina il video al momento che vuoi e scegli **Add a question here**. Per una domanda dopo il video, scegli **Add an end question**.
+3. Scrivi la domanda, le opzioni e quali sono corrette.
+4. Regola **Ask at** se serve: un tempo come 1:30, oppure **At the end**.
+5. Salva.
+
+- Un video accetta fino a 20 domande.
+- **Preview as student** riproduce il video con le sue domande. Le risposte vengono controllate e non registrate. **Stop previewing** torna alla modifica.
+- Puoi cambiare le domande dopo che gli studenti hanno risposto. Le risposte già registrate vengono conservate e non vengono rivalutate.
+
+I risultati compaiono nella pagina di analisi del corso, sotto **Video questions**. Vedi <Link path="guides/course-analytics">Analisi dei corsi</Link>.

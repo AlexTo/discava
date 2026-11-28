@@ -1,0 +1,78 @@
+---
+title: Quiz e compiti
+description: Creare un quiz e le sue impostazioni, farlo come studente, assegnare un compito, consegnare il lavoro, i lavori in ritardo, la valutazione, la restituzione e la richiesta di una nuova consegna.
+---
+
+import Link from '@components/link.astro';
+
+Un quiz viene corretto automaticamente. Un compito è un lavoro che lo studente carica e che un istruttore valuta.
+
+## Quiz: per gli istruttori
+
+In **Course content**, aggiungi un **Quiz** a una lezione. Il costruttore di quiz ha:
+
+- **Questions**: fino a 50. Ognuna è **Single choice** o **Multiple choice**, con da 2 a 10 opzioni e una **Explanation** facoltativa.
+- **Pass mark (%)**: da 0 a 100.
+- **Attempts allowed**: **Unlimited**, oppure un numero di almeno 1.
+- **Show the correct answers**: After each attempt, After the last attempt oppure Never.
+- **Shuffle the options for each student**.
+
+Non c'è limite di tempo.
+
+**Preview as student** ti permette di fare il quiz come lo farebbe uno studente. Le risposte vengono controllate e non viene salvato nulla.
+
+Puoi modificare un quiz dopo che gli studenti lo hanno tentato. I loro tentativi e i migliori punteggi vengono conservati e mai rivalutati. A uno studente nel mezzo di un tentativo viene chiesto di controllare le domande modificate prima di inviare.
+
+## Quiz: per gli studenti
+
+Il quiz mostra il numero di domande, la soglia di superamento e quanti tentativi hai.
+
+1. Scegli **Start quiz**.
+2. Rispondi a ogni domanda. **Next** e **Back** ti spostano tra di esse.
+3. Scegli **Review answers** per vedere cosa hai risposto e cosa è ancora senza risposta. **Change** ti riporta a una domanda.
+4. Scegli **Submit answers**.
+
+Il risultato mostra il punteggio di questo tentativo e se hai superato il quiz. Conta il tuo punteggio migliore.
+
+- **Resume quiz** riprende un tentativo che avevi lasciato.
+- **Retake quiz** inizia un altro tentativo, finché ti restano tentativi.
+- Superare il quiz, o usare l'ultimo tentativo, lo segna come completato.
+- In un corso archiviato i quiz sono chiusi.
+
+## Compiti: per gli istruttori
+
+In un modulo, scegli **New assignment** e scegli il tipo:
+
+- **Upload**: gli studenti consegnano un file e tu lo valuti.
+- **Quiz**: un quiz valutato automaticamente.
+
+Un compito di tipo upload ha un **Assignment title**, delle **Instructions**, **Max points** (un numero intero da 1 a 1000) e una scadenza facoltativa.
+
+### Valutazione
+
+**Home** elenca le consegne **Waiting for grading**. Il link **Submissions** di un compito in **Course content** elenca ogni studente, come Not submitted, Waiting, Resubmission requested o Returned.
+
+1. Apri una consegna.
+2. Leggi il file.
+3. Inserisci i **Points**, da 0 al massimo, e il tuo **Feedback**.
+4. Scegli **Return** per dare allo studente il voto, oppure **Request resubmission** per chiedere un'altra versione.
+
+Dopo aver restituito il lavoro puoi ancora cambiare il voto con **Save grade**. Lo studente viene avvisato ogni volta. Puoi leggere il lavoro di uno studente che ha lasciato il corso, ma non valutarlo.
+
+## Compiti: per gli studenti
+
+Il compito mostra le istruzioni, i **Maximum points** e la scadenza, se ce l'ha.
+
+1. Scegli **Choose file** e seleziona il tuo lavoro.
+2. Scegli **Submit**.
+
+- Consegni un solo file fino a 100 MB: pdf, docx, xlsx, pptx, odt, ods, odp, txt, csv, md, png, jpg, jpeg, gif, webp o zip.
+- **I lavori in ritardo sono accettati.** Dopo la scadenza la tua consegna è contrassegnata **Late**.
+- **Resubmit** sostituisce il tuo file finché l'istruttore non lo restituisce. Un lavoro restituito non si può cambiare.
+- Se l'istruttore ti chiede di consegnare di nuovo, vedi il suo feedback e puoi inviare una nuova versione.
+- Un lavoro restituito mostra i tuoi punti e il feedback.
+- In un corso archiviato non si possono più consegnare lavori.
+
+Vieni avvisato nella campanella, e via email a meno che tu non l'abbia disattivata, quando un lavoro viene restituito, quando viene richiesta una nuova consegna e quando un voto cambia. Vedi <Link path="guides/notifications">Notifiche</Link>.
+
+I voti possono contare per un certificato. Vedi <Link path="guides/certificates">Certificati</Link>.

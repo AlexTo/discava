@@ -1,0 +1,150 @@
+---
+title: Tổng quan kiến trúc
+description: Các thành phần tạo nên Discava, trách nhiệm của từng thành phần, và cách chúng kết nối.
+sidebar:
+  order: 0
+  label: Overview
+---
+
+import Link from '@components/link.astro';
+
+Discava là một tập hợp các thành phần serverless trên AWS. Không có gì chạy khi không ai dùng: không có máy chủ, container hay cluster nào phải giữ cho chạy liên tục.
+
+## Toàn cảnh hệ thống
+
+```d2 title="Components and how they connect"
+direction: down
+
+users: "Students, instructors, admins"
+
+edge: "Websites" {
+  student: "Student portal"
+  instructor: "Instructor portal"
+  admin: "Admin portal"
+}
+
+identity: "Cognito\n(sign-in, groups)"
+
+apis: "APIs" {
+  core: "core-api"
+  instr: "instructor-api"
+  adm: "admin-api"
+}
+
+data: "Data" {
+  table: "Core table\n(DynamoDB)"
+  search: "Search\n(OpenSearch Serverless)"
+  lesson: "Lesson media\n(S3 + CloudFront)"
+  public: "Public media\n(S3 + CloudFront)"
+}
+
+async: "Background work" {
+  router: "Stream router"
+  handlers: "Feature handlers"
+  media: "Media pipeline\n(MediaConvert, Transcribe)"
+  router -> handlers: "one queue each"
+}
+
+email: "SES"
+stripe: "Stripe"
+pay: "Stripe webhook API"
+renderer: "Page renderer"
+
+users -> edge
+users -> identity: "sign in"
+edge -> apis: "tRPC over HTTPS"
+apis -> data.table
+apis.core -> data.search: "query"
+apis.instr -> async.media: "submit video"
+data.table -> async.router: "change stream"
+async.handlers -> data.table
+async.handlers -> data.search: "index"
+async.handlers -> email
+async.media -> data.lesson: "renditions"
+users -> data.lesson: "watch"
+apis.core -> stripe: "start checkout"
+stripe -> pay: "signed confirmation"
+pay -> data.table
+edge.student -> renderer: "public pages"
+renderer -> data.table: "read"
+```
+
+## Các thành phần
+
+### Ba cổng (portal)
+
+| Cổng | Dành cho | Giao tiếp với |
+| --- | --- | --- |
+| **Student portal** | Duyệt danh mục, mua và học các khóa học, bài kiểm tra, bài tập, thảo luận, chứng chỉ | core-api |
+| **Instructor portal** | Xây dựng và định giá khóa học, mã giảm giá, chấm điểm, phân tích, thu nhập, trả lời học viên | core-api, instructor-api |
+| **Admin portal** | Danh mục, kiểm duyệt đánh giá, chứng chỉ, thương hiệu và kết nối Stripe | core-api, admin-api |
+
+Mỗi cổng là một ứng dụng một trang (single-page) React: các tệp tĩnh trong một S3 bucket riêng tư, được CloudFront phục vụ. Một cổng biết các API và trang đăng nhập của nó ở đâu từ tệp `runtime-config.json` được triển khai bên cạnh, nên cùng một bản build chạy được trên mọi stage.
+
+### Trang công khai
+
+Với crawler hay bản xem trước liên kết, một ứng dụng một trang chỉ là một cái vỏ rỗng. Vì vậy CloudFront distribution của cổng học viên chuyển một vài địa chỉ công khai tới một hàm Lambda, **hàm render trang**, hàm này trả lời bằng HTML thật: trang giới thiệu khóa học (`/learn/*`), hồ sơ giảng viên (`/instructors/*`), bản xem trước liên kết chứng chỉ (`/certificates/*`), `sitemap.xml` và `robots.txt`. <Link path="design/public-pages">Trang công khai</Link> có phần thiết kế.
+
+### Một nhà cung cấp danh tính
+
+Một Cognito user pool chứa mọi người dùng. Ba nhóm, `student`, `instructor` và `admin`, quyết định người dùng được làm gì. Việc đăng nhập diễn ra trên trang được lưu trữ của Cognito, và cổng nhận các token để gửi kèm mỗi lệnh gọi API.
+
+### Ba API
+
+Mỗi API là một API REST của API Gateway đứng trước các hàm Lambda, nói chuyện bằng [tRPC](https://trpc.io/).
+
+| API | Ai được gọi | Ví dụ |
+| --- | --- | --- |
+| **core-api** | Mọi người dùng đã đăng nhập, cộng thêm một vài procedure công khai | Danh mục, ghi danh, thanh toán, nội dung bài học, bài kiểm tra, bài tập, thảo luận, chứng chỉ, tìm kiếm |
+| **instructor-api** | Thành viên của `instructor` | Tạo, chỉnh sửa và định giá khóa học, mã giảm giá, tải media lên, chấm điểm, phân tích, thu nhập và chi trả |
+| **admin-api** | Thành viên của `admin` | Phân loại danh mục, kiểm duyệt đánh giá, chứng chỉ, thương hiệu, kết nối Stripe |
+
+Việc tách theo đối tượng nghĩa là mỗi API có các hàm, quyền, giới hạn request và tường lửa riêng. Một lỗi chỉ thuộc về giảng viên không thể bị chạm tới bằng token của học viên, và một đợt dồn lượng truy cập của học viên không thể làm cạn tài nguyên của API giảng viên.
+
+### Một bảng
+
+Toàn bộ dữ liệu ứng dụng nằm trong một bảng DynamoDB duy nhất, **bảng core**: khóa học, module, bài học, bản ghi ghi danh, tiến độ, lượt làm bài kiểm tra, thảo luận, đánh giá, chứng chỉ, thông báo, mã giảm giá, đơn hàng, và thu nhập cùng các khoản chi trả của giảng viên. Các bản ghi liên quan dùng chung một partition, nên toàn bộ chương trình của một khóa học chỉ là một truy vấn.
+
+### Tìm kiếm
+
+Một collection OpenSearch Serverless chứa hai index:
+
+- **Khóa học**: mọi khóa học đã xuất bản. Nó phục vụ tìm kiếm, gợi ý và bộ lọc của danh mục.
+- **Bản chép lời**: văn bản phụ đề của các video bài học. Nó cho phép một học viên đã ghi danh tìm ra thời điểm trong khóa học mà một cụm từ được nói.
+
+Bảng là nguồn sự thật. Các index được nạp từ change stream của nó, có thể dựng lại từ đó, và không bao giờ bị một API ghi vào.
+
+### Media
+
+| Kho | Chứa | Truy cập |
+| --- | --- | --- |
+| **Media bài học** | Video bài học, phụ đề, tệp và bài nộp bài tập | Riêng tư. CloudFront chỉ phục vụ cho các request mang chữ ký mà một API đã cấp sau khi kiểm tra quyền truy cập, như việc ghi danh |
+| **Bucket tải lên** | Các tệp đang trên đường vào | Chỉ ghi qua presigned URL, được job xử lý đọc, tồn tại ngắn hạn |
+| **Media công khai** | Ảnh khóa học, ảnh hồ sơ giảng viên và thương hiệu của nền tảng (logo, biểu tượng, tên và màu) | Ai cũng đọc được qua CloudFront |
+
+### Thanh toán
+
+Các khóa học trả phí được mua trên trang thanh toán do Stripe lưu trữ, với một tài khoản Stripe mà quản trị viên kết nối trong cổng quản trị. Stripe xác nhận từng khoản thanh toán tới một API nhỏ riêng, **API webhook của Stripe**, nơi xác minh chữ ký của thông điệp và ghi danh học viên. Nó tách khỏi ba API tRPC vì người gọi nó là Stripe, không phải một người dùng đã đăng nhập. <Link path="design/payments">Thanh toán</Link> có phần thiết kế.
+
+### Công việc nền
+
+Ba việc diễn ra ngoài một request:
+
+- **Phản ứng với thay đổi dữ liệu.** Change stream của bảng có một bên đọc, **stream router**, đưa mỗi thay đổi vào hàng đợi của mọi tính năng cần nó. Có tám tính năng: tính lại tiến độ (cũng cấp chứng chỉ), lập chỉ mục tìm kiếm khóa học, lập chỉ mục bản chép lời, phân tích, gửi thông báo, ghi nhận thu nhập của giảng viên, dịch phụ đề và xuất bản thương hiệu.
+- **Xử lý video.** Một video đã tải lên được MediaConvert transcode thành các bản phát trực tuyến thích ứng, rồi được Transcribe tạo phụ đề. Amazon Translate biến phụ đề thành các ngôn ngữ phụ đề khác của khóa học.
+- **Trả tiền cho giảng viên.** Một lượt chạy hằng ngày gửi cho mỗi giảng viên khoản thu nhập đến hạn, dưới dạng một Stripe transfer. Xem <Link path="design/instructor-payouts">Chi trả cho giảng viên</Link>.
+
+## Nguyên tắc thiết kế
+
+- **Chỉ serverless.** Mọi thành phần tính phí theo mức dùng và co về không.
+- **Một cách để làm.** Một đám mây, một công cụ triển khai, một bảng. Ít tùy chọn hơn để cấu hình, viết tài liệu và kiểm thử.
+- **An toàn theo mặc định.** Mọi biện pháp bảo vệ đều bật trừ khi một stage tắt nó.
+- **Chạy cục bộ.** Mọi dịch vụ AWS mà Discava dùng đều có bản thay thế cục bộ, nên phát triển không cần tài khoản AWS.
+
+## Đọc tiếp
+
+- <Link path="architecture/aws">Triển khai trên AWS</Link>: các stack, nội dung của từng stack và thứ tự triển khai
+- <Link path="architecture/flows">Luồng request và dữ liệu</Link>: đăng nhập, một lệnh gọi API, hành trình của một video, và cách các thay đổi lan truyền
+- <Link path="architecture/security">Mô hình bảo mật</Link>: ai truy cập được gì, và các biện pháp bảo vệ mà mỗi stage có thể bật
+- <Link path="architecture/codebase">Bản đồ mã nguồn</Link>: mã của từng thành phần nằm ở đâu
+- <Link path="design">Thiết kế</Link>: từng tính năng hoạt động ra sao

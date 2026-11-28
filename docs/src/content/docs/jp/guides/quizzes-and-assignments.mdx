@@ -1,0 +1,78 @@
+---
+title: クイズと課題
+description: クイズの作成と設定、受講生としての受験、課題の設定、提出、遅れた提出、採点、返却、再提出の依頼について説明します。
+---
+
+import Link from '@components/link.astro';
+
+クイズは自動で採点されます。課題は、受講生がアップロードし、講師が採点する提出物です。
+
+## クイズ: 講師向け
+
+**Course content** で、レッスンに **Quiz** を追加します。クイズビルダーには次の項目があります。
+
+- **Questions**: 最大 50 問。それぞれ **Single choice** または **Multiple choice** で、選択肢は 2 から 10 個、任意で **Explanation** を付けられます。
+- **Pass mark (%)**: 0 から 100。
+- **Attempts allowed**: **Unlimited**、または 1 以上の回数。
+- **Show the correct answers**: After each attempt、After the last attempt、Never のいずれか。
+- **Shuffle the options for each student**。
+
+制限時間はありません。
+
+**Preview as student** で、受講生と同じようにクイズを受けられます。回答は採点されますが、何も保存されません。
+
+受講生が受験したあとでも、クイズは編集できます。受験記録と最高得点は保持され、再採点はされません。受験の途中だった受講生は、提出前に変更された問題を確認するよう求められます。
+
+## クイズ: 受講生向け
+
+クイズには、問題数、合格点、受験できる回数が表示されます。
+
+1. **Start quiz** を選びます。
+2. 各問題に答えます。**Next** と **Back** で問題間を移動します。
+3. **Review answers** を選ぶと、答えた内容と、まだ答えていない問題を確認できます。**Change** で問題に戻ります。
+4. **Submit answers** を選びます。
+
+結果には、今回の得点と合格したかどうかが表示されます。最高得点が採用されます。
+
+- **Resume quiz** は、中断した受験を続けます。
+- **Retake quiz** は、受験回数が残っている間、もう一度受験を始めます。
+- クイズに合格するか、最後の受験回数を使い切ると、完了になります。
+- アーカイブされたコースでは、クイズは閉じられています。
+
+## 課題: 講師向け
+
+モジュールで **New assignment** を選び、種類を選びます。
+
+- **Upload**: 受講生がファイルを提出し、あなたが採点します。
+- **Quiz**: 自動で採点されるクイズ。
+
+Upload の課題には、**Assignment title**、**Instructions**、**Max points**（1 から 1000 の整数）、任意の期限があります。
+
+### 採点
+
+**Home** には、**Waiting for grading** の提出物が一覧されます。**Course content** にある課題の **Submissions** リンクは、全受講生を Not submitted、Waiting、Resubmission requested、Returned の状態で一覧にします。
+
+1. 提出物を開きます。
+2. ファイルを読みます。
+3. **Points**（0 から上限まで）と **Feedback** を入力します。
+4. **Return** で受講生に成績を渡すか、**Request resubmission** で別のバージョンを求めます。
+
+返却したあとも、**Save grade** で成績を変更できます。そのたびに受講生へ通知されます。コースを退会した受講生の提出物は読めますが、採点はできません。
+
+## 課題: 受講生向け
+
+課題には、指示、**Maximum points**、期限（ある場合）が表示されます。
+
+1. **Choose file** を選び、提出物を選びます。
+2. **Submit** を選びます。
+
+- 提出できるのは、100 MB までのファイル 1 つです。形式は pdf、docx、xlsx、pptx、odt、ods、odp、txt、csv、md、png、jpg、jpeg、gif、webp、zip です。
+- **遅れた提出も受け付けられます。**期限を過ぎた提出には **Late** と表示されます。
+- **Resubmit** は、講師が返却するまで、ファイルを置き換えます。返却済みの提出物は変更できません。
+- 講師が再提出を求めた場合は、そのフィードバックが表示され、新しいバージョンを提出できます。
+- 返却された提出物には、得点とフィードバックが表示されます。
+- アーカイブされたコースでは、提出はできません。
+
+提出物が返却されたとき、再提出が求められたとき、成績が変わったときは、ベルで知らされ、オフにしない限りメールも届きます。<Link path="guides/notifications">通知</Link>を参照してください。
+
+成績は、修了証の条件に含まれることがあります。<Link path="guides/certificates">修了証</Link>を参照してください。

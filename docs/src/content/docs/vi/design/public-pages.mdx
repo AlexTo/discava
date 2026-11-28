@@ -1,0 +1,157 @@
+---
+title: Trang công khai
+description: "Cách trang giới thiệu khóa học và hồ sơ giảng viên đến được trình thu thập dữ liệu và bản xem trước liên kết: trình render trang, cache và độ mới, việc viết lại cho SPA, thiết lập lập chỉ mục và những gì video xem trước làm lộ ra."
+sidebar:
+  order: 9
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261118-223240-public-course-pages/`](https://github.com/AlexTo/discava/tree/main/specs/20261118-223240-public-course-pages/)
+
+**Spec:** [`specs/_archive/20261120-154626-free-preview-lessons/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261120-154626-free-preview-lessons/) (bài học xem trước miễn phí)
+
+Trang giới thiệu của một khóa học (`/learn/<courseId>`) và hồ sơ của một giảng viên (`/instructors/<handle>`) là công khai: ai cũng mở được khi chưa đăng nhập. Cổng học viên là một ứng dụng một trang, nên một trình thu thập dữ liệu hay một bản xem trước liên kết không chạy script sẽ chỉ thấy một khung rỗng. **Trình render trang** khắc phục điều đó bằng cách trả lời các địa chỉ này bằng HTML thật.
+
+## Trình render trang
+
+Trình render là handler Lambda thứ hai trong `@discava/core-api` (`src/page-renderer/handler.ts`). Distribution CloudFront của cổng học viên dùng nó làm origin cho `/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml` và `/robots.txt`. Nó được dựng bởi construct `StudentPortal` trong stack Websites, với một Function URL mà chỉ CloudFront gọi được. Nó chỉ trả lời `GET` và `HEAD`.
+
+Cục bộ, `pnpm dev` khởi động nó trên cổng 2026 (`src/local-page-renderer.ts`). Trình duyệt tiếp tục dùng máy chủ Vite, và phản hồi cho trình thu thập dữ liệu được lấy từ cổng đó.
+
+| Đường dẫn | Câu trả lời |
+|---|---|
+| `/learn/<courseId>` | Trang giới thiệu của một khóa học đã xuất bản, nếu không là `404` |
+| `/learn/<courseId>/<anything>` | `index.html` thuần với `noindex` (các route học khi đã đăng nhập). Nó không đọc gì |
+| `/instructors/<handle>` | Hồ sơ của một giảng viên dạy một khóa học đã xuất bản, nếu không là `404` |
+| `/certificates/<ID>` | Một phần head cho bản xem trước liên kết (người học, khóa học, ngày và tên nền tảng), luôn `noindex`; một ID không biết là `404` |
+| `/certificates/<ID>/<anything>` | `index.html` thuần với `noindex` (route LinkedIn) |
+| Bất cứ thứ gì khác | Một `404` |
+| `/sitemap.xml` | Mọi khóa học đã xuất bản, hồ sơ công khai và danh mục active, kèm `lastmod` |
+| `/robots.txt` | Xem [thiết lập lập chỉ mục](#thiết-lập-lập-chỉ-mục) |
+
+Với một trang, trình render lấy `index.html` đã build và thêm vào:
+
+- các thẻ head: tiêu đề, mô tả, địa chỉ canonical, thẻ Open Graph và Twitter card, và JSON-LD schema.org (`Course`, hoặc `ProfilePage` với một `Person`);
+- một bản render tĩnh bên trong `#root`: tiêu đề, ảnh, các thông tin chính, kết quả đạt được, yêu cầu, mô tả, đề cương chương trình học, tóm tắt đánh giá, trang đầu của các bài đánh giá và các thẻ giảng viên;
+- một phần tử `<script type="application/json" id="discava-page-data">` chứa các đầu ra procedure mà nó đã dùng;
+- thương hiệu nền tảng: biểu tượng, màu và tài liệu thương hiệu của nó, để trang hiển thị thương hiệu do quản trị viên đặt ngay từ lần vẽ đầu tiên (xem <Link path="design/branding">Thương hiệu</Link>). Nếu không đọc được thương hiệu, trang render với thương hiệu mặc định.
+
+Khi khởi động, cổng đọc và gỡ phần tử page-data rồi nạp nó vào React Query (`src/lib/page-data.ts`). Lần render đầu của ứng dụng khi đó là trang đầy đủ, không nhấp nháy khi nó thay thế phần markup tĩnh. Mọi văn bản đều được escape HTML, và JSON được serialise với `<`, `>` và `&` được escape, nên tên một khóa học không thể thoát ra khỏi trang.
+
+**Một nguồn sự thật duy nhất cho những gì là công khai.** Trình render gọi `course.publicView`, `review.summary`, `review.list`, `instructorProfile.publicView` và `certificate.verify` ngay trong tiến trình, qua `appRouter.createCaller` với một context ẩn danh. Vì vậy một trình thu thập dữ liệu không bao giờ thấy nhiều hơn những gì API trả về. Khóa học nháp, khóa học đã lưu trữ và một ID không biết cho ra các trang `404` giống hệt từng byte. Điều này đúng với tất cả mọi người, kể cả học viên đã ghi danh khóa học. Quyền truy cập của họ qua My Learning không đổi.
+
+**Địa chỉ canonical** dùng host của người xem, mà một CloudFront Function sao chép vào `x-discava-host`. Host chỉ được dùng nếu nó là một trong các tên miền cổng học viên của stage (hoặc một host `*.cloudfront.net` khi chưa cấu hình tên miền nào). Mọi host khác quay về tên miền đầu tiên được cấu hình, nên trỏ một tên miền vào distribution không thể làm nhiễm canonical.
+
+**Khi một phụ thuộc thất bại** (table, tham số thiết lập hoặc việc đọc `index.html`), câu trả lời là một `503` văn bản thuần (`Service temporarily unavailable`) với `Cache-Control: no-store`, `X-Robots-Tag: noindex` và `Retry-After: 5`. Nó không bao giờ được cache và không bao giờ bị biến thành `404`. Nó không có HTML, nên một người truy cập tải trang giới thiệu hay hồ sơ trong lúc sự cố sẽ thấy đoạn văn bản đó, không phải ứng dụng. Điều hướng trong ứng dụng không đến trình render và vẫn hoạt động.
+
+## Cache và độ mới
+
+CloudFront cache mỗi câu trả lời:
+
+| Câu trả lời | `Cache-Control` |
+|---|---|
+| Một trang hoặc khung | `max-age=0, s-maxage=300`: CloudFront giữ 5 phút, trình duyệt luôn kiểm tra lại |
+| Một not-found | `max-age=0, s-maxage=60` |
+| `sitemap.xml`, `robots.txt` | `max-age=300, s-maxage=300` |
+| Một `503` | `no-store` |
+
+Khóa cache chỉ là đường dẫn. Không query string, cookie hay header `Authorization` nào được chuyển tiếp, nên một câu trả lời không bao giờ phụ thuộc vào người hỏi.
+
+Điều đó giới hạn độ cũ ở **5 phút** mà không cần invalidation. Một thay đổi của khóa học hay hồ sơ đến trình thu thập dữ liệu và bản xem trước liên kết trong vòng 5 phút, và một khóa học đã lưu trữ hay một hồ sơ không còn công khai bắt đầu trả lời `404` trong cùng thời gian. Người truy cập trong trình duyệt thấy thay đổi ở lần tải kế tiếp, vì ứng dụng đọc API.
+
+Trình render kiểm tra `index.html` của cổng ở mỗi lần cache miss bằng một `GetObject` có điều kiện (`If-None-Match`, thường là `304`), và không bao giờ quay về bản cũ hơn. Một lần deploy cổng dọn các asset đã băm cũ rồi invalidate toàn bộ distribution, nên không trang cache nào còn trỏ đến một bundle không còn tồn tại.
+
+## Việc viết lại cho ứng dụng một trang
+
+Một CloudFront Function trên behavior mặc định (`spa-rewrite.js`, trong construct `StaticWebsite` dùng chung) viết lại mọi đường dẫn có đoạn cuối không có phần mở rộng tệp thành `/index.html`. Một asset bị thiếu nhận lỗi của S3, và `404` của trình render đến được người xem. Cả ba cổng đều nhận điều này từ construct dùng chung.
+
+Distribution không có error response nào biến `404` hoặc `403` thành `/index.html` với `200`. Chúng áp dụng cho mọi origin của một distribution, nên sẽ biến `404` của trình render thành một trang thành công mà các công cụ tìm kiếm coi là soft 404.
+
+## Thiết lập lập chỉ mục
+
+`studentPortal.allowSearchEngineIndexing` là một thiết lập theo từng stage, mặc định là `false` và chỉ là `true` cho `discava-production`. (Nó không chỉ gọi là "indexing", vì ở đây từ đó đã mang nghĩa lập chỉ mục OpenSearch.)
+
+| | Thiết lập tắt (mọi stage khác, phát triển cục bộ) | Thiết lập bật (production) |
+|---|---|---|
+| Trang | `<meta name="robots" content="noindex">` và `X-Robots-Tag: noindex` trên mọi phản hồi của trình render | `noindex` chỉ trên các câu trả lời not-found và các khung `/learn/*` không phải trang giới thiệu; `/certificates/*` luôn `noindex` |
+| Tệp từ S3 | Response headers policy thêm `X-Robots-Tag: noindex` | Không có dấu |
+| `/robots.txt` | `Disallow: /` | Chặn `/learn/*/`, `/my-learning`, `/signin` và `/search`, cho phép phần còn lại và liệt kê site map |
+
+Nội dung cho trình thu thập dữ liệu và các thẻ mạng xã hội được phục vụ ở mọi stage, nên có thể kiểm thử trước production.
+
+Site map được dựng theo yêu cầu từ các lần đọc theo khóa và các chỉ mục đã khai báo, không bao giờ là một lần quét (`helpers/sitemap.ts`). Nó là một tệp, mà giao thức site map giới hạn ở 50,000 URL. Một site map index là việc làm tiếp theo vượt quá mức đó.
+
+## Các quy tắc hiển thị của video xem trước
+
+Một khóa học có thể có một video xem trước, do giảng viên tải lên thành một tệp riêng và dài không quá 5 phút. Nó được transcode và gắn phụ đề như video bài học, và một bản thay thế giữ phiên bản trước tiếp tục phát cho đến khi bản mới sẵn sàng. Bản ghi của nó, `coursePreview`, tách khỏi `course`, nên một thay đổi trạng thái transcode hay phụ đề không làm đổi `course.updatedAt` hay kích hoạt lập chỉ mục lại tìm kiếm.
+
+Ai cũng phát được, đã đăng nhập hay chưa, nhưng chỉ theo các quy tắc sau:
+
+- `course.previewVideoUrl` là công khai, và chỉ trả lời khi khóa học **published** và bản xem trước có một **phiên bản phát được**. Nếu không, nó hoạt động như với một khóa học không tồn tại.
+- Các cookie đã ký mà nó đặt chỉ bao phủ **thư mục của phiên bản đó** (các rendition và track phụ đề của nó), với cùng thời hạn như của một học viên đã ghi danh. Không video bài học, tệp hay nội dung nào khác của khóa học trở nên truy cập được nếu không ghi danh.
+- Một khóa học đã lưu trữ ngừng phục vụ bản xem trước ngay lập tức, và phát lại khi được khôi phục. Một phiên bản bị thay hoặc gỡ không cấp địa chỉ mới nào, và các tệp của nó bị xóa sau, như với video bài học.
+- Procedure nằm trong `PUBLIC_OPERATIONS`, nên nó có các giới hạn yêu cầu công khai, và tường lửa web của stage khi được bật.
+
+## Bài học xem trước miễn phí
+
+Giảng viên có thể đánh dấu một bài học thông thường là xem trước miễn phí. Khi đó ai cũng mở được nó tại `/learn/<courseId>/preview/<lessonId>`, đã đăng nhập hay chưa, đã ghi danh hay chưa. Đây là ngoại lệ có chủ ý duy nhất đối với "người dùng chưa trả tiền không thể lấy nội dung trả phí".
+
+**Dấu đánh dấu.** Một bài học mang một thuộc tính tùy chọn `freePreview`, chỉ lưu dưới dạng `true` và bị gỡ khi bài học được bỏ đánh dấu (`lesson.setFreePreview` trong instructor-api). Chỉ bài học thuộc loại `lesson` mới mang được nó: một bài học bài tập không thể bị đánh dấu, và invariant của table `free-preview-on-ordinary-lesson` đánh dấu lỗi nếu có.
+
+Một bài học là bản xem trước **mở** khi `isOpenFreePreview` (trong `@discava/core-table`) đúng. Hàm đó là định nghĩa duy nhất của "mở":
+
+- khóa học đã xuất bản;
+- module và bài học đang hiển thị (visible và không bị lưu trữ);
+- bài học là một bài học thông thường, và nó được đánh dấu.
+
+**Ba thao tác công khai riêng.** `freePreview.lesson`, `freePreview.videoUrl` và `freePreview.fileUrl` là các truy vấn công khai trên core-api, được liệt kê trong `PUBLIC_OPERATIONS`. Chúng không bao giờ đọc người gọi, nên một người truy cập chưa đăng nhập, một người dùng chưa ghi danh và một học viên đã ghi danh nhận cùng một câu trả lời.
+
+Các procedure dành cho người đã ghi danh (`course.view`, `contentItem.videoUrl`, `contentItem.fileUrl`, `quiz.view`, các procedure tiến độ, hoàn thành, bài tập và thảo luận cùng phần còn lại) không bị đụng đến và vẫn cần ghi danh, với bài học được đánh dấu cũng như bài học khác. Một thao tác công khai không có claim, nên một thao tác không thể phục vụ cả người truy cập lẫn học viên đã ghi danh.
+
+**Một phản hồi chứa gì.** Mỗi mục được dựng từng trường một, nên không gì rời đi trừ khi nó được nêu tên:
+
+| Mục | Người truy cập nhận được |
+|---|---|
+| Video | Tiêu đề, mô tả, thời lượng và việc nó có phát được lúc này không |
+| Văn bản | Nội dung của nó |
+| Tệp | Tên, kích thước và loại |
+| Quiz | Chỉ tiêu đề và số câu hỏi, hiển thị dưới dạng một thẻ bị khóa. Không câu hỏi, đáp án hay thiết lập |
+| Bài tập | Bị bỏ |
+
+Không khóa lưu trữ, trạng thái hay thuộc tính job nào được trả về. Một người gọi nêu tên một bài học không phải bản xem trước mở, hoặc một mục không được hiển thị dưới nó, nhận cùng một `NOT_FOUND` bất kể lý do, và không có gì được ký.
+
+**Ký.**
+
+- Cookie của một video chỉ bao phủ thư mục của phiên bản đó, được đặt với `Path` đó, và kéo dài **một giờ** (`FREE_PREVIEW_COOKIE_LIFETIME_SECONDS`), so với bốn giờ của một học viên đã ghi danh.
+- Trang yêu cầu địa chỉ khi người truy cập bấm phát và lại mỗi 30 phút khi video đang phát, điều này làm mới các cookie.
+- Một liên kết tệp bao phủ một object trong năm phút. Văn bản không cần chữ ký.
+- Một giờ đó không bao giờ vượt quá thời hạn cookie mà `RETIRED_VERSION_DELAY_MINUTES` đã bao phủ, nên các tệp của một phiên bản bị thay tồn tại lâu hơn mọi cookie xem trước. Một unit test cố định điều này.
+
+**Bỏ đánh dấu làm gì.** Các thao tác đọc bài học ở mỗi yêu cầu và không có gì cache chúng. Từ yêu cầu đầu tiên sau lần ghi (hoặc sau khi bài học, module hay khóa học của nó bị ẩn hoặc lưu trữ) cả ba đều trả lời `NOT_FOUND`: không có truy cập mới. Một địa chỉ xem trước được chia sẻ khi đó hiển thị "This preview is no longer available".
+
+**Bỏ đánh dấu không làm gì.** Nó không thu hồi những gì đã được phát ra:
+
+- cookie video vẫn hoạt động cho đến khi hết hạn, tối đa một giờ sau khi được cấp, và không bao giờ được làm mới;
+- một liên kết tệp hoạt động tối đa năm phút;
+- văn bản trên màn hình, một tệp đã tải xuống hay một bản ghi hình không thể thu hồi.
+
+Trang giới thiệu có thể hiển thị nhãn "Free preview" tối đa năm phút, vì trình render trang cache nó.
+
+**Không có gì được ghi.** Một bản xem trước không thực hiện lần ghi nào và không đọc gì về người gọi. Không có lần hoàn thành, tiến độ, vị trí video đã lưu, lượt làm quiz hay số đếm hoạt động của học viên, và không có thảo luận. Video bắt đầu từ đầu ở mỗi lần truy cập. Điều này giữ mọi bản ghi của học viên gắn với một lượt ghi danh, điều mà `student-records-enrolled` kiểm tra sau mỗi test e2e.
+
+**Quy tắc nội dung trả phí.** Dạng dữ liệu của quy tắc, `paid-course-enrolment-paid`, không đổi: một bản xem trước không tạo lượt ghi danh nào. Dạng API của nó được kiểm thử trong `paid-access.test.ts`, chạy mọi procedure nội dung với tư cách một người dùng đã đăng nhập chưa ghi danh đối với một khóa học có giá, rồi lại đối với một bài học xem trước mở, với cùng các lần từ chối `FORBIDDEN`. Các bài học xem trước mở là ngoại lệ được nêu tên duy nhất, và các test riêng của chúng nằm trong `procedures/free-preview.test.ts` (một ma trận từ chối cho mọi cách một đích không phải bản xem trước mở).
+
+**Trình thu thập dữ liệu.** Trình render đánh dấu mỗi bài học xem trước mở trong đề cương của một trang giới thiệu: tiêu đề của nó liên kết đến địa chỉ xem trước, theo sau là "Free preview". Nội dung của bài học không được render cho trình thu thập dữ liệu. Chính địa chỉ xem trước được phục vụ trang thuần với `noindex`, bị `robots.txt` chặn (`/learn/*/`) và không có trong site map. Render văn bản sẽ để một bài học chưa đánh dấu đọc được trong cache của các công cụ tìm kiếm.
+
+**Ghi chú cho người vận hành: băng thông.** Nền tảng trả tiền để phân phối video xem trước, và một chữ ký có thể stream trong một giờ. Giới hạn công khai chỉ chặn tần suất một chữ ký được cấp, không chặn số byte một lần stream, và ai cũng stream được một video xem trước, như video quảng bá. Hãy theo dõi các chỉ số truyền dữ liệu CloudFront của distribution media (distribution đứng trước bucket media, trong console CloudFront hoặc CloudWatch) và số lượng 429 trên các phương thức `freePreview.*` của gateway stage của core API. Một quy tắc giới hạn theo từng người truy cập hoặc một mức trần số bài học được đánh dấu cho mỗi khóa học là việc làm tiếp theo có thể có.
+
+## Hồ sơ và handle
+
+Hồ sơ của giảng viên được tạo cùng khóa học đầu tiên của họ, nên một thẻ giảng viên luôn có chỗ để liên kết đến. `course.create` gọi `ensureInstructorProfile` (trong `@discava/core-table`) ngay trước transaction riêng của khóa học. Nó là idempotent, và một hồ sơ không có khóa học không phá invariant nào.
+
+- URL dùng một **handle**, không bao giờ là ID tài khoản: 3 đến 30 ký tự gồm chữ thường, chữ số và dấu gạch ngang đơn. Nó là duy nhất giữa các giảng viên qua một bản ghi claim (`profileHandleClaim`), như tên danh mục.
+- Một hồ sơ là công khai khi và chỉ khi chủ của nó dạy ít nhất một khóa học đã xuất bản, và nó liệt kê đúng những khóa học đó. Không có cách từ chối.
+- Đầu ra công khai không mang địa chỉ email và không mã định danh tài khoản.
+
+<Link path="guides/instructor-guide">Hướng dẫn giảng viên</Link> bao quát phía giảng viên.

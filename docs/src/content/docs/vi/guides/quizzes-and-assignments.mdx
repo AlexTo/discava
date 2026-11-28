@@ -1,0 +1,78 @@
+---
+title: Bài kiểm tra và bài tập
+description: Xây dựng một bài kiểm tra và các cài đặt của nó, làm bài với vai trò học viên, giao một bài tập, nộp bài, nộp trễ, và chấm điểm, trả bài và yêu cầu nộp lại.
+---
+
+import Link from '@components/link.astro';
+
+Bài kiểm tra được chấm tự động. Bài tập là bài làm mà học viên tải lên và giảng viên chấm.
+
+## Bài kiểm tra: dành cho giảng viên
+
+Trong **Course content**, thêm một **Quiz** vào một bài học. Trình tạo bài kiểm tra có:
+
+- **Questions**: tối đa 50. Mỗi câu là **Single choice** hoặc **Multiple choice**, với 2 đến 10 lựa chọn và một **Explanation** tùy chọn.
+- **Pass mark (%)**: từ 0 đến 100.
+- **Attempts allowed**: **Unlimited**, hoặc một số tối thiểu là 1.
+- **Show the correct answers**: After each attempt, After the last attempt, hoặc Never.
+- **Shuffle the options for each student**.
+
+Không có giới hạn thời gian.
+
+**Preview as student** cho phép bạn làm bài kiểm tra như một học viên. Câu trả lời được kiểm tra và không có gì được lưu.
+
+Bạn có thể chỉnh sửa một bài kiểm tra sau khi học viên đã làm. Các lượt làm và điểm tốt nhất của họ được giữ và không bao giờ bị chấm lại. Học viên đang làm dở một lượt sẽ được yêu cầu xem lại các câu hỏi đã thay đổi trước khi nộp.
+
+## Bài kiểm tra: dành cho học viên
+
+Bài kiểm tra hiển thị số câu hỏi, điểm đạt và bạn có bao nhiêu lượt làm.
+
+1. Chọn **Start quiz**.
+2. Trả lời từng câu hỏi. **Next** và **Back** chuyển giữa các câu.
+3. Chọn **Review answers** để xem bạn đã trả lời gì và còn gì chưa trả lời. **Change** đưa bạn trở lại một câu hỏi.
+4. Chọn **Submit answers**.
+
+Kết quả hiển thị điểm của lượt này và bạn có đạt hay không. Điểm tốt nhất của bạn là điểm được tính.
+
+- **Resume quiz** tiếp tục một lượt làm bạn đã bỏ dở.
+- **Retake quiz** bắt đầu một lượt khác, khi bạn còn lượt.
+- Đạt bài kiểm tra, hoặc dùng hết lượt cuối, đánh dấu nó hoàn thành.
+- Trong khóa học đã lưu trữ, các bài kiểm tra bị đóng.
+
+## Bài tập: dành cho giảng viên
+
+Trong một module, chọn **New assignment** và chọn loại của nó:
+
+- **Upload**: học viên nộp một file và bạn chấm điểm.
+- **Quiz**: một bài kiểm tra được chấm tự động.
+
+Bài tập tải file có **Assignment title**, **Instructions**, **Max points** (một số nguyên từ 1 đến 1000) và một hạn nộp tùy chọn.
+
+### Chấm điểm
+
+**Home** liệt kê các bài nộp đang **Waiting for grading**. Liên kết **Submissions** của một bài tập trong **Course content** liệt kê mọi học viên, là Not submitted, Waiting, Resubmission requested hoặc Returned.
+
+1. Mở một bài nộp.
+2. Đọc file.
+3. Nhập **Points**, từ 0 đến mức tối đa, và **Feedback** của bạn.
+4. Chọn **Return** để trao điểm cho học viên, hoặc **Request resubmission** để yêu cầu một phiên bản khác.
+
+Sau khi trả bài, bạn vẫn có thể đổi điểm bằng **Save grade**. Học viên được thông báo mỗi lần. Bạn có thể đọc bài của một học viên đã rời khóa học, nhưng không thể chấm nó.
+
+## Bài tập: dành cho học viên
+
+Bài tập hiển thị hướng dẫn, **Maximum points** và hạn nộp, nếu có.
+
+1. Chọn **Choose file** và chọn bài làm của bạn.
+2. Chọn **Submit**.
+
+- Bạn nộp một file tối đa 100 MB: pdf, docx, xlsx, pptx, odt, ods, odp, txt, csv, md, png, jpg, jpeg, gif, webp hoặc zip.
+- **Bài nộp trễ vẫn được chấp nhận.** Sau hạn nộp, bài của bạn được đánh dấu **Late**.
+- **Resubmit** thay file của bạn cho đến khi giảng viên trả bài. Bài đã trả không thể thay đổi.
+- Nếu giảng viên yêu cầu bạn nộp lại, bạn thấy phản hồi của họ và có thể nộp một phiên bản mới.
+- Bài đã trả hiển thị điểm và phản hồi của bạn.
+- Trong khóa học đã lưu trữ, không thể nộp bài nữa.
+
+Bạn được báo ở chuông, và qua email trừ khi bạn tắt, khi bài được trả, khi có yêu cầu nộp lại và khi điểm thay đổi. Xem <Link path="guides/notifications">Thông báo</Link>.
+
+Điểm có thể được tính vào chứng chỉ. Xem <Link path="guides/certificates">Chứng chỉ</Link>.

@@ -1,0 +1,74 @@
+---
+title: Analytique du cours
+description: Le Dashboard de l'instructeur et la page d'analytique de chaque cours, ce que signifie chaque chiffre, les vues sur 30 et 90 jours, l'abandon par leçon, l'activation, et les résultats des quiz et des questions vidéo.
+---
+
+import Link from '@components/link.astro';
+
+**Dashboard** dans le portail instructeur montre comment vont vos cours. Seuls les instructeurs d'un cours peuvent voir ses chiffres.
+
+## Le Dashboard
+
+Il y a une carte pour chaque cours que vous enseignez, quel que soit son statut.
+
+| Chiffre | Signification |
+| --- | --- |
+| **Enrolments** | Toutes les personnes qui se sont inscrites |
+| **Active this week** | Les apprenants qui ont fait quelque chose dans le cours cette semaine calendaire, du lundi au dimanche en UTC |
+| **Completion rate** | Parmi les apprenants toujours inscrits, la part de ceux qui ont terminé le cours, en pourcentage entier arrondi à l'inférieur. « No data » tant que personne n'est inscrit |
+
+Chaque carte indique aussi quand ses chiffres ont changé pour la dernière fois, ou « No activity yet ». Choisissez le titre d'un cours pour ouvrir sa page d'analytique.
+
+## La page d'analytique d'un cours
+
+### Totaux
+
+| Chiffre | Signification |
+| --- | --- |
+| **Enrolments** | Toutes les personnes qui se sont inscrites |
+| **Active** | Inscrites, et n'ayant ni terminé ni quitté |
+| **Completed** | Ont terminé le cours |
+| **Dropped** | Ont quitté le cours, ou dont l'inscription a pris fin |
+| **Completion rate** | Comme sur le Dashboard |
+| **Active this week** | Comme sur le Dashboard |
+
+### 30 ou 90 jours
+
+Les deux graphiques couvrent les 90 derniers jours. Choisissez **30 days** ou **90 days** en haut de la page pour basculer.
+
+- **New enrolments per day**
+- **Active learners per day**
+
+Les jours sont des jours UTC. Tant que personne ne s'inscrit, la page indique « No learners have enrolled yet ».
+
+### Abandon par leçon
+
+Pour chaque leçon montrée aux apprenants : parmi les apprenants qui l'ont commencée, la part de ceux qui l'ont terminée. La leçon avec la part la plus basse est marquée **Lowest completion**. Une leçon que personne n'a commencée l'indique.
+
+Les apprenants qui ont quitté le cours ne sont pas comptés.
+
+### Activation
+
+Combien d'apprenants inscrits ont commencé, en nombre et en pourcentage. Commencer signifie avoir terminé un élément ou soumis une tentative de quiz. Des apprenants récents peuvent encore commencer, ce sont donc des chiffres à ce jour.
+
+La carte indique aussi combien d'apprenants ont répondu à l'invite de la première leçon et combien l'ont ignorée. Voir <Link path="guides/lesson-discussions">Discussions de leçon</Link>.
+
+### Quiz
+
+Il y a un panneau pour chaque quiz. **Show analysis** ouvre :
+
+- **Most-missed questions** : les tentatives, les échecs et le taux d'échec de chaque question, les plus ratées d'abord. Une question avec moins de 5 tentatives n'est pas classée et affiche « Not enough attempts ».
+- **Best score per student** : un graphique de la répartition des meilleures notes.
+
+### Questions vidéo
+
+Le panneau **Video questions** liste les vidéos qui posent des questions. **Show results** sur une vidéo ouvre, pour chaque question, son moment dans la vidéo, ses réponses, ses échecs et son taux d'échec. Une question avec trop peu de réponses affiche « Not enough answers yet ».
+
+Voir <Link path="guides/video-lessons">Leçons vidéo</Link> pour ajouter des questions à une vidéo.
+
+## Lire les chiffres
+
+- Un apprenant compte une seule fois par jour ou par semaine, quoi qu'il ait fait.
+- Si la page d'un cours indique « Course not found », le cours n'existe pas ou vous ne l'enseignez pas.
+
+<Link path="design/course-analytics">Analytique du cours</Link> décrit comment les chiffres sont tenus.

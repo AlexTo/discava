@@ -1,58 +1,90 @@
 ---
-title: Bắt đầu
-description: Chạy trang tài liệu Astro + Starlight mới của bạn.
+title: Chạy Discava trên máy
+description: Khởi động toàn bộ hệ thống trên máy của bạn bằng Docker, đăng nhập bằng người dùng thử và đặt lại dữ liệu cục bộ.
 ---
 
 import Link from '@components/link.astro';
-import Snippet from '@components/snippet.astro';
 
-Chào mừng đến với **docs**! Trang web này được xây dựng bằng [Astro](https://astro.build/) và
-chủ đề tài liệu [Starlight](https://starlight.astro.build/).
+Discava chạy hoàn toàn trên máy của bạn. Mỗi dịch vụ AWS mà nó dùng đều có một bản thay thế cục bộ, nên bạn không cần tài khoản AWS để dùng thử hay phát triển.
 
-## Chạy cục bộ
+## Bạn cần gì
 
-```bash
-pnpm nx start @discava/docs
+- **Node.js 24**, phiên bản mà các hàm Lambda đã triển khai đang chạy
+- **pnpm**, đúng phiên bản trong trường `packageManager` của `package.json` ở thư mục gốc (`corepack enable` sẽ cài giúp bạn)
+- **Docker**, đang chạy
+
+## Khởi động
+
+```sh
+git clone https://github.com/AlexTo/discava.git
+cd discava
+pnpm i
+pnpm dev
 ```
 
-## Build cho production
+`pnpm dev` khởi động ba cổng (portal), ba API và các bản thay thế cục bộ:
 
-```bash
-pnpm nx build @discava/docs
+| Dịch vụ | Cổng | Thay thế cho |
+| --- | --- | --- |
+| Cổng học viên / giảng viên / quản trị | 4201 / 4200 / 4202 | CloudFront |
+| core-api / instructor-api / admin-api | 2022 / 2023 / 2025 | API Gateway và Lambda |
+| Page renderer | 2026 | Lambda phục vụ các trang công khai (trang đích khóa học, hồ sơ giảng viên, chứng chỉ) dưới dạng HTML |
+| DynamoDB local | 8001 | DynamoDB |
+| S3Mock | 9090 | S3 |
+| ElasticMQ | 9324 | SQS |
+| OpenSearch | 9200 | OpenSearch Serverless |
+| Event runner | 2024 | Stream của bảng, MediaConvert, Transcribe, Translate, SES, EventBridge, Scheduler và Stripe |
+| Local OIDC server | 9400 | Cognito |
+
+Email do hệ thống gửi không được chuyển đi thật. Đọc chúng trong hộp thư cục bộ tại `http://localhost:2024/inbox`.
+
+## Đăng nhập
+
+Mở cổng học viên tại `http://localhost:4201`. Nó chuyển bạn đến một trang đăng nhập cục bộ không cần mật khẩu:
+
+| Người dùng | Vai trò |
+| --- | --- |
+| Alice | Giảng viên và học viên |
+| Bob | Học viên |
+| Dan | Học viên |
+| Carol | Quản trị viên |
+
+"Someone else" trên trang đó đăng nhập bạn với bất kỳ claim nào bạn nhập, chẳng hạn các nhóm khác.
+
+Cổng giảng viên ở `http://localhost:4200` và cổng quản trị ở `http://localhost:4202`.
+
+## Thêm khóa học mẫu
+
+Một bản cài đặt mới có catalogue trống. Khi `pnpm dev` đang chạy, lệnh này xuất bản vài khóa học bằng tài khoản Alice, có danh mục, tag và level:
+
+```sh
+pnpm nx run @discava/e2e:seed-local-courses
 ```
 
-## Thêm một locale
+## Thử một khóa học trả phí
 
-Thêm một mục vào khối `locales` trong `astro.config.mjs` và tạo một thư mục
-tương ứng trong `src/content/docs/<locale>/`. Starlight sẽ tự động nhận diện locale mới.
+Không cần tài khoản Stripe: event runner đóng vai Stripe.
 
-## Liên kết nhận biết locale
+1. Với tư cách Carol, mở **Payments** trong cổng quản trị, dán `sk_test_local` và chọn **Connect Stripe**.
+2. Với tư cách Alice, mở một khóa học đã xuất bản trong cổng giảng viên, đặt giá trong mục **Price** và chọn **Save price**.
+3. Với tư cách Bob, mở khóa học và chọn **Buy now**. Trang thanh toán cục bộ có **Pay**, **Decline card** và **Cancel**.
 
-Sử dụng component `Link` được tạo ra bất cứ khi nào bạn muốn liên kết đến một trang khác
-**bên trong** tài liệu của bạn — nó tự động phân giải locale hiện tại, vì vậy một nguồn
-chân lý duy nhất tạo ra URL đúng trong mọi ngôn ngữ:
+<Link path="guides/payments">Khóa học trả phí và thanh toán</Link> giải thích từng bước.
 
-```mdx
-import Link from '@components/link.astro';
+## Bắt đầu lại từ đầu
 
-<Link path="guides/getting-started">Read the getting-started guide</Link>
+Dữ liệu cục bộ nằm trong các Docker volume và vẫn còn sau khi khởi động lại. Để xóa, hãy dừng `pnpm dev` và chạy:
+
+```sh
+pnpm nx run @discava/tooling-local-dev:reset-local-data
 ```
 
-Đây là component hoạt động: <Link path="guides/getting-started">quay lại trang này</Link>.
+## Những gì chỉ chạy trên AWS
 
-Đối với các liên kết bên ngoài thông thường, chỉ cần sử dụng Markdown `[label](url)` thông thường.
+Một vài thứ không có bản thay thế cục bộ và được kiểm tra trên một stage đã triển khai: Managed Login và đăng ký của Cognito, signed cookie của CloudFront, kiểu mã hóa chính xác của MediaConvert, phụ đề thật của Transcribe và bản dịch thật của Translate, cùng trang thanh toán, kiểm tra thẻ và webhook của chính Stripe.
 
-## Sử dụng snippets
+## Tiếp theo
 
-Snippets là các đoạn MDX có thể tái sử dụng được lưu trữ trong `src/content/docs/<locale>/snippets/`.
-Bao gồm một snippet trong bất kỳ trang nào với component `Snippet`:
-
-```mdx
-import Snippet from '@components/snippet.astro';
-
-<Snippet name="example" />
-```
-
-Đây là snippet ví dụ được hiển thị inline:
-
-<Snippet name="example" />
+- <Link path="deploy">Triển khai Discava vào tài khoản AWS của bạn</Link>
+- <Link path="architecture">Đọc cách hệ thống được ghép lại với nhau</Link>
+- [DEVELOPMENT.md](https://github.com/AlexTo/discava/blob/main/DEVELOPMENT.md) nói về kiểm thử, phong cách mã và cách thực hiện thay đổi

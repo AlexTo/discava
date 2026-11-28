@@ -1,0 +1,145 @@
+---
+title: Khóa học trả phí và thanh toán
+description: Kết nối Stripe với vai trò quản trị viên, định giá một khóa học với vai trò giảng viên, mua khóa học với vai trò học viên, và hoàn tiền.
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+Một khóa học miễn phí trừ khi giảng viên đặt giá cho nó. Thanh toán do Stripe xử lý, vào một tài khoản Stripe mà quản trị viên của nền tảng kết nối.
+
+## Dành cho quản trị viên: kết nối Stripe
+
+Không có gì về Stripe được đặt khi Discava được triển khai. Cho đến khi quản trị viên kết nối một tài khoản, mọi khóa học đều miễn phí và không thể đặt giá.
+
+1. Trong dashboard của Stripe, mở Developers, rồi API keys, và sao chép một trong:
+   - Một **secret key** (bắt đầu bằng `sk_`).
+   - Một **restricted key** (bắt đầu bằng `rk_`) có quyền ghi với Checkout Sessions, Refunds và Webhook Endpoints, và quyền đọc với Accounts, Events và PaymentIntents. Nếu thiếu Refunds và PaymentIntents, các khoản thanh toán không thể hoàn tất sẽ không được hoàn tiền và các lần hoàn tiền thực hiện trong dashboard sẽ không được ghi nhận.
+2. Mở **Payments** trong cổng quản trị.
+3. Dán khóa vào **Stripe secret key** và chọn **Connect Stripe**.
+
+Discava kiểm tra khóa, đăng ký địa chỉ xác nhận của riêng nó (một webhook endpoint) trong tài khoản Stripe của bạn, và lưu khóa. Bạn không bao giờ phải tự tạo webhook hay sao chép signing secret.
+
+Trang sau đó hiển thị **Connected**, tên tài khoản, bốn ký tự cuối của khóa, và **Test mode** hoặc **Live mode**. Chế độ được xác định từ khóa. Ở test mode, học viên trả bằng thẻ thử của Stripe và được ghi danh mà không có tiền thật chuyển đi, vì vậy hãy dùng khóa live trước khi học viên thật đến.
+
+Để trả tiền cho giảng viên, tài khoản Stripe cũng cần bật **Connect**. Xem <Link path="guides/earnings-and-payouts">Thu nhập và chi trả</Link>.
+
+### Thay khóa
+
+Chọn **Replace key**, dán khóa mới và chọn **Save key**. Xác nhận bằng **Replace the key**.
+
+- **Một khóa mới cho cùng tài khoản** là một lần xoay khóa. Thanh toán vẫn tiếp tục, và các checkout đang mở vẫn hoàn tất.
+- **Một khóa của tài khoản khác, hoặc chế độ còn lại,** là một lần chuyển đổi: từ giờ thanh toán đi vào tài khoản đó. Chuyển đổi chờ đến khi không còn checkout nào đang mở. Một checkout kéo dài tối đa một giờ, và trang cho bạn biết khi cái cuối cùng kết thúc. Trước khi chuyển, hãy kiểm tra các lần gửi webhook của tài khoản cũ trong dashboard của Stripe: một xác nhận mà Stripe chưa gửi sẽ không thể được chấp nhận sau đó.
+
+Chuyển đổi cũng ảnh hưởng đến thu nhập chưa trả của giảng viên. Hãy đọc <Link path="guides/earnings-and-payouts">Thu nhập và chi trả</Link> trước.
+
+### Ngắt kết nối
+
+Chọn **Disconnect** và xác nhận bằng **Disconnect Stripe**. Việc này dừng các giao dịch mua mới: học viên thấy "Payments are unavailable right now" và giảng viên không thể đặt giá. Các mức giá đã đặt vẫn còn, và học viên đã trả tiền vẫn giữ quyền truy cập. Giống như chuyển đổi, nó chờ các checkout đang mở.
+
+### Lịch sử thay đổi
+
+**Recent changes** liệt kê các thay đổi gần nhất: khi nào, ai, điều gì đã xảy ra (đã kết nối, thay khóa, chuyển tài khoản, ngắt kết nối, hoặc thất bại kèm lý do) và chế độ. Với khóa, nó chỉ hiển thị bốn ký tự cuối.
+
+"Confirmation address changed" nghĩa là địa chỉ webhook của stage không còn là địa chỉ đã đăng ký với Stripe, ví dụ sau khi thêm một domain tùy chỉnh. Hãy lưu lại khóa để đăng ký địa chỉ mới.
+
+### Hoàn tiền cho học viên
+
+Hoàn tiền khoản thanh toán trong dashboard của Stripe.
+
+- **Hoàn tiền toàn bộ** kết thúc việc ghi danh của học viên trong vài giây và báo cho họ, ở chuông và qua email. Tiến độ của họ được giữ lại.
+- **Hoàn tiền một phần** giữ nguyên quyền truy cập của họ.
+
+Học viên có khoản thanh toán không thể hoàn tất sẽ được hoàn tiền tự động: khóa học đã bị hủy xuất bản trong lúc họ thanh toán, hoặc họ đã ghi danh rồi. Họ không nhận thông báo hoàn tiền.
+
+## Dành cho giảng viên: định giá một khóa học
+
+1. Mở khóa học từ **My Courses** và vào mục **Price** của nó.
+2. Nhập **Price**: `0` cho miễn phí, hoặc một số tiền từ 1.00 đến 10,000.00.
+3. Chọn **Currency**: USD, EUR, GBP, AUD hoặc CAD.
+4. Chọn **Save price**.
+
+- Bạn có thể đổi giá bất cứ lúc nào. Giá mới áp dụng cho các giao dịch mua mới.
+- Học viên đã ghi danh giữ quyền truy cập của họ, dù họ đã trả mức giá khác hay ghi danh khi khóa học còn miễn phí.
+- Nếu bạn thấy "Payments aren't set up yet; ask an administrator", Stripe chưa được kết nối. Bạn vẫn có thể đặt một khóa học trở lại miễn phí.
+
+Giá hiển thị trên trang công khai của khóa học và trên thẻ catalogue của nó, hoặc "Free".
+
+## Dành cho học viên: mua một khóa học
+
+Khóa học có giá hiển thị giá của nó và **Buy now** thay cho **Enrol now**. Nếu bạn chưa đăng nhập, nút ghi **Sign in to buy** và đưa bạn đi đăng nhập trước.
+
+1. **Buy now** đưa bạn đến trang thanh toán của Stripe, nơi hiển thị khóa học và số tiền.
+2. Sau khi trả tiền, bạn quay lại khóa học. Nó hiện "Confirming your payment", rồi bạn được ghi danh, thường trong vài giây, và bài học đầu tiên bạn chưa hoàn thành mở ra với dòng "You're enrolled in" theo sau là tên khóa học. Nếu khóa học chưa có bài học nào hiển thị cho học viên, trang khóa học sẽ mở thay vào đó.
+3. Nếu bạn hủy, bạn quay lại khóa học với "Payment cancelled" và không bị tính tiền. Chọn Buy now lần nữa trong vòng một giờ sẽ mở lại cùng khoản thanh toán đó.
+
+Ghi danh vào khóa học miễn phí mở cùng bài học đó, không có bước thanh toán. Xem <Link path="guides/finding-and-taking-courses">Tìm và học các khóa học</Link>.
+
+Bạn chỉ bị tính tiền một lần dù bấm bao nhiêu lần.
+
+Nếu khoản thanh toán của bạn được hoàn toàn bộ, việc ghi danh của bạn kết thúc và trang khóa học lại đưa ra Buy now. Tiến độ của bạn được giữ lại: mua lại khóa học và bạn học tiếp từ chỗ đã dừng. Nếu khóa học đã trở thành miễn phí trong lúc đó, việc ghi danh cũng mang tiến độ của bạn trở lại.
+
+### Yêu cầu hoàn tiền
+
+Trang khóa học nêu điều khoản hoàn tiền bên cạnh giá. Bạn có thể được hoàn tiền:
+
+- trong vòng 14 ngày kể từ khi trả tiền,
+- khi bạn đã hoàn thành chưa tới một nửa khóa học,
+- một lần cho mỗi khóa học.
+
+Khi bạn đủ điều kiện, trang khóa học hiển thị **Request a refund** và ngày bạn có thể yêu cầu đến.
+
+1. Chọn **Request a refund**.
+2. Xác nhận bằng **Request refund**. Trang hiện "Refund requested" kèm ngày, và nói rằng quyền truy cập của bạn kết thúc khi việc hoàn tiền được xác nhận.
+3. Stripe hoàn toàn bộ số tiền. Việc ghi danh của bạn kết thúc và trang khóa học lại đưa ra **Buy now**.
+4. Bạn nhận một thông báo ở chuông và một email. Email này không thể tắt.
+
+Khi bạn không còn đủ điều kiện, nút được thay bằng lý do: thời hạn hoàn tiền đã hết, bạn đã hoàn thành một nửa khóa học, hoặc bạn đã được hoàn tiền cho khóa học này trước đó.
+
+Nếu bạn đã được hoàn tiền cho một khóa học theo yêu cầu của chính bạn, trang sẽ cảnh báo bạn bên cạnh **Buy now**, và lần mua thứ hai của khóa học đó không thể được hoàn tiền. Hoàn tiền do operator thực hiện trong Stripe, hoặc tự động cho một khoản thanh toán không thể hoàn tất, không bị tính chống lại bạn.
+
+Tiến độ và mọi chứng chỉ của bạn được giữ lại.
+
+### Rời khỏi khóa học
+
+Với khóa học bạn ghi danh mà không trả tiền, trang khóa học hiện **Leave course**. Xác nhận và việc ghi danh kết thúc: khóa học rời khỏi My Learning, và tiến độ của bạn được giữ lại. Ghi danh lại để học tiếp. Khóa học bạn đã trả tiền không có **Leave course**: hãy yêu cầu hoàn tiền thay vào đó.
+
+## Mã giảm giá
+
+### Dành cho giảng viên: tạo mã
+
+Mở một khóa học trả phí từ **My Courses** và chọn **Coupons** ở đầu trang của nó. Khóa học miễn phí không có gì để giảm, nên trang yêu cầu bạn đặt giá trước. Chọn **Create code** và cung cấp:
+
+- **Một mã**, 4 đến 24 chữ cái, chữ số hoặc dấu gạch ngang, không phân biệt hoa thường. Để trống, hoặc chọn **Generate**, và Discava tạo một mã như `K7QD-2MXP`.
+- **Một loại và giá trị**: **Percent off**, một số nguyên từ 1 đến 100, hoặc **Fixed amount** theo tiền tệ của khóa học, từ 1.00 đến bằng giá.
+- **Một ngày hết hạn** (tùy chọn). Mã dùng được đến hết ngày đó, theo UTC.
+- **Một số lần sử dụng tối đa** (tùy chọn).
+
+Sau đó chọn **Create**. Mỗi mã hiển thị là **Active**, **Disabled**, **Expired** hoặc **Used up**.
+
+Mỗi mã thuộc về một khóa học. Không có mã bao phủ nhiều khóa học hay toàn bộ trang, và không có nhập hàng loạt.
+
+**Disable** tắt một mã ngay lập tức và **Enable** bật lại. **Edit limits** đổi ngày hết hạn và mức tối đa, nhưng không bao giờ thấp hơn số lần sử dụng mà mã đã có. **Delete** chỉ được đưa ra khi chưa ai dùng mã; hãy vô hiệu hóa mã đã dùng thay vào đó. Loại và giá trị của mã không thể đổi: hãy vô hiệu hóa nó và tạo mã mới.
+
+Hoàn tiền không trả lại lượt sử dụng.
+
+### Dành cho học viên: dùng mã
+
+1. Trên một khóa học trả phí, chọn **Have a code?**.
+2. Nhập mã và chọn **Apply**. Trang hiển thị giá niêm yết, mức giảm và tổng, và nút mua ghi **Pay** kèm tổng.
+3. Thanh toán như thường.
+
+**Remove code** quay về giá niêm yết. Không có gì bị dùng hết cho đến khi bạn trả tiền.
+
+- Mỗi học viên chỉ dùng một mã một lần.
+- Mã không dùng được sẽ nói lý do: bị tắt, hết hạn, đã dùng đủ số lần tối đa, bạn đã dùng rồi, hoặc làm giá quá thấp để thanh toán. Mã không tồn tại và mã của khóa học khác cho cùng một thông báo.
+- Nếu một mã giảm toàn bộ giá, nút ghi **Enrol for free**: bạn được ghi danh ngay lập tức, không có trang thanh toán.
+
+## Hạn chế
+
+- Chỉ thẻ.
+- Mỗi mã giảm giá thuộc về một khóa học: không có mã toàn trang hay hàng loạt.
+- Không tính hay thu thuế.
+
+<Link path="design/payments">Thanh toán</Link> mô tả cách nó hoạt động.

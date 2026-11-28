@@ -1,0 +1,76 @@
+---
+title: Modello di sicurezza
+description: Chi può raggiungere cosa in Discava, le protezioni che uno stage può attivare e come i deploy vengono tenuti entro i limiti.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+## Chi può fare cosa
+
+L'accesso è deciso a livelli, e ogni livello presume che quello precedente possa fallire.
+
+| Livello | Fa rispettare |
+| --- | --- |
+| **Gruppi Cognito** | Il ruolo di un utente: `student`, `instructor` o `admin` |
+| **API separate** | Le procedure di istruttori e admin sono deploy separati. Il token di uno studente viene rifiutato da instructor-api prima che giri qualsiasi procedura |
+| **Regole delle procedure** | La regola specifica: questo istruttore possiede questo corso, questo studente è iscritto a esso |
+| **Media firmati** | Un video o un file viene servito solo a una richiesta firmata per esso. La firma è emessa dopo un controllo di accesso, come l'iscrizione |
+
+Un corso in bozza o archiviato risponde "not found" a chiunque non debba vederlo, così la sua esistenza non viene rivelata.
+
+## Protezioni per stage
+
+Ogni protezione è **attiva per impostazione predefinita**. La configurazione di uno stage può solo disattivare cose, cosa che `discava-development` fa per restare economico.
+
+| Protezione | Cosa fa | Production | Development |
+| --- | --- | --- | --- |
+| **WAF** | Web application firewall su portali, API, media e user pool | On | Off |
+| **Cifratura KMS** | Chiavi gestite dal cliente, con rotazione, per tabella, bucket, code, log e ricerca | On | Off (cifratura gestita da AWS) |
+| **MFA** | Un secondo fattore all'accesso | On | Off |
+| **Protezione dall'eliminazione** | Rifiuta l'eliminazione di user pool e tabella | On | Off |
+| **Conservazione all'eliminazione** | Conserva i dati se uno stack viene rimosso | On | Off |
+| **Registrazione autonoma** | Permette a chiunque di creare un account | On | Off |
+| **Tracing** | Tracciamento delle richieste con X-Ray | On | Off |
+
+I dati sono sempre cifrati a riposo e in transito. L'impostazione KMS decide se le chiavi sono tue da controllare e verificare.
+
+Su uno stage di sviluppo con il WAF disattivato, i limiti di richieste, la concorrenza delle funzioni e i tetti di throughput della tabella nella configurazione dello stage limitano quanto può costare un'ondata di richieste. Con la registrazione autonoma disattivata, un estraneo non può ottenere un account per raggiungere le procedure riservate agli utenti autenticati.
+
+## Privilegio minimo dentro il sistema
+
+- Ogni funzione Lambda ha un proprio ruolo con solo i permessi che il suo compito richiede.
+- Le capacità sensibili sono isolate in funzioni dedicate. La chiave che firma le richieste dei media delle lezioni è leggibile da una funzione in core-api e una in instructor-api, non dalla funzione che serve ogni altra procedura.
+- La chiave Stripe e il segreto di firma del webhook sono in Secrets Manager. Una funzione di admin-api può scriverli. Le funzioni di checkout, webhook, account payout ed esecuzione dei payout leggono solo ciò che serve, e nessuna risposta, riga di log o record di audit porta l'uno o l'altro.
+- Il webhook di Stripe accetta un messaggio solo se la sua firma si verifica rispetto al segreto di firma memorizzato. Un pagamento non è mai considerato attendibile dal browser.
+- Nessun bucket S3 è pubblico. I portali e i media sono raggiungibili solo tramite le loro distribuzioni CloudFront.
+- Il page renderer serve le pagine pubbliche con accesso in sola lettura alla tabella, e solo la distribuzione CloudFront del portale studenti può invocarlo.
+- Ogni API risponde a richieste cross-origin solo dai portali che la chiamano: tutti e tre per core-api, il portale istruttori per instructor-api, il portale admin per admin-api. Sono ammessi anche gli indirizzi di sviluppo locale.
+- Gli indici di ricerca sono scritti solo dalle funzioni di indicizzazione. Le API possono solo leggerli.
+- Le funzioni ottengono i nomi delle risorse da variabili d'ambiente impostate al deploy, e le credenziali non compaiono mai nel codice né nei file d'ambiente.
+
+## Controlli prima del deploy del codice
+
+| Controllo | Dove | Cosa intercetta |
+| --- | --- | --- |
+| **Checkov** | Ogni build | Impostazioni di infrastruttura non sicure nei template generati |
+| **Trivy** | CI e prima di ogni deploy | Vulnerabilità note nelle dipendenze e segreti committati |
+| **git-secrets** | Prima di ogni commit | Credenziali sul punto di essere committate |
+| **Invarianti della tabella** | Test end-to-end | Dati lasciati in uno stato che viola una regola che attraversa più record |
+
+## Tenere i deploy entro i limiti
+
+La pipeline di deploy è essa stessa una superficie di attacco, quindi è vincolata:
+
+- **Nessuna credenziale AWS memorizzata.** GitHub Actions accede con un token emesso per una singola esecuzione.
+- **Il ruolo di deploy si fida di un solo environment** di un solo repository. Proteggere quell'environment con revisori obbligatori controlla il deploy.
+- **Il ruolo di deploy non può creare risorse.** Può solo chiedere a CloudFormation di distribuire stack che portano il nome del suo stage.
+- **Il ruolo di esecuzione è limitato** alle risorse dello stage per nome.
+- **Un permissions boundary** limita ogni ruolo che uno stage crea, così una modifica distribuita non può concedersi più di quanto il boundary permette.
+
+<Link path="deploy/ci-cd">Riferimento CI/CD</Link> spiega l'accesso e i due ruoli.
+
+## Segnalare una vulnerabilità
+
+Non aprire una issue pubblica. Segui il processo di notifica dei problemi di sicurezza in [CONTRIBUTING.md](https://github.com/AlexTo/discava/blob/main/CONTRIBUTING.md#security-issue-notifications).

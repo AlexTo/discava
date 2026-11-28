@@ -1,0 +1,65 @@
+---
+title: 部署概览
+description: 从 Discava 的一个 fork 到在你的 AWS 账户中运行的安装，由 GitHub Actions 部署。
+sidebar:
+  order: 0
+  label: Overview
+---
+
+import Link from '@components/link.astro';
+
+本节带你从零开始，得到一个由 GitHub Actions 为你部署的 Discava 安装。它假设你熟悉终端、GitHub 和 AWS 的基础知识。
+
+## 最终得到什么
+
+- 一个由你控制的 GitHub 上的 Discava **fork**
+- 你的 AWS 账户中的一个 Discava **stage**（阶段）：三个门户、三个 API、一个数据库、视频处理、搜索和支付
+- 你的 fork 中的一个 **Deploy workflow**，它会部署该 stage，可以由你手动运行，也可以在 `main` 上的 CI 通过时自动运行
+- 任何地方都**没有长期有效的 AWS 密钥**。GitHub 使用短期令牌（OIDC）登录 AWS
+
+## 各部分如何配合
+
+```d2 title="From a push to a deployed stage"
+direction: right
+you: "You"
+fork: "Your fork on GitHub" {
+  ci: "CI workflow"
+  deploy: "Deploy workflow"
+  env: "GitHub environment\n(one per stage)"
+}
+aws: "Your AWS account" {
+  oidc: "GitHub OIDC provider"
+  deployrole: "Deploy role"
+  execrole: "Execution role"
+  cfn: "CloudFormation"
+  stage: "Discava stage"
+}
+
+you -> fork.ci: "push to main"
+fork.ci -> fork.deploy: "passes"
+fork.env -> fork.deploy: "role ARNs, region"
+fork.deploy -> aws.oidc: "short-lived token"
+aws.oidc -> aws.deployrole: "assume"
+aws.deployrole -> aws.cfn: "cdk deploy"
+aws.execrole -> aws.cfn: "used by"
+aws.cfn -> aws.stage: "creates"
+```
+
+一个 **stage** 就是一套完整的安装。系统默认定义了两个：
+
+| Stage | 用途 | 安全设置 |
+| --- | --- | --- |
+| `discava-development` | 低成本试用 | 宽松：没有 WAF，没有客户管理的 KMS 密钥，关闭自助注册，请求限额低，所有资源随堆栈一起删除 |
+| `discava-production` | 真实用户 | 加固：WAF，带密钥轮换的 KMS 加密，MFA，删除保护，删除时保留有状态资源 |
+
+先从 `discava-development` 开始。生产环境的步骤相同。
+
+## 步骤
+
+1. <Link path="deploy/prerequisites">前提条件</Link>：你需要的 AWS 账户、工具和权限
+2. <Link path="deploy/setup">Fork 和设置</Link>：fork 仓库并运行设置脚本，脚本会创建 AWS 角色和 GitHub environment
+3. <Link path="deploy/first-deploy">首次部署</Link>：运行 Deploy workflow，然后创建你的第一批用户
+4. <Link path="deploy/configuration">Stage 配置</Link>：自定义域名、邮件、讲师付款、限额和新增 stage
+5. <Link path="deploy/ci-cd">CI/CD 参考</Link>：每个 workflow 的作用以及它读取的每个变量
+
+另有两个页面供你需要时查阅：<Link path="deploy/from-your-machine">从本机部署</Link>（其中也列出了维护脚本）和<Link path="deploy/troubleshooting">故障排查</Link>。

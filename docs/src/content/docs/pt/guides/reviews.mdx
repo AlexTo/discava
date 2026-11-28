@@ -1,0 +1,77 @@
+---
+title: Notas e avaliações
+description: Como dar nota e avaliar um curso, como as notas aparecem e pesam na busca, as respostas do instrutor, a remoção pelo administrador, a privacidade e o que as avaliações ainda não fazem.
+sidebar:
+  order: 4
+---
+
+Um aluno pode dar a um curso uma nota de 1 a 5 estrelas e adicionar uma avaliação escrita. As notas aparecem na página do curso, nos cartões de cursos e na busca.
+
+## Para alunos
+
+Abra a página do curso e encontre a seção **Reviews**. Se você está matriculado, pode:
+
+- **Post** uma avaliação: escolha uma nota em estrelas (obrigatória), opcionalmente escreva até 2.000 caracteres e escolha **Post review**.
+- **Edit** sua avaliação, depois **Save changes**. Ela mostra a marca "edited" e continua contando uma vez.
+- **Delete review**, após confirmar. O curso volta ao resumo que tinha sem ela, e você pode publicar uma nova.
+
+As regras:
+
+- Cada aluno tem uma avaliação por curso. Publicar duas vezes ao mesmo tempo, por exemplo com um clique duplo, gera uma só avaliação.
+- Você precisa estar matriculado. Um aluno que saiu do curso não pode publicar uma nova avaliação.
+- Um curso que não está publicado não aceita novas avaliações.
+- Você ainda pode editar ou excluir uma avaliação que já escreveu, qualquer que seja o status do curso.
+
+Visitantes sem sessão iniciada veem o resumo e as avaliações, com o link **Sign in and enrol to review**. Alunos com sessão iniciada que não estão matriculados veem "Enrol in this course to review it".
+
+## Como as notas aparecem
+
+A página do curso mostra a média com uma casa decimal (por exemplo 4,6), o número de notas e uma distribuição de quantos deram cada número de estrelas. Os cartões do catálogo e da busca mostram a mesma média e contagem, ou "No ratings yet".
+
+## Como a busca usa as notas
+
+A busca pode ordenar por **Relevance**, **Highest rated** ou **Newest**, e filtrar por uma nota mínima (4.5, 4.0, 3.5 ou 3.0 e mais). O filtro de mínimo usa a média simples, e cursos sem notas nunca o satisfazem.
+
+A ordenação por nota, e o pequeno efeito das notas na relevância, não usam a média simples, para que uma única nota de 5 estrelas não supere um curso com muitas notas boas. A busca trata todo curso como se tivesse cinco notas extras de 3,5 estrelas:
+
+> nota ponderada = (número de notas × média + 5 × 3,5) ÷ (número de notas + 5)
+
+Uma nota de 5 estrelas dá 3,75. Vinte notas com média de 4,5 dão 4,3, então esse curso fica melhor classificado.
+
+- Em **Highest rated**, os cursos sem nota ficam por último.
+- Em **Relevance**, a correspondência do texto ainda domina. Uma nota ponderada acima de 3,5 eleva a pontuação e uma abaixo de 3,5 a reduz, em no máximo 15%. Cursos sem nota não mudam.
+- Uma mudança de nota chega à busca em segundos.
+
+## Respostas do instrutor
+
+Abra o curso em **My Courses** e escolha **Reviews** no topo da página. A página mostra a média, a distribuição e cada avaliação.
+
+- **Respond** a uma avaliação com até 1.000 caracteres, depois **Save response**. **Edit response** e **Delete response** a alteram depois.
+- Qualquer instrutor do curso pode alterar a resposta de outro.
+- A resposta aparece abaixo da avaliação na página do curso, com o nome do instrutor. Ela não muda a nota nem marca a avaliação como editada.
+- Uma avaliação removida não aceita resposta.
+
+Uma nova avaliação aparece no seu sino. Para receber também um e-mail, ative **Course reviews** em **Notification settings**: vem desligado por padrão.
+
+## Remoção pelo administrador
+
+Um administrador pode remover uma avaliação que quebra as regras:
+
+1. Abra **Reviews** no portal admin.
+2. Escolha o curso em **Course**. Cursos publicados e arquivados são listados.
+3. Escolha **Remove** na avaliação.
+4. Informe um **Reason** (obrigatório, até 200 caracteres) e escolha **Remove review**.
+
+Uma avaliação removida sai da página do curso, dos cartões, da média e da busca. Não pode ser desfeita. Os instrutores do curso não podem remover avaliações.
+
+O autor vê "Your review was removed by a moderator" com o motivo, e nenhum formulário: ele não pode publicar outra avaliação para esse curso.
+
+## Privacidade
+
+As avaliações mostram o nome de exibição do autor em forma abreviada, como "Alex T.", nunca o e-mail. Os instrutores recebem o ID do aluno apenas para responder à avaliação.
+
+## Limitações
+
+- Sem votos de "útil".
+- Sem como denunciar uma avaliação: a remoção é feita por um administrador.
+- Nenhum progresso mínimo é exigido: qualquer aluno matriculado pode avaliar de imediato.

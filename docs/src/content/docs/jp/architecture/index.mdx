@@ -1,0 +1,150 @@
+---
+title: アーキテクチャ概要
+description: Discava を構成するコンポーネント、それぞれの責務、およびそれらの接続。
+sidebar:
+  order: 0
+  label: Overview
+---
+
+import Link from '@components/link.astro';
+
+Discava は、AWS 上のサーバーレスなコンポーネントの集まりです。誰も使っていないときは何も動きません。常時稼働させておくサーバー、コンテナ、クラスターはありません。
+
+## システムの全体像
+
+```d2 title="Components and how they connect"
+direction: down
+
+users: "Students, instructors, admins"
+
+edge: "Websites" {
+  student: "Student portal"
+  instructor: "Instructor portal"
+  admin: "Admin portal"
+}
+
+identity: "Cognito\n(sign-in, groups)"
+
+apis: "APIs" {
+  core: "core-api"
+  instr: "instructor-api"
+  adm: "admin-api"
+}
+
+data: "Data" {
+  table: "Core table\n(DynamoDB)"
+  search: "Search\n(OpenSearch Serverless)"
+  lesson: "Lesson media\n(S3 + CloudFront)"
+  public: "Public media\n(S3 + CloudFront)"
+}
+
+async: "Background work" {
+  router: "Stream router"
+  handlers: "Feature handlers"
+  media: "Media pipeline\n(MediaConvert, Transcribe)"
+  router -> handlers: "one queue each"
+}
+
+email: "SES"
+stripe: "Stripe"
+pay: "Stripe webhook API"
+renderer: "Page renderer"
+
+users -> edge
+users -> identity: "sign in"
+edge -> apis: "tRPC over HTTPS"
+apis -> data.table
+apis.core -> data.search: "query"
+apis.instr -> async.media: "submit video"
+data.table -> async.router: "change stream"
+async.handlers -> data.table
+async.handlers -> data.search: "index"
+async.handlers -> email
+async.media -> data.lesson: "renditions"
+users -> data.lesson: "watch"
+apis.core -> stripe: "start checkout"
+stripe -> pay: "signed confirmation"
+pay -> data.table
+edge.student -> renderer: "public pages"
+renderer -> data.table: "read"
+```
+
+## コンポーネント
+
+### 3つのポータル
+
+| ポータル | 用途 | 通信先 |
+| --- | --- | --- |
+| **受講生ポータル** | カタログの閲覧、コースの購入と受講、クイズ、課題、ディスカッション、証明書 | core-api |
+| **講師ポータル** | コースの作成と価格設定、クーポン、採点、分析、収益、受講生への回答 | core-api, instructor-api |
+| **管理ポータル** | カテゴリー、レビューのモデレーション、証明書、ブランディング、Stripe の接続 | core-api, admin-api |
+
+どれも React のシングルページアプリケーションです。静的ファイルは非公開の S3 バケットに置かれ、CloudFront から配信されます。ポータルは、API とサインインページの場所を、隣にデプロイされた `runtime-config.json` ファイルから知るので、同じビルドがすべてのステージで動きます。
+
+### 公開ページ
+
+クローラーやリンクプレビューにとって、シングルページアプリケーションは空の殻です。そこで、受講生ポータルの CloudFront ディストリビューションは、いくつかの公開アドレスを Lambda 関数である**ページレンダラー**に振り分けます。ページレンダラーは実際の HTML で応答します。コースのランディングページ（`/learn/*`）、講師のプロフィール（`/instructors/*`）、証明書のリンクプレビュー（`/certificates/*`）、`sitemap.xml`、`robots.txt` です。設計は <Link path="design/public-pages">公開ページ</Link> にあります。
+
+### 1つの ID プロバイダー
+
+すべてのユーザーは Cognito ユーザープールに登録されています。`student`、`instructor`、`admin` の3つのグループが、ユーザーにできることを決めます。サインインは Cognito のホスト型ページで行われ、ポータルは受け取ったトークンを API 呼び出しのたびに送ります。
+
+### 3つの API
+
+各 API は、Lambda 関数の前に置かれた API Gateway の REST API で、[tRPC](https://trpc.io/) を話します。
+
+| API | 呼び出せる人 | 例 |
+| --- | --- | --- |
+| **core-api** | サインイン済みのすべてのユーザー、および一部の公開プロシージャ | カタログ、登録、チェックアウト、レッスンコンテンツ、クイズ、課題、ディスカッション、証明書、検索 |
+| **instructor-api** | `instructor` のメンバー | コースの作成、編集、価格設定、クーポン、メディアのアップロード、採点、分析、収益と支払い |
+| **admin-api** | `admin` のメンバー | カテゴリーの分類、レビューのモデレーション、証明書、ブランディング、Stripe の接続 |
+
+対象者ごとに分けることで、各 API は独自の関数、権限、リクエスト制限、ファイアウォールを持ちます。講師専用のバグに受講生のトークンで到達することはできず、受講生のトラフィックが急増しても講師向け API が枯渇することはありません。
+
+### 1つのテーブル
+
+アプリケーションのデータはすべて、1つの DynamoDB テーブルである**コアテーブル**にあります。コース、モジュール、レッスン、登録、進捗、クイズの受験、ディスカッション、レビュー、証明書、通知、クーポン、注文、講師の収益と支払いです。関連するレコードは同じパーティションを共有するため、コース全体のカリキュラムを1回のクエリで取得できます。
+
+### 検索
+
+OpenSearch Serverless コレクションには、2つのインデックスがあります。
+
+- **Courses**: 公開済みのすべてのコース。カタログの検索、サジェスト、フィルターに応えます。
+- **Transcripts**: レッスン動画の字幕テキスト。登録済みの受講生が、コースの中でフレーズが話された場面を見つけられるようにします。
+
+テーブルが信頼できる唯一の情報源です。インデックスはその変更ストリームから作られ、そこから再構築でき、API が書き込むことはありません。
+
+### メディア
+
+| ストア | 保存するもの | アクセス |
+| --- | --- | --- |
+| **Lesson media** | レッスンの動画、字幕、ファイル、課題の提出物 | 非公開。API が登録などのアクセスを確認したうえで発行した署名を持つリクエストにだけ、CloudFront が配信します |
+| **Upload bucket** | 取り込み途中のファイル | 署名付き URL による書き込み専用。処理ジョブが読み取ります。短期間のみ保持 |
+| **Public media** | コース画像、講師のプロフィール写真、プラットフォームのブランド（ロゴ、アイコン、名前、色） | CloudFront を通じて誰でも読み取れます |
+
+### 支払い
+
+有料コースは Stripe のホスト型チェックアウトページで購入します。Stripe アカウントは、管理者が管理ポータルで接続したものです。Stripe は各支払いを、**Stripe webhook API** という専用の小さな API に確認します。この API はメッセージの署名を検証して、受講生を登録します。呼び出すのがサインイン済みのユーザーではなく Stripe なので、3つの tRPC API とは別になっています。設計は <Link path="design/payments">支払い</Link> にあります。
+
+### バックグラウンド処理
+
+リクエストの外で行われることが3つあります。
+
+- **データ変更への反応。** テーブルの変更ストリームの読み取り手は**ストリームルーター**だけで、各変更を、それを必要とするすべての機能のキューに渡します。機能は8つあります。進捗の再計算（証明書も発行）、コース検索のインデックス、トランスクリプトのインデックス、分析、通知の配信、講師の収益の記録、字幕の翻訳、ブランドの公開です。
+- **動画の処理。** アップロードされた動画は、MediaConvert でアダプティブストリーミングのレンディションにトランスコードされ、Transcribe で字幕が付きます。Amazon Translate が、字幕をコースの他の字幕言語にします。
+- **講師への支払い。** 毎日の処理が、支払い期限の収益を Stripe の送金として各講師に送ります。<Link path="design/instructor-payouts">講師への支払い</Link> を参照してください。
+
+## 設計原則
+
+- **サーバーレスのみ。** すべてのコンポーネントが使用量で課金され、ゼロまでスケールダウンします。
+- **やり方は1つ。** クラウドは1つ、デプロイツールは1つ、テーブルは1つ。設定、文書化、テストする選択肢を減らします。
+- **既定で安全。** ステージが無効にしない限り、すべての保護がオンです。
+- **ローカルで動く。** Discava が使うすべての AWS サービスにローカルの代替があるので、開発に AWS アカウントは不要です。
+
+## 続きを読む
+
+- <Link path="architecture/aws">AWS へのデプロイ</Link>: スタック、各スタックの内容、デプロイの順序
+- <Link path="architecture/flows">リクエストとデータの流れ</Link>: サインイン、API 呼び出し、動画の旅、変更の伝わり方
+- <Link path="architecture/security">セキュリティモデル</Link>: 誰が何に到達できるか、ステージが有効にできる保護
+- <Link path="architecture/codebase">コードベースマップ</Link>: 各コンポーネントのコードの場所
+- <Link path="design">設計</Link>: 個々の機能の仕組み

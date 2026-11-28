@@ -1,0 +1,74 @@
+---
+title: Análises do curso
+description: O Dashboard do instrutor e a página de análises de cada curso, o que significa cada número, as visões de 30 e 90 dias, o abandono por aula, a ativação e os resultados de quizzes e perguntas em vídeo.
+---
+
+import Link from '@components/link.astro';
+
+**Dashboard** no portal do instrutor mostra como seus cursos estão indo. Só os instrutores de um curso podem ver os números dele.
+
+## O Dashboard
+
+Há um cartão para cada curso que você ensina, qualquer que seja o status.
+
+| Número | Significado |
+| --- | --- |
+| **Enrolments** | Todos que se matricularam |
+| **Active this week** | Alunos que fizeram algo no curso nesta semana do calendário, de segunda a domingo em UTC |
+| **Completion rate** | Entre os alunos ainda matriculados, a parcela que concluiu o curso, em porcentagem inteira arredondada para baixo. "No data" até alguém se matricular |
+
+Cada cartão também diz quando seus números mudaram pela última vez, ou "No activity yet". Escolha o título de um curso para abrir a página de análises dele.
+
+## A página de análises de um curso
+
+### Totais
+
+| Número | Significado |
+| --- | --- |
+| **Enrolments** | Todos que se matricularam |
+| **Active** | Matriculados, que não concluíram nem saíram |
+| **Completed** | Concluíram o curso |
+| **Dropped** | Saíram do curso, ou tiveram a matrícula encerrada |
+| **Completion rate** | Como no Dashboard |
+| **Active this week** | Como no Dashboard |
+
+### 30 ou 90 dias
+
+Os dois gráficos cobrem os últimos 90 dias. Escolha **30 days** ou **90 days** no topo da página para alternar.
+
+- **New enrolments per day**
+- **Active learners per day**
+
+Os dias são dias UTC. Até alguém se matricular, a página diz "No learners have enrolled yet".
+
+### Abandono por aula
+
+Para cada aula mostrada aos alunos: entre os alunos que a começaram, a parcela que a concluiu. A aula com a menor parcela é marcada com **Lowest completion**. Uma aula que ninguém começou informa isso.
+
+Os alunos que saíram do curso não são contados.
+
+### Ativação
+
+Quantos alunos matriculados já começaram, como número e porcentagem. Começar significa ter concluído um item ou enviado uma tentativa de quiz. Alunos recentes ainda podem começar, então estes são números até agora.
+
+O cartão também diz quantos alunos responderam ao convite da primeira aula e quantos o dispensaram. Veja <Link path="guides/lesson-discussions">Discussões de aula</Link>.
+
+### Quizzes
+
+Há um painel para cada quiz. **Show analysis** abre:
+
+- **Most-missed questions**: as tentativas, os erros e a taxa de erro de cada pergunta, das mais erradas para as menos. Uma pergunta com menos de 5 tentativas não entra na classificação e mostra "Not enough attempts".
+- **Best score per student**: um gráfico de como as melhores notas se distribuem.
+
+### Perguntas em vídeo
+
+O painel **Video questions** lista os vídeos que fazem perguntas. **Show results** em um vídeo abre o momento de cada pergunta no vídeo, suas respostas, erros e taxa de erro. Uma pergunta com poucas respostas mostra "Not enough answers yet".
+
+Veja <Link path="guides/video-lessons">Aulas em vídeo</Link> para adicionar perguntas a um vídeo.
+
+## Como ler os números
+
+- Um aluno conta uma vez em um dia ou em uma semana, por mais que tenha feito.
+- Se a página de um curso diz "Course not found", o curso não existe ou você não o ensina.
+
+<Link path="design/course-analytics">Análises do curso</Link> descreve como os números são guardados.

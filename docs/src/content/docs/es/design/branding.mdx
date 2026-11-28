@@ -1,0 +1,52 @@
+---
+title: Marca
+description: "Cómo se guarda, publica y aplica la marca de la plataforma definida por el administrador: el registro y su revisión, las claves de imagen inmutables, el documento publicado y su presupuesto de caché, el renderizador de páginas, la paleta de colores y las comprobaciones de SVG."
+sidebar:
+  order: 13
+---
+
+**Spec:** [`specs/20261122-090054-admin-branding/`](https://github.com/AlexTo/discava/tree/main/specs/20261122-090054-admin-branding/)
+
+Un administrador define un logotipo, un nombre, un icono, una imagen para compartir y un color desde el portal de administración, y cada portal y página pública los muestra en un máximo de 5 minutos, sin desplegar. Esta página describe cómo funciona.
+
+## El registro y su revisión
+
+La marca es un único registro `platformBrand` en la tabla core, con una clave constante. No existe hasta el primer guardado, y que no exista significa la marca por defecto. `saveBrand` en `helpers/platform-brand.ts` es su único escritor.
+
+Cada guardado lleva la marca completa y la `revision` que el administrador cargó.
+
+- El primer guardado está condicionado a que el registro no exista, y los siguientes a que `revision` siga siendo el valor cargado.
+- Una condición fallida se convierte en `CONFLICT` ("Someone else changed the branding. Reload to see their changes."), así que un guardado obsoleto nunca puede aplicarse a medias.
+- Los campos `changedBy`, `changedByName` y `changedAt` indican quién guardó por última vez.
+
+## Imágenes y claves inmutables
+
+Las imágenes viven en el bucket público de medios bajo `brand/<kind>/<nonce>.<ext>`, donde `kind` es `logo`, `icon` o `share-image`. `branding.createUploadUrl` presigna un `PUT` con el tipo de contenido exacto, la longitud, un `Cache-Control` inmutable de un año y la etiqueta `lifecycle=unattached`. Una carga nueva es una clave nueva, así que una imagen reemplazada nunca puede servirse desde una caché una vez que la marca apunta a otra.
+
+`branding.save` lee cada objeto recién referenciado y comprueba su tipo, tamaño y forma contra las reglas de `@discava/common-branding/image-rules` (el portal de administración ejecuta las mismas reglas antes de subir). Quita la etiqueta de un objeto que conserva, y la vuelve a poner en uno que reemplazó, que la regla de ciclo de vida del bucket elimina después de un día. No se escribe nada si alguna imagen falla.
+
+### Comprobaciones de SVG
+
+Un logotipo SVG se analiza (`helpers/brand-image.ts` de admin-api) y se rechaza a menos que cada elemento y atributo esté en una lista de permitidos: sin `script`, `foreignObject`, `iframe`, atributos de manejadores de eventos, ni referencias que no sean un `#fragment` del mismo documento. Rechazar en lugar de reescribir mantiene el archivo guardado exactamente como se subió. Los logotipos se muestran mediante `<img>`, donde los navegadores nunca ejecutan scripts de SVG, y la distribución agrega un `Content-Security-Policy` con `sandbox` para un archivo abierto directamente. El icono es solo PNG, porque los iconos de pantalla de inicio de iOS deben ser rasterizados.
+
+## El documento publicado
+
+Los navegadores no leen la tabla. La función de stream `brand-publishing` (ver [el enrutador](./stream-event-router/)) lee el registro actual, nunca la imagen del stream, así que una entrega tardía no puede publicar una revisión anterior. Coloca `brand/brand.json` en el bucket público de medios con `Cache-Control: public, max-age=60, s-maxage=240`. El documento omite quién guardó y cuándo. Los portales lo obtienen desde otro origen, así que la distribución agrega encabezados CORS para `GET` y `HEAD` a todo lo que está bajo `brand/`.
+
+Ese es el **presupuesto de caché**: un navegador conserva el documento hasta 60 segundos y CloudFront hasta 240, así que un cambio llega a cada nueva carga de página en un máximo de 5 minutos. Un documento ausente, ilegible o inválido significa la marca por defecto, así que un fallo nunca rompe una página.
+
+## En los portales
+
+`BrandProvider` en `@discava/common-web-utils/brand` está dentro de `RuntimeConfigProvider` en cada portal, y `useBrand()` entrega la marca resuelta. Parte de la marca que el renderizador de páginas incrustó, o si no de la última marca que vio (guardada en `localStorage`), o si no de nada. Con una marca se renderiza de inmediato y se actualiza en segundo plano; sin una, retiene el primer render hasta que llega `brand.json` o pasa un segundo. Define las variables CSS, los enlaces de iconos, el color del tema y el título. El portal de administración también lo alimenta desde `branding.get` y cada guardado, así que el administrador ve un cambio al instante.
+
+## El renderizador de páginas
+
+El [renderizador de páginas](./public-pages/) lee el registro en cada render (la página luego se guarda en caché durante 300 segundos) y lo aplica al sufijo del título, `og:site_name`, el proveedor JSON-LD, `og:image` y `twitter:image` (la imagen para compartir cuando la página no tiene una propia), los enlaces de iconos y un estilo `:root` en línea, e incrusta el documento de marca en los datos de la página para que el portal parta de él. Si la lectura falla, registra una advertencia y renderiza la marca por defecto.
+
+## La paleta de colores
+
+`brandPalette(hex)` en `@discava/common-branding/colour` devuelve las variables CSS que se deben sobrescribir: `--primary`, `--primary-foreground`, `--ring`, los equivalentes de la barra lateral y `--brand-link`. Elige el color de texto con la mayor relación de contraste WCAG frente al color de la marca y rechaza el color cuando ninguno llega a 4.5:1. `--brand-link` es el color de la marca solo cuando llega a 4.5:1 sobre el fondo de la página. La misma función se ejecuta en admin-api, la vista previa del portal de administración, los portales y el renderizador, así que no pueden discrepar. Los colores con significado (destructivo, gráficos y estado) no se tocan.
+
+## Qué no lleva marca
+
+Las páginas de inicio de sesión alojadas de Cognito y el sitio de documentación conservan su propio aspecto.

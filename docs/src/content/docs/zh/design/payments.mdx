@@ -1,0 +1,227 @@
+---
+title: 支付
+description: 付费课程如何通过 Stripe Checkout 购买、订单记录、确保课程只交付一次的 webhook、优惠券、退款，以及管理员的 Stripe 连接。
+sidebar:
+  order: 10
+---
+
+import Link from '@components/link.astro';
+
+**规格：** [`specs/20261116-013315-stripe-checkout/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013315-stripe-checkout/)（结账）和 [`specs/20261116-013138-coupons-discount-codes/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013138-coupons-discount-codes/)（优惠券）
+
+## 规则
+
+**有定价的课程只能通过已支付的订单加入，而且只有 Stripe 的签名确认才能让订单变为已支付。** 浏览器发送的任何内容，包括从 Stripe 页面返回，都不会让任何人加入课程。core-api 的 `course.enrol` 会拒绝有定价的课程（"This course must be purchased"），而 webhook 是 `settleOrderPaid` 唯一的调用方。
+
+有一种情况不需要付款：[优惠券](#优惠券)抵扣了全部价格。服务器算出总额为零，直接把订单写成 `paid`，所以不会调用 Stripe。
+
+## 价格
+
+课程有 `priceAmount` 和 `priceCurrency`。金额是以该货币最小单位表示的整数（1999 即 19.99），所以价格从不使用浮点数。`0` 表示免费，每门新课程一开始都是免费的。
+
+- 支持的货币是 USD、EUR、GBP、AUD 和 CAD，都是两位小数。没有小数或有三位小数的货币不受支持。
+- 大于零的价格在 1.00 到 10,000.00 之间。
+- 讲师通过 instructor-api 的 `course.setPrice` 设置价格，课程处于任何状态都可以。设置大于零的价格需要有效的 Stripe 连接。改回免费则不需要。
+- 价格变更只适用于新的购买。它不会影响任何订单或加入记录：已加入的学生保留访问权限。
+
+规则和格式化逻辑在 `@discava/common-web-utils/price` 中，由各个门户和 API 共用。
+
+## 订单
+
+一个 `order` 是一名学生购买一门课程的一次尝试。创建时，它会复制课程标题、标价（`listAmount`）、应收金额（`amount`）和货币，以及发起时所用的 Stripe 账户和模式。使用优惠券发起的订单还会复制 `discountAmount`、`couponCode`、`couponType` 和 `couponValue`，此时 `amount` 是标价减去折扣。
+
+| 状态 | 含义 |
+| --- | --- |
+| `pending` | 有一个结账正在进行 |
+| `paid` | Stripe 确认了付款，学生已加入课程 |
+| `expired` | 结账被放弃，或创建失败 |
+| `refunded` | 全部金额已退还给学生 |
+
+core-table 中的 `helpers/order.ts` 是 `order` 以及加入记录 `orderId` 唯一的写入方。每次状态变更都是基于原状态的条件写入，所以重复或并发的调用不会产生任何变化。这些操作都不会调用 Stripe：由调用方在之前或之后调用。
+
+## 发起结账
+
+core-api 的 `payment.checkout` 接收课程 ID 和可选的 `couponCode`。金额和货币由服务器根据课程（和优惠券）计算，从不取自输入。没有优惠码时：
+
+1. 它会拒绝未发布的课程、免费课程，以及已经加入的学生。
+2. 如果学生对该课程有一个没有使用优惠券、且剩余时间超过五分钟的 `pending` 订单，它会返回该订单的页面，所以点击两次 **Buy now** 只会产生一个订单。
+3. 否则 `startOrder` 会在一个事务中创建 `pending` 订单，该事务同时检查 Stripe 连接是否为 `active`，并提高连接的 `latestCheckoutExpiresAt` 以覆盖新的结账。
+4. 它创建一个 Stripe Checkout 会话，以订单 ID 作为幂等键，仅限银行卡支付，元数据中包含订单、学生和课程 ID。会话的地址保存在订单上并返回。
+
+结账的有效期是一小时。如果无法连接 Stripe，订单会过期，学生会看到 "Couldn't start the payment"。
+
+带优惠码的结账遵循相同的步骤，只是多了对优惠码的占用：见[优惠券](#优惠券)。
+
+`payment.available` 告诉学生门户是否可以发起购买：只说明连接是否有效，不涉及账户或密钥。
+
+## Webhook
+
+Stripe 向 `POST /stripe/webhook` 发送请求，这是 `Payments` 堆栈中独立的 API Gateway API，有自己的 WAF、限流和域名。处理程序位于 `packages/events/src/payments/`。
+
+- **签名是唯一的关卡。** 消息会用保存的签名密钥按其原始字节验证，如果消息超过五分钟或验证失败，就返回 400 拒绝。未连接时没有密钥，所以每条消息都会失败。
+- **400** 表示没有任何变化。**500** 表示处理失败，Stripe 应该重试。**200** 涵盖已处理、重复、无匹配和被忽略的事件。
+
+| 事件 | 发生的事情 |
+| --- | --- |
+| `checkout.session.completed` | 订单被结算，如果无法交付则退款。尚未支付的会话会被忽略 |
+| `checkout.session.expired` | `pending` 订单变为 `expired`，其优惠券占用被释放 |
+| `charge.refunded` | 退款记录到订单上 |
+| `refund.failed`、`charge.refund.updated`（`status: failed`） | 在 `paid` 订单上设置 `refundFailedAt`；`charge.refunded` 已经移到 `refunded` 的订单会被放回 `paid`，加入记录也会恢复 |
+
+这些是在 Stripe 注册的仅有的事件。事件列表在注册端点时记录在连接上。如果它与这里的列表不一致（连接是在新增某个事件之前保存的），管理员的支付页面会要求重新保存密钥，这次保存会更新现有端点的事件，而不改变它的地址、ID 或签名密钥。
+
+### 只交付一次
+
+`settleOrderPaid` 在**一个事务**中把订单从 `pending` 变为 `paid`，并给学生加入记录，该事务同时检查课程仍处于已发布状态。加入记录会被创建，或者在学生有 `dropped` 记录时被恢复。如果订单带有优惠券，同一个事务会确认其兑换。Stripe 至少投递一次且顺序不定，所以同一个确认同时到达五次，仍然只留下一个已支付订单和一条加入记录：第一次之后的每次调用都会发现订单已不再是 `pending`。
+
+### 无法交付的付款
+
+款项已经收取，所以绝不会留下。webhook 会向 Stripe 请求全额退款，幂等键由订单 ID 构成，`refundUndeliverable` 会把订单标记为 `refunded` 并附上原因。不会给予加入记录，订单的优惠券占用也会被释放。
+
+| 原因 | 何时 |
+| --- | --- |
+| `duplicate` | 学生已经加入 |
+| `unavailable` | 课程不再处于已发布状态 |
+| `mismatch` | 会话的金额、货币，或订单、学生、课程 ID 与订单不一致。这也会作为错误记录（"Paid session differs from its order; refunding"），该行出现时学生已经退款 |
+
+如果已支付会话、已过期会话或退款对应的订单不在表中，会记录为错误（"Paid session for an unknown order"、"Expired session for an unknown order"、"Refund for an unknown order"），并返回 200。运维人员应关注这些日志行：它们意味着 Stripe 持有一笔 Discava 没有记录的付款。
+
+## 优惠券
+
+讲师通过 instructor-api 的 `coupon.create`、`coupon.list`、`coupon.update` 和 `coupon.delete` 为付费课程创建折扣码。学生在课程页面输入一个：core-api 的 `coupon.preview` 显示他们将支付的金额且不写入任何内容，`payment.checkout` 则以 `couponCode` 接收该码。<Link path="guides/payments">支付指南</Link>介绍了相关界面。
+
+| 记录 | 键 | 内容 |
+| --- | --- | --- |
+| `coupon` | 课程，然后是优惠码 | `type`（`percent` 或 `fixed`）、`value`、可选的 `expiresAt` 和 `maxRedemptions`、`enabled` 以及 `redeemedCount` |
+| `couponRedemption` | 课程和优惠码，然后是学生 | 所属订单、`status`（`reserved` 或 `redeemed`），以及占用期间的 `reservedUntil` |
+
+`couponRedemption` 的键体现了一名学生对一个优惠码只能使用一次的规则。
+
+### 优惠码和价格
+
+- 优惠码为 4 到 24 个字符，由 A-Z、0-9 和 `-` 组成，以大写存储。生成的优惠码为 8 个字符，写作 `XXXX-XXXX`。
+- 百分比是 1 到 100 的整数。固定金额使用课程的货币，大于零，且在创建优惠码时不超过课程价格。
+- 优惠码的类型、值和货币永不改变。`coupon.update` 只修改 `enabled`、过期时间和限额，且不能把限额降到低于 `redeemedCount`。`coupon.delete` 只在 `redeemedCount` 为 0 时有效；已使用的优惠码只能禁用。
+- core-table 的 `helpers/coupon-price.ts` 中的 `priceWithCoupon` 是唯一的价格函数。百分比向下取整，固定金额绝不会超过标价。
+- 总额大于零但低于 Stripe 的最低收费额（0.50，GBP 为 0.30）时无法支付，所以该优惠码会被拒绝。
+
+`coupon.preview` 和 `payment.checkout` 运行同一个检查（`checkCoupon`），所以它们以相同的消息拒绝相同的优惠码。未知的优惠码、其他课程的优惠码，以及其他货币的固定金额优惠码，都会得到 "This code is not valid for this course"，所以学生无法区分它们。
+
+### 占用、确认、释放
+
+core-table 中的 `helpers/coupon-redemption.ts` 是 `redeemedCount` 和 `couponRedemption` 唯一的写入方。它构建三组写入，每组都在引起它的订单变更的事务内执行：
+
+| 步骤 | 何时 | 写入什么 |
+| --- | --- | --- |
+| **占用（Claim）** | `payment.checkout` 创建订单 | 在优惠券已启用、未过期且未达限额的条件下，把 `redeemedCount` 加一。把学生的兑换记录创建为 `reserved`，如果他们对该优惠码已有记录则失败 |
+| **确认（Confirm）** | `settleOrderPaid` 把订单标记为已支付 | `reserved` 变为 `redeemed` |
+| **释放（Release）** | 订单过期、被新的结账取代，或因无法交付而退款 | 删除 `reserved` 的兑换记录，并把 `redeemedCount` 减一 |
+
+因此 `redeemedCount` 同时统计已占用和已兑换的记录。由于占用是订单自身事务中的一个条件，许多学生在同一时刻发起结账时，限额依然成立。被取消的事务不写入任何内容；结账会再次读取以给出准确的拒绝原因，发生三次冲突后会以 "Too many people are checking out; try again" 放弃。
+
+占用持续到其结账过期后五分钟（`reservedUntil`）。当优惠码看起来已用完时，结账会先释放已过该时间且 Stripe 会话已结束的占用，然后再检查一次。Stripe 报告为已完成的会话会保留其占用：它的已支付事件可能还在路上。
+
+### 一个有效的结账
+
+每名学生对每门课程只有一个有效的结账。用不同的优惠码发起结账，或在带优惠码之后不带优惠码发起，会取代之前的 `pending` 订单：
+
+1. 先让之前订单的 Stripe 会话过期，使其永远无法被支付。
+2. 新订单的事务把之前的订单移到 `expired` 并释放其占用。
+
+如果 Stripe 表示之前的会话已经支付，答复是 "You are already enrolled in this course"。用同一个优惠码再次发起且剩余时间超过五分钟，则返回已打开的结账页面。
+
+### 抵扣全部价格的优惠码
+
+当总额为零时，`startFreeOrder` 在一个事务中把订单直接写为 `paid`、金额为 0，同时写入加入记录和状态为 `redeemed` 的兑换记录。不会调用 Stripe，`payment.checkout` 返回 `enrolled: true` 而不是页面地址。它仍然需要有效的 Stripe 连接。这样的订单不算销售，所以不记录<Link path="design/instructor-payouts">收入</Link>。
+
+### 优惠券和退款
+
+交付之后的全额退款会让兑换记录保持 `redeemed`，所以学生不能再次使用同一个优惠码。
+
+## 退款
+
+退款从 Stripe 开始：来自 Stripe 控制台，或来自 core-api 代表学生调用的 `payment.requestRefund`。`charge.refunded` 携带迄今为止的退款总额，由 `refundOrder` 应用：
+
+- **低于订单金额**时，只有 `refundedAmount` 上升。学生保留访问权限。
+- **等于订单金额**时，一个事务把订单移到 `refunded` 并把加入记录设为 `dropped`，但仅当加入记录仍指向这个订单。延迟到第二次购买之后才到达的退款通知不能终止新的加入记录。
+
+全额退款之后，webhook 会发布一条 `order.refunded` 通知（"Your refund for … is complete"），除了在门户中显示，还会发送邮件。只有当订单为 `refunded` 且原因是 `requested`（每一次从 `charge.refunded` 记录的全额退款，无论来自控制台还是学生的请求），并且加入记录仍指向该订单时才会发送。它的去重键是订单 ID，所以重新投递的通知不会重复发送，发布失败时 Stripe 的重新投递会重试。部分退款，以及对无法交付的付款的自动退款，都没有通知。
+
+### 退款请求
+
+core-api 的 `payment.requestRefund` 让学生退还自己的购买，`payment.myOrder` 告诉课程页面他们是否可以退款。core-table 中的 `refundEligibility` 仅在以下条件都满足时才允许：
+
+- 订单为 `paid`，且学生的加入记录指向它并且不是 `dropped`；
+- 订单是通过当前连接的 Stripe 账户支付的，并且支付处于已连接状态；
+- 尚未对它请求过退款；
+- 学生尚未完成该课程；
+- 学生完成的比例低于 `REFUND_PROGRESS_LIMIT_PERCENT`（50），在提出请求时根据其完成记录和当前课程大纲计算（`readRefundLimits`），而不是读取保存的 `progressPercent`；
+- 该学生此前针对该课程的订单，没有一个是应其本人请求而退款的（设置了 `refundRequestedAt`；运维人员的退款或自动退款不计入）；
+- 距离付款在 `REFUND_WINDOW_DAYS`（14）天之内。
+
+`requestRefund` 请求 Stripe 退还金额的剩余部分，幂等键由订单 ID 构成，然后在订单上设置 `refundRequestedAt`。它自己从不改变订单或加入记录：随后的 `charge.refunded` 才会这样做。先调用 Stripe 再做标记，所以两者之间崩溃时，留下的是通知仍会记录的退款，而不会是没有退款的标记。
+
+Stripe 在退款创建时就会发送 `charge.refunded`，即使退款仍是 `pending`，之后如果银行退回这笔钱，它还可能让退款失败。所以失败通常到达时，订单已经是 `refunded`，加入记录已经是 `dropped`。失败的退款会被撤销，这样学生不会既失去钱又失去课程。如果 Stripe 报告退款失败（`refund.failed`，或 `status: failed` 的 `charge.refund.updated`）：
+
+- 对于 `refunded` 且原因是 `requested` 的订单，`reverseRefund` 在一个事务中执行：订单回到 `paid`，移除 `refundedAt` 和 `refundedAmount`，设置 `refundFailedAt`，保留 `refundRequestedAt`；加入记录从 `dropped` 回到 `active`（如果有 `completedAt` 则为 `completed`），但仅当它仍指向这个订单。如果学生在退款之后又买了这门课程，加入记录指向的是新订单，`reverseRefund` 不会改变任何东西，订单和加入记录都不变：旧订单回到 `paid` 会让该课程出现第二个已支付订单。不会发送通知，失败的退款交给客服处理。它以订单为 `refunded` 作为条件，所以重复的失败事件不会产生任何变化。`refundOrder` 会忽略 Stripe 在订单的 `refundFailedAt` 之前创建的 `charge.refunded`（即已失败退款的重新投递或迟到的通知），所以它不会第二次终止访问权限；在它之后创建的退款会作为新的退款应用。学生会收到一条 `order.refund_failed` 通知（"Your refund failed; your access is back. Contact support about your refund"），以订单 ID 去重。证书不受影响：只有管理员才能因退款而撤销证书。
+- **收入：** 订单的变化会以带有 `refundFailedAt` 且没有 `refundedAmount` 的 `paid` 订单到达收入记录程序，`recordRefundReversal` 记录被收回的退款：为每位讲师写一条 `refund` 条目，退款的各项数字取负（条目 ID 为 `refund-reversal-<orderId>-<total>`），日期为 `refundFailedAt`，并把 `earningOrder.refundedMinor` 恢复为 0，全部在一个事务中完成。原有的退款条目从不被编辑，所以已被某次结算扣除的退款会由下一次结算退还，这笔销售的收入与退款请求之前相同。冲销的时间保存在 `earningOrder.reversedAt` 中，即使账本里还没有退款也是如此，`recordRefund` 会略过日期等于或早于它的退款。所以重复的事件、在冲销之后到达的退款镜像，或在冲销之前到达的退款镜像，都不会记录任何内容，而同一订单之后的退款（客服再次退款）会作为新的退款记录，也可以再被冲销。
+- 对于仍为 `paid` 的订单，`markRefundFailed` 设置 `refundFailedAt`。
+
+订单为 `paid` 且保留 `refundRequestedAt`，所以不会再提供第二次请求；`payment.myOrder` 返回 `refundFailedAt`，课程页面会告诉学生退款失败并请联系客服，不显示 "Request a refund" 按钮。课程页面对待处理的退款只轮询有限的时间（2 分钟），然后说明它仍在处理中，并提供一个再次检查的按钮。
+
+被终止的加入记录保留其进度和完成记录。学生可以回来：
+
+- **再次购买。** 结算新订单会恢复加入记录，如果他们已完成课程则恢复为 `completed`，并保留进度。
+- **如果课程现在免费，则直接加入。** `course.enrol` 调用 `restoreFreeEnrolment`，它会恢复加入记录并移除其 `orderId`。不会写入订单。
+
+### 退出课程
+
+`course.unenrol` 结束未付费的加入记录：`unenrolFromCourse` 仅在它没有 `orderId` 时才把它设为 `dropped`，否则以 `EnrolmentPaidForError` 拒绝。购买得来的加入记录只能通过退款结束，所以付费课程不经退款就无法退出。进度和完成记录会保留，课程免费期间 `course.enrol` 会恢复加入记录。不检查课程的状态和价格，所以学生可以退出已归档或后来定价的课程。
+
+### 条款
+
+- 这两个限制是 core-table 的 `helpers/order.ts` 中的常量：`REFUND_WINDOW_DAYS`（14）和 `REFUND_PROGRESS_LIMIT_PERCENT`（50）。
+- `payment.myOrder` 和 `course.publicView` 把它们作为 `refundWindowDays` 和 `refundProgressLimitPercent` 返回，所以课程页面上的条款行说明的就是 API 实际应用的内容。
+- `course.myEnrolment` 返回 `refundedBefore`，所以页面会在曾应本人请求退款的学生再次购买之前向其发出警告。
+- 运维人员在 Stripe 中的退款不受这些条款约束。
+- 请求会被自动退款，不经审核。
+- 证书在退款后依然有效。
+
+## Stripe 连接
+
+Stripe 不是在部署时配置的。管理员在管理门户的 **Payments** 页面粘贴一个密钥。
+
+- **`paymentConnection`** 是一条记录，保存非机密信息：状态、测试或正式模式、账户的 ID 和名称、密钥的最后四个字符，以及已注册的 webhook 地址。
+- **密钥和 webhook 签名密钥**存放在 Secrets Manager 中。admin-api 专用的 `PaymentsConnect` 函数是唯一能写入它们的代码。结账函数读取密钥，webhook 读取两者，二者都不能写入。
+- **`paymentChange`** 是对每次尝试只追加的审计行：谁、何时、哪个账户以及密钥的最后四个字符。它从不保存密钥或 Stripe 的错误文本。
+
+保存密钥会检查其格式，向 Stripe 询问它属于谁，为这三个事件注册该阶段的 webhook 地址，并存储密钥和 Stripe 返回的签名密钥。
+
+| 保存 | 它做什么 |
+| --- | --- |
+| **轮换**（同一账户、同一地址） | 只替换密钥。注册和签名密钥保持不变，所以已打开的结账仍可完成 |
+| **切换**（另一个账户或模式，或新地址） | 获取租约，用新密钥注册，存储两个密钥，然后移除旧的注册 |
+| **断开** | 获取租约，把记录标记为 `disconnected` 并清除密钥 |
+
+切换或断开会获取一个两分钟的**租约**：记录的状态变为 `changing`，结账和定价把它视为未连接。如果仍可能有结账处于打开状态，租约会被拒绝（"Checkouts are open until …"），所以在替换密钥期间不会有付款在进行中。轮换不获取租约，但以记录的 `revision` 为条件，所以与并发的切换冲突时会干净地失败。失败的变更会恢复记录和密钥。
+
+## 不变量
+
+core-table 的 `helpers/invariants/` 中有两个文件，在每个端到端场景之后检查跨记录的规则：
+
+- `payments.ts`：订单的字段与其状态相符，标价减去折扣等于收取的金额，已支付订单有其加入记录，加入记录的 `orderId` 指向同一学生和同一课程的订单，而有定价课程中没有订单的加入记录，其日期早于课程开始收费之前，即课程还是免费的时候。
+- `coupons.ts`：`redeemedCount` 等于该优惠券的兑换记录数量且在限额之内，每条兑换记录都有其订单（占用时为待处理，兑换后为已支付），由优惠码产生的免费订单有其加入记录。
+
+## 本地开发
+
+事件运行器包含一个 Stripe 替身（`packages/events/src/local/stripe-stand-in.ts`）：Stripe 的 API、带有 **Pay**、**Decline card** 和 **Cancel** 的托管结账页面，以及发往端口 2024 上 `/stripe/webhook` 的已签名 webhook 投递。以 Carol 的身份用密钥 `sk_test_local` 连接它。密钥保存在被 git 忽略的 `tmp/local-dev/secrets/` 中，代替 Secrets Manager。
+
+`/stripe/test/` 下的控制项可以驱动真实 Stripe 账户会做的事：`refund`、`refunds`（列出一笔付款的退款）、`fail-next-refund`（下一笔退款先以 `charge.refunded` 通知，稍后再报告失败，且该扣款不再是已退款状态）、`hold-next-refund`（以 `charge.refunded` 通知，但永不完成）、`replay`（再次投递确认）、`expire`、`forge`（签名错误的消息）和 `endpoints`。
+
+`LOCAL_CHECKOUT_TTL_SECONDS` 可以缩短结账一小时的有效期，仅限本地开发。
+
+## 局限
+
+- 仅支持银行卡支付，不处理税费，也不做货币转换。
+
+<Link path="design/instructor-payouts">讲师结算</Link>介绍订单支付之后资金的去向。

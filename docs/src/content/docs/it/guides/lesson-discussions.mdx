@@ -1,0 +1,75 @@
+---
+title: Discussioni sulle lezioni
+description: Fare domande, rispondere, votare e accettare risposte in una lezione, l'area Questions dell'istruttore, cosa fanno nascondere ed eliminare, i limiti e cosa succede alle lezioni archiviate.
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Ogni lezione ha una sezione **Questions** in cui gli studenti iscritti al corso fanno domande e si rispondono a vicenda, e in cui intervengono gli istruttori del corso.
+
+## Per gli studenti
+
+In una lezione, sotto il contenuto, la sezione **Questions** elenca le domande della lezione, dalla più recente.
+
+- **Ask**: compila **Question title** (fino a 120 caratteri) e **Details**, poi scegli **Post question**.
+- **Reply**: scegli **Open question**, scrivi la risposta e scegli **Post reply**. Una discussione contiene fino a 500 risposte.
+- **Upvote** su una domanda o risposta scritta da qualcun altro. **Remove upvote** lo annulla.
+- **Accept** una risposta: chi ha posto la domanda può scegliere **Mark as answer** su qualsiasi risposta. Appare fissata sopra le altre risposte come **Accepted answer** e la domanda appare come **Answered**. **Remove answer** lo annulla.
+- **Report** un messaggio di qualcun altro che infrange le regole. Gli istruttori lo vedono nel loro elenco Reported.
+- **Delete** la tua domanda o risposta, dopo conferma. Eliminare la tua domanda elimina anche la sua risposta accettata. Non si può annullare.
+
+In un corso archiviato le domande si possono leggere ma non si può pubblicare nulla di nuovo.
+
+### Il suggerimento della prima lezione
+
+Quando ti iscrivi, arrivi nella prima lezione del corso e la sua sezione **Questions** mostra un suggerimento sopra l'elenco, per esempio "What do you want to be able to do with what this course teaches?". Ha una casella di testo, **Post** e **Not now**.
+
+- Puoi rispondere una sola volta. **Post** aggiunge la tua risposta all'elenco della lezione, contrassegnata **Answer to the course prompt**. I compagni possono rispondere e votare come per una domanda.
+- **Not now** chiude il suggerimento senza pubblicare nulla.
+- In entrambi i casi il suggerimento non torna, su nessun dispositivo, anche se elimini la tua risposta.
+- Tutti nel corso possono leggere la tua risposta, così come i suoi istruttori.
+
+Compare solo nella prima lezione mostrata agli studenti e non prende il focus della tastiera all'apertura della lezione.
+
+La campanella ti avvisa quando qualcuno risponde a un tuo messaggio, quando viene segnata una risposta alla tua domanda e quando la tua risposta viene segnata come risposta. I primi due inviano anche un'email a meno che tu non l'abbia disattivata. Vedi <Link path="guides/notifications">Notifiche</Link>.
+
+## Per gli istruttori
+
+Apri il corso da **My Courses** e scegli **Questions** in alto nella pagina. La pagina ha tre schede:
+
+- **Unanswered**: domande senza risposta dell'istruttore né risposta accettata, dalla più vecchia. **Open** una domanda per rispondere. La tua risposta mostra un badge **Instructor** e toglie la domanda dall'elenco. Non devi essere iscritto.
+- **Reported**: messaggi segnalati dagli studenti, con il numero di segnalazioni. **Hide** un messaggio, **Delete** o **Dismiss reports**.
+- **By lesson**: scegli una lezione per vedere ogni discussione al suo interno e **Open thread** per leggerne una.
+
+In una discussione aperta puoi anche **Mark as answer** su qualsiasi risposta, e **Hide** o **Delete** qualsiasi messaggio.
+
+Non puoi rispondere in un corso archiviato, né in una lezione che gli studenti non possono aprire perché nascosta o archiviata.
+
+### Il suggerimento della prima lezione
+
+Nella pagina del corso, la sezione **First-lesson prompt** ti permette di sostituire il testo del suggerimento (testo semplice, fino a 200 caratteri). Svuotarlo ripristina quello predefinito. Cambiarlo non mostra di nuovo il suggerimento agli studenti che hanno già risposto o lo hanno chiuso.
+
+Le risposte al suggerimento non sono in **Unanswered**, perché non sono domande in attesa di un istruttore. Leggile in **By lesson**, nella prima lezione del corso. Puoi rispondere, nasconderle o eliminarle come qualsiasi messaggio, e una segnalata compare in **Reported**.
+
+### Nascondere ed eliminare
+
+- **Hide** è reversibile. Gli studenti vedono "This post was hidden by an instructor." al posto del messaggio, senza autore né testo. **Unhide** lo riporta com'era.
+- **Delete** è definitivo. Tutti, istruttori compresi, vedono "This post was deleted." e il testo non c'è più.
+
+Nascondere o eliminare una domanda nasconde anche le sue risposte. Una domanda nascosta o eliminata esce dall'elenco Unanswered.
+
+## Limiti
+
+- I messaggi sono testo semplice. Il markup come l'HTML viene mostrato come digitato, mai interpretato.
+- Il titolo di una domanda è fino a 120 caratteri, e una domanda o risposta fino a 4.000 caratteri.
+- Una domanda contiene fino a 500 risposte visibili.
+
+## Chi può leggerle
+
+Gli studenti con un'iscrizione attiva, nelle lezioni che possono aprire, e gli istruttori del corso in qualsiasi lezione. Uno studente che ha lasciato il corso, uno non iscritto e i visitatori vengono rifiutati. Uno studente non può chiamare le code o la moderazione dell'istruttore.
+
+## Lezioni archiviate
+
+Archiviare una lezione (rimuoverla da un corso pubblicato) la nasconde agli studenti, che non possono più aprire né lei né le sue domande. Gli istruttori leggono ancora le sue discussioni in **By lesson** e ripristinare la lezione riporta la discussione intatta. Una lezione con domande può restare archiviata ma non può essere eliminata definitivamente.

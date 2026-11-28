@@ -1,0 +1,228 @@
+---
+title: 测验
+description: "测验内容项：数据模型、评分、作答次数、作答中被编辑，以及学生和讲师的体验。"
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+**规格：** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/)（视频内提问）
+
+测验是一个内容项（`type: 'quiz'`），与视频、文本和文件项一起放在课时的序列中。它有一道或多道题，每道题是**单选**或**多选**。
+
+测验也可以是作业课时（`kind: 'assignment'` 的课时）中唯一的内容项。它通过 `lesson.createQuizAssignment` 创建，之后的编辑和作答与其他测验相同。视频内提出的简短问题沿用测验题目的结构；见[视频内提问](#视频内提问)。
+
+## 数据模型
+
+### 测验内容项
+
+测验专有的 `contentItem` 属性。与其他类型一样，某个类型要求哪些属性，由 instructor-api 的 zod 模式（`schema/quiz.ts`）强制，而不是由 ElectroDB。
+
+| 属性 | 结构 |
+|---|---|
+| `questions` | `[{ questionId, kind: 'single' \| 'multiple', prompt, options: [{ optionId, text }] }]`。`prompt` 是 Tiptap JSON。可以安全地发送给学生 |
+| `answerKey` | `{ [questionId]: { correctOptionIds: string[], explanation? } }`。`explanation` 是 Tiptap JSON。**core-api 除评分外从不读取它** |
+| `settings` | `{ passMarkPercent, attemptsAllowed /* null = unlimited */, shuffleOptions, revealAnswers: 'after_each_attempt' \| 'after_final_attempt' \| 'never' }` |
+| `quizVersion` | 数字，每次保存时递增。保存时要指明编辑器加载的版本，如果测验已经变化，则会被拒绝（见[保存测验](#保存测验)） |
+| `questionsHash` | 仅 `questions` 的哈希（不含答案或 `settings`），每次保存时重新计算（`hashQuizQuestions`） |
+
+`questions` 和 `answerKey` 是分开的属性，这样把内容项传递给学生时就不会泄露答案。课程读取（`course.view`、`course.publicView`）只按标题和位置列出测验。它们从不包含 `questions` 或 `answerKey`。
+
+`questionId` 和 `optionId` 由客户端提供，并且在多次保存之间必须保持不变，因为答案、学生的作答以及下面的对账步骤都引用它们。
+
+### `quizAttempt`
+
+- pk 为 `userId`，sk 为 `courseId / contentItemId / attemptId`。`attemptId` 是 UUIDv7，所以学生对某个测验的各次作答按提交顺序排序。
+- 保存 `answers`（`{ [questionId]: optionId[] }`）、`correctQuestionIds`、`scorePercent`、`passed`、`quizVersion`、`questionsHash`、`submittedAt`，以及 `moduleId` 和 `lessonId`。`correctQuestionIds` 记录当时哪些题被判为正确，因为答案之后可能改变。
+- 一旦写入就不再更新。
+
+### 每位用户的测验摘要（`quizSummary`）
+
+- pk 为 `userId`，sk 为 `courseId / contentItemId`。保存 `attemptsUsed`、`bestScore`、`bestAttemptId`、`passedAt`，以及 `moduleId` 和 `lessonId`。
+- 与每次作答在同一个事务中写入。第一次作答创建它。之后的每次都以它读到的 `attemptsUsed` 为条件，所以即使两次提交竞争，作答次数限制依然成立：输的一方重新读取并被拒绝。
+- `bestScore` 只会增加。`passedAt` 由第一次通过的作答设置，且永不清除。
+- 创建学生的摘要会使测验的 `studentActivityCount` 加一（见<Link path="design/live-course-editing">课程在线编辑</Link>）。
+- 通过的那次作答，或用完最后一次机会的作答，也会在同一个事务中记录该测验的 `itemCompletion`，除非已经存在（见<Link path="design/progress-and-completion">进度与完成</Link>）。
+- `quiz-summary-matches-attempts` 不变量（`core-table/src/helpers/invariants/student-activity.ts`）检查每份摘要都与它的作答一致，并且每次作答都有摘要。
+
+## 评分
+
+- 只在服务端进行，在 core-api 中。客户端在提交之前永远收不到 `answerKey`。
+- 每道题要么全对要么全错：所选选项必须与 `correctOptionIds` 完全相等。
+- 分数是答对题目的百分比，向下取整为整数，所以学生看到的从不高于他们实际得分。`passed` 即 `score >= passMarkPercent`。
+- 计入的是所有作答、所有测验版本中的**最高**分。
+- 已记录的通过是永久的，即使之后提高了及格线或编辑了测验。
+- 过去的作答从不会被自动重新评分。
+
+## 学生 API
+
+core-api 有三个过程（`procedures/quiz.ts`），每个都接收测验的 `courseId`、`moduleId`、`lessonId` 和 `contentItemId`。三者都要求：
+
+- 选课状态不是 `dropped`（在已发布的课程中没有选课时返回 `FORBIDDEN`，否则返回 `NOT_FOUND`）；
+- 测验是有效可见的：测验、它的课时和它的模块都可见且未归档。否则返回 `NOT_FOUND` "This quiz is no longer available"。
+
+**`quiz.view`** 返回题目、设置、`quizVersion` 和 `questionsHash`，从不返回答案。在已归档的课程中它仍然可用，与课程的其余部分一样。
+
+**`quiz.submitAttempt`** 接收 `answers` 和学生所作答的 `questionsHash`。它在服务端评分，并在一个事务中写入作答和摘要。同一个事务会检查：
+
+- 课程仍处于已发布状态；
+- 模块、课时和测验仍然可见且未归档；
+- 测验仍是评分时所依据的 `quizVersion`；
+- 选课状态仍不是 dropped。
+
+如果期间有任何变化，就不会写入任何内容，并且重新读取提交的内容并再次评分，最多三次，然后返回 `CONFLICT`。
+
+| 拒绝 | 何时 |
+|---|---|
+| `PRECONDITION_FAILED` | 课程已归档，或没有剩余的作答机会 |
+| `CONFLICT` | 题目在学生加载之后发生了变化（见[下文](#测验在作答过程中被编辑)），或三次尝试都在竞争中失败 |
+| `BAD_REQUEST` | 某个答案指向未知的题目或选项，重复了某个选项，或者给单选题提供了多个选项 |
+
+**`quiz.myAttempts`** 返回学生的摘要（或 `null`）以及他们的作答，最新的在前，一次一页（`cursor` 和 `limit`，默认 10，最多 100）。历史记录要分页，因为在作答次数不限时它没有上限。
+
+每次作答的结果会显示哪些题答对了。只有当 `revealAnswers` 允许时，`submitAttempt` 和 `myAttempts` 才会返回正确选项和解析（`reveal`）：
+
+| `revealAnswers` | 何时返回 `reveal` |
+|---|---|
+| `after_each_attempt` | 学生作答一次之后 |
+| `after_final_attempt` | 没有剩余的作答机会之后。作答次数不限时永远不返回 |
+| `never` | 永不 |
+
+## 测验在作答过程中被编辑
+
+每次提交时，客户端都会发送它所显示题目的 `questionsHash`。
+
+| 讲师更改了什么 | 提交的结果 |
+|---|---|
+| 仅答案或解析（哈希匹配） | 被接受，并按**当前**的答案评分。学生没有任何察觉 |
+| 任何题干、题型，或选项的措辞、数量或顺序（哈希不同） | `CONFLICT`，并且**不消耗作答次数**。客户端重新获取并对账（见下文） |
+| 及格线 | 被接受，并按当前的及格线评分。已记录的通过保持不变 |
+| `attemptsAllowed` 被降到 `attemptsUsed` 或更低 | 被拒绝，提示 "No attempts remaining"，并显示最高分 |
+| 测验、它的课时或模块被归档或隐藏 | 被拒绝，提示 "This quiz is no longer available"；本地草稿被丢弃 |
+
+"仅答案"的意思是学生的屏幕在前后看起来完全相同。例如：
+
+- 更正哪个选项是正确的：对于 "Which service runs containers without managing servers?"，答案原先是 EC2，更正为 Fargate。
+- 给多选题添加另一个正确选项。屏幕不会变化，因为它始终写着 "Select all that apply"，从不说明有几个是正确的。
+- 添加或改写解析。
+
+重新排列选项即使无害也算作变化，以保持规则简单：只要屏幕可能看起来不同，学生就要重新检查。
+
+### `CONFLICT` 之后的对账
+
+客户端按 `questionId` 比较新旧 `questions`：
+
+- **未变化：** 保留答案。
+- **已移除：** 丢弃答案。
+- **新增：** 以未作答开始，标记为 **New**。
+- **题干、选项或题型改变：** 指向仍然存在的选项的答案会保留（对于改为单选的题目，只有恰好剩下一个时才保留），并把该题标记为 **Updated**。
+
+`@discava/common-web-utils/quiz` 中的 `reconcile` 负责这件事。学生会进入审阅界面，看到 "This quiz was updated. Check the marked questions before submitting."。审阅界面打开时和窗口获得焦点时，测验查询也会重新获取，所以横幅通常在他们按下 Submit 之前就出现了。`CONFLICT` 是最终的保证。
+
+## 学生体验
+
+课时是一个按 `order` 排列各项的滚动页面。顶部的步骤条显示每个内容项的状态（✓ 已完成，⚠ 测验已完成但未通过，否则为该内容项类型的图标），并可滚动到该项。**未通过的测验永远不会阻止继续前进。**
+
+测验是课时流中的一张卡片（`common/shadcn` 中的 `QuizCard`，与讲师的预览共用）。它依次经过四个界面：
+
+| 界面 | 显示 | 按钮 |
+|---|---|---|
+| 概览 | "5 questions · Pass 80% · 1 of 3 attempts used"，最高分和一个 Passed 徽章 | **Start quiz**、**Resume quiz**（有已保存的草稿时）或 **Retake quiz**。没有剩余次数时显示 "No attempts remaining" |
+| 题目 | 一道题，多选题带有 "Select all that apply" 和复选框，单选题使用单选按钮 | **Back**、**Next**，最后一题上是 **Review answers** |
+| 审阅 | 每个答案，未作答的题目会被标出 | **Back**、**Submit answers** |
+| 结果 | "This attempt: 60% · Not passed"，每道题的对错，以及在 `revealAnswers` 允许时显示正确选项和解析 | **Done**、**Retake quiz** |
+
+- **题目导航。** 题目多于一道的测验会在选项上方显示一排带编号的按钮。每个按钮跳转到对应的题目，作答后会被填充，并向屏幕阅读器说明它的状态（"Question 2, answered"）。
+- 反馈只在提交之后给出，从不按题给出，所以无法一个选项一个选项地探测答案。
+- 进行中的答案按测验保存到 localStorage（`readQuizDraft`、`writeQuizDraft`）。只有在提交时才会在服务器上创建作答记录。
+- 较低分的重做会显示 "Your best score of 80% still counts."。
+- 无障碍：每道题一个 `fieldset`，由它的编号和题干作标签，对错用图标和文字显示（而不仅仅是颜色），完整支持键盘操作。
+- 题干和解析使用只读的 Tiptap 渲染器，由 `common/shadcn` 共享。
+
+## 保存测验
+
+创建测验以及之后的每次保存，都会把整个测验作为一个文档写入。`quizVersion` 用来防止两位编辑者或一个过期的标签页互相覆盖。
+
+```d2 title="What happens when an instructor saves a quiz: access and archive checks, the version check, then one conditional write"
+direction: down
+
+start: "contentItem.updateQuiz\n(sends the quizVersion\nthe editor loaded)" {shape: oval}
+access: "Instructor of this\ncourse, and the item\nis a quiz?" {shape: diamond}
+archived: "Quiz, its lesson, module\nor course archived?" {shape: diamond}
+stale: "Stored quizVersion\n= the one sent?" {shape: diamond}
+write: "One transaction: course, module and lesson\nstill exist and aren't archived, quiz isn't\narchived and is still at that quizVersion.\nWrites the new content, quizVersion + 1\nand the recomputed questionsHash"
+landed: "Did a condition fail?" {shape: diamond}
+
+forbidden: "FORBIDDEN or BAD_REQUEST"
+frozen: "PRECONDITION_FAILED:\nrestore it first"
+conflict: "CONFLICT: the quiz changed since it\nwas loaded; reload and retry.\nNothing written"
+done: "Saved as quizVersion + 1" {shape: oval}
+
+start -> access
+access -> forbidden: no
+access -> archived: yes
+archived -> frozen: yes
+archived -> stale: no
+stale -> conflict: no
+stale -> write: yes
+write -> landed
+landed -> conflict: "yes, and nothing is archived"
+landed -> frozen: "yes, and something was archived"
+landed -> done: no
+```
+
+- 基于同一个版本所做的两次保存，恰好有一次成功；另一次得到 `CONFLICT`。该检查在写入的事务内部再次执行，所以即使两次保存同时发生也成立，而不仅仅是一次紧跟着另一次。
+- 成功的保存会返回新的 `quizVersion`，编辑器在下一次保存时使用它。
+- `questionsHash` 只根据 `questions` 重新计算，所以只更改答案、解析或设置的保存会保持相同的哈希。
+- 创建测验时 `quizVersion` 从 1 开始。与其他新内容一样，在草稿课程中它从 `visible` 开始，否则从 `hidden` 开始，并且在已归档的模块或课时下，或在已归档的课程中，不能创建或编辑它（见<Link path="design/live-course-editing">课程在线编辑</Link>）。
+
+## 讲师体验
+
+- 课时内容行中，**Quiz** 按钮与 **Video**、**Text** 和 **File** 按钮并列。它会打开新测验的构建器，测验在第一次保存时创建；之后的保存则更新它。
+- 构建器在一个大对话框中打开，无论是新测验还是测验的 **Edit** 按钮，与 Text 和 Video 对话框一样。带着未保存的更改关闭它时会先询问：
+  - 设置：标题、描述、及格线、允许的作答次数、打乱选项、何时显示答案。
+  - 每道题一张卡片：Tiptap 题干（编辑器只为展开的卡片挂载）、Single/Multiple 切换、带有正确标记的选项行（单选用单选按钮，多选用复选框）、添加/移除/重新排序选项、可选的解析。
+  - 拖动来重新排序题目。
+  - 题目旁边的目录面板按编号列出题目及每个题干的开头，并标出需要修正的题目；点击其中一项会展开并滚动到它。
+  - **Preview as student**，使用真正的学生组件（`QuizCard`），显示构建器中测验当前的样子，无论是否已保存。它在浏览器中按与 core-api 相同的规则评分，不发送也不保存任何内容，并且始终显示正确答案和解析。它的作答只在它打开期间计数。
+  - 整个测验作为一个文档保存：`contentItem.updateQuiz` 针对构建器加载的 `quizVersion`，把题目、答案和设置一起替换。遇到 `CONFLICT` 时，构建器会提供重新加载最新版本的选项。
+  - 当测验或它上方的任何内容被归档时为只读，并说明原因。
+- 校验，在表单和 zod 中进行（无论表单怎么做，API 都会强制执行全部规则）：
+  - 1 到 50 道题，每道题有 2 到 10 个选项。选项文字为 1 到 500 个字符。
+  - 单选题：恰好 1 个正确答案。多选题：至少 1 个正确答案。每个正确的 id 都是该题的选项之一。
+  - 每道题都有一条答案条目，并且答案中没有其他题目的条目。题目 id 唯一，选项 id 在一道题内唯一。
+  - 题干和解析是符合编辑器模式的 Tiptap 文档（相同的 `StarterKit` 节点和标记），以 JSON 字符串存储。
+  - 及格线是 0 到 100 的整数。允许的作答次数是从 1 开始的整数，或者不限。
+  - 题目和答案合计最多 300 KB，远低于 DynamoDB 400 KB 的条目限制。
+  - 在有多个正确答案的情况下从 Multiple 切换到 Single，会询问保留哪一个。
+- 编辑已有作答的测验时会警告 "N students have attempted this quiz"。
+
+讲师看到的测验统计（分数分布、各题结果）由 `analytics-update` 流功能根据作答构建；见<Link path="design/course-analytics">课程分析</Link>。
+
+## 视频内提问
+
+讲师可以在视频内容项上放置最多 20 道题，每道题位于视频中的某个时刻或结尾。它们是低风险的：没有及格线，没有作答次数限制，不保存分数，并且从不阻止进度。播放器如何提出这些问题，见<Link path="design/video-player">视频播放器与字幕</Link>。
+
+- **存放位置：** 在视频自己的 `contentItem` 上，使用测验所用的 `questions`、`answerKey` 和 `quizVersion` 属性。每道题是一道测验题再加上 `atSeconds`（整数秒，结尾提问则为 `null`）和服务端设置的 `contentHash`。视频没有 `settings` 或 `questionsHash`。
+- **带版本的保存：** `contentItem.updateVideoQuestions` 针对编辑器加载的 `quizVersion` 替换整个集合，与 `updateQuiz` 相同。版本 0 表示从未保存过。基于同一个版本的两次保存，恰好有一次成功，另一次得到 `CONFLICT`。它与 `contentItem.updateVideo` 是分开的，所以可以在不触及媒体的情况下更改题目。编写仅限课程的讲师，并且在视频、课时、模块或课程被归档时会被拒绝。
+- **每题的哈希：** `contentHash` 涵盖一道题的 id、题型、题干和选项，不含它的时刻或答案。它在每道题上起到 `questionsHash` 对测验所起的作用，所以编辑一道题永远不会干扰正在回答另一道题的学习者，而移动一道题不会改变任何东西。
+- **答题单：** 学习者对一个视频的答案是一条 `videoAnswerSheet` 记录（pk `userId`，sk `courseId / contentItemId`），其中对每道已回答的题保存所选的选项、当时按答案判断是否正确，以及时间。`answerCount` 是每次写入的条件，所以两个标签页不能同时都成功。答题单只会增加条目。
+- **仅记录第一次回答：** 一道题的第一次回答会被记录，并且永远不会被更改、替换或重新评分。再次提交会返回已记录的回答。只有在学习者的回答已被记录之后，答案和解析才会到达学习者。**Try again** 是练习，在浏览器中按已经显示的答案评分，不记录任何内容。跳过不记录任何内容。
+- **低风险：** 回答不会创建 `itemCompletion`，也不会改变进度、测验结果或证书。它会把该学习者算作使用过该视频（见<Link path="design/live-course-editing">课程在线编辑</Link>），并算作当天活跃。
+
+### 视频提问在作答中被编辑
+
+每次回答时，客户端都会发送它所显示题目的 `contentHash`。
+
+| 讲师更改了什么 | 提交的结果 |
+|---|---|
+| 仅正确选项或解析（哈希匹配） | 被接受，并按**当前**的答案评分。学习者没有任何察觉 |
+| 题干、题型，或选项的措辞、数量或顺序（哈希不同） | `CONFLICT`，且不记录任何内容。学习者会被告知该题已更新，并看到更新后的题目 |
+| 题目的时刻 | 被接受。已记录的回答不受影响，尚未回答该题的学习者会在新的时刻被提问 |
+| 题目被移除 | 以未找到被拒绝，且不记录任何内容。视频继续播放。已记录的回答会保留，但该题不再被提问，也不再列入结果 |
+| 视频、课时、模块或课程被归档或隐藏 | 被拒绝，提示 "no longer available" |
+
+已记录的回答永远不会被重新评分：答错的学习者在答案被更正之后仍然是 "incorrect"。重新打开已回答题目的学习者，会在他们已记录的结果旁看到当前的答案和解析。
+
+当讲师打开已有学习者使用过的视频的题目时，编辑器会发出警告：他们的回答会被保留，不会重新评分。编辑器中的预览在浏览器中用讲师自己的答案评分，并且不记录任何内容。

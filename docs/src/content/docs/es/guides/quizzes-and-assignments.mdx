@@ -1,0 +1,78 @@
+---
+title: Quizzes y tareas
+description: Crear un quiz y sus ajustes, hacer uno como estudiante, definir una tarea, entregar trabajo, trabajo tardío, y calificar, devolver y pedir una nueva entrega.
+---
+
+import Link from '@components/link.astro';
+
+Un quiz se corrige automáticamente. Una tarea es un trabajo que un estudiante sube y un instructor califica.
+
+## Quizzes: para instructores
+
+En **Course content**, añade un **Quiz** a una lección. El constructor de quizzes tiene:
+
+- **Questions**: hasta 50. Cada una es **Single choice** o **Multiple choice**, con de 2 a 10 opciones y una **Explanation** opcional.
+- **Pass mark (%)**: de 0 a 100.
+- **Attempts allowed**: **Unlimited**, o un número de al menos 1.
+- **Show the correct answers**: After each attempt, After the last attempt o Never.
+- **Shuffle the options for each student**.
+
+No hay límite de tiempo.
+
+**Preview as student** te permite hacer el quiz como lo haría un estudiante. Las respuestas se comprueban y no se guarda nada.
+
+Puedes editar un quiz después de que los estudiantes lo hayan intentado. Sus intentos y mejores notas se conservan y nunca se recalifican. A un estudiante que está a mitad de un intento se le pide revisar las preguntas modificadas antes de enviar.
+
+## Quizzes: para estudiantes
+
+El quiz muestra su número de preguntas, la nota de aprobado y cuántos intentos tienes.
+
+1. Elige **Start quiz**.
+2. Responde cada pregunta. **Next** y **Back** te mueven entre ellas.
+3. Elige **Review answers** para ver lo que respondiste y lo que sigue sin responder. **Change** te lleva de vuelta a una pregunta.
+4. Elige **Submit answers**.
+
+El resultado muestra la nota de este intento y si aprobaste. Cuenta tu mejor nota.
+
+- **Resume quiz** continúa un intento que dejaste.
+- **Retake quiz** inicia otro intento, mientras te queden intentos.
+- Aprobar el quiz, o usar tu último intento, lo marca como completado.
+- En un curso archivado, los quizzes están cerrados.
+
+## Tareas: para instructores
+
+En un módulo, elige **New assignment** y escoge su tipo:
+
+- **Upload**: los estudiantes entregan un archivo y tú lo calificas.
+- **Quiz**: un quiz que se califica automáticamente.
+
+Una tarea de subida tiene un **Assignment title**, **Instructions**, **Max points** (un número entero de 1 a 1000) y una fecha límite opcional.
+
+### Calificar
+
+**Home** lista las entregas **Waiting for grading**. El enlace **Submissions** de una tarea en **Course content** lista a cada estudiante, como Not submitted, Waiting, Resubmission requested o Returned.
+
+1. Abre una entrega.
+2. Lee el archivo.
+3. Introduce los **Points**, de 0 al máximo, y tus **Feedback**.
+4. Elige **Return** para dar la nota al estudiante, o **Request resubmission** para pedir otra versión.
+
+Después de devolver un trabajo aún puedes cambiar la nota con **Save grade**. Al estudiante se le avisa cada vez. Puedes leer el trabajo de un estudiante que ha dejado el curso, pero no calificarlo.
+
+## Tareas: para estudiantes
+
+La tarea muestra sus instrucciones, los **Maximum points** y la fecha límite, si la tiene.
+
+1. Elige **Choose file** y escoge tu trabajo.
+2. Elige **Submit**.
+
+- Entregas un archivo de hasta 100 MB: pdf, docx, xlsx, pptx, odt, ods, odp, txt, csv, md, png, jpg, jpeg, gif, webp o zip.
+- **Se acepta el trabajo tardío.** Después de la fecha límite tu entrega se marca como **Late**.
+- **Resubmit** reemplaza tu archivo hasta que el instructor lo devuelva. El trabajo devuelto no se puede cambiar.
+- Si tu instructor te pide volver a entregar, ves sus comentarios y puedes enviar una nueva versión.
+- El trabajo devuelto muestra tus puntos y los comentarios.
+- En un curso archivado ya no se puede entregar trabajo.
+
+Se te avisa en la campana, y por correo salvo que lo desactives, cuando se devuelve un trabajo, cuando se pide una nueva entrega y cuando cambia una nota. Consulta <Link path="guides/notifications">Notificaciones</Link>.
+
+Las notas pueden contar para un certificado. Consulta <Link path="guides/certificates">Certificados</Link>.

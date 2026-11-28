@@ -1,0 +1,75 @@
+---
+title: Discussões de aula
+description: Como perguntar, responder, votar e aceitar respostas em uma aula, a área Questions do instrutor, o que ocultar e excluir fazem, os limites e o que acontece com aulas arquivadas.
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Toda aula tem uma seção **Questions** em que os alunos matriculados no curso fazem perguntas e respondem uns aos outros, e em que os instrutores do curso intervêm.
+
+## Para alunos
+
+Em uma aula, abaixo do conteúdo, a seção **Questions** lista as perguntas da aula, das mais recentes para as mais antigas.
+
+- **Perguntar**: preencha **Question title** (até 120 caracteres) e **Details**, depois escolha **Post question**.
+- **Responder**: escolha **Open question**, escreva sua resposta e escolha **Post reply**. Uma conversa comporta até 500 respostas.
+- **Upvote** em uma pergunta ou resposta escrita por outra pessoa. **Remove upvote** desfaz.
+- **Aceitar** uma resposta: quem fez a pergunta pode escolher **Mark as answer** em qualquer resposta. Ela aparece fixada acima das outras como **Accepted answer**, e a pergunta aparece como **Answered**. **Remove answer** desfaz.
+- **Report** em uma publicação de outra pessoa que quebra as regras. Os instrutores a veem na lista Reported.
+- **Delete** na sua própria pergunta ou resposta, após confirmar. Excluir sua pergunta também exclui a resposta aceita dela. Isso não pode ser desfeito.
+
+Em um curso arquivado, as perguntas podem ser lidas, mas nada novo pode ser publicado.
+
+### O convite da primeira aula
+
+Quando você se matricula, cai na primeira aula do curso, e a seção **Questions** dela mostra um convite acima da lista, por exemplo "What do you want to be able to do with what this course teaches?". Ele tem uma caixa de texto, **Post** e **Not now**.
+
+- Você pode responder uma vez. **Post** adiciona sua resposta à lista da aula, marcada como **Answer to the course prompt**. Os colegas podem responder a ela e dar upvote como em uma pergunta.
+- **Not now** fecha o convite sem publicar nada.
+- De qualquer forma, o convite não volta, em nenhum dispositivo, mesmo que você exclua sua resposta.
+- Todos no curso podem ler sua resposta, e os instrutores também.
+
+Ele aparece apenas na primeira aula mostrada aos alunos e não toma o foco do teclado quando a aula abre.
+
+O sino avisa quando alguém responde a uma publicação sua, quando uma resposta à sua pergunta é marcada e quando sua resposta é marcada como a resposta. Os dois primeiros também enviam e-mail, a menos que você desative. Veja <Link path="guides/notifications">Notificações</Link>.
+
+## Para instrutores
+
+Abra o curso em **My Courses** e escolha **Questions** no topo da página. A página tem três abas:
+
+- **Unanswered**: perguntas sem resposta de instrutor e sem resposta aceita, das mais antigas para as mais novas. **Open** uma pergunta para responder. Sua resposta mostra um selo **Instructor** e tira a pergunta da lista. Você não precisa estar matriculado.
+- **Reported**: publicações que os alunos denunciaram, com o número de denúncias. **Hide** uma publicação, **Delete** ou **Dismiss reports**.
+- **By lesson**: escolha uma aula para ver todas as conversas nela, e **Open thread** para ler uma.
+
+Em uma conversa aberta você também pode usar **Mark as answer** em qualquer resposta, e **Hide** ou **Delete** em qualquer publicação.
+
+Você não pode responder em um curso arquivado, nem em uma aula que os alunos não conseguem abrir por estar oculta ou arquivada.
+
+### O convite da primeira aula
+
+Na página do curso, a seção **First-lesson prompt** permite trocar o texto do convite (texto simples, até 200 caracteres). Limpá-lo traz de volta o padrão. Alterá-lo não mostra o convite de novo aos alunos que já responderam ou o dispensaram.
+
+As respostas ao convite não estão em **Unanswered**, porque não são perguntas à espera de um instrutor. Leia-as em **By lesson**, na primeira aula do curso. Você pode responder, ocultar ou excluí-las como qualquer publicação, e uma denunciada aparece em **Reported**.
+
+### Ocultar e excluir
+
+- **Hide** é reversível. Os alunos veem "This post was hidden by an instructor." no lugar da publicação, sem autor nem texto. **Unhide** a traz de volta como era.
+- **Delete** é definitivo. Todos, instrutores inclusive, veem "This post was deleted." e o texto se perde.
+
+Ocultar ou excluir uma pergunta oculta também suas respostas. Uma pergunta oculta ou excluída sai da lista Unanswered.
+
+## Limites
+
+- As publicações são texto simples. Marcação como HTML é mostrada como digitada, nunca renderizada.
+- O título de uma pergunta tem até 120 caracteres, e uma pergunta ou resposta até 4.000 caracteres.
+- Uma pergunta comporta até 500 respostas visíveis.
+
+## Quem pode lê-las
+
+Alunos com matrícula vigente, nas aulas que conseguem abrir, e os instrutores do curso em qualquer aula. Um aluno que abandonou o curso, um aluno não matriculado e visitantes são recusados. Um aluno não pode chamar as filas nem a moderação do instrutor.
+
+## Aulas arquivadas
+
+Arquivar uma aula (removê-la de um curso publicado) a oculta dos alunos, que então não podem mais abri-la nem ver suas perguntas. Os instrutores ainda leem as conversas dela em **By lesson**, e restaurar a aula traz a discussão de volta intacta. Uma aula com perguntas pode continuar arquivada, mas não pode ser excluída em definitivo.

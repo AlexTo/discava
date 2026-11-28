@@ -1,0 +1,76 @@
+---
+title: Modelo de segurança
+description: Quem pode alcançar o quê no Discava, as proteções que um stage pode ativar e como os deploys são mantidos dentro dos limites.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+## Quem pode fazer o quê
+
+O acesso é decidido em camadas, e cada camada pressupõe que a anterior pode falhar.
+
+| Camada | Garante |
+| --- | --- |
+| **Grupos do Cognito** | O papel do usuário: `student`, `instructor` ou `admin` |
+| **APIs separadas** | Os procedimentos de instrutor e de admin são deployments separados. O token de um estudante é rejeitado pela instructor-api antes de qualquer procedimento rodar |
+| **Regras de procedimento** | A regra específica: este instrutor é dono deste curso, este estudante está matriculado nele |
+| **Mídia assinada** | Um vídeo ou arquivo é servido apenas a uma requisição assinada para ele. A assinatura é emitida após uma verificação de acesso, como a matrícula |
+
+Um curso em rascunho ou arquivado responde "não encontrado" a quem não deveria vê-lo, então sua existência não é revelada.
+
+## Proteções por stage
+
+Toda proteção vem **ativada por padrão**. A configuração de um stage só pode desativar coisas, o que o `discava-development` faz para ficar barato.
+
+| Proteção | O que faz | Produção | Desenvolvimento |
+| --- | --- | --- | --- |
+| **WAF** | Firewall de aplicações web nos portais, APIs, mídia e user pool | Ativado | Desativado |
+| **Criptografia KMS** | Chaves gerenciadas pelo cliente, com rotação, para a tabela, buckets, filas, logs e busca | Ativado | Desativado (criptografia gerenciada pela AWS) |
+| **MFA** | Um segundo fator no login | Ativado | Desativado |
+| **Proteção contra exclusão** | Impede a exclusão do user pool e da tabela | Ativado | Desativado |
+| **Reter na exclusão** | Mantém os dados se uma stack for removida | Ativado | Desativado |
+| **Auto cadastro** | Permite que qualquer pessoa crie uma conta | Ativado | Desativado |
+| **Tracing** | Rastreamento de requisições com X-Ray | Ativado | Desativado |
+
+Os dados são sempre criptografados em repouso e em trânsito. A configuração do KMS decide se as chaves são suas para controlar e auditar.
+
+Em um stage de desenvolvimento com o WAF desativado, os limites de requisições, a concorrência das funções e os tetos de throughput da tabela na configuração do stage limitam quanto uma enxurrada de requisições pode custar. Com o auto cadastro desativado, alguém de fora não consegue uma conta para alcançar os procedimentos que exigem login.
+
+## Privilégio mínimo dentro do sistema
+
+- Cada função Lambda tem seu próprio role com apenas as permissões de que sua tarefa precisa.
+- Capacidades sensíveis ficam isoladas em funções dedicadas. A chave que assina as requisições de lesson media pode ser lida por uma função da core-api e uma da instructor-api, não pela função que atende todos os outros procedimentos.
+- A chave do Stripe e o segredo de assinatura do webhook ficam no Secrets Manager. Uma função da admin-api pode gravá-los. As funções de checkout, webhook, conta de repasse e execução de repasses leem apenas o que precisam, e nenhuma resposta, linha de log ou registro de auditoria carrega nenhum dos dois.
+- O webhook do Stripe só aceita uma mensagem se sua assinatura for verificada contra o segredo de assinatura armazenado. Um pagamento nunca é confiado a partir do navegador.
+- Nenhum bucket S3 é público. Os portais e a mídia só são alcançáveis pelas suas distribuições CloudFront.
+- O page renderer serve páginas públicas com acesso somente leitura à tabela, e apenas a distribuição CloudFront do portal do estudante pode invocá-lo.
+- Cada API responde a requisições cross-origin apenas dos portais que a chamam: os três para a core-api, o portal do instrutor para a instructor-api, o portal de administração para a admin-api. Os endereços do desenvolvimento local também são permitidos.
+- Os índices de busca são escritos apenas pelas funções de indexação. As APIs só podem lê-los.
+- As funções obtêm nomes de recursos de variáveis de ambiente definidas no deploy, e credenciais nunca aparecem no código nem em arquivos de ambiente.
+
+## Verificações antes de o código ser implantado
+
+| Verificação | Onde | Detecta |
+| --- | --- | --- |
+| **Checkov** | Todo build | Configurações de infraestrutura inseguras nos templates gerados |
+| **Trivy** | CI e antes de cada deploy | Vulnerabilidades conhecidas em dependências e segredos commitados |
+| **git-secrets** | Antes de cada commit | Credenciais prestes a serem commitadas |
+| **Invariantes da tabela** | Testes de ponta a ponta | Dados deixados em um estado que quebra uma regra que atravessa vários registros |
+
+## Mantendo os deploys dentro dos limites
+
+O próprio pipeline de deploy é uma superfície de ataque, então ele é restringido:
+
+- **Nenhuma credencial AWS armazenada.** O GitHub Actions entra com um token emitido para uma execução.
+- **O role de deploy confia em um environment** de um repositório. Proteger esse environment com revisores obrigatórios controla o deploy.
+- **O role de deploy não pode criar recursos.** Ele só pode pedir ao CloudFormation que implante stacks nomeadas para o seu stage.
+- **O role de execução é restrito** aos recursos do stage por nome.
+- **Um permissions boundary** limita todo role que um stage cria, então uma mudança implantada não pode conceder a si mesma mais do que o boundary permite.
+
+<Link path="deploy/ci-cd">Referência de CI/CD</Link> explica o login e os dois roles.
+
+## Reportando uma vulnerabilidade
+
+Por favor, não abra uma issue pública. Siga o processo de notificação de segurança no [CONTRIBUTING.md](https://github.com/AlexTo/discava/blob/main/CONTRIBUTING.md#security-issue-notifications).

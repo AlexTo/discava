@@ -1,0 +1,104 @@
+---
+title: Notifiche
+description: Di cosa vengono avvisate le persone nella campanella e via email, come disattivare le email e, per gli sviluppatori, gli helper dei producer, le chiavi di deduplica, la casella locale e la configurazione dello stage per le email.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+Una notifica è un breve messaggio per una persona. Compare nella campanella nell'intestazione di ogni portale e, secondo le sue preferenze, viene inviata come email.
+
+## Di cosa vieni avvisato
+
+| Notifica | Inviata quando | Email |
+| --- | --- | --- |
+| **Course announcements** | Un istruttore pubblica un annuncio in un corso a cui sei iscritto | On |
+| **Discussion replies** | Qualcuno risponde a un tuo messaggio in una discussione di una lezione | On |
+| **Answered questions** | Qualcuno segna una risposta alla tua domanda | On |
+| **Accepted answers** | La tua risposta viene segnata come risposta | Off |
+| **Assignment returned** | Un istruttore restituisce la tua consegna | On |
+| **Resubmission requested** | Un istruttore ti chiede di consegnare di nuovo un compito | On |
+| **Assignment grade updated** | Un istruttore cambia il voto di un compito restituito | On |
+| **Certificates** | Ottieni un certificato, e un promemoria per aggiungerlo al tuo profilo LinkedIn | On |
+| **Certificate revoked** | Un certificato che hai ottenuto viene revocato | On |
+| **Certificate restored** | Un certificato revocato è di nuovo valido | On |
+| **Refunds** | Un rimborso completo di un corso che hai acquistato è andato a buon fine | Always |
+| **New assignment submissions** (istruttori) | Gli studenti consegnano un lavoro a un tuo compito, al massimo una volta al giorno per compito | Off |
+| **Course reviews** (istruttori) | Uno studente recensisce uno dei tuoi corsi | Off |
+
+"On" e "Off" sono le impostazioni con cui parti. "Always" non si può disattivare.
+
+## La campanella
+
+La campanella elenca ogni notifica, qualunque siano le tue impostazioni email. Sceglierne una apre la pagina a cui si riferisce. **Mark all as read** azzera il conteggio dei non letti.
+
+## Attivare o disattivare le email
+
+1. Apri il menu dell'account in qualsiasi portale e scegli **Notification settings**.
+2. Usa l'interruttore accanto a una notifica per scegliere se ti arriva anche via email.
+
+Ogni email ha anche un link per annullare l'iscrizione. Apre una pagina nel portale studenti dove **Stop these emails** disattiva quel tipo di email, e nulla cambia finché non lo premi. **Turn them back on** annulla l'operazione.
+
+Il resto di questa pagina è per gli sviluppatori che aggiungono notifiche a una funzionalità. Le funzionalità pubblicano notifiche tramite gli helper in `@discava/core-table`. Nient'altro può scrivere i record delle notifiche.
+
+## Aggiungere un tipo di evento
+
+Ogni tipo di notifica è una voce in `NOTIFICATION_TYPES` (`packages/databases/core-table/src/helpers/notification-types.ts`):
+
+- `id`: stabile, `<area>.<event>`, per esempio `announcement.posted`.
+- `name` e `description`: ciò che mostra la pagina delle impostazioni.
+- `params`: i parametri stringa piatti da cui è costruita la notifica.
+- `emailPolicy`: `default-on`, `default-off`, `required` (sempre inviata) o `never` (solo campanella).
+- `build(params)`: pura; restituisce il `title` (tagliato a 120 caratteri), il `body` (tagliato a 500) e il `link` (`portal` e un `path` che inizia con `/`, senza segreti). Può restituire anche un `action` facoltativo (`label` e `path`, nello stesso portale del link): l'email lo mostra come secondo pulsante e riga, e la campanella lo ignora.
+- `emailPreferenceType` (facoltativo): l'id di un altro tipo la cui impostazione email, token di annullamento e etichetta nelle impostazioni governano questo. Il tipo non ha un'impostazione propria, `setNotificationPreference` lo rifiuta e la pagina delle impostazioni lo omette. `isEmailEnabled` lo risolve.
+
+Quattro tipi riguardano i certificati: `certificate.issued` (il suo `link` è la pagina del certificato e il suo `action` è "Add to LinkedIn profile"), `certificate.reminder` (stesso link e action, con `emailPreferenceType: 'certificate.issued'`), e `certificate.revoked` e `certificate.restored` (entrambi puntano a My Learning). Vedi <Link path="design/certificates">Certificati</Link>.
+
+`order.refunded` comunica a uno studente che un rimborso completo del suo acquisto è concluso (il suo `link` è la pagina del corso e la sua email è `required`). Viene inviato per ogni rimborso completo registrato da Stripe, che lo studente lo abbia richiesto o che lo abbia effettuato un operatore nella dashboard, e la sua chiave di deduplica è l'ID dell'ordine, quindi una consegna ripetuta ne invia una sola. Vedi <Link path="design/payments">Pagamenti</Link>.
+
+Aggiungi un test per la voce in `notification-types.test.ts`. Nient'altro cambia: impostazioni, campanella ed email la recepiscono.
+
+## Pubblicare
+
+Ogni helper prende lo stesso input: `type`, `params`, `dedupeKey`, `occurredAt` e `userId` (o `courseId` per un pubblico di corso).
+
+- `notificationWrites(service, input)` valida l'input e restituisce gli elementi della transazione (la notifica e il conteggio dei non letti dell'utente). Aggiungili al tuo `service.transaction.write`, accanto alla scrittura a cui la notifica si riferisce, così o vengono confermati entrambi o nessuno. Una transazione annullata si gestisce come per qualsiasi altro fallimento di condizione.
+- `publishNotification(service, input)` fa lo stesso in una propria transazione e restituisce `'created'` o `'duplicate'`. Usalo quando la notifica non fa parte di un'altra scrittura.
+- `notifyCourseStudents(service, input)` restituisce un elemento che chiede di notificare ogni studente iscritto al corso (non uscito). Aggiungilo alla tua transazione. La pipeline poi crea la notifica di ogni studente con la tua `dedupeKey`, quindi un nuovo tentativo è sicuro. Sono coperti solo gli studenti; per gli istruttori chiama `notificationWrites` per ciascuno.
+
+Un input non valido (un tipo non registrato, un parametro mancante, una chiave vuota, un istante errato) lancia `NotificationInputError` prima che venga letto o scritto qualcosa. Gli helper non controllano che l'utente esista o abbia un indirizzo email.
+
+Non chiamare `markNotificationRead`, `markNotificationsRead` o `notificationEmailTransitions`: appartengono all'API e alla consegna.
+
+## La chiave di deduplica e `occurredAt`
+
+La chiave di deduplica dà un nome all'evento, per esempio `${contentItemId}:${version}`. L'id di una notifica deriva dal suo tipo e dalla sua chiave, quindi pubblicare lo stesso evento due volte, da un nuovo tentativo o da dieci richieste contemporanee, è una sola notifica. Usa qualcosa che sia uguale a ogni nuovo tentativo dell'evento e diverso per ogni nuovo evento; mai un valore casuale o l'ora corrente.
+
+`occurredAt` è un istante ISO in UTC con millisecondi (`2026-11-18T21:55:47.000Z`) preso dal tuo record (quando il messaggio è stato creato, non quando il codice è stato eseguito), così un nuovo tentativo dà lo stesso valore. Ordina l'elenco della campanella.
+
+## Preferenze e annullamento dell'iscrizione
+
+Una persona può disattivare l'email di ogni tipo in **Notification settings**, dal menu utente di ogni portale. L'interruttore di un tipo `required` è attivo e non si può cambiare. Un tipo `never` non invia email e non è elencato. La campanella non è influenzata dalle preferenze.
+
+Ogni email porta un link di annullamento, firmato perché non possa essere modificato, e gli header `List-Unsubscribe` per il pulsante a un clic di un client di posta. Il link apre una pagina nel portale studenti che non cambia nulla finché non si preme il suo pulsante, e la pagina può riattivare le email. Il segreto di firma viene generato per stage dallo stack Data.
+
+## Provarlo in locale
+
+Con `pnpm dev` in esecuzione, pubblica con il target `notify-local`:
+
+```sh
+pnpm nx run @discava/tooling-local-dev:notify-local -- --user <sub> --type announcement.posted
+pnpm nx run @discava/tooling-local-dev:notify-local -- --course <courseId> --type announcement.posted
+```
+
+Ripeti il comando con la stessa `--key` per vedere che un duplicato non fa nulla. Le email non lasciano la tua macchina: vengono conservate nella casella locale su `http://localhost:2024/inbox` (`GET /emails` le elenca come JSON), che `reset-local-data` svuota.
+
+## Email su uno stage
+
+L'email viene inviata con Amazon SES ed è disattivata finché lo stage non è configurato. Sotto `infra.notifications` nella configurazione dello stage (o negli override di ambiente `<STAGE>_INFRA_NOTIFICATIONS_*`):
+
+- `fromAddress`: l'indirizzo da cui vengono inviate le email.
+- `sesIdentity`: il dominio o indirizzo SES verificato da cui la funzione di consegna può inviare, e nient'altro. `fromAddress` deve appartenervi.
+
+Senza `fromAddress`, le notifiche raggiungono comunque la campanella e ogni email viene registrata come saltata. Nella sandbox di SES anche i destinatari devono essere verificati. Le consegne fallite vanno nella coda di errori `notification-delivery`, che ha un allarme.

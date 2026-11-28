@@ -1,0 +1,78 @@
+---
+title: Chấm điểm và phản hồi bài tập
+description: Cách giảng viên trả bài tập tải lên kèm điểm và phản hồi, yêu cầu nộp lại, xem các bài đang chờ, cùng các bản ghi và quy tắc đằng sau.
+sidebar:
+  order: 12
+---
+
+**Spec:** [`specs/20261120-230057-assignment-grading/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-230057-assignment-grading/)
+
+Học viên nộp một tệp cho bài tập tải lên và có thể thay tệp đó cho đến khi bài được trả. Giảng viên của khóa học liệt kê bài của mọi học viên đã ghi danh, mở một bài nộp, rồi hoặc trả bài ở trạng thái cuối cùng kèm điểm và phản hồi, hoặc yêu cầu nộp lại chỉ kèm phản hồi. Chỉ giảng viên của khóa học mới có thể liệt kê, đọc hoặc trả bài nộp.
+
+| Ai | API | Procedure |
+|---|---|---|
+| Học viên | core-api | `assignment.uploadUrl`, `submit`, `mySubmission`, `submissionFileUrl` |
+| Giảng viên | instructor-api | `assignmentSubmission.list`, `get`, `fileUrl`, `return`, `requestResubmission`, `amendGrade`, và `gradingQueue.list` |
+
+## Bài nộp và chấm điểm
+
+Một bài nộp là một bản ghi `assignmentSubmission` cho mỗi học viên mỗi bài tập. `status` của nó chuyển như sau:
+
+| Chuyển trạng thái | Ai | Điều kiện | Hiệu ứng |
+|---|---|---|---|
+| Nộp (lần đầu) | Học viên | Chưa có bài nộp | `submitted`, `version` 1, vào chỉ mục chờ |
+| Nộp lại | Học viên | `version` không đổi và trạng thái là `submitted` hoặc `resubmission_requested` | `submitted`, `version` + 1, quay lại chỉ mục chờ |
+| Yêu cầu nộp lại | Giảng viên | `version` và `reviewRevision` không đổi, trạng thái `submitted` | `resubmission_requested`, rời chỉ mục chờ |
+| Trả bài ở trạng thái cuối | Giảng viên | `version` và `reviewRevision` không đổi, trạng thái `submitted` hoặc `resubmission_requested` | `returned`, đặt điểm, khóa không cho học viên nộp lại |
+| Sửa điểm | Giảng viên | `reviewRevision` không đổi, trạng thái `returned` | Điểm và phản hồi thay đổi, trạng thái vẫn là `returned` |
+
+- **Đồng thời.** Mỗi hành động của giảng viên cộng một vào `reviewRevision`, và mỗi lần ghi đều có điều kiện theo `version` và `reviewRevision` mà giảng viên đang xem. Một lần trả bài không thể áp vào tệp mà học viên đã thay từ đó, và khi hai giảng viên thao tác cùng lúc thì chỉ đúng một người thắng.
+- **Điểm** là một số từ 0 đến `maxPoints` của bài tập, tối đa hai chữ số thập phân. `pointsOutOf` giữ mức tối đa mà bài đã được chấm theo, phòng khi `maxPoints` thay đổi sau này.
+- **Học viên đã rời khóa học.** Việc trả bài hoặc sửa điểm bị từ chối với học viên không còn ghi danh. Giảng viên vẫn đọc được bài của họ.
+- **Việc hoàn thành không bị ảnh hưởng.** Chấm điểm không bao giờ thay đổi trạng thái hoàn thành của học viên hay `studentActivityCount` của mục nội dung. Yêu cầu nộp lại không hủy việc hoàn thành, và nộp lại không tính học viên lần thứ hai.
+
+## Các vòng phản hồi
+
+Mỗi hành động của giảng viên ghi một bản ghi `submissionFeedback`: một yêu cầu nộp lại, một lần trả bài cuối cùng, hoặc một lần sửa điểm. Phản hồi là bắt buộc khi yêu cầu nộp lại và tùy chọn khi trả bài.
+
+- Các vòng chỉ được thêm vào, khóa theo bài nộp và thời gian, nên lịch sử của một học viên là một truy vấn, mới nhất trước. Học viên thấy các phản hồi trước đó qua các lần nộp lại, nên biết mình đã được yêu cầu gì.
+- Bài nộp chỉ giữ điểm hiện tại. Các vòng là bản ghi riêng vì mỗi vòng có thể chứa 20 000 ký tự JSON Tiptap và số lượng không giới hạn: một danh sách nằm trong bài nộp có thể chạm giới hạn kích thước item của DynamoDB.
+
+Học viên được thông báo trong ứng dụng và qua email (bật theo mặc định) về từng hành động: `assignment.returned`, `assignment.resubmission_requested` và `assignment.grade_updated`, mỗi loại được loại trùng theo `feedbackId` của vòng. Thông báo và vòng phản hồi được ghi trong cùng transaction với thay đổi của bài nộp.
+
+## Chỉ mục chờ và việc ghi danh
+
+Các bài nộp đang chờ giảng viên (trạng thái `submitted`) mang `waitingCourseId` và `waitingSince`, là khóa của một chỉ mục thưa (`byWaiting`) với khóa  partition là khóa học và sort key là thời điểm nộp. Mọi lần ghi làm đổi `status` đều đặt hoặc xóa cả hai thuộc tính cùng nhau thông qua `waitingKeys`.
+
+Vì vậy hàng chờ chấm điểm trên trang chủ giảng viên (`gradingQueue.list`) là một truy vấn cho mỗi khóa học mà giảng viên dạy, mỗi truy vấn đã sắp cũ nhất trước, rồi gộp trong bộ nhớ. Nó đọc mọi mục đang chờ, nên tổng số là chính xác.
+
+**Việc ghi danh được áp dụng lúc đọc.** Hàng chờ đọc hàng loạt các lượt ghi danh của những học viên được liệt kê và loại bỏ học viên có ghi danh là `dropped` hoặc không tồn tại. Nếu lưu ghi danh trong chỉ mục, việc hoàn tiền và thanh toán sẽ phải ghi lại mọi bài nộp của học viên trong khóa học, bên trong transaction của chính chúng. Đọc lúc truy vấn thì không đụng đến mã thanh toán, và một học viên ghi danh lại sẽ xuất hiện lại trong hàng chờ mà không cần ghi gì.
+
+Vì thiếu ghi danh sẽ làm ẩn học viên, một lần đọc không đầy đủ không được phép tưởng là đầy đủ. Khi DynamoDB để lại các khóa chưa xử lý do bị giới hạn tốc độ, hàng chờ yêu cầu lại chúng, tối đa ba lần với khoảng nghỉ tăng dần, rồi báo lỗi yêu cầu thay vì trả về một hàng chờ ngắn hơn thực tế.
+
+Danh sách theo từng bài tập đọc mọi bài nộp và mọi lượt ghi danh của khóa học (hai truy vấn trên một partition), gộp chúng, rồi phân trang trong bộ nhớ, 50 dòng mỗi lần, với con trỏ mã hóa vị trí sắp xếp của dòng cuối. Học viên chưa có bài nộp hiện là "chưa nộp", và những người đã rời đi hiện là "không còn ghi danh".
+
+## Thông báo hằng ngày
+
+Giảng viên được báo về các bài nộp mới bằng `assignment.submissions_received`, tối đa một lần mỗi bài tập mỗi ngày (UTC) cho mỗi giảng viên, trong ứng dụng, với email tắt theo mặc định. Một bản ghi nhỏ `submissionNotice` (một bản ghi cho mỗi bài tập mỗi ngày, hết hạn sau hai ngày) là dấu đánh dấu. `submit` đọc nó trước; nếu chưa có, cùng transaction sẽ tạo nó và ghi một thông báo cho mỗi giảng viên, có giới hạn để transaction nằm dưới mức 100 item của DynamoDB. Nếu một bài nộp khác thắng cuộc đua, lần thử lại sẵn có sẽ chạy lại mà không có dấu đánh dấu và thông báo. Nhờ vậy "tối đa một lần mỗi ngày" là một sự thật của cơ sở dữ liệu chứ không phải hy vọng vào thời điểm.
+
+## Xem trước tệp đã nộp
+
+Trang chấm bài hiển thị PDF và ảnh (png, jpg, jpeg, gif, webp) bên cạnh biểu mẫu chấm điểm; mọi loại tệp khác hiển thị thông tin chi tiết và nút Download.
+
+- **Ảnh** là một thẻ `<img>` dùng cùng URL CloudFront đã ký, hiệu lực năm phút, như khi tải xuống. Trình duyệt bỏ qua `Content-Disposition` với ảnh.
+- **PDF** được tải từ URL đã ký và vẽ lên canvas bởi `react-pdf` (PDF.js), chỉ nạp trên trang chấm bài. Các tệp lưu trữ được phục vụ với `Content-Disposition: attachment` và CSP của cổng chặn `<iframe>` và `<embed>`, nên vẽ lên canvas không cần thay đổi distribution, CSP hay các object đã lưu.
+
+**Hạn chế đã biết: JPEG 2000 và JBIG2.** PDF.js giải mã các định dạng ảnh nhúng này bằng WebAssembly, thứ mà CSP của cổng (`script-src 'self'`, không có `'wasm-unsafe-eval'`) chặn. Những ảnh như vậy có thể không được vẽ, nhưng phần còn lại của trang vẫn hiển thị và Download vẫn hoạt động. Việc nới lỏng một CSP dùng chung vì chuyện này được đánh giá là không đáng.
+
+Điểm và phản hồi chưa gửi của giảng viên được giữ trong trình duyệt của chính họ, theo từng bài nộp, và không được lưu trên máy chủ.
+
+## Các quy tắc mà kiểm tra bắt buộc
+
+Các helper dùng chung trong `helpers/assignment-grading.ts` của core-table là nơi duy nhất ghi các trường điểm và `submissionFeedback`. Lệnh submit của học viên, trong `helpers/assignment-submission.ts`, đặt các khóa chờ qua cùng `waitingKeys`. Các kiểm tra trong `helpers/invariants/assignment-grading.ts` bao gồm:
+
+- hình dạng của điểm: `returned` có điểm trong khoảng `pointsOutOf`, có người trả bài và thời gian, còn các trạng thái khác thì không;
+- các khóa chờ khớp với `status`;
+- mỗi vòng thuộc về một bài nộp, và hình dạng của vòng;
+- vòng mới nhất khớp với trạng thái và `reviewRevision` của bài nộp;
+- hình dạng của dấu đánh dấu thông báo hằng ngày.

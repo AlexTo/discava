@@ -1,0 +1,76 @@
+---
+title: Modèle de sécurité
+description: Qui peut atteindre quoi dans Discava, les protections qu'un stage peut activer et la façon dont les déploiements restent bornés.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+## Qui peut faire quoi
+
+L'accès est décidé en couches, et chaque couche suppose que la précédente pourrait échouer.
+
+| Couche | Applique |
+| --- | --- |
+| **Groupes Cognito** | Le rôle d'un utilisateur : `student`, `instructor` ou `admin` |
+| **API séparées** | Les procédures instructeur et admin sont des déploiements distincts. Le jeton d'un étudiant est rejeté par instructor-api avant l'exécution de toute procédure |
+| **Règles de procédure** | La règle précise : cet instructeur possède ce cours, cet étudiant est inscrit à ce cours |
+| **Médias signés** | Une vidéo ou un fichier n'est servi qu'à une requête signée pour lui. La signature est émise après une vérification d'accès, comme l'inscription |
+
+Un cours en brouillon ou archivé répond « introuvable » à quiconque ne devrait pas le voir, ce qui ne révèle pas son existence.
+
+## Protections par stage
+
+Chaque protection est **active par défaut**. La configuration d'un stage ne peut que désactiver des éléments, ce que fait `discava-development` pour rester économique.
+
+| Protection | Ce qu'elle fait | Production | Développement |
+| --- | --- | --- | --- |
+| **WAF** | Pare-feu applicatif web sur les portails, les API, les médias et le pool d'utilisateurs | Actif | Inactif |
+| **Chiffrement KMS** | Clés gérées par le client, avec rotation, pour la table, les buckets, les files, les journaux et la recherche | Actif | Inactif (chiffrement géré par AWS) |
+| **MFA** | Un second facteur à la connexion | Actif | Inactif |
+| **Protection contre la suppression** | Refuse la suppression du pool d'utilisateurs et de la table | Actif | Inactif |
+| **Conservation à la suppression** | Garde les données si une stack est supprimée | Actif | Inactif |
+| **Inscription libre** | Permet à n'importe qui de créer un compte | Actif | Inactif |
+| **Traçage** | Traçage des requêtes avec X-Ray | Actif | Inactif |
+
+Les données sont toujours chiffrées au repos et en transit. Le réglage KMS décide si les clés vous appartiennent, à vous de les contrôler et de les auditer.
+
+Sur un stage de développement sans WAF, les limites de requêtes, la concurrence des fonctions et les plafonds de débit de la table dans la configuration du stage bornent ce qu'un afflux de requêtes peut coûter. Avec l'inscription libre désactivée, une personne extérieure ne peut pas obtenir de compte pour atteindre les procédures réservées aux utilisateurs connectés.
+
+## Moindre privilège à l'intérieur du système
+
+- Chaque fonction Lambda a son propre rôle avec uniquement les permissions que sa tâche demande.
+- Les capacités sensibles sont isolées dans des fonctions dédiées. La clé qui signe les requêtes de médias de leçon est lisible par une fonction de core-api et une de instructor-api, pas par la fonction qui sert toutes les autres procédures.
+- La clé Stripe et le secret de signature du webhook sont dans Secrets Manager. Une seule fonction de admin-api peut les écrire. Les fonctions de paiement, de webhook, de compte de versement et d'exécution des versements ne lisent que ce dont elles ont besoin, et aucune réponse, ligne de journal ou trace d'audit n'en contient.
+- Le webhook Stripe n'accepte un message que si sa signature se vérifie avec le secret de signature stocké. Un paiement n'est jamais cru sur la foi du navigateur.
+- Aucun bucket S3 n'est public. Les portails et les médias ne sont atteignables que par leurs distributions CloudFront.
+- Le page renderer sert les pages publiques avec un accès en lecture seule à la table, et seule la distribution CloudFront du portail étudiant peut l'invoquer.
+- Chaque API ne répond aux requêtes cross-origin que des portails qui l'appellent : les trois pour core-api, le portail instructeur pour instructor-api, le portail admin pour admin-api. Les adresses du développement local sont aussi autorisées.
+- Les index de recherche ne sont écrits que par les fonctions d'indexation. Les API ne peuvent que les lire.
+- Les fonctions reçoivent les noms de ressources par des variables d'environnement définies au déploiement, et les identifiants n'apparaissent jamais dans le code ni dans des fichiers d'environnement.
+
+## Vérifications avant le déploiement du code
+
+| Vérification | Où | Détecte |
+| --- | --- | --- |
+| **Checkov** | Chaque build | Les réglages d'infrastructure non sécurisés dans les templates générés |
+| **Trivy** | CI et avant chaque déploiement | Les vulnérabilités connues dans les dépendances et les secrets commités |
+| **git-secrets** | Avant chaque commit | Les identifiants sur le point d'être commités |
+| **Invariants de la table** | Tests de bout en bout | Les données laissées dans un état qui viole une règle portant sur plusieurs enregistrements |
+
+## Garder les déploiements bornés
+
+Le pipeline de déploiement est lui-même une surface d'attaque, il est donc contraint :
+
+- **Aucun identifiant AWS stocké.** GitHub Actions se connecte avec un jeton émis pour une seule exécution.
+- **Le rôle de déploiement fait confiance à un seul environnement** d'un seul dépôt. Protéger cet environnement avec des relecteurs obligatoires conditionne le déploiement.
+- **Le rôle de déploiement ne peut pas créer de ressources.** Il peut seulement demander à CloudFormation de déployer des stacks nommées d'après son stage.
+- **Le rôle d'exécution est limité** aux ressources du stage, par nom.
+- **Une limite de permissions** plafonne chaque rôle créé par un stage, donc une modification déployée ne peut pas s'accorder plus que ce que la limite autorise.
+
+<Link path="deploy/ci-cd">Référence CI/CD</Link> explique la connexion et les deux rôles.
+
+## Signaler une vulnérabilité
+
+N'ouvrez pas de ticket public. Suivez la procédure de notification de sécurité décrite dans [CONTRIBUTING.md](https://github.com/AlexTo/discava/blob/main/CONTRIBUTING.md#security-issue-notifications).

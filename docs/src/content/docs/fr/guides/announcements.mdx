@@ -1,0 +1,37 @@
+---
+title: Annonces
+description: Publier, modifier et supprimer des annonces destinées aux étudiants d'un cours, qui peut les lire et qui est notifié.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+Une annonce est un court message d'un instructeur aux étudiants inscrits à un cours. Elle a un titre (jusqu'à 120 caractères) et un texte mis en forme.
+
+## Pour les instructeurs
+
+Ouvrez le cours depuis **My Courses** et allez à sa section **Announcements**, vers le bas de la page.
+
+- **Publier** : saisissez un titre et le texte, puis choisissez **Post announcement**. Seul un cours publié accepte de nouvelles annonces. Un cours en brouillon affiche « Publish the course to post announcements. »
+- **Modifier** : choisissez **Edit** sur une annonce, changez le titre ou le texte, puis **Save changes**. Les étudiants voient le nouveau texte avec une mention « edited ».
+- **Supprimer** : choisissez **Delete** et confirmez. L'annonce disparaît de l'accueil du cours. Cela ne peut pas être annulé.
+
+Ce que les étudiants reçoivent :
+
+- Publier notifie une fois chaque étudiant inscrit, dans la cloche et, sauf s'il l'a désactivé, par e-mail.
+- Modifier n'envoie rien.
+- Supprimer ne retire pas la notification que les étudiants ont déjà reçue.
+- Publier deux fois la même annonce, par exemple en double-cliquant, ne la publie qu'une fois.
+
+Dans un cours archivé, vous pouvez toujours modifier et supprimer des annonces, mais pas en publier de nouvelles.
+
+## Qui peut les lire
+
+- Les étudiants inscrits au cours lisent les annonces dans l'accueil du cours, les plus récentes d'abord. Cela fonctionne toujours après l'archivage du cours.
+- Un étudiant qui a quitté le cours, un étudiant d'un autre cours et les visiteurs ne peuvent pas les lire.
+- Les instructeurs qui enseignent le cours les lisent dans le portail instructeur.
+
+## Pour les développeurs
+
+Les annonces n'ajoutent aucune livraison propre. Publier écrit l'annonce et une demande de notification des étudiants du cours dans une seule transaction, via le contrat de producteur de notifications (`notifyCourseStudents`, le type `announcement.posted`). La diffusion des notifications la livre ensuite. Voir <Link path="guides/notifications">Notifications</Link> pour son fonctionnement.

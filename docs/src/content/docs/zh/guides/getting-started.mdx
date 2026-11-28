@@ -1,57 +1,90 @@
 ---
-title: 快速开始
-description: 运行您的新 Astro + Starlight 文档站点。
+title: 在本地运行 Discava
+description: 用 Docker 在你的机器上启动整个系统，以测试用户身份登录，并重置本地数据。
 ---
 
 import Link from '@components/link.astro';
-import Snippet from '@components/snippet.astro';
 
-欢迎来到 **docs**！本站点使用 [Astro](https://astro.build/) 和
-[Starlight](https://starlight.astro.build/) 文档主题构建。
+Discava 完全在你的机器上运行。它用到的每个 AWS 服务都有本地替身，所以试用或开发都不需要 AWS 账户。
 
-## 本地运行
+## 你需要什么
 
-```bash
-pnpm nx start @discava/docs
+- **Node.js 24**，即已部署的 Lambda 函数所用的版本
+- **pnpm**，版本以根目录 `package.json` 的 `packageManager` 字段为准（`corepack enable` 会为你安装）
+- **Docker**，并且处于运行状态
+
+## 启动
+
+```sh
+git clone https://github.com/AlexTo/discava.git
+cd discava
+pnpm i
+pnpm dev
 ```
 
-## 生产构建
+`pnpm dev` 会启动三个门户、三个 API 和本地替身：
 
-```bash
-pnpm nx build @discava/docs
+| 服务 | 端口 | 替代的服务 |
+| --- | --- | --- |
+| 学生 / 讲师 / 管理员门户 | 4201 / 4200 / 4202 | CloudFront |
+| core-api / instructor-api / admin-api | 2022 / 2023 / 2025 | API Gateway 和 Lambda |
+| 页面渲染器 | 2026 | 以 HTML 形式提供公开页面（课程落地页、讲师简介、证书）的 Lambda |
+| DynamoDB local | 8001 | DynamoDB |
+| S3Mock | 9090 | S3 |
+| ElasticMQ | 9324 | SQS |
+| OpenSearch | 9200 | OpenSearch Serverless |
+| 事件运行器 | 2024 | 表的流、MediaConvert、Transcribe、Translate、SES、EventBridge、Scheduler 和 Stripe |
+| 本地 OIDC 服务器 | 9400 | Cognito |
+
+系统发送的邮件不会真正投递。请在本地收件箱 `http://localhost:2024/inbox` 中查看。
+
+## 登录
+
+打开学生门户 `http://localhost:4201`。它会把你带到一个无需密码的本地登录页：
+
+| 用户 | 角色 |
+| --- | --- |
+| Alice | 讲师和学生 |
+| Bob | 学生 |
+| Dan | 学生 |
+| Carol | 管理员 |
+
+该页面上的 "Someone else" 会用你输入的任意声明（例如其他组）让你登录。
+
+讲师门户在 `http://localhost:4200`，管理员门户在 `http://localhost:4202`。
+
+## 添加示例课程
+
+新安装的目录是空的。在 `pnpm dev` 运行时，下面的命令会以 Alice 的身份发布几门课程，带有分类、标签和级别：
+
+```sh
+pnpm nx run @discava/e2e:seed-local-courses
 ```
 
-## 添加语言
+## 试用付费课程
 
-在 `astro.config.mjs` 的 `locales` 块中添加一个条目，并在 `src/content/docs/<locale>/` 下创建匹配的
-目录。Starlight 将自动识别新语言。
+不需要 Stripe 账户：事件运行器会替代 Stripe。
 
-## 语言感知链接
+1. 以 Carol 的身份，在管理员门户打开 **Payments**，粘贴 `sk_test_local`，然后选择 **Connect Stripe**。
+2. 以 Alice 的身份，在讲师门户打开一门已发布的课程，在它的 **Price** 部分设置价格，然后选择 **Save price**。
+3. 以 Bob 的身份，打开该课程并选择 **Buy now**。本地支付页面提供 **Pay**、**Decline card** 和 **Cancel**。
 
-当您想要链接到文档**内部**的另一个页面时，请使用生成的 `Link` 组件——它会自动解析当前语言，
-因此单一的真实来源可以在每种语言中生成正确的 URL：
+<Link path="guides/payments">付费课程和支付</Link>会逐步解释每一步。
 
-```mdx
-import Link from '@components/link.astro';
+## 重新开始
 
-<Link path="guides/getting-started">Read the getting-started guide</Link>
+本地数据保存在 Docker 卷中，重启后依然存在。要删除它，请停止 `pnpm dev` 并运行：
+
+```sh
+pnpm nx run @discava/tooling-local-dev:reset-local-data
 ```
 
-这是组件的实际效果：<Link path="guides/getting-started">返回本页</Link>。
+## 只能在 AWS 上运行的部分
 
-对于常规外部链接，只需使用普通的 Markdown `[label](url)`。
+有些功能没有本地等价物，只能在已部署的环境中检查：Cognito 的 Managed Login 和注册、CloudFront 的签名 Cookie、MediaConvert 的确切编码效果、真实的 Transcribe 字幕和 Translate 翻译，以及 Stripe 自己的结账页面、银行卡校验和 webhook 投递。
 
-## 使用片段
+## 下一步
 
-片段是存储在 `src/content/docs/<locale>/snippets/` 中的可重用 MDX 片段。
-使用 `Snippet` 组件在任何页面中包含一个片段：
-
-```mdx
-import Snippet from '@components/snippet.astro';
-
-<Snippet name="example" />
-```
-
-以下是内联渲染的示例片段：
-
-<Snippet name="example" />
+- <Link path="deploy">把 Discava 部署到你的 AWS 账户</Link>
+- <Link path="architecture">了解系统是如何搭建的</Link>
+- [DEVELOPMENT.md](https://github.com/AlexTo/discava/blob/main/DEVELOPMENT.md) 介绍测试、代码风格和如何提交变更

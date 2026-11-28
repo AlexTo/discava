@@ -1,0 +1,104 @@
+---
+title: 通知
+description: ベルとメールで通知される内容、メールをオフにする方法、そして開発者向けに、プロデューサーヘルパー、重複排除キー、ローカルの受信箱、メールのステージ設定を説明します。
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+通知は、1 人に宛てた短いメッセージです。各ポータルのヘッダーにあるベルに表示され、設定に応じてメールでも送られます。
+
+## 通知される内容
+
+| 通知 | 送られるタイミング | メール |
+| --- | --- | --- |
+| **Course announcements** | 参加しているコースに講師がお知らせを投稿したとき | オン |
+| **Discussion replies** | レッスンのディスカッションで、あなたの投稿に返信があったとき | オン |
+| **Answered questions** | あなたの質問への回答が承認されたとき | オン |
+| **Accepted answers** | あなたの返信が回答として承認されたとき | オフ |
+| **Assignment returned** | 講師があなたの提出物を返却したとき | オン |
+| **Resubmission requested** | 講師が課題の再提出を求めたとき | オン |
+| **Assignment grade updated** | 講師が返却済みの課題の成績を変更したとき | オン |
+| **Certificates** | 修了証を取得したとき、および LinkedIn プロフィールへの追加を促すリマインダー 1 回 | オン |
+| **Certificate revoked** | 取得した修了証が取り消されたとき | オン |
+| **Certificate restored** | 取り消された修了証が再び有効になったとき | オン |
+| **Refunds** | 購入したコースの全額返金が完了したとき | 常に送信 |
+| **New assignment submissions**（講師向け） | 受講生があなたの課題に提出したとき。課題ごとに 1 日 1 回まで | オフ |
+| **Course reviews**（講師向け） | 受講生があなたのコースをレビューしたとき | オフ |
+
+「オン」と「オフ」は、初期設定です。「常に送信」はオフにできません。
+
+## ベル
+
+ベルは、メールの設定にかかわらず、すべての通知を一覧にします。通知を選ぶと、その内容のページが開きます。**Mark all as read** で未読数が消えます。
+
+## メールのオンとオフ
+
+1. いずれかのポータルでアカウントメニューを開き、**Notification settings** を選びます。
+2. 通知の横のスイッチで、メールでも受け取るかどうかを選びます。
+
+すべてのメールには配信停止リンクもあります。リンクは受講生ポータルのページを開き、**Stop these emails** を押すとその種類のメールがオフになります。押すまでは何も変わりません。**Turn them back on** で元に戻せます。
+
+このページの残りは、機能に通知を追加する開発者向けです。機能は `@discava/core-table` のヘルパーを通じて通知を発行します。ほかのコードが通知レコードを書き込んではいけません。
+
+## イベントタイプを追加する
+
+通知の種類は、`NOTIFICATION_TYPES`（`packages/databases/core-table/src/helpers/notification-types.ts`）の 1 エントリです。
+
+- `id`: 安定した ID で、`<area>.<event>` の形式です。例: `announcement.posted`。
+- `name` と `description`: 設定ページに表示されます。
+- `params`: 通知の生成に使う、フラットな文字列パラメーター。
+- `emailPolicy`: `default-on`、`default-off`、`required`（常に送信）、`never`（ベルのみ）。
+- `build(params)`: 純粋関数で、`title`（120 文字で切り詰め）、`body`（500 文字で切り詰め）、`link`（`portal` と、`/` で始まる `path`。秘密情報を含めない）を返します。任意で `action` を 1 つ（`label` と `path`。リンクと同じポータル内）返せます。メールでは 2 つ目のボタンと行として表示され、ベルでは無視されます。
+- `emailPreferenceType`（任意）: このタイプのメール設定、配信停止トークン、設定ラベルを決める、別タイプの id。このタイプ自体には設定がなく、`setNotificationPreference` は拒否し、設定ページにも表示されません。`isEmailEnabled` が解決します。
+
+修了証用のタイプは 4 つあります。`certificate.issued`（`link` は修了証のページ、`action` は「Add to LinkedIn profile」）、`certificate.reminder`（同じリンクとアクションで、`emailPreferenceType: 'certificate.issued'`）、`certificate.revoked` と `certificate.restored`（どちらも My Learning へのリンク）です。<Link path="design/certificates">修了証</Link>を参照してください。
+
+`order.refunded` は、購入の全額返金が完了したことを受講生に知らせます（`link` はコースページ、メールは `required`）。Stripe から記録されたすべての全額返金について、受講生が依頼した場合も運営者がダッシュボードで行った場合も送られ、重複排除キーは注文 ID なので、配信が繰り返されても 1 通だけ送られます。<Link path="design/payments">決済</Link>を参照してください。
+
+エントリのテストを `notification-types.test.ts` に追加します。ほかに変更は不要で、設定、ベル、メールが自動的に反映します。
+
+## 発行する
+
+すべてのヘルパーは同じ入力を取ります。`type`、`params`、`dedupeKey`、`occurredAt`、そして `userId`（コース全体宛ての場合は `courseId`）です。
+
+- `notificationWrites(service, input)` は入力を検証し、トランザクション項目（通知とユーザーの未読数）を返します。通知の元になる書き込みと並べて、自分の `service.transaction.write` に追加します。両方がコミットされるか、どちらもされないかのどちらかです。キャンセルされたトランザクションは、ほかの条件失敗と同じように扱われます。
+- `publishNotification(service, input)` は自身のトランザクションで同じことを行い、`'created'` または `'duplicate'` を返します。通知がほかの書き込みの一部でないときに使います。
+- `notifyCourseStudents(service, input)` は、コースに登録している（退会していない）全受講生への通知を依頼する項目を 1 つ返します。トランザクションに追加してください。その後パイプラインが、あなたの `dedupeKey` で各受講生の通知を作成するため、再試行しても安全です。対象は受講生のみで、講師には、それぞれに `notificationWrites` を呼びます。
+
+不正な入力（未登録のタイプ、パラメーターの欠落、空のキー、不正な日時）は、何かを読み書きする前に `NotificationInputError` をスローします。ヘルパーは、ユーザーが存在するか、メールアドレスがあるかを確認しません。
+
+`markNotificationRead`、`markNotificationsRead`、`notificationEmailTransitions` は呼ばないでください。これらは API と配信側のものです。
+
+## 重複排除キーと `occurredAt`
+
+重複排除キーはイベントを表します。例: `${contentItemId}:${version}`。通知の ID はタイプとキーから決まるため、再試行や 10 件の同時リクエストで同じイベントを 2 回発行しても、通知は 1 件です。イベントが再試行されるたびに同じで、新しいイベントごとに異なる値を使ってください。ランダムな値や現在時刻は使いません。
+
+`occurredAt` は、ミリ秒つきの UTC の ISO 日時（`2026-11-18T21:55:47.000Z`）で、あなた自身のレコード（コードが実行された時刻ではなく、投稿が作成された時刻）から取ります。再試行しても同じ値になります。ベルの一覧の並び順に使われます。
+
+## 設定と配信停止
+
+各ポータルのユーザーメニューにある **Notification settings** で、タイプごとにメールをオフにできます。`required` タイプのスイッチはオンで、変更できません。`never` タイプはメールを送らず、一覧にも表示されません。ベルは設定の影響を受けません。
+
+すべてのメールには、改ざんできないよう署名された配信停止リンクと、メールクライアントのワンクリックボタン用の `List-Unsubscribe` ヘッダーがあります。リンクは受講生ポータルのページを開き、ボタンを押すまで何も変更しません。そのページからメールを再びオンにもできます。署名用の秘密鍵は、ステージごとに Data スタックが生成します。
+
+## ローカルで試す
+
+`pnpm dev` を実行した状態で、`notify-local` ターゲットで発行します。
+
+```sh
+pnpm nx run @discava/tooling-local-dev:notify-local -- --user <sub> --type announcement.posted
+pnpm nx run @discava/tooling-local-dev:notify-local -- --course <courseId> --type announcement.posted
+```
+
+同じ `--key` でコマンドを繰り返すと、重複が何も起こさないことを確認できます。メールはあなたのマシンの外には出ず、ローカルの受信箱 `http://localhost:2024/inbox`（`GET /emails` で JSON として一覧できます）に保存されます。`reset-local-data` で空になります。
+
+## ステージでのメール
+
+メールは Amazon SES で送られ、ステージを設定するまでオフです。ステージの設定の `infra.notifications` 配下（または `<STAGE>_INFRA_NOTIFICATIONS_*` 環境変数による上書き）に次を設定します。
+
+- `fromAddress`: メールの送信元アドレス。
+- `sesIdentity`: 配信関数が送信を許可される、検証済みの SES ドメインまたはアドレス。それ以外には送れません。`fromAddress` はこれに属している必要があります。
+
+`fromAddress` がない場合でも、通知はベルには届き、各メールはスキップとして記録されます。SES サンドボックスでは、受信者も検証されている必要があります。配信に失敗したものは `notification-delivery` の失敗キューに入り、アラームが設定されています。

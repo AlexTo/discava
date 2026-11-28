@@ -1,0 +1,50 @@
+---
+title: カタログカテゴリ
+description: "管理者が管理するカテゴリの分類体系、コースのカタログフィールド、そしてそれらが検索ファセットにどう使われるか。"
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/_archive/20261115-000000-catalogue-categories/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-000000-catalogue-categories/)
+
+コースは**カテゴリ**（1コースにつき1つ、管理者が管理する分類体系から選択）で整理でき、ほかの4つの任意フィールドで説明できます。受講生はそのすべてでカタログを絞り込めます。
+
+## コースのカタログフィールド
+
+| フィールド | ルール |
+|---|---|
+| `categoryId` | 設定または変更するときは、存在する**有効な**カテゴリであること |
+| `tags` | 最大8個、各1〜30文字。トリムして小文字にし、重複を除いて保存される |
+| `level` | `beginner`、`intermediate`、`advanced` のいずれか |
+| `language` | 固定リストにあるコード |
+| `durationHours` | 1〜500の整数 |
+
+5つともすべて任意です。講師は講師ポータルから instructor-api の `course.updateCatalogue` で設定し、カテゴリは `category.listActive` から選びます。5つのフィールドを書き込むのは core-table の `helpers/course-catalogue.ts` にある `courseCatalogueWrites` だけなので、どの書き込み元も同じ方法で検証します。
+
+## カテゴリの分類体系
+
+カテゴリには次の項目があります。
+
+- `name`: 1〜60文字。大文字小文字とスペースを無視して一意
+- `slug`: URL に使える形式。作成時に名前から生成され、変更されません。スラッグがすでに使われている場合は数字が付きます（`design`、`design-2`）
+- `status`: `active` または `archived`
+
+分類体系全体は core-table の1つのパーティションにあるため、一覧の取得は1回のクエリで済みます。カテゴリは削除されません。アーカイブすると新しい割り当ての選択肢からは隠れますが、すでにそのカテゴリを使っているコースはそのまま保持します。
+
+一意性は、カテゴリと同じトランザクションで書き込まれる `categoryClaim` レコードで強制されます。スラッグ用と正規化した名前用の2件です。名前を変更すると名前のクレームだけが移動してスラッグは変わらないため、カテゴリのランディングページの URL は変わりません。両方のレコードを書き込むのは core-table の `helpers/category.ts` だけです。
+
+不変条件のチェック `course-category-exists` と `category-claims-consistent` は、コースが存在するカテゴリだけを指していること、そしてすべてのカテゴリがちょうど2件のクレームを持つことを保証します。
+
+## 管理ポータルと `admin-api`
+
+管理者（Cognito の `admin` グループ）は管理ポータルでカテゴリを管理し、ポータルは **`admin-api`** を呼び出します。これは instructor-api と同じ構成で、独自の Lambda と API Gateway を持つ別の tRPC API なので、管理者だけがそのプロシージャにアクセスできます。プロシージャは `category.list`、`create`、`rename`、`archive` です。
+
+受講生と訪問者は、core-api の公開プロシージャ `category.list` と `category.bySlug` を通じてカテゴリを読みます。カテゴリのランディングページはこれらを使います。
+
+新しいステージにはカテゴリがありません。`pnpm nx run @discava/tooling-deploy:seed-categories` が初期セットを書き込み、すでにあるものはスキップします。
+
+## 検索ファセット
+
+カテゴリ、タグ、レベル、言語、所要時間は `courses` 検索インデックスに登録され、検索は各項目のファセット件数を返します。ファセットクエリと、デプロイ後に実行する1回限りの再インデックスについては、<Link path="design/search">検索</Link>を参照してください。

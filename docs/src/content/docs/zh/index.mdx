@@ -1,33 +1,46 @@
 ---
-title: docs
-description: docs 的文档。
+title: Discava
+description: Discava 的文档。Discava 是一个无服务器、AWS 原生的学习管理系统。
 template: splash
 hero:
-  title: docs
-  tagline: 使用 Astro 和 Starlight 构建的项目文档。
-  actions:
-    - text: 开始使用
-      link: /zh/guides/getting-started
-      icon: right-arrow
+  title: Discava
+  tagline: 运行在你自己 AWS 账号中的无服务器学习管理系统。
 ---
 
 import { CardGrid, Card } from '@astrojs/starlight/components';
 import { ContributorList } from 'astro-contributors';
+import Link from '@components/link.astro';
+
+## 选择你的路径
 
 <CardGrid>
-  <Card title="指南" icon="open-book">
-    docs 的参考文档。
+  <Card title="我想试用" icon="laptop">
+    用 Docker 在你的机器上运行整个系统。不需要 AWS 账号。
+
+    <Link path="guides/getting-started">在本地运行 Discava</Link>
   </Card>
-  <Card title="博客" icon="pencil">
-    来自团队的新闻和更新。
+  <Card title="我想部署" icon="rocket">
+    Fork 仓库，连接到你的 AWS 账号，让 GitHub Actions 完成部署。
+
+    <Link path="deploy">部署指南</Link>
   </Card>
-  <Card title="片段" icon="seti:config">
-    在文档中使用的可重用内容片段。
+  <Card title="我想了解它" icon="puzzle">
+    各个组件、它们在 AWS 上如何部署，以及一个请求如何在其中流转。
+
+    <Link path="architecture">架构</Link>
   </Card>
-  <Card title="本地化" icon="translate">
-    本地化已开箱即用配置 — 在 `astro.config.mjs` 中添加目标语言环境。
+  <Card title="我想修改它" icon="pencil">
+    每个功能如何工作：数据模型、规则，以及实现这些规则的代码。
+
+    <Link path="design">设计</Link>
   </Card>
 </CardGrid>
+
+## Discava 是什么
+
+Discava 是一个免费的开源学习平台。讲师用视频、文本、测验和作业来构建课程。学生报名课程或购买付费课程，然后学习并跟踪自己的进度。讲师可获得每笔销售中属于自己的份额。管理员负责管理目录分类、审核评价、设置平台品牌，并连接用于收款的 Stripe 账号。
+
+它在设计上有明确主张：只用一个云服务商（AWS），只有一种部署方式（CDK），所有部分都是无服务器的，因此闲置的安装几乎不产生费用。
 
 ## 感谢我们出色的贡献者！
 

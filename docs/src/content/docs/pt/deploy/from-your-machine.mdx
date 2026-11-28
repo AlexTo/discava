@@ -1,0 +1,83 @@
+---
+title: Deploy a partir da sua máquina
+description: Faça deploy, atualize e destrua um stage com suas próprias credenciais AWS, sem o GitHub Actions.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+O GitHub Actions é a forma recomendada de fazer deploy. Fazer deploy a partir da sua máquina é útil para um stage de teste pessoal ou para depurar um deploy.
+
+## Antes de começar
+
+- Um clone com as dependências instaladas (`pnpm i`) e a AWS CLI
+- Credenciais AWS no seu shell para a conta de destino (`aws sts get-caller-identity` funciona)
+- Uma região, em `AWS_REGION` ou no seu perfil AWS
+- CDK com bootstrap feito nessa região, uma vez por conta e região:
+
+  ```sh
+  pnpm exec cdk bootstrap aws://<account-id>/<region>
+  ```
+
+  Um stage com WAF nos portais ou na mídia também precisa de bootstrap em `us-east-1`.
+
+## Deploy
+
+```sh
+pnpm nx deploy @discava/infra "discava-development/*"
+```
+
+O padrão `<stage>/*` seleciona todas as stacks do stage. Isso compila os portais e as funções Lambda, sintetiza os templates e faz o deploy sem pedir aprovação.
+
+Para usar sempre um perfil AWS nomeado em um stage, defina seu `credentials` em `packages/common/infra-config/src/stages.config.ts`. Os comandos de deploy, destroy e reindex desta página passam então a usá-lo:
+
+```ts
+'discava-development': {
+  credentials: { type: 'profile', profile: 'my-profile' },
+  region: 'eu-west-1',
+  infra: { /* … */ },
+},
+```
+
+## Diferenças em relação ao deploy pelo GitHub
+
+| | GitHub Actions | Sua máquina |
+| --- | --- | --- |
+| Credenciais | Os roles restritos de deploy e de execução do stage | As suas, por meio dos roles de bootstrap do CDK |
+| Permissions boundary | Aplicado a todos os roles | Não aplicado |
+| Sobrescritas de configuração | Lidas das variáveis do environment do GitHub | Lidas do seu shell: `export DISCAVA_DEVELOPMENT_INFRA_…` antes do deploy |
+| Scan de vulnerabilidades | Roda primeiro | Rode `pnpm trivy` você mesmo (precisa do Docker) |
+
+Como as sobrescritas vêm do seu shell, um deploy local de um stage que usa domínios personalizados no GitHub **os remove**, a menos que você exporte as mesmas variáveis. Escolha uma forma de fazer deploy de cada stage e mantenha-a.
+
+## Scripts de manutenção
+
+Eles rodam na sua máquina contra um stage já implantado, seja qual for a forma como foi implantado. Nenhum é necessário no uso normal: os índices de busca e as análises se mantêm atualizados sozinhos.
+
+| Quando | Comando |
+| --- | --- |
+| Reconstruir o índice de busca de cursos, por exemplo após um deploy que adiciona um campo de busca | `pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development` |
+| Reconstruir o índice de busca de transcrições, para todos os cursos ou um só | `pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development [--course=<courseId>]` |
+| Recalcular os números de análise de um curso a partir de seus registros | `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` |
+| Gravar as categorias iniciais | `pnpm nx run @discava/tooling-deploy:seed-categories` |
+
+Os dois comandos de reindex procuram a função de reindex do stage nas suas stacks do CloudFormation e a invocam, então precisam apenas de credenciais AWS e do nome do stage. Sem `--stage`, o `reindex-transcripts` roda contra a stack local.
+
+Os dois últimos gravam direto na tabela. Aponte-os primeiro para a tabela do stage, ou eles gravarão na tabela local de desenvolvimento:
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+export DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE
+```
+
+## Destroy
+
+```sh
+pnpm nx destroy @discava/infra "discava-development/*"
+```
+
+O CDK pede confirmação. O `discava-development` exclui tudo, inclusive os dados. O `discava-production` mantém seus recursos com estado (entre eles o user pool, a tabela, os buckets de mídia e a collection de busca) quando suas stacks são excluídas, e tem proteção contra exclusão ativada: removê-los é um passo deliberado e manual.
+
+Os roles e as políticas que o <Link path="deploy/setup">script de setup</Link> criou não fazem parte de nenhuma stack. Exclua-os no console do IAM se não precisar mais deles.

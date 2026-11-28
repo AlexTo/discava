@@ -1,0 +1,39 @@
+---
+title: 设计概览
+description: Discava 的功能设计如何编写文档，以及它们所依赖的共同概念。
+sidebar:
+  order: 0
+---
+
+import Link from '@components/link.astro';
+
+本节描述 **Discava 的各项功能如何运作**。每个页面涵盖一个功能领域。
+
+## 页面
+
+| 页面 | 内容 |
+|---|---|
+| <Link path="design/assignments">作业评分与反馈</Link> | 用分数和反馈批改上传类作业，重新提交请求，反馈轮次，待处理索引与评分队列，每日讲师通知，以及预览已提交的文件 |
+| <Link path="design/branding">品牌</Link> | 管理员设置的平台名称、徽标、图标、分享图片和颜色：品牌记录，门户和公开页面读取的已发布文档，调色板和图片检查 |
+| <Link path="design/catalogue-categories">目录分类</Link> | 管理员管理的分类体系，课程上的目录字段，以及它们如何为搜索分面提供数据 |
+| <Link path="design/certificates">证书</Link> | 结课证书如何签发、按课程开启或关闭、分享和验证 |
+| <Link path="design/course-analytics">课程分析</Link> | 讲师仪表板和课程分析页面：每项数据的含义，以及数据为什么会比记录滞后几秒 |
+| <Link path="design/instructor-payouts">讲师付款</Link> | 如何根据订单记录收入，账本及其每日汇总，每日付款运行及其恢复，以及收款账户规则 |
+| <Link path="design/live-course-editing">课程在线编辑</Link> | 课程发布之后，添加、移除、隐藏、恢复和编辑模块、课时与内容项 |
+| <Link path="design/payments">支付</Link> | 通过 Stripe Checkout 购买付费课程：价格，订单，确保课程只交付一次的 webhook，退款，以及管理员的 Stripe 连接 |
+| <Link path="design/progress-and-completion">进度与完成</Link> | 内容项、课时和课程的完成如何被记录，以及负责这些记录的服务端重新计算 |
+| <Link path="design/public-pages">公开页面</Link> | 面向爬虫和链接预览的课程落地页与讲师主页：页面渲染器，缓存与新鲜度，SPA 重写，索引设置，以及预览视频的暴露规则 |
+| <Link path="design/quizzes">测验</Link> | 测验内容项：数据模型，评分，作答次数，以及学生和讲师的体验 |
+| <Link path="design/search">搜索</Link> | 跨内容类型搜索：OpenSearch Serverless 集合，索引流水线，以及如何强制执行可见性 |
+| <Link path="design/stream-event-router">流事件路由器</Link> | 功能如何响应 core table 的变更：它的注册、队列、失败队列、告警和处理程序的义务，以及本地路由器 |
+| <Link path="design/video-player">视频播放器与字幕</Link> | 课时视频播放器如何续播、变速、响应键盘和显示字幕，以及字幕如何生成或上传 |
+
+## 共同概念
+
+**课程结构层级。** 课程包含模块，模块包含课时，课时包含一个有序的内容项列表（视频、文本、文件、测验、作业）。这四者都通过 ElectroDB 的 `curriculum` 集合存放在同一个 DynamoDB 分区（`COURSE#<courseId>`）中，因此整门课程只需一次查询。该查询会读取每一页，因为课程的课程结构可能超过 DynamoDB 每页 1 MB 的限制。
+
+**有效可见性。** 只有当模块、课时或内容项**及其所有祖先**都是 `visible` 且未归档时，才会向学生显示。学生读取、学生写入和进度计算都使用有效可见性，而不是只看记录自身的 `visibility`。该规则只实现了一次，即 `@discava/core-table` 中的 `filterEffectivelyVisible`。
+
+**选课。** 学生只有在已选课期间，才能读取课程内容并写入其中的任何数据：他们拥有一条 `enrolment` 记录（pk `courseId`，sk `userId`），其 `status` 不是 `dropped`。学生通过 core-api 的 `course.enrol` 自行选课，且只能选**已发布**的**免费**课程：课程的状态和价格会与选课写入在同一个事务中检查，因此请求过程中被归档或被定价的课程无法接受新的选课。有价格的课程只能通过已付款的订单进入（见<Link path="design/payments">支付</Link>）。再次选课会返回已有的选课记录。草稿或已归档的课程会返回 `NOT_FOUND`，与匿名的 `course.publicView` 一致，因此不会泄露草稿的存在。已选课的学生在课程被归档之后仍可阅读，但对他们来说也是只读的。`course.myEnrolment` 返回调用者的选课记录，如果没有则返回空。
+
+**学生数据以用户为键。** `progress`、`itemCompletion`、`quizAttempt` 和 `quizSummary` 使用 `userId` 作为分区键，因此"某位学生在某门课程中的进度"只需一次查询。反过来说，"哪些学生接触过这个内容项？"不做扫描就无法回答，这就是内容项带有 `studentActivityCount` 的原因。

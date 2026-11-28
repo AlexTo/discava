@@ -1,0 +1,69 @@
+---
+title: 문제 해결
+description: 설정이나 배포가 실패하는 흔한 이유와 각각의 해결 방법입니다.
+sidebar:
+  order: 7
+---
+
+## 설정 스크립트
+
+**"Couldn't authenticate with AWS."** AWS CLI에 유효한 자격 증명이 없습니다. 로그인(`aws sso login --profile <profile>` 또는 `aws configure`)한 뒤 스크립트를 다시 실행하세요.
+
+**"`<stage>` is configured for account … ; switch credentials and re-run."** 스테이지가 `stages.config.ts`에서 특정 계정을 지정했는데 다른 계정에 로그인되어 있습니다.
+
+**"Unknown stage."** 스테이지가 `stages.config.ts`에 없습니다. 먼저 그곳에 추가하세요.
+
+**"The origin remote isn't a GitHub repository."** `--yes`와 함께일 때 표시됩니다. 없으면 스크립트가 저장소를 묻습니다. 직접 지정하세요: `GITHUB_REPOSITORY=<you>/discava ./scripts/setup-stage.sh`.
+
+**"stdin isn't a terminal."** 스크립트가 프롬프트를 띄울 수 없습니다. 터미널에서 실행하거나, `--yes`를 넘겨 기본값을 수락하세요.
+
+**"uses a custom OIDC subject claim template."** 저장소나 조직이 OIDC 토큰의 subject를 사용자 지정했습니다. `GITHUB_OIDC_SUBJECT_PREFIX`를 subject에서 `:environment:` 앞부분으로 설정하고 스크립트를 다시 실행하세요.
+
+**"no issued certificate in … covers …" 또는 "… is for exactly …"** 루트 도메인이 있으면 스크립트는 모든 구성 요소에 대해 발급된 인증서가 필요합니다. 찾지 못한 것을 각각 나열하고 아무것도 바꾸기 전에 멈춥니다. 메시지가 알려 주는 리전의 ACM에서 요청하세요. 두 API는 스테이지의 리전, 포털과 미디어는 `us-east-1`입니다. 각각 **Issued**가 될 때까지 기다린 뒤 스크립트를 다시 실행하세요. 각 API에는 와일드카드가 아니라 자기 도메인만 정확히 명시한 인증서(`core-api.<root>`, `instructor-api.<root>`)가 필요합니다. 포털과 미디어는 `<root>`와 `*.<root>`에 대한 인증서 하나를 공유할 수 있습니다. 사용자 지정 도메인 없이 배포하려면 루트 도메인을 비워 두세요.
+
+## Deploy 워크플로
+
+**`main`에 푸시한 뒤 워크플로가 시작되지 않습니다.** 자동 배포에는 세 가지가 필요합니다. 저장소 변수 `AUTO_DEPLOY_STAGE`, 포크에서 활성화된 워크플로, **통과한** CI 실행입니다. CI 실행을 확인하세요. **Deploy Docs** 작업(GitHub Pages가 활성화되지 않음)이나 **Trivy** 작업이 실패하면 CI 전체가 실패합니다.
+
+**"Unknown stage".** 입력한 스테이지가 배포하는 커밋의 `stages.config.ts`에 없습니다.
+
+**"Not authorized to perform sts:AssumeRoleWithWebIdentity".** AWS가 워크플로의 토큰을 거부했습니다. 흔한 원인:
+
+- GitHub 환경의 이름이 스테이지 이름과 정확히 같지 않음
+- 설정 스크립트를 다른 저장소의 클론(포크가 아니라 원본)에서 실행해서, 역할이 그 저장소를 신뢰함
+- 설정 이후 포크의 이름을 바꾸거나 소유권을 이전함
+
+워크플로를 실행하는 저장소의 클론에서 설정 스크립트를 다시 실행하세요.
+
+**"Credentials could not be loaded" 또는 빈 역할.** 환경에 `AWS_DEPLOY_ROLE_ARN` 변수가 없습니다. 설정 스크립트를 실행하거나, 스크립트가 출력한 변수를 직접 만드세요.
+
+**"Invalid value for `<STAGE>_INFRA_…`".** 구성 재정의의 값 종류가 잘못되었습니다. 불리언은 `true` 또는 `false`, 숫자는 정수, 로그 수준은 `DEBUG`, `INFO`, `WARN`, `ERROR`여야 합니다. GitHub 환경의 변수를 고치고 다시 배포하세요.
+
+**"SSM parameter /cdk-bootstrap/hnb659fds/version not found".** 스테이지가 배포하는 리전에 CDK가 부트스트랩되어 있지 않습니다. 설정 스크립트를 다시 실행해 부트스트랩을 수락하세요. WAF가 있는 스테이지는 `us-east-1`도 잊지 마세요.
+
+**CloudFormation이 리소스를 만드는 중 접근 거부.** CloudFormation은 실행 역할 `cfn-execution-<stage>`로 실행됩니다. 이 역할은 Discava가 만드는 것만, 그리고 이름이 스테이지 이름으로 시작하는 리소스(`discava-development-…`, 일부 종류는 `discavadevelopment…`)에 대해서만 할 수 있습니다.
+
+방금 더 새로운 Discava 버전을 가져왔다면 먼저 설정 스크립트를 다시 실행하세요. 그 버전이 필요로 하는 권한으로 역할을 갱신합니다. 오류가 남거나 직접 리소스를 추가했다면, 오류가 가리키는 대상을 보세요.
+
+- **`cfn-execution-<stage>`가 거부됨.** `scripts/setup-stage.sh`의 실행 역할 정책에 해당 동작을 추가하세요. 리소스 이름이 스테이지 이름으로 시작하지 않는다면, 대신 그렇게 시작하는 명시적 이름을 부여하세요. CDK의 `Names.uniqueResourceName`이 컨스트럭트 경로로 이름을 만들어 줍니다. 그런 다음 스크립트를 다시 실행하세요.
+- **함수가 실행될 때 그 함수의 역할이 거부됨.** 같은 스크립트의 권한 경계에 해당 동작을 추가하고 다시 실행하세요. 스테이지가 만드는 모든 역할은 그 경계를 답니다. 실행 역할은 달지 않으므로, 경계에 동작을 추가해도 배포 실패는 해결되지 않습니다.
+
+내 컴퓨터에서의 배포는 무엇이든 할 수 있는 CDK의 기본 역할을 씁니다. 그래서 로컬에서 배포되는 스택도 Deploy 워크플로에서는 실패할 수 있습니다.
+
+**Trivy 단계가 실패합니다.** 의존성에 수정본이 있는 알려진 치명적 취약점이 있거나, 시크릿이 커밋되었습니다. 의존성을 업데이트하세요. 검토하고 수용한 결과는 `.trivyignore`에 한 줄에 ID 하나씩 넣습니다.
+
+**스택이 `ROLLBACK_COMPLETE`에서 멈춥니다.** 첫 생성에서 실패한 스택은 갱신할 수 없습니다. CloudFormation 콘솔에서 삭제하고 다시 배포하세요.
+
+## 배포 후
+
+**포털에 로그인 오류가 표시됩니다.** 사용자가 그 포털에 필요한 그룹(`student`, `instructor`, `admin`)에 속해 있는지 확인하세요.
+
+**사용자 지정 도메인이 확인되지 않습니다.** DNS 레코드는 자동으로 만들어지지 않습니다. 도메인을 CloudFront 배포나 API Gateway 사용자 지정 도메인에 연결하세요.
+
+**포털 도메인을 추가한 뒤 API 호출이 CORS 오류로 실패합니다.** 다시 배포하세요. API가 허용하는 출처는 배포 시점에 포털 도메인에서 가져옵니다.
+
+**첫 검색이 느립니다.** `discava-development`에서는 검색이 0으로 줄어듭니다. 한동안 조용했다가 처음 질의하면 용량을 기다리느라 10~30초가 걸립니다.
+
+**이메일이 도착하지 않습니다.** 두 `NOTIFICATIONS` 변수가 설정되어 있는지, 스테이지의 리전에서 SES ID가 검증되었는지, SES 계정이 아직 샌드박스에 있는지 확인하세요.
+
+**동영상이 계속 "processing"입니다.** 스테이지의 리전에서 MediaConvert 콘솔의 작업 목록에서 실패한 작업과 그 오류를 확인하세요.

@@ -1,0 +1,85 @@
+---
+title: Buscar y tomar cursos
+description: Buscar y explorar el catálogo como estudiante, la página pública del curso, las vistas previas gratuitas y los perfiles de instructores, inscribirse en un curso gratuito y salir de él, y My Learning.
+---
+
+import Link from '@components/link.astro';
+
+Puedes buscar, explorar y leer páginas de cursos sin una cuenta. Inicias sesión para inscribirte.
+
+## Búsqueda
+
+El cuadro de búsqueda del encabezado dice "What do you want to learn?".
+
+1. Escribe al menos 3 caracteres. Los cursos que coinciden se sugieren mientras escribes.
+2. Elige una sugerencia con las flechas y Enter, o seleccionándola, para abrir ese curso.
+3. O pulsa Enter sin elegir ninguna para ver todos los resultados.
+
+En la página de resultados puedes:
+
+- Ordenar con **Sort by** Relevance, Highest rated o Newest.
+- Filtrar por categoría, nivel, idioma, duración y etiquetas.
+- Definir un **Minimum rating**: 4.5, 4.0, 3.5 o 3.0 y más.
+- Elegir **Clear filters** para empezar de nuevo.
+
+<Link path="guides/reviews">Valoraciones y reseñas</Link> explica cómo afectan las valoraciones al orden.
+
+## Explorar
+
+- **Browse courses**, en `/courses`, lista el catálogo. Elige una categoría para acotarlo, o **All**.
+- Una categoría tiene su propia página, con un cuadro de búsqueda para esa categoría.
+- Una categoría que la plataforma ha archivado indica que ya no está disponible, con un enlace a **Browse all courses**.
+
+## La página del curso
+
+La página de un curso publicado es pública. Muestra qué cubre el curso, su contenido, su precio o "Free", su valoración y reseñas, y sus instructores.
+
+- **Play preview** reproduce el video de vista previa del curso, si lo tiene.
+- Una lección marcada como **Free preview** se abre sin iniciar sesión ni inscribirte. Puedes ver sus videos, leer su texto y descargar sus archivos. Sus quizzes siguen bloqueados: "Enrol to take this quiz". No se guarda nada para ti hasta que te inscribes.
+- **View profile** en la tarjeta de un instructor abre su perfil, con los cursos que imparte.
+
+Si un instructor deja de ofrecer una vista previa, su dirección dice "This preview is no longer available." con **View the course**.
+
+## Inscribirse en un curso gratuito
+
+1. En la página del curso, elige **Enrol now**.
+2. Si no has iniciado sesión, elige **Continue to sign in** e inicia sesión. Vuelves al curso.
+3. Se abre la primera lección que no has completado, con "You're enrolled in" y el nombre del curso.
+
+Si te inscribes desde una lección de vista previa gratuita, te quedas en esa lección y puedes elegir **Start this lesson**.
+
+Un curso con precio muestra **Buy now** en su lugar. Consulta <Link path="guides/payments">Cursos de pago y pagos</Link>.
+
+## Salir de un curso
+
+En un curso que no pagaste, la página del curso muestra **Leave course**.
+
+1. Elige **Leave course**.
+2. Confirma con **Leave course**.
+
+Tu inscripción termina y tu progreso se conserva. Puedes volver a inscribirte en cualquier momento y continuar, salvo que el curso haya recibido un precio desde entonces: en ese caso tendrías que comprarlo.
+
+Un curso que pagaste no tiene **Leave course**. Pide un reembolso en su lugar.
+
+## My Learning
+
+**My Learning** en el encabezado lista tus cursos en dos pestañas, **In progress** y **Completed**. Cada tarjeta muestra tu progreso y un botón:
+
+| Botón | Cuándo |
+| --- | --- |
+| **Start** | Todavía no has completado nada |
+| **Continue** | Vas a mitad de camino |
+| **Review** | Completaste el curso |
+| **See what's new** | Completaste el curso y el instructor ha añadido contenido desde entonces |
+
+Cuando has iniciado sesión, la página de inicio te da la bienvenida con **Continue learning** para el curso en el que estabas, tus otros cursos y cursos para empezar.
+
+La página de un curso en el que estás inscrito muestra tu progreso como porcentaje, con **Start learning** o **Continue learning**. Un curso completado muestra **Completed**, la fecha y **Review course**.
+
+## Más
+
+- <Link path="guides/video-lessons">Lecciones en video</Link>: el reproductor, los subtítulos y la búsqueda de lo que se dijo.
+- <Link path="guides/quizzes-and-assignments">Quizzes y tareas</Link>.
+- <Link path="guides/lesson-discussions">Debates en las lecciones</Link>: hacer preguntas en una lección.
+- <Link path="guides/certificates">Certificados</Link>.
+- <Link path="guides/notifications">Notificaciones</Link>: la campana y los ajustes de correo.

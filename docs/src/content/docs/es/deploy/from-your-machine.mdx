@@ -1,0 +1,83 @@
+---
+title: Desplegar desde tu máquina
+description: Despliega, actualiza y destruye una etapa con tus propias credenciales de AWS, sin GitHub Actions.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+GitHub Actions es la forma recomendada de desplegar. Desplegar desde tu máquina es útil para una etapa de pruebas personal o para depurar un despliegue.
+
+## Antes de empezar
+
+- Un clon con sus dependencias instaladas (`pnpm i`) y la AWS CLI
+- Credenciales de AWS en tu shell para la cuenta de destino (`aws sts get-caller-identity` funciona)
+- Una región, en `AWS_REGION` o en tu perfil de AWS
+- CDK con bootstrap hecho en esa región, una vez por cuenta y región:
+
+  ```sh
+  pnpm exec cdk bootstrap aws://<account-id>/<region>
+  ```
+
+  Una etapa con WAF en sus portales o medios también necesita el bootstrap en `us-east-1`.
+
+## Desplegar
+
+```sh
+pnpm nx deploy @discava/infra "discava-development/*"
+```
+
+El patrón `<stage>/*` selecciona todos los stacks de la etapa. Esto compila los portales y las funciones Lambda, sintetiza las plantillas y las despliega sin pedir aprobación.
+
+Para usar siempre un perfil de AWS con nombre en una etapa, define su `credentials` en `packages/common/infra-config/src/stages.config.ts`. Los comandos de despliegue, destrucción y reindexación de esta página lo usarán:
+
+```ts
+'discava-development': {
+  credentials: { type: 'profile', profile: 'my-profile' },
+  region: 'eu-west-1',
+  infra: { /* … */ },
+},
+```
+
+## Diferencias con un despliegue desde GitHub
+
+| | GitHub Actions | Tu máquina |
+| --- | --- | --- |
+| Credenciales | Los roles de despliegue y de ejecución acotados de la etapa | Las tuyas, mediante los roles de bootstrap de CDK |
+| Permissions boundary | Se aplica a cada rol | No se aplica |
+| Sobrescrituras de configuración | Se leen de las variables del entorno de GitHub | Se leen de tu shell: `export DISCAVA_DEVELOPMENT_INFRA_…` antes de desplegar |
+| Análisis de vulnerabilidades | Se ejecuta primero | Ejecuta `pnpm trivy` tú mismo (necesita Docker) |
+
+Como las sobrescrituras vienen de tu shell, un despliegue local de una etapa que usa dominios personalizados en GitHub **los elimina** a menos que exportes las mismas variables. Elige una forma de desplegar cada etapa y mantente en ella.
+
+## Scripts de mantenimiento
+
+Se ejecutan desde tu máquina contra una etapa desplegada, de la forma que se haya desplegado. Ninguno hace falta en el uso normal: los índices de búsqueda y las analíticas se mantienen al día solos.
+
+| Cuándo | Comando |
+| --- | --- |
+| Reconstruir el índice de búsqueda de cursos, por ejemplo tras un despliegue que agrega un campo de búsqueda | `pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development` |
+| Reconstruir el índice de búsqueda de transcripciones, de todos los cursos o de uno | `pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development [--course=<courseId>]` |
+| Recalcular las cifras de analíticas de un curso a partir de sus registros | `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` |
+| Escribir las categorías iniciales | `pnpm nx run @discava/tooling-deploy:seed-categories` |
+
+Los dos comandos de reindexación buscan la función de reindexación de la etapa en sus stacks de CloudFormation y la invocan, así que solo necesitan credenciales de AWS y el nombre de la etapa. Sin `--stage`, `reindex-transcripts` se ejecuta contra el stack local.
+
+Los dos últimos escriben directamente en la tabla. Apúntalos primero a la tabla de la etapa, o escribirán en la tabla de desarrollo local:
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+export DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE
+```
+
+## Destruir
+
+```sh
+pnpm nx destroy @discava/infra "discava-development/*"
+```
+
+CDK te pide confirmación. `discava-development` elimina todo, datos incluidos. `discava-production` conserva sus recursos con estado (entre ellos el grupo de usuarios, la tabla, los buckets de medios y la colección de búsqueda) cuando se eliminan sus stacks, y tiene la protección contra eliminación activada: quitarlos es un paso deliberado y manual.
+
+Los roles y políticas que creó el <Link path="deploy/setup">script de configuración</Link> no forman parte de ningún stack. Elimínalos en la consola de IAM si ya no los necesitas.

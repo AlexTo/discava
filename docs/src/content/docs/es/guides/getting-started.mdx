@@ -1,59 +1,90 @@
 ---
-title: Primeros pasos
-description: Ejecutando tu nuevo sitio de documentación Astro + Starlight.
+title: Ejecutar Discava en local
+description: Inicia todo el sistema en tu máquina con Docker, inicia sesión como usuario de prueba y restablece los datos locales.
 ---
 
 import Link from '@components/link.astro';
-import Snippet from '@components/snippet.astro';
 
-¡Bienvenido a **docs**! Este sitio está construido con [Astro](https://astro.build/) y el
-tema de documentación [Starlight](https://starlight.astro.build/).
+Discava se ejecuta por completo en tu máquina. Cada servicio de AWS que usa tiene un sustituto local, así que no necesitas una cuenta de AWS para probarlo ni para desarrollar con él.
 
-## Ejecutar localmente
+## Qué necesitas
 
-```bash
-pnpm nx start @discava/docs
+- **Node.js 24**, la versión en la que se ejecutan las funciones Lambda desplegadas
+- **pnpm**, en la versión del campo `packageManager` del `package.json` raíz (`corepack enable` lo instala por ti)
+- **Docker**, en ejecución
+
+## Iniciarlo
+
+```sh
+git clone https://github.com/AlexTo/discava.git
+cd discava
+pnpm i
+pnpm dev
 ```
 
-## Compilar para producción
+`pnpm dev` inicia los tres portales, las tres APIs y los sustitutos locales:
 
-```bash
-pnpm nx build @discava/docs
+| Servicio | Puerto | Sustituye a |
+| --- | --- | --- |
+| Portal de estudiantes / instructores / administración | 4201 / 4200 / 4202 | CloudFront |
+| core-api / instructor-api / admin-api | 2022 / 2023 / 2025 | API Gateway y Lambda |
+| Renderizador de páginas | 2026 | La Lambda que sirve las páginas públicas (páginas de cursos, perfiles de instructores, certificados) como HTML |
+| DynamoDB local | 8001 | DynamoDB |
+| S3Mock | 9090 | S3 |
+| ElasticMQ | 9324 | SQS |
+| OpenSearch | 9200 | OpenSearch Serverless |
+| Event runner | 2024 | El stream de la tabla, MediaConvert, Transcribe, Translate, SES, EventBridge, Scheduler y Stripe |
+| Servidor OIDC local | 9400 | Cognito |
+
+Los correos que envía el sistema no se entregan. Léelos en la bandeja local en `http://localhost:2024/inbox`.
+
+## Iniciar sesión
+
+Abre el portal de estudiantes en `http://localhost:4201`. Te envía a una página de inicio de sesión local sin contraseñas:
+
+| Usuario | Roles |
+| --- | --- |
+| Alice | Instructora y estudiante |
+| Bob | Estudiante |
+| Dan | Estudiante |
+| Carol | Administradora |
+
+"Someone else" en esa página te inicia sesión con los claims que escribas, como otros grupos.
+
+El portal de instructores está en `http://localhost:4200` y el portal de administración en `http://localhost:4202`.
+
+## Añadir cursos de ejemplo
+
+Una instalación nueva tiene el catálogo vacío. Con `pnpm dev` en ejecución, esto publica algunos cursos como Alice, con categorías, etiquetas y niveles:
+
+```sh
+pnpm nx run @discava/e2e:seed-local-courses
 ```
 
-## Agregar un idioma
+## Probar un curso de pago
 
-Agrega una entrada al bloque `locales` en `astro.config.mjs` y crea un directorio
-correspondiente bajo `src/content/docs/<locale>/`. Starlight detectará el nuevo idioma
-automáticamente.
+No hace falta una cuenta de Stripe: el event runner hace de Stripe.
 
-## Enlaces conscientes del idioma
+1. Como Carol, abre **Payments** en el portal de administración, pega `sk_test_local` y elige **Connect Stripe**.
+2. Como Alice, abre un curso publicado en el portal de instructores, define un precio en su sección **Price** y elige **Save price**.
+3. Como Bob, abre el curso y elige **Buy now**. La página de pago local ofrece **Pay**, **Decline card** y **Cancel**.
 
-Usa el componente generado `Link` siempre que quieras enlazar a otra página
-**dentro** de tu documentación — resuelve automáticamente el idioma actual, por lo que una única
-fuente de verdad produce la URL correcta en cada idioma:
+<Link path="guides/payments">Cursos de pago y pagos</Link> explica cada paso.
 
-```mdx
-import Link from '@components/link.astro';
+## Empezar de cero
 
-<Link path="guides/getting-started">Read the getting-started guide</Link>
+Los datos locales viven en volúmenes de Docker y sobreviven a los reinicios. Para borrarlos, detén `pnpm dev` y ejecuta:
+
+```sh
+pnpm nx run @discava/tooling-local-dev:reset-local-data
 ```
 
-Aquí está el componente en acción: <Link path="guides/getting-started">volver a esta página</Link>.
+## Qué solo se ejecuta en AWS
 
-Para enlaces externos regulares, simplemente usa Markdown ordinario `[label](url)`.
+Algunas cosas no tienen equivalente local y se comprueban en una etapa desplegada: Managed Login y el registro de Cognito, las cookies firmadas de CloudFront, la codificación exacta de MediaConvert, los subtítulos reales de Transcribe y las traducciones de Translate, y la página de pago propia de Stripe, las verificaciones de tarjeta y las entregas de webhooks.
 
-## Usar fragmentos
+## Siguiente
 
-Los fragmentos son porciones reutilizables de MDX almacenadas en `src/content/docs/<locale>/snippets/`.
-Incluye uno en cualquier página con el componente `Snippet`:
-
-```mdx
-import Snippet from '@components/snippet.astro';
-
-<Snippet name="example" />
-```
-
-Aquí está el fragmento de ejemplo renderizado en línea:
-
-<Snippet name="example" />
+- <Link path="deploy">Despliega Discava en tu cuenta de AWS</Link>
+- <Link path="architecture">Lee cómo está construido el sistema</Link>
+- [DEVELOPMENT.md](https://github.com/AlexTo/discava/blob/main/DEVELOPMENT.md) cubre las pruebas, el estilo de código y cómo se hacen los cambios

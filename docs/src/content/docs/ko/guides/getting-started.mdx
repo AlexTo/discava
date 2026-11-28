@@ -1,57 +1,90 @@
 ---
-title: 시작하기
-description: 새로운 Astro + Starlight 문서 사이트를 실행합니다.
+title: Discava를 로컬에서 실행하기
+description: Docker로 전체 시스템을 내 컴퓨터에서 시작하고, 테스트 사용자로 로그인하고, 로컬 데이터를 초기화합니다.
 ---
 
 import Link from '@components/link.astro';
-import Snippet from '@components/snippet.astro';
 
-**docs**에 오신 것을 환영합니다! 이 사이트는 [Astro](https://astro.build/)와
-[Starlight](https://starlight.astro.build/) 문서 테마로 구축되었습니다.
+Discava는 전체가 내 컴퓨터에서 실행됩니다. 사용하는 모든 AWS 서비스에 로컬 대체물이 있으므로 사용해 보거나 개발할 때 AWS 계정이 필요 없습니다.
 
-## 로컬에서 실행
+## 준비물
 
-```bash
-pnpm nx start @discava/docs
+- **Node.js 24**, 배포된 Lambda 함수가 실행되는 버전
+- **pnpm**, 루트 `package.json`의 `packageManager` 필드에 있는 버전 (`corepack enable`이 설치해 줍니다)
+- **Docker**, 실행 중이어야 합니다
+
+## 시작하기
+
+```sh
+git clone https://github.com/AlexTo/discava.git
+cd discava
+pnpm i
+pnpm dev
 ```
 
-## 프로덕션용 빌드
+`pnpm dev`는 세 개의 포털, 세 개의 API, 로컬 대체 서비스를 시작합니다.
 
-```bash
-pnpm nx build @discava/docs
+| 서비스 | 포트 | 대체 대상 |
+| --- | --- | --- |
+| 수강생 / 강사 / 관리자 포털 | 4201 / 4200 / 4202 | CloudFront |
+| core-api / instructor-api / admin-api | 2022 / 2023 / 2025 | API Gateway와 Lambda |
+| 페이지 렌더러 | 2026 | 공개 페이지(강좌 랜딩 페이지, 강사 프로필, 수료증)를 HTML로 제공하는 Lambda |
+| DynamoDB local | 8001 | DynamoDB |
+| S3Mock | 9090 | S3 |
+| ElasticMQ | 9324 | SQS |
+| OpenSearch | 9200 | OpenSearch Serverless |
+| 이벤트 러너 | 2024 | 테이블 스트림, MediaConvert, Transcribe, Translate, SES, EventBridge, Scheduler, Stripe |
+| 로컬 OIDC 서버 | 9400 | Cognito |
+
+시스템이 보내는 이메일은 실제로 전달되지 않습니다. `http://localhost:2024/inbox`의 로컬 받은편지함에서 확인하세요.
+
+## 로그인
+
+`http://localhost:4201`에서 수강생 포털을 엽니다. 비밀번호가 없는 로컬 로그인 페이지로 이동합니다.
+
+| 사용자 | 역할 |
+| --- | --- |
+| Alice | 강사와 수강생 |
+| Bob | 수강생 |
+| Dan | 수강생 |
+| Carol | 관리자 |
+
+해당 페이지의 "Someone else"는 다른 그룹 등 입력한 클레임으로 로그인합니다.
+
+강사 포털은 `http://localhost:4200`, 관리자 포털은 `http://localhost:4202`에 있습니다.
+
+## 샘플 강좌 추가
+
+새로 설치하면 카탈로그가 비어 있습니다. `pnpm dev`가 실행 중일 때 다음 명령은 카테고리, 태그, 레벨이 있는 몇 개의 강좌를 Alice로 게시합니다.
+
+```sh
+pnpm nx run @discava/e2e:seed-local-courses
 ```
 
-## 로케일 추가하기
+## 유료 강좌 체험
 
-`astro.config.mjs`의 `locales` 블록에 항목을 추가하고 `src/content/docs/<locale>/` 아래에
-일치하는 디렉토리를 생성하세요. Starlight가 새 로케일을 자동으로 인식합니다.
+Stripe 계정은 필요 없습니다. 이벤트 러너가 Stripe를 대신합니다.
 
-## 로케일 인식 링크
+1. Carol로 관리자 포털의 **Payments**를 열고 `sk_test_local`을 붙여넣은 뒤 **Connect Stripe**를 선택합니다.
+2. Alice로 강사 포털에서 게시된 강좌를 열고 **Price** 섹션에서 가격을 설정한 뒤 **Save price**를 선택합니다.
+3. Bob으로 강좌를 열고 **Buy now**를 선택합니다. 로컬 결제 페이지에는 **Pay**, **Decline card**, **Cancel**이 있습니다.
 
-문서 **내부**의 다른 페이지로 링크하려면 생성된 `Link` 컴포넌트를 사용하세요 — 현재 로케일을
-자동으로 해석하므로 단일 소스가 모든 언어에서 올바른 URL을 생성합니다:
+각 단계는 <Link path="guides/payments">유료 강좌와 결제</Link>에서 설명합니다.
 
-```mdx
-import Link from '@components/link.astro';
+## 처음부터 다시 시작
 
-<Link path="guides/getting-started">Read the getting-started guide</Link>
+로컬 데이터는 Docker 볼륨에 있으며 재시작해도 유지됩니다. 삭제하려면 `pnpm dev`를 중지하고 다음을 실행하세요.
+
+```sh
+pnpm nx run @discava/tooling-local-dev:reset-local-data
 ```
 
-다음은 실제 동작하는 컴포넌트입니다: <Link path="guides/getting-started">이 페이지로 돌아가기</Link>.
+## AWS에서만 실행되는 것
 
-일반적인 외부 링크의 경우 일반 Markdown `[label](url)`을 사용하세요.
+로컬 대체물이 없어 배포된 스테이지에서 확인하는 항목이 몇 가지 있습니다. Cognito의 Managed Login과 회원 가입, CloudFront의 서명된 쿠키, MediaConvert의 정확한 인코딩, 실제 Transcribe 자막과 Translate 번역, Stripe 자체 체크아웃 페이지, 카드 검증, 웹훅 전달입니다.
 
-## 스니펫 사용하기
+## 다음 단계
 
-스니펫은 `src/content/docs/<locale>/snippets/`에 저장된 재사용 가능한 MDX 조각입니다.
-`Snippet` 컴포넌트를 사용하여 모든 페이지에 포함할 수 있습니다:
-
-```mdx
-import Snippet from '@components/snippet.astro';
-
-<Snippet name="example" />
-```
-
-다음은 인라인으로 렌더링된 예제 스니펫입니다:
-
-<Snippet name="example" />
+- <Link path="deploy">Discava를 내 AWS 계정에 배포하기</Link>
+- <Link path="architecture">시스템이 어떻게 구성되어 있는지 읽기</Link>
+- [DEVELOPMENT.md](https://github.com/AlexTo/discava/blob/main/DEVELOPMENT.md)는 테스트, 코드 스타일, 변경 방법을 다룹니다

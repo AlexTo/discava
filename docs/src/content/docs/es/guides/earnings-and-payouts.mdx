@@ -1,0 +1,101 @@
+---
+title: Ganancias y pagos
+description: Cómo se calculan las ganancias de un instructor, la página Earnings, cómo configurar una cuenta de pagos, cuándo se envían los pagos y qué ocurre al cambiar de cuenta de cobro.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+Cuando un estudiante compra tu curso, tu parte se registra en segundos y se te paga a través de Stripe.
+
+## Cómo se calculan las ganancias
+
+Por cada venta:
+
+> neto = importe pagado − comisión de la plataforma
+
+- El **importe pagado** es lo que pagó el estudiante, después de cualquier cupón. Un **descuento** lo reduce y, por lo tanto, reduce tu parte: ganas sobre el importe pagado, nunca sobre el precio de lista.
+- La **comisión de la plataforma** es un porcentaje del importe pagado, definido por la plataforma (20% salvo que se haya cambiado). Una venta conserva la comisión con la que se registró.
+- Si un curso tiene **varios instructores**, se reparten cada venta a partes iguales.
+- Un **reembolso** te quita tu parte del importe reembolsado y devuelve la comisión correspondiente. Un reembolso total deja la venta en cero.
+
+Cada moneda se mantiene por separado. No se convierte nada.
+
+Una venta cuenta el día en que se pagó y un reembolso el día en que se hizo, así que el reembolso de una venta del mes pasado reduce las cifras de este mes. Los días son días UTC.
+
+## La página Earnings
+
+**Earnings** en la barra lateral del portal del instructor tiene cuatro partes.
+
+**Payout account**: su estado y lo único que debes hacer al respecto. Consulta [Configurar los pagos](#configurar-los-pagos).
+
+**Balance**, por moneda:
+
+| Cifra | Significado |
+| --- | --- |
+| **On hold** | Ganado, pero todavía dentro del periodo de retención. La página muestra la próxima fecha de liberación |
+| **Waiting for account setup** | Pasó el periodo de retención, pero no tienes una cuenta de pagos activa |
+| **Ready** | Saldrá con el próximo pago |
+
+**Report**: empieza con el mes actual. Elige otro mes, o elige **Custom range** y define una fecha From y To con un máximo de 366 días de diferencia.
+
+- Para cada curso muestra el número de pedidos, el bruto, los descuentos, los reembolsos, la comisión de la plataforma y el neto, con un total por moneda.
+- **Show orders** en un curso lista cada venta y reembolso con una referencia de pedido. Nunca muestra quién compró.
+- Los días se cuentan en UTC.
+
+**Payouts**: la fecha, el importe y el estado de cada pago.
+
+## Configurar los pagos
+
+1. Abre **Earnings**.
+2. En la tarjeta **Payout account**, elige **Set up payouts**.
+3. Da a Stripe tu identidad y tus datos bancarios en sus propias páginas. Stripe te devuelve a Earnings cuando terminas.
+
+La tarjeta muestra en qué punto estás:
+
+| Estado | Qué hacer |
+| --- | --- |
+| **Not set up** | **Set up payouts** |
+| **In progress** | **Continue setup**: el formulario de Stripe no está terminado |
+| **Active** | Nada. **Open Stripe dashboard** te lleva a tu cuenta de Stripe |
+| **Restricted** | **Fix account**: Stripe necesita algo más de ti |
+
+Si la tarjeta dice "Payouts aren't available yet", la plataforma no ha conectado Stripe. Consulta a un administrador.
+
+Las ganancias se registran tengas o no configurados los pagos. Esperan hasta que lo hagas.
+
+## Cuándo se te paga
+
+- Cada venta se **retiene** durante un número de días definido por la plataforma (14 en la etapa de producción salvo que se haya cambiado), de modo que un reembolso en ese tiempo nunca tenga que recuperarse de ti.
+- Una ejecución de pagos ocurre **una vez al día**. Envía todo lo que está listo, un pago por moneda.
+- Un saldo inferior al **pago mínimo** (10.00 salvo que se haya cambiado) espera a una ejecución posterior.
+
+El estado de un pago es uno de estos:
+
+- **Pending**: se está enviando.
+- **Sent**: Stripe lo ha aceptado.
+- **Failed**: Stripe lo rechazó, con el motivo. Sus ganancias vuelven a tu saldo y se reintentan.
+
+## Reembolsos después de que se te pagó
+
+Un reembolso hecho después de que su venta se pagó deja un **saldo negativo**. Se descuenta de tu próximo pago. No se toma nada de tu cuenta bancaria.
+
+## Ganancias retenidas
+
+Si la plataforma cambia la cuenta de Stripe con la que cobra, las ganancias anteriores al cambio que no se habían pagado aparecen como **Held**: "Earned before the platform changed its payment account. Contact the platform to be paid." Tu cuenta de pagos aparece como no configurada, porque pertenecía a la cuenta anterior. Configúrala de nuevo para las ventas a partir de ahora.
+
+## Para administradores
+
+- Los pagos necesitan **Connect** habilitado en la cuenta de Stripe de la plataforma. Sin él, a un instructor que elige **Set up payouts** se le dice "This platform can't set up payout accounts yet".
+- Una clave restringida también necesita gestionar cuentas conectadas, enlaces de cuenta, enlaces de inicio de sesión y transferencias, además de lo que necesita <Link path="guides/payments">el cobro de pagos</Link>.
+- La comisión, el periodo de retención y el pago mínimo se definen por etapa. La etapa de desarrollo retiene las ventas 1 día, no 14. Consulta <Link path="deploy/configuration">Configuración de etapas</Link>.
+- Cambiar de cuenta o de modo de Stripe retiene las ganancias no pagadas de todos los instructores. Deja que la ejecución diaria pague primero lo que está listo, y paga las ganancias retenidas a mano.
+
+## Limitaciones
+
+- Sin formularios fiscales, facturas ni cálculo de impuestos.
+- Sin conversión de moneda.
+- Las disputas y contracargos no aparecen en el informe.
+
+<Link path="design/instructor-payouts">Pagos a instructores</Link> describe cómo funciona.

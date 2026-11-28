@@ -1,0 +1,131 @@
+---
+title: Routeur d'événements de flux
+description: "Comment une fonctionnalité réagit aux changements de la table core : l'enregistrement, sa file et sa file d'échecs, les obligations du handler, le comportement local et le redrive."
+sidebar:
+  order: 7
+---
+
+**Spécification :** [`specs/20261116-183449-stream-event-router/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-183449-stream-event-router/)
+
+Le flux DynamoDB de la table core a **un seul lecteur** : le routeur de flux. Il envoie chaque changement à la file de chaque fonctionnalité qui le veut, et le handler de chaque fonctionnalité lit sa propre file.
+
+Une fonctionnalité qui réagit aux changements de la table ajoute un enregistrement, un handler et le câblage du handler (ci-dessous). Elle n'ajoute ni file, ni alarme, ni mapping de flux propre. Huit fonctionnalités sont enregistrées aujourd'hui ; le [tableau ci-dessous](#métriques-à-surveiller) les liste.
+
+```d2 title="One stream reader, one queue and failure queue per feature"
+table: "Core table"
+stream: "DynamoDB Stream"
+router: "Stream router"
+pq: "progress-recalculation queue"
+sq: "search-indexing queue"
+pf: "progress failure queue"
+sf: "search failure queue"
+ph: "progress handler"
+sh: "search handler"
+
+table -> stream
+stream -> router
+router -> pq: "filters match"
+router -> sq: "filters match"
+pq -> ph
+sq -> sh
+pq -> pf: "after maxReceiveCount"
+sq -> sf: "after maxReceiveCount"
+```
+
+## L'enregistrement
+
+`STREAM_FEATURES` dans `packages/databases/core-table/src/helpers/stream-features.ts` est l'unique définition que la pile déployée et l'exécuteur d'événements local lisent tous deux.
+
+| Champ | Signification |
+|---|---|
+| `name` | Unique, en kebab-case. Nomme la file, la file d'échecs, l'alarme et le handler |
+| `filters` | Les enregistrements que la fonctionnalité veut : un `eventName` (`INSERT`, `MODIFY` ou `REMOVE`), l'`image` à examiner (`NewImage` ou `OldImage`) et les `entities` (noms d'entités ElectroDB). Un enregistrement qui passe un filtre quelconque va à la fonctionnalité |
+| `handler` | La fonction `events-*` qui lit la file de la fonctionnalité |
+| `batch` | `maxRecords` et `windowSeconds` : combien de changements, et combien de temps attendre pour les rassembler, par exécution du handler |
+| `maxReceiveCount` | Combien de fois un message est reçu avant d'aller dans la file d'échecs |
+| `maxConcurrency` | Plafond facultatif d'exécutions simultanées du handler (au moins 2, un minimum du mapping de source d'événements) |
+
+`featuresFor(record)` est la seule logique de correspondance. Le routeur et l'exécuteur local l'appellent tous deux, donc ils ne peuvent pas diverger. Un enregistrement va à chaque fonctionnalité ayant un filtre correspondant, en tant que copie distincte, et à aucune autre. Un enregistrement ne correspondant à rien ne produit rien.
+
+Les filtres et le matcher de chaque fonctionnalité vivent dans leur propre module à côté du registre (`progress-stream.ts` avec `PROGRESS_STREAM_FILTERS` et `matchesProgressStreamFilters`, `search-stream.ts`, et ainsi de suite), et `featuresFor` appelle ces matchers.
+
+Des tests échouent quand un nom se répète, qu'un filtre nomme une entité que la table core ne définit pas, qu'un filtre ne correspond à rien dans les enregistrements d'exemple (`stream-features.test.ts`), ou qu'un `handler` ne nomme aucune fonction (`handlers.test.ts` dans `packages/events`).
+
+## Ajouter une fonctionnalité
+
+1. Ajoutez une entrée à `STREAM_FEATURES`.
+2. Écrivez le handler dans `packages/events` et son wrapper `events-*` avec `ts#lambda-function`. Lisez ses enregistrements via `sqsToStreamRecords` (`src/router/sqs-stream-records.ts`), qui déballe les messages de la file en enregistrements de flux.
+3. Ajoutez le handler à `HANDLERS` dans `packages/events/src/router/handlers.ts`, par lequel l'exécuteur local fait son dispatch. `handlers.test.ts` échoue quand le `handler` d'un enregistrement y manque, ou quand il contient un handler qu'aucune fonctionnalité n'utilise.
+4. Construisez la Lambda du handler dans `StreamRouterStack` (`packages/infra/src/stacks/stream-router-stack.ts`), comme le font `createProgressRecalculationLambda` et `createSearchIndexingLambda` : créez la fonction `events-*`, donnez-lui ce qu'elle lit et écrit (la table core, ses paramètres de déploiement, etc.), et ajoutez-la à l'objet `handlers` passé à `StreamRouter`, indexée par le nom de la fonctionnalité. Sans cela, `StreamRouter` lève `No handler given for stream feature '<name>'` à la synthèse.
+5. Une fois le handler passé, le construct `StreamRouter` construit la file, la file d'échecs, l'alarme et le mapping de source d'événements à partir de l'entrée, et l'exécuteur local construit son équivalent.
+6. Écrivez les tests de livraison en double et dans le désordre du handler (ci-dessous).
+7. Ajoutez les métriques de file de la fonctionnalité à la [liste ci-dessous](#métriques-à-surveiller).
+
+## Ce que le construct construit par fonctionnalité
+
+- Une **file**, avec un délai de visibilité de six fois le délai d'expiration du handler.
+- Une **file d'échecs**, qui garde un message après `maxReceiveCount` réceptions et le conserve 14 jours.
+- Une **alarme** qui est à l'état d'alarme dès que la file d'échecs contient un message. Elle n'a pas de cible de notification : elle apparaît dans la console CloudWatch.
+- Un **mapping de source d'événements** de la file vers le handler, utilisant le `batch` et le `maxConcurrency` de l'enregistrement.
+
+Toutes les files partagent une clé KMS gérée par le client avec rotation. Un stage peut passer au chiffrement géré par SQS avec `enableKmsEncryption: false`, comme la table core. Les messages contiennent des enregistrements entiers de la table, donc traitez-les comme des données de la table.
+
+Le routeur a sa propre file d'échecs et sa propre alarme (`StreamRouterFailures`) pour un enregistrement qu'il ne peut jamais envoyer : trop gros pour un message, ou refusé par la file. Elle contient une description de l'enregistrement (son id d'événement, ses clés, son entité, ses fonctionnalités, sa taille et la raison ; pas son contenu) pour qu'on puisse le retrouver dans la table. Les lots échoués du mapping de flux lui-même (numéros de partition et de séquence) y vont aussi. Un envoi qui échoue pour une raison transitoire est réessayé par le mapping de flux, pour cet enregistrement seulement.
+
+## Obligations des handlers
+
+Le routeur ne promet ni l'ordre par enregistrement ni une livraison exactement une fois. Chaque handler DOIT pouvoir s'exécuter deux fois avec les mêmes enregistrements, et avec des enregistrements dans n'importe quel ordre, et DOIT dire comment dans le commentaire d'en-tête de son fichier :
+
+- **Dériver le résultat des données actuelles** là où l'ordre compte, jamais de l'enregistrement seul. L'indexation de recherche ne lit que l'identité du cours à partir du changement et relit le cours depuis la table core, puis l'indexe s'il est publié et le retire s'il n'est pas publié ou a disparu. Le recalcul de la progression recalcule la progression de chaque étudiant à partir du programme et des achèvements à chaque exécution.
+- Un changement qui ne peut pas être traité (il ne nomme aucun cours, par exemple) **échoue** au lieu d'être ignoré, pour finir dans la file d'échecs où quelqu'un peut le voir.
+- Les compteurs et autres valeurs qui s'accumulent à partir des enregistrements eux-mêmes (appliquer un changement deux fois ou dans le désordre les fait dériver) ont besoin de leur propre vérification que la livraison en double et dans le désordre donne le même résultat, ou doivent être recalculés à partir de la table.
+
+Les tests d'une nouvelle fonctionnalité incluent une livraison en double et une livraison dans le désordre.
+
+## Échecs et redrive
+
+Un handler qui lève une exception remet ses messages dans la file après le délai de visibilité. Après `maxReceiveCount` réceptions, un message passe dans la file d'échecs de cette fonctionnalité et ne bloque plus les changements suivants. Les autres fonctionnalités ne sont pas affectées.
+
+Une fois la cause corrigée, rejouez les messages avec le redrive propre au service de files. Aucun outil de rejeu n'est construit, car les handlers peuvent être réexécutés sans risque.
+
+Pour un stage déployé, dans la console SQS ouvrez la file d'échecs et choisissez **Start DLQ redrive** vers la file de la fonctionnalité (ou utilisez `aws sqs start-message-move-task --source-arn <failure queue ARN> --destination-arn <feature queue ARN>`). Vérifiez que l'alarme de la file d'échecs revient à OK.
+
+## Métriques à surveiller
+
+Chaque file SQS publie des métriques de profondeur et d'âge sous l'espace de noms `AWS/SQS`, avec une dimension `QueueName` :
+
+- **`ApproximateNumberOfMessagesVisible`** sur la file d'une fonctionnalité : changements en attente. Elle devrait revenir près de zéro entre les rafales.
+- **`ApproximateAgeOfOldestMessage`** sur la file d'une fonctionnalité : le retard du handler. Un âge croissant avec une profondeur stable indique un handler bloqué ou limité.
+- **`ApproximateNumberOfMessagesVisible`** sur la file d'échecs d'une fonctionnalité : tout ce qui dépasse zéro est du travail mis de côté, et déclenche l'alarme de la fonctionnalité.
+
+| Fonctionnalité | File | File d'échecs |
+|---|---|---|
+| `progress-recalculation` | `ProgressRecalculationQueue` | `ProgressRecalculationFailures` |
+| `search-indexing` | `SearchIndexingQueue` | `SearchIndexingFailures` |
+| `transcript-indexing` | `TranscriptIndexingQueue` | `TranscriptIndexingFailures` |
+| `analytics-update` | `AnalyticsUpdateQueue` | `AnalyticsUpdateFailures` |
+| `earnings-recording` | `EarningsRecordingQueue` | `EarningsRecordingFailures` |
+| `notification-delivery` | `NotificationDeliveryQueue` | `NotificationDeliveryFailures` |
+| `caption-translation` | `CaptionTranslationQueue` | `CaptionTranslationFailures` |
+| `brand-publishing` | `BrandPublishingQueue` | `BrandPublishingFailures` |
+
+Les noms sont les ids logiques du construct (les noms de files déployées portent le préfixe de la pile et un suffixe). Une nouvelle fonctionnalité ajoute une ligne ici.
+
+## Comportement local
+
+`pnpm dev` exécute le même routeur dans l'exécuteur d'événements (`packages/events/src/local`), avec ElasticMQ comme file (compatible avec l'API SQS, dans Docker, en mémoire) et un exécuteur de fonctionnalité par enregistrement. Il utilise les mêmes `STREAM_FEATURES` et `featuresFor` que le routeur déployé et conserve la taille de lot et la fenêtre de chaque fonctionnalité. Un message reçu `maxReceiveCount` fois passe dans la file d'échecs de la fonctionnalité et est journalisé. Rien ne nécessite de compte AWS.
+
+L'exécuteur (port 2024) a des routes pour consulter et rejouer les files locales :
+
+```sh
+# queue and failure queue counts per feature
+curl http://localhost:2024/router/queues
+
+# move a feature's failed messages back to its queue
+curl -X POST http://localhost:2024/router/redrive/search-indexing
+
+# make a feature's next 5 batches fail, to reproduce a failure end to end
+curl -X POST http://localhost:2024/router/fail/search-indexing -d '{"batches": 5}'
+```
+
+Le redrive est un petit helper de l'exécuteur, pas le redrive du service de files, qu'ElasticMQ ne documente pas. Les files sont en mémoire, donc arrêter `pnpm dev` les vide.

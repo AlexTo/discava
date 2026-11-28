@@ -1,0 +1,104 @@
+---
+title: Notifications
+description: Ce dont les gens sont avertis dans la cloche et par e-mail, comment désactiver les e-mails, et pour les développeurs les helpers de production, les clés de déduplication, la boîte de réception locale et la config de stage pour l'e-mail.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+Une notification est un court message destiné à une personne. Elle s'affiche dans la cloche de l'en-tête de chaque portail et, selon les préférences de la personne, est envoyée par e-mail.
+
+## Ce dont vous êtes averti
+
+| Notification | Envoyée quand | E-mail |
+| --- | --- | --- |
+| **Course announcements** | Un instructeur publie une annonce dans un cours auquel vous participez | Activé |
+| **Discussion replies** | Quelqu'un répond à votre message dans une discussion de leçon | Activé |
+| **Answered questions** | Quelqu'un marque une réponse à votre question | Activé |
+| **Accepted answers** | Votre réponse est marquée comme la réponse | Désactivé |
+| **Assignment returned** | Un instructeur rend votre travail | Activé |
+| **Resubmission requested** | Un instructeur vous demande de soumettre de nouveau un devoir | Activé |
+| **Assignment grade updated** | Un instructeur change la note d'un devoir rendu | Activé |
+| **Certificates** | Vous obtenez un certificat, et un rappel pour l'ajouter à votre profil LinkedIn | Activé |
+| **Certificate revoked** | Un certificat que vous avez obtenu est révoqué | Activé |
+| **Certificate restored** | Un certificat révoqué est de nouveau valide | Activé |
+| **Refunds** | Le remboursement intégral d'un cours que vous avez acheté a abouti | Toujours |
+| **New assignment submissions** (instructeurs) | Des étudiants soumettent un travail pour l'un de vos devoirs, au plus une fois par jour et par devoir | Désactivé |
+| **Course reviews** (instructeurs) | Un étudiant évalue l'un de vos cours | Désactivé |
+
+« Activé » et « Désactivé » sont les réglages de départ. « Toujours » ne peut pas être désactivé.
+
+## La cloche
+
+La cloche liste chaque notification, quels que soient vos réglages d'e-mail. En choisir une ouvre la page concernée. **Mark all as read** remet à zéro le compteur de non lus.
+
+## Activer ou désactiver les e-mails
+
+1. Ouvrez le menu du compte dans n'importe quel portail et choisissez **Notification settings**.
+2. Utilisez l'interrupteur à côté d'une notification pour choisir si elle vous parvient aussi par e-mail.
+
+Chaque e-mail contient aussi un lien de désabonnement. Il ouvre une page du portail étudiant où **Stop these emails** désactive ce type d'e-mail, et rien ne change tant que vous n'appuyez pas dessus. **Turn them back on** l'annule.
+
+Le reste de cette page s'adresse aux développeurs qui ajoutent des notifications à une fonctionnalité. Les fonctionnalités publient des notifications via des helpers de `@discava/core-table`. Rien d'autre ne doit écrire les enregistrements de notification.
+
+## Ajouter un type d'événement
+
+Chaque type de notification est une entrée de `NOTIFICATION_TYPES` (`packages/databases/core-table/src/helpers/notification-types.ts`) :
+
+- `id` : stable, `<area>.<event>`, par exemple `announcement.posted`.
+- `name` et `description` : ce que la page de réglages affiche.
+- `params` : les paramètres sous forme de chaînes simples à partir desquels la notification est construite.
+- `emailPolicy` : `default-on`, `default-off`, `required` (toujours envoyé) ou `never` (cloche uniquement).
+- `build(params)` : fonction pure ; renvoie le `title` (coupé à 120 caractères), le `body` (coupé à 500) et le `link` (`portal` et un `path` commençant par `/`, sans secret). Elle peut aussi renvoyer une `action` facultative (`label` et `path`, dans le même portail que le lien) : l'e-mail l'affiche comme un second bouton et une ligne, et la cloche l'ignore.
+- `emailPreferenceType` (facultatif) : l'id d'un autre type dont le réglage d'e-mail, le jeton de désabonnement et le libellé de réglage régissent celui-ci. Le type n'a pas de réglage propre, `setNotificationPreference` le refuse et la page de réglages l'omet. `isEmailEnabled` le résout.
+
+Quatre types concernent les certificats : `certificate.issued` (son `link` est la page du certificat et son `action` est « Add to LinkedIn profile »), `certificate.reminder` (même lien et même action, avec `emailPreferenceType: 'certificate.issued'`), et `certificate.revoked` et `certificate.restored` (tous deux renvoient vers My Learning). Voir <Link path="design/certificates">Certificats</Link>.
+
+`order.refunded` informe un étudiant que le remboursement intégral de son achat est terminé (son `link` est la page du cours, et son e-mail est `required`). Il est envoyé pour chaque remboursement intégral enregistré depuis Stripe, que l'étudiant l'ait demandé ou qu'un opérateur l'ait fait dans le tableau de bord, et sa clé de déduplication est l'ID de la commande, donc une livraison répétée n'en envoie qu'un. Voir <Link path="design/payments">Paiements</Link>.
+
+Ajoutez un test pour l'entrée dans `notification-types.test.ts`. Rien d'autre ne change : les réglages, la cloche et l'e-mail la prennent en compte.
+
+## Publier
+
+Chaque helper prend la même entrée : `type`, `params`, `dedupeKey`, `occurredAt`, et `userId` (ou `courseId` pour une audience de cours).
+
+- `notificationWrites(service, input)` valide l'entrée et renvoie les éléments de transaction (la notification et le compteur de non lus de l'utilisateur). Ajoutez-les à votre propre `service.transaction.write`, à côté de l'écriture dont parle la notification, pour que les deux soient validées ou aucune. Une transaction annulée est traitée comme pour tout autre échec de condition.
+- `publishNotification(service, input)` fait la même chose dans sa propre transaction et renvoie `'created'` ou `'duplicate'`. Utilisez-le quand la notification ne fait pas partie d'une autre écriture.
+- `notifyCourseStudents(service, input)` renvoie un élément qui demande que chaque étudiant inscrit au cours (n'ayant pas abandonné) soit notifié. Ajoutez-le à votre transaction. Le pipeline crée ensuite la notification de chaque étudiant avec votre `dedupeKey`, donc une nouvelle tentative est sans risque. Seuls les étudiants sont couverts ; pour les instructeurs, appelez `notificationWrites` pour chacun.
+
+Une entrée invalide (type non enregistré, paramètre manquant, clé vide, instant incorrect) lève `NotificationInputError` avant que quoi que ce soit soit lu ou écrit. Les helpers ne vérifient pas que l'utilisateur existe ou a une adresse e-mail.
+
+N'appelez pas `markNotificationRead`, `markNotificationsRead` ni `notificationEmailTransitions` : ils appartiennent à l'API et à la livraison.
+
+## La clé de déduplication et `occurredAt`
+
+La clé de déduplication nomme l'événement, par exemple `${contentItemId}:${version}`. L'id d'une notification vient de son type et de sa clé, donc publier le même événement deux fois, par une nouvelle tentative ou par dix requêtes simultanées, donne une seule notification. Utilisez une valeur identique à chaque nouvelle tentative de l'événement et différente pour chaque nouvel événement ; jamais une valeur aléatoire ni l'heure courante.
+
+`occurredAt` est un instant ISO en UTC avec millisecondes (`2026-11-18T21:55:47.000Z`) tiré de votre propre enregistrement (quand le message a été créé, pas quand le code s'est exécuté), pour qu'une nouvelle tentative donne la même valeur. Il ordonne la liste de la cloche.
+
+## Préférences et désabonnement
+
+Chacun peut désactiver l'e-mail de chaque type dans **Notification settings**, depuis le menu utilisateur de chaque portail. L'interrupteur d'un type `required` est activé et ne peut pas être changé. Un type `never` n'envoie aucun e-mail et n'est pas listé. La cloche n'est pas affectée par les préférences.
+
+Chaque e-mail contient un lien de désabonnement, signé pour ne pas pouvoir être modifié, et les en-têtes `List-Unsubscribe` pour le bouton en un clic d'un client de messagerie. Le lien ouvre une page du portail étudiant qui ne change rien tant que son bouton n'est pas pressé, et la page peut réactiver les e-mails. Le secret de signature est généré par stage par la pile Data.
+
+## Essayer en local
+
+Avec `pnpm dev` en cours d'exécution, publiez avec la cible `notify-local` :
+
+```sh
+pnpm nx run @discava/tooling-local-dev:notify-local -- --user <sub> --type announcement.posted
+pnpm nx run @discava/tooling-local-dev:notify-local -- --course <courseId> --type announcement.posted
+```
+
+Répétez la commande avec le même `--key` pour voir qu'un doublon ne fait rien. Les e-mails ne quittent pas votre machine : ils sont conservés dans la boîte de réception locale à `http://localhost:2024/inbox` (`GET /emails` les liste en JSON), que `reset-local-data` vide.
+
+## E-mail sur un stage
+
+L'e-mail est envoyé avec Amazon SES et reste désactivé tant que le stage n'est pas configuré. Sous `infra.notifications` dans la config du stage (ou les surcharges d'environnement `<STAGE>_INFRA_NOTIFICATIONS_*`) :
+
+- `fromAddress` : l'adresse depuis laquelle les e-mails sont envoyés.
+- `sesIdentity` : le domaine ou l'adresse SES vérifié depuis lequel la fonction de livraison peut envoyer, et rien d'autre. `fromAddress` doit lui appartenir.
+
+Sans `fromAddress`, les notifications atteignent quand même la cloche et chaque e-mail est enregistré comme ignoré. Dans le bac à sable SES, les destinataires doivent aussi être vérifiés. Les livraisons échouées vont dans la file d'échecs `notification-delivery`, qui a une alarme.

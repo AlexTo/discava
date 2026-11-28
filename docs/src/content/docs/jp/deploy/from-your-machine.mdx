@@ -1,0 +1,83 @@
+---
+title: 自分のマシンからのデプロイ
+description: GitHub Actions を使わずに、自分の AWS 認証情報でステージをデプロイ、更新、破棄します。
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+デプロイには GitHub Actions を使うことを推奨します。自分のマシンからのデプロイは、個人用のテストステージや、デプロイのデバッグに役立ちます。
+
+## 始める前に
+
+- 依存関係をインストール済みのクローン（`pnpm i`）と、AWS CLI
+- 対象アカウントの AWS 認証情報がシェルにあること（`aws sts get-caller-identity` が動くこと）
+- `AWS_REGION` または AWS プロファイルで指定したリージョン
+- そのリージョンで CDK がブートストラップされていること。アカウントとリージョンごとに 1 回です。
+
+  ```sh
+  pnpm exec cdk bootstrap aws://<account-id>/<region>
+  ```
+
+  ポータルやメディアに WAF を使うステージは、`us-east-1` もブートストラップが必要です。
+
+## デプロイ
+
+```sh
+pnpm nx deploy @discava/infra "discava-development/*"
+```
+
+パターン `<stage>/*` は、ステージ内のすべてのスタックを選びます。これでポータルと Lambda 関数をビルドし、テンプレートを合成して、承認を求めずにデプロイします。
+
+ステージで毎回、名前付きの AWS プロファイルを使うには、`packages/common/infra-config/src/stages.config.ts` でそのステージの `credentials` を設定します。このページの deploy、destroy、reindex のコマンドは、それを使うようになります。
+
+```ts
+'discava-development': {
+  credentials: { type: 'profile', profile: 'my-profile' },
+  region: 'eu-west-1',
+  infra: { /* … */ },
+},
+```
+
+## GitHub からのデプロイとの違い
+
+| | GitHub Actions | 自分のマシン |
+| --- | --- | --- |
+| 認証情報 | ステージ専用の、権限を絞ったデプロイロールと実行ロール | 自分のもの。CDK のブートストラップロール経由 |
+| 権限の境界 | すべてのロールに適用 | 適用されない |
+| 設定の上書き | GitHub 環境の変数から読み取る | シェルから読み取る。デプロイ前に `export DISCAVA_DEVELOPMENT_INFRA_…` |
+| 脆弱性スキャン | 最初に実行される | 自分で `pnpm trivy` を実行する（Docker が必要） |
+
+上書きはシェルから読み取られるため、GitHub ではカスタムドメインを使っているステージをローカルでデプロイすると、同じ変数を export しない限り、それらが**削除されます**。ステージごとにデプロイ方法を 1 つ決めて、それを続けてください。
+
+## メンテナンススクリプト
+
+これらは、デプロイ方法にかかわらず、デプロイ済みのステージに対して自分のマシンから実行します。通常の利用では必要ありません。検索インデックスと分析は、自動的に最新に保たれます。
+
+| いつ | コマンド |
+| --- | --- |
+| コースの検索インデックスを再構築する。たとえば、検索フィールドを追加するデプロイのあと | `pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development` |
+| 文字起こしの検索インデックスを、全コースまたは 1 コースについて再構築する | `pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development [--course=<courseId>]` |
+| コースの分析の数値を、レコードから再計算する | `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` |
+| 初期カテゴリを書き込む | `pnpm nx run @discava/tooling-deploy:seed-categories` |
+
+2 つの reindex コマンドは、ステージの CloudFormation スタックから reindex 関数を探して呼び出すので、AWS 認証情報とステージ名だけが必要です。`--stage` がない場合、`reindex-transcripts` はローカルのスタックに対して実行されます。
+
+最後の 2 つは、テーブルに直接書き込みます。先にステージのテーブルを指すようにしないと、ローカルの開発用テーブルに書き込まれます。
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+export DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE
+```
+
+## 破棄
+
+```sh
+pnpm nx destroy @discava/infra "discava-development/*"
+```
+
+CDK が確認を求めます。`discava-development` は、データを含むすべてを削除します。`discava-production` は、スタックを削除してもステートフルなリソース（ユーザープール、テーブル、メディアバケット、検索コレクションなど）を保持し、削除保護が有効です。これらの削除は、意図的な手動の作業になります。
+
+<Link path="deploy/setup">セットアップスクリプト</Link>が作成したロールとポリシーは、どのスタックにも含まれません。不要になったら、IAM コンソールで削除してください。

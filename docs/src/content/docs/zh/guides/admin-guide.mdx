@@ -1,0 +1,77 @@
+---
+title: 管理员指南
+description: 管理员在管理门户中做什么：管理目录分类，查询、撤销和恢复证书，以及在哪里了解评价审核、品牌和支付。
+---
+
+import Link from '@components/link.astro';
+
+本页是管理门户的概览。只有属于平台 `admin` 组的账户才能使用。
+
+## 熟悉界面
+
+侧边栏有五个页面：
+
+| 页面 | 用途 |
+| --- | --- |
+| **Home** | 下面每个区域各有一张卡片 |
+| **Categories** | 讲师用来归类课程的分类 |
+| **Reviews** | 删除违反规则的课程评价 |
+| **Certificates** | 查询证书以便撤销或恢复 |
+| **Payments** | 连接学生付款所用的 Stripe 账户 |
+
+账户菜单中有 **Branding**、**Notification settings** 和 **Sign out**。
+
+## 分类
+
+分类是讲师在课程的 **Catalogue details** 中选择的列表。学生通过它们浏览和筛选目录。
+
+**添加分类**
+
+1. 打开 **Categories**。
+2. 在 **New category name** 中输入名称。
+3. 选择 **Add category**。
+
+已被使用的名称会被拒绝。
+
+**重命名分类**
+
+1. 在分类上选择 **Rename**。
+2. 修改名称。
+3. 选择 **Save**。按 Escape 或选择 **Cancel** 则保持原样。
+
+**归档分类**
+
+1. 在分类上选择 **Archive**。
+2. 阅读对话框：它会说明有多少门课程使用该分类。
+3. 用 **Archive** 确认。
+
+已归档的分类不再提供给讲师选择。已使用它的课程会保留。它在学生门户中的页面会显示该分类已不可用。列表中每个分类显示为 **Active** 或 **Archived**，管理门户无法恢复已归档的分类。
+
+## 证书
+
+1. 打开 **Certificates**。
+2. 输入 **Certificate ID**，选择 **Look up**。ID 在证书页面和 PDF 上。
+3. 证书显示为 **Valid** 或 **Revoked**，并附有历史记录，说明谁在何时撤销或恢复了它。
+
+- **Revoke** 需要一个 **Reason**：Academic integrity、Issued in error、Order refunded 或 Other。选择 Other 时需要填写 **Note**。用 **Revoke certificate** 确认。证书的公开页面随后会显示已被撤销，并通知学生。
+- **Restore** 用 **Restore certificate** 确认后，证书以相同的 ID 重新生效，并通知学生。
+
+管理员可以恢复任何证书。讲师无法恢复由管理员撤销的证书。
+
+<Link path="guides/certificates">证书</Link> 涵盖其余内容：什么情况下可获得证书，以及学生和讲师看到什么。
+
+## 评价
+
+**Reviews** 列出某门课程的评价，你可以带着理由删除违反规则的评价。被删除的评价不再计入课程评分，其作者也不能再发布评价。参见 <Link path="guides/reviews">评分和评价</Link> 中管理员删除的部分。
+
+## 品牌
+
+账户菜单中的 **Branding** 用来设置平台的名称、徽标、图标、分享图片和颜色，适用于三个门户和公开页面。参见 <Link path="guides/branding">品牌</Link>。
+
+## 支付
+
+**Payments** 连接学生付款所用的 Stripe 账户。连接之前，所有课程都是免费的，讲师也无法设置价格。连接、更换密钥、断开连接和退款参见 <Link path="guides/payments">付费课程和支付</Link>，付费讲师需要什么参见 <Link path="guides/earnings-and-payouts">收入和提现</Link>。
+
+## 通知
+
+账户菜单中的 **Notification settings** 用来选择哪些通知也会通过邮件发给你。参见 <Link path="guides/notifications">通知</Link>。

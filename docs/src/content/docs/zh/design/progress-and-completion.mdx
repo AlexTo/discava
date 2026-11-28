@@ -1,0 +1,118 @@
+---
+title: 进度与完成
+description: 条目、课时和课程的完成情况如何记录，以及作为唯一写入方的服务端重新计算。
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+## 规则
+
+**课时和课程的进度与完成状态只会由一个 Lambda 在服务端写入。** 它们从不依赖学生重新加载页面，也不依赖任何其他客户端触发。
+
+只有单个条目是否完成（例如视频播放到结尾）是由学生一侧发起的，因为只有浏览器能观察到这一点。即便如此，是否计入也由 core-api 决定，条目以上的所有内容都在服务端推导。
+
+## 记录
+
+| 记录 | 键 | 写入方 | 内容 |
+|---|---|---|---|
+| `itemCompletion` | pk `userId`，sk `courseId / lessonId / contentItemId` | core-api | `completedAt` |
+| `progress`（每个课时） | pk `userId`，sk `courseId / lessonId` | 仅进度重新计算 Lambda | `status`、`completedAt` |
+| `enrolment` | pk `courseId`，sk `userId` | 仅进度重新计算 Lambda（针对这些字段） | `progressPercent`、`status`、`completedAt` |
+
+core-api 写入 `itemCompletion` 记录和测验尝试。它从不写入 `progress`，也不写入报名记录中的进度字段。
+
+## 条目何时算完成
+
+| 条目类型 | 完成条件 |
+|---|---|
+| 文本 | 学生点击 **Mark as done** |
+| 视频 | 学生点击 **Mark as done** |
+| 文件 | 学生点击 **Mark as done** |
+| 测验 | 已通过，或已用完所有尝试次数 |
+| 上传作业 | 学生提交了文件 |
+
+因用完尝试次数而完成的测验，对进度来说算完成，但对证书来说不算通过：如果课程要求测验必须通过，学生会得到一个已完成的课程，但在通过之前没有证书。
+
+文本、视频和文件条目不会自行完成：没有滚动、观看时长或下载的跟踪。和大多数学习平台一样，由学生自己决定何时完成一个条目。
+
+### 记录完成
+
+- **文本、视频和文件：** 课时播放器中的 **Mark as done** 会调用 core-api 的 `contentItem.complete`，由 core-api 决定是否计入。一个事务会检查课程已发布，条目、所属课时和所属模块可见且未归档，并且学生已报名（不是 `dropped`）。然后仅在尚无记录时创建 `itemCompletion`。
+  - 这次完成是学生对该条目的第一条记录，所以同一个事务会让该条目的 `studentActivityCount` 加一。每个学生只计一次（见 <Link path="design/live-course-editing">Live course editing</Link>）。
+  - 再次完成会返回已有的完成记录。已归档的课程是只读的，所以其中的任何内容都不能被完成。
+- **测验：** 自动完成。通过的那次尝试，或用掉最后一次尝试的那次，会在与该次尝试相同的事务中记录完成（见 <Link path="design/quizzes">Quizzes</Link>）。它不会再次统计该学生：第一次尝试时已经统计过。
+  - `contentItem.complete` 也接受测验，但只有在已通过或没有剩余尝试次数时才行。这涵盖了尝试次数上限被调到低于学生已用次数的情况，此时无法再提交。
+- **上传作业：** 自动完成。学生的第一次提交会在与 `assignmentSubmission` 相同的事务中记录完成，并在 `studentActivityCount` 中计入一次。重新提交会替换文件并增加提交记录的 `version`，不会再次统计该学生。`contentItem.complete` 对作业只会返回已有的完成记录，从不创建：没有提交时会失败，提示 "Submit your work to complete it"。
+- **视频问题：** 回答视频中的问题不算完成。无论回答、答错或跳过多少问题，都不会创建 `itemCompletion`，也不会改变课时或课程进度；视频仍然只能通过 **Mark as done** 完成。答案记录在它自己的 `videoAnswerSheet` 中（见 <Link path="design/quizzes">Quizzes</Link>）。它确实会算作学生对该视频的第一条记录，计入 `studentActivityCount` 并设置 `lastActivityAt`，之后 **Mark as done** 不会再次统计该学生。
+- **最近活动：** 完成条目、提交测验尝试或作业、回答视频问题，都会在同一个事务中设置报名记录的 `lastActivityAt`，并且它只会向前推进。它用来给学生的课程排序，最近活跃的排在最前，这样登录后的首页可以提示他们从上次中断的地方继续。进度重新计算不会改动它：讲师的修改不算学生的活动。
+
+### 读取进度
+
+- **完成记录：** `course.myItemCompletions` 返回学生在某个课程中的完成记录，包括后来被隐藏或归档的条目的记录。其中哪些仍然计数，由当前课程大纲决定。
+- **课时进度：** `course.myLessonProgress` 返回学生在某个课程中的课时进度记录，即进度重新计算最后一次写入的结果；没有记录的课时表示尚未开始。课程级别的汇总随报名记录一起返回（`course.myEnrolment`）。
+- **跨课程：** `course.myEnrolments` 列出学生未退出的报名记录，最近活跃的在前，每条包含其进度、下一个课时（第一个实际可见且进度不是 `completed` 的课时）以及有多少新条目。它为登录后的首页和 My Learning 提供数据。
+
+## 课时与课程完成
+
+- 当课时中每个**实际可见**的条目都有 `itemCompletion` 时，该课时为 `completed`。
+- `progressPercent` 是学生已完成的条目占课程中实际可见条目的比例。它始终根据当前课程大纲**重新计算**，从不递增，所以添加、删除或隐藏内容都不会让它出错。
+- 达到 100% 时，报名记录会得到 `status: 'completed'` 和 `completedAt`。
+- **完成是永久的**，对课时和课程都是如此。向学生已完成的内容添加新内容，不会让它变回未完成。之后 `progressPercent` 可能低于 100，但学生会看到 **Completed ✓ · 2 new items**，新条目会带有 **New** 徽章。
+
+学生的课程页面可以在读取时计算进度，用于即时显示。这只用于显示，从不写入。
+
+## 进度重新计算 Lambda
+
+`packages/events` 中的一个 Lambda 是课时 `progress` 以及报名记录中 `progressPercent`、`status` 和 `completedAt` 的唯一写入方。
+
+### 触发
+
+核心表的流（新旧镜像），经由<Link path="design/stream-event-router">流事件路由器</Link>：`progress-recalculation` 功能的过滤器（`PROGRESS_STREAM_FILTERS`）根据 ElectroDB 存在每条记录中的实体名（`__edb_e__`）匹配，所以 Lambda 只会在以下情况运行：
+
+| 流事件 | 重新计算 |
+|---|---|
+| 插入 `itemCompletion` | 该课程中的那一位学生 |
+| 模块、课时或内容条目：`visibility` 或 `archivedAt` 发生变化，或记录被删除 | 课程中每一位未退出的已报名学生 |
+| 插入或修改 `quizSummary` | 那一位学生，仅当出现 `passedAt`，或已通过测验的最高分上升时；其他变化一律忽略 |
+| 修改 `assignmentSubmission` | 那一位学生，仅当新旧镜像之间的 `status`、`points` 或 `returnedAt` 不同时；重新提交不会改变其中任何一个 |
+| 修改 `course` | 每一位未退出的已报名学生，仅当新旧镜像之间的 `certificateCriteria.version` 或 `certificatesEnabled` 不同时；其他课程编辑一律忽略 |
+| 测验内容条目：`settings.passMarkPercent` 发生变化 | 每一位未退出的已报名学生。只有最高分达到当前及格线时才算通过，所以调低及格线可能让学生符合条件，而及格线跨过 0 会改变被评估的人群 |
+
+过滤器无法比较一条记录的新旧镜像，所以模块、课时、内容条目、测验汇总或课程的每次变化都会到达 Lambda。然后 Lambda 会忽略那些保持 `visibility` 和 `archivedAt` 不变的变化（测验的及格线是例外，见上文）：例如新标题、排序或 `studentActivityCount`。Lambda 自己对 `progress`、`enrolment` 和 `certificate` 的写入不匹配任何过滤器，所以它不会触发自己。
+
+### 它做什么
+
+对每个受影响的（学生，课程）：
+
+1. 加载一次课程大纲（`curriculum` 集合，所有分页），并用 `@discava/core-table` 中的 `filterEffectivelyVisible` 保留实际可见的条目，规则与 core-api 的课程视图相同。
+2. 读取该学生在该课程的 `itemCompletion` 记录和课时 `progress`（pk `userId`，sk 前缀 `courseId`）。未报名或已退出的学生不处理。
+3. 写入每个课时的 `progress`，但只在有变化时写入：
+   - 当课时所有实际可见的条目都完成时为 `completed`，部分完成时为 `in_progress`，否则为 `not_started`。
+   - 没有实际可见条目的课时没有进度。
+   - 没有记录就表示未开始，所以未动过的课时不会写入。
+   - `completed` 只会被设置，从不被清除：写入的条件是该记录尚未是 `completed`。
+4. 如果报名记录的 `progressPercent`（向下取整，所以只有全部完成时才是 100）有变化，就写入它。达到 100% 时，设置 `status: 'completed'` 和 `completedAt`，条件是报名记录仍为 `active`。没有任何可见内容的课程永远不会被完成。
+5. 如果报名记录为 `completed`，学生还没有证书，且课程会颁发证书，就检查课程的证书条件（`evaluateCertificateCriteria`，见 <Link path="design/certificates">Certificates</Link>），仅在条件满足时调用 `issueCertificate`。只有条件需要时才会读取学生的测验汇总和已评分的提交。
+6. 如果学生有证书，就安排它唯一的一次 LinkedIn 提醒，除非已经安排或发送过、已记录 LinkedIn 点击，或已经过期。
+
+学生以每批十人的方式重新计算，每个课程的大纲在每批中只加载一次。
+
+### 失败
+
+失败的批次会回到该功能的队列并重试。在收到 `maxReceiveCount` 次后仍然失败的消息会转入该功能的失败队列，而不是阻塞之后的变更（见 <Link path="design/stream-event-router">Stream event router</Link>）。由于每次运行都从头重新计算，同一批学生的下一次变更也会修复失败批次遗漏的内容。
+
+报名记录与课程共用分区键，所以列出需要重新计算的学生只需一次查询。一次课程大纲变更对每位已报名学生花费一次查询。
+
+### 幂等性
+
+每次运行都从头重新计算，所以重复的流记录或一连串讲师编辑只会再次产生相同的结果。该功能的队列最多等待五秒来收集一批最多 100 条记录，批次中的记录会被分组，使每个课程中的每位学生在每批中只重新计算一次，无论有多少条记录提到他们。同一位学生的两次运行同时发生时（一次完成和一次大纲变更落在不同的流分片上），两者都会根据各自读到的内容重新计算。任何一方都无法撤销另一方的完成，因为完成的写入以尚未完成为条件。
+
+### 影响
+
+- 删除学生尚未完成的最后一个课时，会把他们标记为 `completed`，即使他们再也没有回来。
+- 课程列表和讲师报告读取的是已存储的值，所以从不需要等待学生回来。
+- 存储的值会落后于触发它的写入，延迟为流延迟加上队列的批处理时间，通常是几秒。
+
+哪些讲师操作会触发重新计算，见 <Link path="design/live-course-editing">Live course editing</Link>。

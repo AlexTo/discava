@@ -1,0 +1,118 @@
+---
+title: Tiến độ và hoàn thành
+description: Cách việc hoàn thành mục, bài học và khóa học được ghi lại, và việc tính lại phía máy chủ là nơi duy nhất ghi chúng.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+## Quy tắc
+
+**Tiến độ và việc hoàn thành của bài học và khóa học chỉ bao giờ được ghi ở phía máy chủ, bởi một Lambda.** Chúng không bao giờ phụ thuộc vào việc học viên tải lại một trang hay bất kỳ tác nhân nào khác phía client.
+
+Thứ duy nhất bắt đầu từ học viên là việc một mục riêng lẻ đã hoàn thành hay chưa (ví dụ xem đến cuối một video), vì chỉ trình duyệt mới quan sát được điều đó. Ngay cả khi đó, core-api quyết định nó có được tính hay không, và mọi thứ ở trên cấp mục đều được suy ra trên máy chủ.
+
+## Các bản ghi
+
+| Bản ghi | Khóa | Được ghi bởi | Chứa |
+|---|---|---|---|
+| `itemCompletion` | pk `userId`, sk `courseId / lessonId / contentItemId` | core-api | `completedAt` |
+| `progress` (theo từng bài học) | pk `userId`, sk `courseId / lessonId` | Chỉ Lambda tính lại tiến độ | `status`, `completedAt` |
+| `enrolment` | pk `courseId`, sk `userId` | Chỉ Lambda tính lại tiến độ (với các trường này) | `progressPercent`, `status`, `completedAt` |
+
+core-api ghi các bản ghi `itemCompletion` và các lượt làm quiz. Nó không bao giờ ghi `progress` hay các trường tiến độ của lượt ghi danh.
+
+## Khi nào một mục hoàn thành
+
+| Loại mục | Hoàn thành khi |
+|---|---|
+| Văn bản | Học viên bấm **Mark as done** |
+| Video | Học viên bấm **Mark as done** |
+| Tệp | Học viên bấm **Mark as done** |
+| Quiz | Đạt, hoặc đã dùng hết các lượt làm |
+| Bài tập tải lên | Học viên nộp một tệp |
+
+Một quiz hoàn thành do hết lượt làm được tính là hoàn thành với tiến độ, nhưng không được tính là đạt với chứng chỉ: khi khóa học yêu cầu phải đạt quiz, học viên có một khóa học đã hoàn thành và không có chứng chỉ cho đến khi họ đạt.
+
+Các mục văn bản, video và tệp không bao giờ tự hoàn thành: không có theo dõi cuộn trang, thời gian xem hay tải xuống. Học viên quyết định khi nào họ xong với một mục, như trên hầu hết nền tảng học tập.
+
+### Ghi lại một lần hoàn thành
+
+- **Văn bản, video và tệp:** **Mark as done** trong trình phát bài học gọi `contentItem.complete` của core-api; core-api quyết định nó có được tính hay không. Một transaction kiểm tra rằng khóa học đã xuất bản, rằng mục, bài học và module của nó hiển thị và không bị lưu trữ, và rằng học viên đã ghi danh (không `dropped`). Sau đó nó tạo `itemCompletion` chỉ khi chưa có.
+  - Lần hoàn thành là bản ghi đầu tiên của học viên về mục đó, nên cùng transaction tăng `studentActivityCount` của mục. Mỗi học viên chỉ được tính một lần (xem <Link path="design/live-course-editing">Chỉnh sửa khóa học đang chạy</Link>).
+  - Hoàn thành lại trả về lần hoàn thành hiện có. Một khóa học đã lưu trữ là chỉ đọc, nên không có gì trong đó có thể hoàn thành.
+- **Quiz:** tự hoàn thành. Lượt làm đạt, hoặc dùng lượt cuối cùng, ghi lần hoàn thành trong cùng transaction với lượt làm (xem <Link path="design/quizzes">Quiz</Link>). Nó không tính học viên lần nữa: lượt làm đầu tiên của họ đã tính.
+  - `contentItem.complete` cũng chấp nhận một quiz, nhưng chỉ khi nó đã đạt hoặc không còn lượt làm nào. Điều này bao gồm trường hợp giới hạn lượt làm bị hạ xuống dưới mức học viên đã dùng, khi không thể nộp thêm.
+- **Bài tập tải lên:** tự hoàn thành. Lần nộp đầu tiên của học viên ghi lần hoàn thành trong cùng transaction với `assignmentSubmission`, và tính họ một lần trong `studentActivityCount`. Nộp lại thay tệp và tăng `version` của bài nộp; nó không tính họ lần nữa. `contentItem.complete` trả về một lần hoàn thành hiện có cho một bài tập nhưng không bao giờ tạo mới: nếu không có bài nộp, nó thất bại với "Submit your work to complete it".
+- **Câu hỏi trong video:** trả lời một câu hỏi trong video không phải là một lần hoàn thành. Nó không tạo `itemCompletion` nào và không đổi tiến độ bài học hay khóa học, dù bao nhiêu câu hỏi được trả lời, sai hay bỏ qua; video vẫn chỉ hoàn thành bằng **Mark as done**. Câu trả lời được ghi trong `videoAnswerSheet` riêng của nó (xem <Link path="design/quizzes">Quiz</Link>). Nó có được tính là bản ghi đầu tiên của học viên về video cho `studentActivityCount` và đặt `lastActivityAt`, và **Mark as done** không tính học viên lần thứ hai.
+- **Hoạt động gần nhất:** hoàn thành một mục, nộp một lượt làm quiz hoặc một bài tập, hay trả lời một câu hỏi trong video sẽ đặt `lastActivityAt` của lượt ghi danh trong cùng transaction, và nó chỉ tiến về phía trước. Nó sắp xếp các khóa học của học viên, hoạt động gần nhất trước, để trang chủ khi đã đăng nhập có thể đề nghị tiếp tục từ chỗ họ dừng. Việc tính lại tiến độ không đụng đến nó: thay đổi của giảng viên không phải hoạt động của học viên.
+
+### Đọc tiến độ
+
+- **Các lần hoàn thành:** `course.myItemCompletions` trả về các lần hoàn thành của một học viên trong một khóa học, gồm cả các mục sau đó bị ẩn hoặc lưu trữ. Cái nào trong số đó còn được tính được quyết định từ chương trình học hiện tại.
+- **Tiến độ bài học:** `course.myLessonProgress` trả về các bản ghi tiến độ bài học của một học viên trong một khóa học, như lần tính lại tiến độ ghi gần nhất; bài học không có bản ghi là chưa bắt đầu. Tổng hợp cấp khóa học đi kèm với lượt ghi danh (`course.myEnrolment`).
+- **Xuyên các khóa học:** `course.myEnrolments` liệt kê các lượt ghi danh chưa dropped của một học viên, hoạt động gần nhất trước, mỗi lượt kèm tiến độ, bài học kế tiếp (bài học hiển thị hiệu lực đầu tiên có tiến độ chưa `completed`) và số mục mới. Nó cấp dữ liệu cho trang chủ khi đã đăng nhập và My Learning.
+
+## Hoàn thành bài học và khóa học
+
+- Một bài học là `completed` khi mọi mục **hiển thị hiệu lực** trong đó đều có `itemCompletion`.
+- `progressPercent` là tỷ lệ các mục hiển thị hiệu lực của khóa học mà học viên đã hoàn thành. Nó luôn được **tính lại** từ chương trình học hiện tại, không bao giờ tăng dần, nên thêm, gỡ hay ẩn nội dung không thể làm nó sai.
+- Ở 100%, lượt ghi danh nhận `status: 'completed'` và `completedAt`.
+- **Hoàn thành là vĩnh viễn**, với cả bài học lẫn khóa học. Thêm nội dung vào thứ mà học viên đã hoàn thành không bao giờ làm nó trở thành chưa hoàn thành. `progressPercent` có thể giảm xuống dưới 100 sau đó, nhưng học viên thấy **Completed ✓ · 2 new items**, và các mục mới có huy hiệu **New**.
+
+Trang khóa học của học viên có thể tính tiến độ khi đọc để hiển thị ngay. Đó chỉ là hiển thị và không bao giờ ghi.
+
+## Lambda tính lại tiến độ
+
+Một Lambda trong `packages/events` là nơi duy nhất ghi `progress` của bài học và `progressPercent`, `status` và `completedAt` của lượt ghi danh.
+
+### Kích hoạt
+
+Stream của core table (ảnh mới và cũ), qua <Link path="design/stream-event-router">stream event router</Link>: các bộ lọc của tính năng `progress-recalculation` (`PROGRESS_STREAM_FILTERS`) khớp theo tên entity mà ElectroDB lưu trong mỗi bản ghi (`__edb_e__`), nên Lambda chỉ chạy cho:
+
+| Sự kiện stream | Tính lại |
+|---|---|
+| `itemCompletion` được chèn | Đúng một học viên đó, trong khóa học đó |
+| Module, bài học hoặc mục nội dung: `visibility` hoặc `archivedAt` đổi, hoặc bản ghi bị gỡ | Mọi học viên đã ghi danh trong khóa học chưa bỏ học |
+| `quizSummary` được chèn hoặc sửa | Đúng một học viên đó, khi `passedAt` xuất hiện hoặc điểm tốt nhất của một quiz đã đạt tăng lên; mọi thay đổi khác bị bỏ qua |
+| `assignmentSubmission` được sửa | Đúng một học viên đó, chỉ khi `status`, `points` hoặc `returnedAt` khác nhau giữa ảnh cũ và mới; một lần nộp lại không đổi cái nào |
+| `course` được sửa | Mọi học viên đã ghi danh chưa bỏ học, chỉ khi `certificateCriteria.version` hoặc `certificatesEnabled` khác nhau giữa ảnh cũ và mới; mọi chỉnh sửa khóa học khác bị bỏ qua |
+| Mục nội dung quiz: `settings.passMarkPercent` đổi | Mọi học viên đã ghi danh chưa bỏ học. Một lần đạt chỉ được tính khi điểm tốt nhất đạt mức hiện tại, nên hạ mức có thể làm một học viên đủ điều kiện, và một mức đi qua 0 đổi việc ai được đánh giá |
+
+Một bộ lọc không thể so sánh ảnh cũ và mới của một bản ghi, nên mọi thay đổi với module, bài học, mục nội dung, quiz summary hay khóa học đều đến Lambda. Lambda sau đó bỏ qua những thay đổi để `visibility` và `archivedAt` như cũ (mức điểm đạt của quiz là ngoại lệ, xem ở trên): một tiêu đề mới, một `order` hay một `studentActivityCount`. Các lần ghi của chính Lambda, vào `progress`, `enrolment` và `certificate`, không khớp bộ lọc nào, nên nó không bao giờ tự kích hoạt mình.
+
+### Nó làm gì
+
+Với mỗi (học viên, khóa học) bị ảnh hưởng:
+
+1. Nạp chương trình học của khóa một lần (collection `curriculum`, mọi trang) và giữ các mục hiển thị hiệu lực bằng `filterEffectivelyVisible` từ `@discava/core-table`, cùng quy tắc mà các chế độ xem khóa học của core-api dùng.
+2. Đọc các bản ghi `itemCompletion` và `progress` bài học của học viên cho khóa học (pk `userId`, tiền tố sk `courseId`). Một học viên chưa ghi danh, hoặc đã bỏ học, thì để yên.
+3. Ghi `progress` của từng bài học, nhưng chỉ khi nó đã thay đổi:
+   - Một bài học là `completed` khi mọi mục hiển thị hiệu lực của nó đều xong, `in_progress` khi một số xong, và `not_started` nếu không.
+   - Một bài học không có mục hiển thị hiệu lực nào thì không có tiến độ.
+   - Không có bản ghi nghĩa là chưa bắt đầu, nên một bài học chưa đụng đến không được ghi.
+   - `completed` chỉ bao giờ được đặt, không bao giờ bị xóa: lần ghi có điều kiện là bản ghi chưa `completed`.
+4. Ghi `progressPercent` của lượt ghi danh (làm tròn xuống, nên chỉ là 100 khi mọi thứ xong) nếu nó đã đổi. Ở 100%, đặt `status: 'completed'` và `completedAt`, với điều kiện lượt ghi danh vẫn `active`. Một khóa học không có gì hiển thị thì không bao giờ hoàn thành.
+5. Nếu lượt ghi danh là `completed`, học viên chưa có chứng chỉ và khóa học cấp chứng chỉ, kiểm tra các tiêu chí chứng chỉ của khóa học (`evaluateCertificateCriteria`, xem <Link path="design/certificates">Chứng chỉ</Link>) và chỉ gọi `issueCertificate` khi chúng được đáp ứng. Các quiz summary và bài nộp đã chấm của học viên chỉ được đọc khi các tiêu chí cần đến.
+6. Nếu học viên có chứng chỉ, lên lịch lời nhắc LinkedIn duy nhất của nó, trừ khi nó đã được lên lịch hoặc gửi, một lượt nhấp LinkedIn đã được ghi, hoặc nó đã quá hạn.
+
+Các học viên được tính lại mười người một lần, và chương trình học của mỗi khóa được nạp một lần cho mỗi lô.
+
+### Lỗi
+
+Một lô thất bại quay về hàng đợi của tính năng và được thử lại. Một thông điệp vẫn thất bại sau `maxReceiveCount` lần nhận sẽ chuyển sang hàng đợi lỗi của tính năng thay vì chặn các thay đổi sau (xem <Link path="design/stream-event-router">Stream event router</Link>). Vì mỗi lần chạy tính lại từ đầu, thay đổi kế tiếp cho cùng các học viên cũng sửa bất cứ thứ gì một lô thất bại đã bỏ sót.
+
+Các lượt ghi danh dùng chung partition key với khóa học, nên liệt kê các học viên cần tính lại là một truy vấn. Một thay đổi chương trình học tốn một truy vấn cho mỗi học viên đã ghi danh.
+
+### Idempotency
+
+Mỗi lần chạy tính lại từ đầu, nên một bản ghi stream trùng lặp hay một loạt chỉnh sửa của giảng viên chỉ cho ra cùng kết quả lần nữa. Hàng đợi của tính năng chờ tối đa năm giây để gom một lô tối đa 100 bản ghi, và các bản ghi trong một lô được nhóm để mỗi học viên trong mỗi khóa học được tính lại một lần cho mỗi lô, dù bao nhiêu bản ghi nêu tên họ. Hai lần chạy cho cùng một học viên vào cùng lúc (một lần hoàn thành và một thay đổi chương trình học đến ở các shard stream khác nhau) đều tính lại từ những gì chúng đọc. Không bên nào có thể hoàn tác lần hoàn thành của bên kia, vì các lần ghi hoàn thành có điều kiện là chưa hoàn thành.
+
+### Hệ quả
+
+- Gỡ bài học cuối cùng mà học viên chưa xong sẽ đánh dấu họ `completed` dù họ không bao giờ quay lại.
+- Danh sách khóa học và báo cáo của giảng viên đọc các giá trị đã lưu, nên chúng không bao giờ chờ một học viên quay lại.
+- Các giá trị đã lưu chậm hơn lần ghi kích hoạt bởi độ trễ stream và việc gom lô của hàng đợi, thường là vài giây.
+
+Xem <Link path="design/live-course-editing">Chỉnh sửa khóa học đang chạy</Link> để biết những hành động nào của giảng viên kích hoạt việc tính lại.

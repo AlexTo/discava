@@ -1,0 +1,199 @@
+---
+title: Trình phát video và phụ đề
+description: Cách trình phát video bài học tiếp tục phát, đổi tốc độ, phản hồi bàn phím và hiển thị phụ đề, và cách phụ đề được tạo hoặc tải lên.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/_archive/20261115-204517-video-player/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204517-video-player/)
+
+**Spec:** [`specs/20261120-002950-transcript-search/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002950-transcript-search/)
+
+**Spec:** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/)
+
+**Spec:** [`specs/20261120-154712-caption-translation/spec.md`](https://github.com/AlexTo/discava/blob/main/specs/20261120-154712-caption-translation/spec.md) (phụ đề dịch)
+
+Cả hai cổng phát video bài học bằng cùng một trình phát, `HlsVideo` trong `packages/common/shadcn`. Thanh điều khiển của nó (`VideoControls`) thay thế thanh của trình duyệt: phát, tua, âm lượng, tắt tiếng, tốc độ, phụ đề, bản ghi lời thoại, picture-in-picture và toàn màn hình. Các quy tắc không thuộc UI (tốc độ, ánh xạ phím, tùy chọn đã lưu, khi nào báo vị trí) nằm trong `@discava/common-web-utils/video-player`.
+
+## Tiếp tục phát
+
+Trình phát lưu vị trí của học viên khoảng mỗi 10 giây khi đang phát, và khi họ tạm dừng, tua xong, hoặc rời trang. Lần sau họ mở video, nó nhảy đến điểm đó, giữ ở trạng thái tạm dừng, và hiển thị "Resumed at m:ss" cùng nút **Start over** cho đến khi video phát hoặc qua 8 giây.
+
+- `contentItem.saveVideoPosition` (core-api) ghi một bản ghi `videoPosition` cho mỗi học viên mỗi video, bị ghi đè sau mỗi lần lưu. `contentItem.videoUrl` trả nó về làm nơi để tiếp tục.
+- Một vị trí thuộc về một phiên bản của video. Sau khi video được thay, vị trí cũ bị bỏ qua.
+- Một vị trí không phải là hoàn thành, hoạt động của học viên hay tiến độ.
+- Bản xem trước của giảng viên không lưu vị trí.
+
+## Tốc độ, âm lượng và tùy chọn
+
+Tốc độ chạy từ 0.5x đến 2x (0.5, 0.75, 1, 1.25, 1.5, 1.75, 2). Tốc độ, âm lượng, tắt tiếng, lựa chọn phụ đề và việc bản ghi lời thoại có đang mở được ghi nhớ trong localStorage của trình duyệt. Nếu bộ nhớ không khả dụng, các giá trị mặc định được áp dụng một cách âm thầm.
+
+## Phím tắt
+
+Chúng hoạt động khi tiêu điểm ở bất cứ đâu trong trình phát. Chúng bị bỏ qua trong các ô văn bản và khi giữ Ctrl, Alt hoặc Meta, và một phím mà điều khiển đang có tiêu điểm đã dùng (Space trên một nút, các phím mũi tên trên một thanh trượt) được để cho điều khiển đó.
+
+| Phím | Hành động |
+|-----|--------|
+| Space, K | Phát hoặc tạm dừng |
+| J, L | Lùi, tiến 10 giây |
+| Left, Right | Lùi, tiến 5 giây |
+| Up, Down | Tăng, giảm âm lượng 5% |
+| M | Tắt tiếng |
+| C | Bật hoặc tắt phụ đề |
+| F | Toàn màn hình |
+| `<`, `>` | Tốc độ trước, sau |
+| 0 đến 9 | Nhảy đến 0% đến 90% của video |
+
+## Phụ đề
+
+Khi một video có các track phụ đề, trình phát hiển thị một menu phụ đề: **Off**, rồi từng track theo ngôn ngữ, với track mặc định được đánh dấu. Một track tải lỗi bị bỏ qua kèm một thông báo ngắn và video tiếp tục phát.
+
+- **Tự động tạo:** khi một video chuyển mã xong, Amazon Transcribe tạo một track ở chế độ nền. Việc này không bao giờ làm chậm việc video sẵn sàng.
+- **Giảng viên tải lên:** giảng viên có thể đính kèm một tệp WebVTT (`.vtt`) vào một video đã sẵn sàng (`contentItem.captionUploadUrl`, rồi `attachCaption`; `removeCaption` xóa một track). Tải lên cho một ngôn ngữ đã có track sẽ thay thế nó và giữ trạng thái mặc định của nó, nên một bản tải lên thay track tự động tạo sẽ trở thành mặc định. Kết quả Transcribe về sau không bao giờ ghi đè một track đã tải lên.
+- **Giới hạn:** một tệp tối đa 1 MB, một video có tối đa 10 track, và mỗi ngôn ngữ một track, từ danh sách mười ngôn ngữ (`CAPTION_LANGUAGES`).
+- **Track nằm ở đâu:** trên `contentItem` của video, trong `captionTracks`. Mọi bên ghi đều tính danh sách mới bằng `applyCaptionChange` (`core-table/src/helpers/caption-tracks.ts`) và ghi nó với điều kiện `captionTracksRev`, nên hai bên ghi không thể ghi đè nhau.
+
+### Trạng thái phụ đề
+
+`captionsStatus` của một video là `pending` khi Transcribe đang chạy, rồi `ready` hoặc `failed`. Một job còn pending sau 2 giờ được báo là `failed`. Một lỗi chỉ ảnh hưởng đến phụ đề; bản thân video vẫn phát được. Hàng bài học của giảng viên hiển thị trạng thái và số lượng track.
+
+## Phụ đề dịch
+
+Giảng viên chọn **caption languages** [ngôn ngữ phụ đề] cho một khóa học (tối đa 9, từ mười ngôn ngữ mà phụ đề có thể được tải lên). Mọi video của khóa học, và bản xem trước của nó, có một track phụ đề cho mỗi ngôn ngữ đó, do Amazon Translate tạo từ **track nguồn** của video: track mặc định của nó, dù được tạo bởi Transcribe hay tải lên. Một track dịch không bao giờ là mặc định, và menu phụ đề hiển thị nó là "*language* (auto-translated)".
+
+[Bảng bản ghi lời thoại](#bản-ghi-lời-thoại) (#590), một tính năng liên quan, hiển thị track mà menu đã chọn, nên một track dịch cũng cho một bản ghi lời thoại đã dịch.
+
+### Mốc thời gian
+
+Mốc thời gian không bao giờ được gửi cho dịch vụ:
+
+1. WebVTT nguồn được phân tích thành các cue, và chỉ phần chữ của mỗi cue được dịch.
+2. Tệp mới sao chép mọi dòng định danh và mốc thời gian từ nguồn không đổi, theo cùng thứ tự.
+3. Các thẻ cue bị xóa trước khi dịch và văn bản được escape lại sau đó, nên văn bản đã dịch không thể tạo thành một thẻ hay mũi tên `-->`.
+4. Trước khi ghi, handler kiểm tra số cue và mọi dòng mốc thời gian đều khớp. Nếu không, nó ghi một lỗi cho ngôn ngữ đó.
+
+Mỗi cue được dịch riêng, nên một câu trải dài trên nhiều cue có thể đọc kém mượt hơn bản dịch theo cấp câu.
+
+### Điều gì khởi động một bản dịch
+
+Tính năng `caption-translation` của <Link path="design/stream-event-router">stream router</Link> (`packages/events/src/media/caption-translation.ts`) chạy khi một đầu vào dịch thay đổi, và không vì gì khác. Sửa tiêu đề, hoạt động của học viên và các lần ghi của chính handler không định tuyến gì.
+
+| Tác nhân | Thay đổi đến handler |
+|---------|---------------------------------|
+| Video mới hoặc được thay | các track không phải bản dịch của video (hoặc của bản xem trước khóa học) thay đổi |
+| Phụ đề nguồn bị thay hoặc xóa, hoặc một track đã tải lên bị xóa | như trên |
+| Ngôn ngữ phụ đề, hoặc ngôn ngữ giảng dạy của khóa học, thay đổi | bản ghi khóa học; handler đánh dấu từng video của khóa học (và bản xem trước) để dịch, mỗi video một thông điệp hàng đợi |
+| **Translate again** | `captionTranslationRequestedAt` được đặt trên video, hoặc trên mọi video của khóa học |
+
+Việc Transcribe hoàn tất và API của giảng viên không bao giờ gọi Amazon Translate và không thể bị nó làm thất bại.
+
+### Thứ tự ưu tiên
+
+Mọi quy tắc nằm trong `applyCaptionChange` và `planCaptionTranslations`, trong các helper `caption-tracks` của core table. Một track đã tải lên luôn thắng: handler ghi qua cùng kiểm tra revision như mọi bên ghi phụ đề khác, nên bất kể một bản tải lên và một bản dịch đến theo thứ tự nào, thứ còn lại là bản tải lên.
+
+| Tình huống | Kết quả |
+|-----------|--------|
+| Một track dịch đến cho một ngôn ngữ đang giữ track tự động hoặc đã tải lên | Bị bỏ |
+| Một track dịch đến và nguồn của nó không phải track mặc định hiện tại của phiên bản | Bị bỏ |
+| Một track tự động hoặc đã tải lên đến cho một ngôn ngữ đang giữ track dịch | Thay thế nó |
+| Một bản tải lên ở giới hạn 10 track | Đẩy ra một track dịch: track có ngôn ngữ đứng cuối trong danh sách của khóa học |
+| Track mặc định bị thay hoặc xóa | Mọi track dịch của phiên bản đó bị bỏ trong cùng lần ghi, và được làm lại từ nguồn mới |
+| Track mặc định bị xóa | Track cũ nhất không phải bản dịch trở thành mặc định |
+| Track nguồn tự động không ở ngôn ngữ giảng dạy của khóa học | Không được dịch (`language-mismatch`); nguồn đã tải lên luôn được dịch |
+
+### Lỗi và "Translate again"
+
+Một lỗi được ghi trên video (`captionTranslation`), không bao giờ trên `status`, `captionsStatus` hay bất kỳ track nào, và việc phát không bao giờ chờ bản dịch.
+
+- Lý do là `failed` hoặc `too-long` (nguồn vượt 300,000 ký tự).
+- Các lỗi mà thử lại không sửa được được ghi mà không làm thông điệp hàng đợi thất bại, nên chúng không làm đầy hàng đợi lỗi.
+- Các thông điệp thực sự thất bại được nhận tối đa năm lần rồi đến hàng đợi lỗi và cảnh báo của tính năng.
+
+Hộp thoại Captions hiển thị trạng thái của từng ngôn ngữ: đã dịch, đã tải lên, đang dịch, lỗi, quá dài, không còn chỗ, hoặc không dịch kèm lý do.
+
+- **Translate again** (`contentItem.retryCaptionTranslation`) xóa kết quả đã ghi và yêu cầu lại cho video.
+- **Translate missing captions again** trong cài đặt của khóa học (`course.retryCaptionTranslations`) làm điều đó cho mọi video.
+- Một thông điệp mất trước khi handler chạy khiến "Translating" cứ hiển thị, và **Translate again** là cách khắc phục.
+
+### Phát triển cục bộ
+
+Với `LOCAL_DEV=true`, client Translate gọi `translateLocally` (`packages/events/src/local/translator.ts`) thay vì SDK.
+
+- Mỗi văn bản trả về dạng `[<target tag>] <text>`, ví dụ `[es-ES] Hello`, để rõ track nào đang hiển thị.
+- Một nguồn chứa `[[fail-translation]]`, hoặc `[[fail-translation:es-ES]]` cho một ngôn ngữ, làm yêu cầu đó thất bại như một cặp ngôn ngữ bị từ chối, được ghi là lỗi mà không thử lại.
+- Mọi thứ khác (stream router, hàng đợi, handler, quy tắc track, S3Mock) là mã thật.
+
+Đầu ra thật của Amazon Translate, cách xử lý ngắt dòng, throttling và các chỉ số chỉ chạy trên một stage đã triển khai.
+
+### Chi phí
+
+Amazon Translate tính phí theo ký tự gửi đi, gồm cả khoảng trắng. Chi phí của một video là số ký tự nguồn nhân với số ngôn ngữ được dịch; không tính phí cho ngôn ngữ đã có track dịch còn mới hoặc bản tải lên, hoặc khi tính năng tắt. Trang này không nêu giá: xem <a href="https://aws.amazon.com/translate/pricing/">trang giá Amazon Translate</a> và xác nhận cho region của stage.
+
+- **Chỉ số:** handler phát các chỉ số `CaptionTranslation` với các chiều `Stage` và `TargetLanguage`: `TranslatedCharacters`, `TranslatedTracks`, `TranslationFailures` và `ChunkFallbacks` (các chunk có số dòng không khớp và được gửi lại từng cue một mỗi yêu cầu). `Stage` tách các stage dùng chung một tài khoản. Các chỉ số của chính Translate theo tài khoản và region, nên tính năng không dựa vào chúng.
+- **Dòng log:** một dòng cho mỗi track dịch, gồm khóa học, video, ngôn ngữ, số ký tự và số yêu cầu. Logs Insights có thể trả lời "khóa học nào tốn nhất".
+- **Cài đặt stage:** `captionTranslation.enabled` (khi `false`, giảng viên không chọn được ngôn ngữ, không gì được dịch và các track dịch hiện có vẫn còn) và `maxLanguagesPerCourse` (mặc định 9; 3 trên `discava-development`).
+- **Giới hạn:** cùng một nguồn không được dịch sang cùng một ngôn ngữ hai lần, một stage có thể hạ số ngôn ngữ mỗi khóa học hoặc tắt tính năng, và nguồn vượt 300,000 ký tự không được dịch. Chưa có hạn mức chi tiêu theo khóa học hay giảng viên, và chưa có bảng điều khiển hay cảnh báo về số ký tự mỗi ngày.
+
+## Bản ghi lời thoại
+
+Nút **Transcript** trên thanh điều khiển mở một bảng (`TranscriptPanel`) với mọi dòng của phụ đề video, mỗi dòng kèm thời gian.
+
+- Nó chỉ có trong trình phát bài học của học viên, và chỉ khi video có ít nhất một track phụ đề. Bản xem trước và cổng giảng viên không hiển thị nó.
+- Bảng nằm bên dưới trình phát ở mọi độ rộng, cao tối đa 20rem hoặc một nửa khung nhìn. Nếu đặt bên cạnh trình phát, nó sẽ làm video quá hẹp cho thanh điều khiển.
+- Nó bị ẩn khi trình phát ở toàn màn hình.
+- Không có gì cuộn ngang ở độ rộng điện thoại.
+
+- **Track nào:** track mà menu phụ đề đã chọn. Chọn ngôn ngữ khác sẽ đổi các dòng và tên của bảng, "Transcript (language)". Khi phụ đề **Off**, bảng vẫn hiển thị track đã ghi nhớ, hoặc mặc định. Nếu tệp của không track nào tải được, bảng nói "This transcript couldn't be loaded." và video tiếp tục phát.
+- **Chọn một dòng:** bấm hoặc chạm vào một dòng sẽ tua đến đầu dòng đó và phát.
+- **Theo dõi:** dòng hiện tại được đánh dấu (viền trái và chữ đậm hơn, cộng với `aria-current="true"`) và bảng tự cuộn để giữ nó trong tầm nhìn. Nó không bao giờ cuộn trang và không bao giờ di chuyển tiêu điểm. Cuộn, lăn chuột, chạm hoặc di chuyển tiêu điểm bên trong bảng sẽ tạm dừng việc theo dõi và hiển thị **Jump to current line**; nút đó, hoặc việc chọn một dòng, tiếp tục nó. Khi đặt giảm chuyển động, việc cuộn không có hoạt ảnh.
+- **Trình đọc màn hình:** không có vùng live, vì phụ đề và âm thanh đã mang nội dung trực tiếp. Mỗi dòng được đọc là thời gian của nó bằng chữ ("12 minutes 40 seconds") rồi đến văn bản.
+- **Trạng thái mở được ghi nhớ:** mở hay đóng được ghi nhớ trong trình duyệt cùng các tùy chọn trình phát khác (`transcriptOpen`, mặc định đóng).
+
+### Phím trong bản ghi lời thoại
+
+Bảng nằm ngoài vùng chứa phím tắt của trình phát, nên các phím tắt ở trên không áp dụng bên trong nó: Space, các phím mũi tên và các phím chữ không bao giờ đổi video từ đó.
+
+| Phím | Hành động |
+|-----|--------|
+| Tab | Vào danh sách, đến dòng hiện tại (dòng đầu tiên trước khi có cue nào); thêm một Tab nữa thì rời khỏi |
+| Down, Up | Đặt tiêu điểm vào dòng kế, dòng trước |
+| Home, End | Đặt tiêu điểm vào dòng đầu, dòng cuối |
+| Enter, Space | Tua đến dòng đang có tiêu điểm và phát; tiêu điểm ở lại trên nó |
+
+### Dựng trong trình duyệt
+
+Không có API bản ghi lời thoại. Trình phát vốn đã tải tệp WebVTT của từng track cho lớp phủ phụ đề. Bảng phân tích cùng văn bản đó một lần (`parseWebVtt`, trong `@discava/common-web-utils/webvtt`) thành các cue, nên nó không tạo thêm yêu cầu nào và có đúng quyền truy cập mà phụ đề có.
+
+- Văn bản cue được rút gọn thành văn bản thuần (bỏ cue settings, các thẻ `<v>`, `<c>`, `<i>` và thẻ timestamp, giải mã năm entity của WebVTT) và hiển thị dưới dạng các text node.
+- Toàn bộ bản ghi lời thoại được hiển thị, không dùng danh sách ảo, nên tìm trong trang và các lệnh đọc của trình đọc màn hình hoạt động trên nó.
+- Bộ lập chỉ mục cho <Link path="design/search">tìm kiếm bản ghi lời thoại</Link> dùng cùng bộ phân tích, nên bảng và chỉ mục thống nhất về việc một dòng là gì.
+
+### Tìm trong bản ghi lời thoại của một khóa học
+
+Trình phát khóa học có một ô tìm kiếm, "Search what was said". Gửi ít nhất 2 ký tự sẽ mở trang kết quả của khóa học (`/learn/<courseId>/search`), trang này gọi `transcript.search` với ngôn ngữ phụ đề đã ghi nhớ của người học. Mỗi kết quả nêu module, bài học và video, hiển thị các từ khớp trong một đoạn trích, và liên kết đến bài học tại thời điểm đó (bên dưới). Cách chỉ mục được xây dựng và cách quyền truy cập được thực thi nằm trong <Link path="design/search">Tìm kiếm</Link>.
+
+### Mở bài học tại một thời điểm
+
+Địa chỉ của một bài học nhận hai tham số tùy chọn: `?item=<contentItemId>&t=<seconds>`. Một kết quả tìm kiếm bản ghi lời thoại liên kết theo cách này.
+
+- Khi `item` nêu một video trong bài học, bài học cuộn đến nó, chuyển tiêu điểm đến trình phát của nó, tua đến `t`, giữ ở trạng thái tạm dừng, và hiển thị "Starting at m:ss" không có nút **Start over**.
+- `t` thay thế vị trí đã lưu cho lượt truy cập đó, và việc tua không lưu gì.
+- Mọi thứ khác trong các tham số bị bỏ qua và bài học mở như bình thường.
+- Các tham số không cấp quyền gì: bài học vẫn tải qua các kiểm tra ghi danh và hiển thị thông thường.
+
+## Câu hỏi
+
+Giảng viên có thể đặt câu hỏi trên một video (xem <Link path="design/quizzes">Quiz</Link> về cách chúng được lưu). Trình phát đọc chúng bằng `videoQuestion.view` và ghi một câu trả lời bằng `videoQuestion.answer` (core-api); thẻ câu hỏi là `VideoQuestionCard`, được điều khiển bởi hook `useVideoQuestions`. Một video không có câu hỏi phát đúng như trên và không tạo yêu cầu câu hỏi nào.
+
+- **Khi nào một câu hỏi được đặt ra:** khi việc phát bình thường đến thời điểm của một câu hỏi mà người học chưa trả lời hoặc bỏ qua trong lượt truy cập này, video tạm dừng và câu hỏi xuất hiện đè lên nó bên trong trình phát, nên toàn màn hình được giữ. Tiêu điểm bàn phím chuyển đến câu hỏi và tiêu đề của nó được đọc lên. Nhiều câu hỏi tại cùng một thời điểm được hỏi lần lượt, theo thứ tự của giảng viên. Một câu hỏi tại 0:00 được hỏi khi việc phát bắt đầu.
+- **Trả lời:** người học chọn một lựa chọn và bấm **Submit answer**, rồi thấy nó đúng hay sai (bằng biểu tượng và chữ, không chỉ bằng màu), các lựa chọn đúng và lời giải thích nếu có, được đọc lên khi nó xuất hiện. **Continue** tiếp tục video từ chỗ nó dừng, phát lại nếu trước đó đang phát. **Skip** (hoặc Escape) đóng câu hỏi, không ghi gì và không hỏi lại trong lượt truy cập này. Một câu hỏi nhiều đáp án nói "Select all that apply" và được chấm được hoặc mất toàn bộ. Nếu việc lưu thất bại, câu hỏi vẫn mở với lựa chọn được giữ và **Skip** vẫn hoạt động.
+- **Phím tắt khi một câu hỏi đang mở:** thanh điều khiển bị vô hiệu và các phím tắt của trình phát (Space, các phím mũi tên, phím số và phần còn lại) không tác động đến video bên dưới. Trong picture-in-picture, video quay lại trang để có thể thấy câu hỏi.
+- **Tua:** việc tua không bao giờ mở một câu hỏi, dù bằng kéo, phím tắt hay tiếp tục ở vị trí đã lưu, kể cả ở lần xem đầu tiên. Một câu hỏi chỉ được hỏi khi việc phát đến thời điểm của nó, hoặc khi người học chọn dấu của nó.
+- **Dấu:** thanh tua có một dấu cho mỗi câu hỏi có thời điểm và một dấu ở cuối khi có kiểm tra cuối. Mỗi dấu là một nút nêu thời gian và trạng thái của nó ("Question at 1:30, not answered"), và đã trả lời với chưa trả lời khác nhau bằng dấu tích và dấu chấm chứ không chỉ bằng màu. Chọn một dấu sẽ chuyển đến thời điểm đó, tạm dừng và mở câu hỏi: câu chưa trả lời để trả lời, câu đã trả lời để xem lại cùng câu trả lời đã ghi, đáp án và lời giải thích. **Try again** ở đó là luyện tập, được chấm trong trình duyệt và không được ghi.
+- **Kiểm tra cuối:** khi video kết thúc và có các câu hỏi cuối chưa trả lời, câu đầu tiên tự xuất hiện ("Question 1 of 2"), rồi câu kế, và một bản tóm tắt cho biết người học đã trả lời đúng bao nhiêu câu hỏi cuối. Mỗi câu có thể bị bỏ qua và kiểm tra có thể bị đóng. Khi mọi câu hỏi cuối đã được trả lời, nó không tự bắt đầu lại, và dấu cuối mở các câu trả lời. Một câu hỏi có thời điểm sau phần kết của video đang phát được hỏi cùng kiểm tra cuối.
+- **Tiếp tục trước một câu hỏi đang mở:** người học rời đi khi một câu hỏi đang mở sẽ quay lại ngay trước nó, nên nó được hỏi lại. Người học có vị trí đã lưu nằm sau một câu hỏi chưa trả lời sẽ không bị hỏi khi tiếp tục; dấu của nó hiển thị chưa trả lời.
+- **Được ghi, và không:** câu trả lời đầu tiên cho mỗi câu hỏi được ghi, và không gì khác. Bỏ qua và **Try again** thì không. Một câu trả lời không bao giờ đổi việc video có hoàn thành hay không (việc đó vẫn là **Mark as done**), tiến độ hay chứng chỉ.
+- **Lỗi:** nếu các câu hỏi tải lỗi, video phát như thể không có câu hỏi. Trong khóa học đã lưu trữ, video phát mà không có câu hỏi.
+- **Màn hình nhỏ và chuyển động:** một câu hỏi cao hơn video sẽ kéo dài xuống dưới nó và cuộn cùng trang, không cuộn ngang ở 375 px. Khi đặt giảm chuyển động, nó xuất hiện không có hoạt ảnh.

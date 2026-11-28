@@ -1,0 +1,78 @@
+---
+title: Calificación y comentarios de tareas
+description: Cómo los instructores devuelven las tareas de carga con puntos y comentarios, piden reenvíos y ven el trabajo pendiente, y los registros y reglas detrás de todo esto.
+sidebar:
+  order: 12
+---
+
+**Spec:** [`specs/20261120-230057-assignment-grading/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-230057-assignment-grading/)
+
+Un estudiante envía un archivo a una tarea de carga y puede reemplazarlo hasta que se devuelva. Un instructor del curso lista el trabajo de cada estudiante inscrito, abre un envío y lo devuelve como final con puntos y comentarios, o pide un reenvío solo con comentarios. Solo los instructores del curso pueden listar, leer o devolver envíos.
+
+| Quién | API | Procedimientos |
+|---|---|---|
+| Estudiante | core-api | `assignment.uploadUrl`, `submit`, `mySubmission`, `submissionFileUrl` |
+| Instructor | instructor-api | `assignmentSubmission.list`, `get`, `fileUrl`, `return`, `requestResubmission`, `amendGrade`, y `gradingQueue.list` |
+
+## Envíos y calificación
+
+Un envío es un registro `assignmentSubmission` por estudiante y por tarea. Su `status` cambia así:
+
+| Transición | Quién | Condición | Efecto |
+|---|---|---|---|
+| Enviar (primera vez) | Estudiante | Aún no hay envío | `submitted`, `version` 1, entra al índice de pendientes |
+| Reenviar | Estudiante | `version` sin cambios y estado `submitted` o `resubmission_requested` | `submitted`, `version` + 1, vuelve al índice de pendientes |
+| Pedir reenvío | Instructor | `version` y `reviewRevision` sin cambios, estado `submitted` | `resubmission_requested`, sale del índice de pendientes |
+| Devolver como final | Instructor | `version` y `reviewRevision` sin cambios, estado `submitted` o `resubmission_requested` | `returned`, fija los puntos, impide que el estudiante reenvíe |
+| Corregir calificación | Instructor | `reviewRevision` sin cambios, estado `returned` | Cambian los puntos y los comentarios, el estado sigue en `returned` |
+
+- **Concurrencia.** Cada acción del instructor suma uno a `reviewRevision`, y cada escritura está condicionada a la `version` y la `reviewRevision` que el instructor estaba viendo. Una devolución no puede aplicarse a un archivo que el estudiante ya reemplazó, y cuando dos instructores actúan a la vez, solo uno gana.
+- **Los puntos** son un número de 0 a `maxPoints` de la tarea, con un máximo de dos decimales. `pointsOutOf` guarda el máximo contra el que se calificó el trabajo, por si `maxPoints` cambia después.
+- **Estudiantes que se fueron.** Devolver o corregir se rechaza para un estudiante que ya no está inscrito. El instructor aún puede leer su trabajo.
+- **La finalización no se toca.** Calificar nunca cambia la finalización del estudiante ni el `studentActivityCount` del elemento de contenido. Pedir un reenvío no deshace la finalización, y un reenvío no cuenta al estudiante por segunda vez.
+
+## Rondas de comentarios
+
+Cada acción del instructor escribe un registro `submissionFeedback`: una petición de reenvío, una devolución final o una corrección. Los comentarios son obligatorios al pedir un reenvío y opcionales al devolver.
+
+- Las rondas solo se agregan y se indexan por envío y hora, así que el historial de un estudiante es una sola consulta, de la más reciente a la más antigua. El estudiante ve los comentarios anteriores a lo largo de los reenvíos, para saber qué se le pidió.
+- El envío conserva solo la calificación actual. Las rondas son registros aparte porque cada una puede contener 20 000 caracteres de JSON de Tiptap y su número no tiene límite: una lista dentro del envío podría llegar al límite de tamaño de ítem de DynamoDB.
+
+El estudiante recibe una notificación en la app y por correo (activado por defecto) de cada acción: `assignment.returned`, `assignment.resubmission_requested` y `assignment.grade_updated`, cada una deduplicada por el `feedbackId` de la ronda. La notificación y la ronda se escriben en la misma transacción que el cambio del envío.
+
+## El índice de pendientes y la inscripción
+
+Los envíos que esperan a un instructor (estado `submitted`) llevan `waitingCourseId` y `waitingSince`, que forman un índice disperso (`byWaiting`) con el curso como partición y la hora del envío como clave de ordenamiento. Toda escritura que cambia `status` fija o quita ambos atributos a la vez mediante `waitingKeys`.
+
+Por eso la cola de calificación de la página de inicio del instructor (`gradingQueue.list`) es una consulta por cada curso que el instructor enseña, cada una ya ordenada del más antiguo al más reciente, y se combinan en memoria. Lee todas las entradas pendientes, así que su total es exacto.
+
+**La inscripción se aplica al leer.** La cola lee en lote las inscripciones de los estudiantes listados y omite a los estudiantes cuya inscripción es `dropped` o no existe. Guardar la inscripción en el índice haría que los reembolsos y el pago reescribieran cada envío que un estudiante tiene en el curso, dentro de sus propias transacciones. Leerla en su lugar deja intacto el código de pagos, y un estudiante que se vuelve a inscribir reaparece en la cola sin ninguna escritura.
+
+Como una inscripción ausente oculta a un estudiante, una lectura parcial no debe pasar por completa. Cuando DynamoDB deja claves sin procesar por limitación, la cola las vuelve a pedir, hasta tres veces con una pausa creciente, y luego falla la solicitud en lugar de devolver una cola más corta.
+
+La lista por tarea lee todos los envíos y todas las inscripciones del curso (dos consultas de una sola partición), las combina y pagina en memoria, 50 filas a la vez, con un cursor que codifica la posición de ordenamiento de la última fila. Los estudiantes sin envío aparecen como "no enviado", y los que se fueron como "ya no inscrito".
+
+## El aviso diario
+
+Los instructores reciben aviso de nuevos envíos mediante `assignment.submissions_received`, como máximo una vez por tarea al día (UTC) por instructor, en la app, con el correo desactivado por defecto. Un pequeño registro `submissionNotice` (uno por tarea por día, que expira dos días después) es la marca. `submit` la lee primero; si no existe, la misma transacción la crea y escribe una notificación por instructor, con un tope para que la transacción se mantenga bajo el límite de 100 ítems de DynamoDB. Si otro envío gana la carrera, el reintento existente se ejecuta de nuevo sin la marca ni las notificaciones. Así, "como máximo una vez al día" es un hecho de la base de datos y no una esperanza de sincronización.
+
+## Vista previa de un archivo enviado
+
+La página de revisión muestra PDF e imágenes (png, jpg, jpeg, gif, webp) junto al formulario de calificación; cualquier otro tipo de archivo muestra sus detalles y un botón Download.
+
+- **Las imágenes** son un `<img>` que usa la misma URL firmada de CloudFront de cinco minutos que una descarga. Los navegadores ignoran `Content-Disposition` en las imágenes.
+- **Los PDF** se descargan desde la URL firmada y `react-pdf` (PDF.js) los dibuja en un canvas, cargado solo en la página de revisión. Los archivos guardados se sirven con `Content-Disposition: attachment` y la CSP del portal bloquea `<iframe>` y `<embed>`, así que dibujar en canvas no exige cambios en la distribución, la CSP ni los objetos guardados.
+
+**Limitación conocida: JPEG 2000 y JBIG2.** PDF.js decodifica estos formatos de imagen incrustados con WebAssembly, que la CSP del portal (`script-src 'self'`, sin `'wasm-unsafe-eval'`) bloquea. Estas imágenes pueden no dibujarse, pero el resto de la página se muestra y Download sigue funcionando. Se decidió que relajar una CSP compartida por esto no valía la pena.
+
+Los puntos y comentarios sin enviar de un instructor se guardan en su propio navegador, por envío, y no se guardan en el servidor.
+
+## Reglas que hacen cumplir las comprobaciones
+
+Los helpers compartidos de `helpers/assignment-grading.ts` en core-table son los únicos que escriben los campos de calificación y `submissionFeedback`. El envío del estudiante, en `helpers/assignment-submission.ts`, fija las claves de pendiente mediante el mismo `waitingKeys`. Las comprobaciones de `helpers/invariants/assignment-grading.ts` cubren:
+
+- la forma de la calificación: `returned` tiene puntos dentro de `pointsOutOf`, quien devolvió y las horas, y nada más los tiene;
+- que las claves de pendiente concuerden con `status`;
+- que cada ronda pertenezca a un envío, y la forma de la ronda;
+- que la ronda más reciente coincida con el estado del envío y con `reviewRevision`;
+- la forma de la marca del aviso diario.

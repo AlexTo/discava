@@ -1,0 +1,83 @@
+---
+title: Déployer depuis votre machine
+description: Déployez, mettez à jour et détruisez un stage avec vos propres identifiants AWS, sans GitHub Actions.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+GitHub Actions est la méthode de déploiement recommandée. Déployer depuis votre machine est utile pour un stage de test personnel ou pour déboguer un déploiement.
+
+## Avant de commencer
+
+- Un clone avec ses dépendances installées (`pnpm i`), et l'AWS CLI
+- Des identifiants AWS dans votre shell pour le compte cible (`aws sts get-caller-identity` fonctionne)
+- Une région, dans `AWS_REGION` ou votre profil AWS
+- CDK initialisé dans cette région, une fois par compte et par région :
+
+  ```sh
+  pnpm exec cdk bootstrap aws://<account-id>/<region>
+  ```
+
+  Un stage avec WAF sur ses portails ou ses médias a aussi besoin que `us-east-1` soit initialisé.
+
+## Déployer
+
+```sh
+pnpm nx deploy @discava/infra "discava-development/*"
+```
+
+Le motif `<stage>/*` sélectionne chaque stack du stage. Cela construit les portails et les fonctions Lambda, synthétise les templates et les déploie sans demander d'approbation.
+
+Pour utiliser à chaque fois un profil AWS nommé pour un stage, définissez ses `credentials` dans `packages/common/infra-config/src/stages.config.ts`. Les commandes de déploiement, de destruction et de réindexation de cette page l'utilisent alors :
+
+```ts
+'discava-development': {
+  credentials: { type: 'profile', profile: 'my-profile' },
+  region: 'eu-west-1',
+  infra: { /* … */ },
+},
+```
+
+## Différences avec un déploiement GitHub
+
+| | GitHub Actions | Votre machine |
+| --- | --- | --- |
+| Identifiants | Les rôles de déploiement et d'exécution restreints du stage | Les vôtres, via les rôles d'initialisation de CDK |
+| Limite de permissions | Appliquée à chaque rôle | Non appliquée |
+| Surcharges de configuration | Lues depuis les variables de l'environnement GitHub | Lues depuis votre shell : `export DISCAVA_DEVELOPMENT_INFRA_…` avant de déployer |
+| Analyse de vulnérabilités | S'exécute en premier | Lancez `pnpm trivy` vous-même (demande Docker) |
+
+Comme les surcharges viennent de votre shell, un déploiement local d'un stage qui utilise des domaines personnalisés sur GitHub **les supprime** sauf si vous exportez les mêmes variables. Choisissez une seule façon de déployer chaque stage et gardez-la.
+
+## Scripts de maintenance
+
+Ils s'exécutent depuis votre machine contre un stage déployé, quelle que soit la façon dont il a été déployé. Aucun n'est nécessaire en usage normal : les index de recherche et l'analytique se tiennent à jour tout seuls.
+
+| Quand | Commande |
+| --- | --- |
+| Reconstruire l'index de recherche des cours, par exemple après un déploiement qui ajoute un champ de recherche | `pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development` |
+| Reconstruire l'index de recherche des transcriptions, pour tous les cours ou un seul | `pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development [--course=<courseId>]` |
+| Recalculer les chiffres d'analytique d'un cours à partir de ses enregistrements | `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` |
+| Écrire les catégories de départ | `pnpm nx run @discava/tooling-deploy:seed-categories` |
+
+Les deux commandes de réindexation cherchent la fonction de réindexation du stage dans ses stacks CloudFormation et l'invoquent, donc elles n'ont besoin que d'identifiants AWS et du nom du stage. Sans `--stage`, `reindex-transcripts` s'exécute contre la stack locale.
+
+Les deux dernières écrivent directement dans la table. Pointez-les d'abord vers la table du stage, sinon elles écrivent dans la table de développement locale :
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+export DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE
+```
+
+## Détruire
+
+```sh
+pnpm nx destroy @discava/infra "discava-development/*"
+```
+
+CDK vous demande de confirmer. `discava-development` supprime tout, données comprises. `discava-production` conserve ses ressources à état (dont le pool d'utilisateurs, la table, les buckets de médias et la collection de recherche) quand ses stacks sont supprimées, et a la protection contre la suppression activée : les retirer est une étape manuelle et délibérée.
+
+Les rôles et politiques créés par le <Link path="deploy/setup">script de configuration</Link> ne font partie d'aucune stack. Supprimez-les dans la console IAM si vous n'en avez plus besoin.

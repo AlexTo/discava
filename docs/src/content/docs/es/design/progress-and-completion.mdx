@@ -1,0 +1,118 @@
+---
+title: Progreso y finalización
+description: Cómo se registran la finalización de ítems, lecciones y cursos, y el recálculo en el servidor que es su único escritor.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+## La regla
+
+**El progreso y la finalización de lecciones y cursos solo se escriben en el servidor, por una única Lambda.** Nunca dependen de que un estudiante recargue una página ni de ningún otro disparador del lado del cliente.
+
+Lo único que parte del estudiante es si un ítem individual está completo (llegar al final de un video, por ejemplo), porque solo el navegador puede observarlo. Incluso entonces, core-api decide si cuenta, y todo lo que está por encima del ítem se deriva en el servidor.
+
+## Registros
+
+| Registro | Claves | Escrito por | Contiene |
+|---|---|---|---|
+| `itemCompletion` | pk `userId`, sk `courseId / lessonId / contentItemId` | core-api | `completedAt` |
+| `progress` (por lección) | pk `userId`, sk `courseId / lessonId` | Solo la Lambda de recálculo de progreso | `status`, `completedAt` |
+| `enrolment` | pk `courseId`, sk `userId` | Solo la Lambda de recálculo de progreso (para estos campos) | `progressPercent`, `status`, `completedAt` |
+
+core-api escribe los registros `itemCompletion` y los intentos de quiz. Nunca escribe `progress` ni los campos de progreso de la inscripción.
+
+## Cuándo está completo un ítem
+
+| Tipo de ítem | Completo cuando |
+|---|---|
+| Texto | El estudiante pulsa **Mark as done** |
+| Video | El estudiante pulsa **Mark as done** |
+| Archivo | El estudiante pulsa **Mark as done** |
+| Quiz | Aprobado, o todos los intentos usados |
+| Tarea de carga | El estudiante envía un archivo |
+
+Un quiz que se completa por agotar los intentos está completo para el progreso, pero no cuenta como aprobado para un certificado: cuando el curso exige aprobar los quizzes, el estudiante tiene un curso completado y ningún certificado hasta que apruebe.
+
+Los ítems de texto, video y archivo nunca se completan solos: no hay seguimiento de desplazamiento, tiempo de visualización ni descargas. El estudiante decide cuándo termina con un ítem, como en la mayoría de las plataformas de aprendizaje.
+
+### Registrar una finalización
+
+- **Texto, video y archivo:** **Mark as done** en el reproductor de lecciones llama a `contentItem.complete` de core-api; core-api decide si cuenta. Una transacción comprueba que el curso está publicado, que el ítem, su lección y su módulo son visibles y no están archivados, y que el estudiante está inscrito (no `dropped`). Luego crea el `itemCompletion` solo si no existe uno.
+  - La finalización es el primer registro del estudiante sobre el ítem, así que la misma transacción incrementa el `studentActivityCount` del ítem. Cada estudiante se cuenta una vez (consulta <Link path="design/live-course-editing">Edición de cursos en vivo</Link>).
+  - Completar de nuevo devuelve la finalización existente. Un curso archivado es de solo lectura, así que nada en él puede completarse.
+- **Quiz:** se completa solo. El intento que aprueba, o que usa el último intento, registra la finalización en la misma transacción que el intento (consulta <Link path="design/quizzes">Quizzes</Link>). No cuenta de nuevo al estudiante: su primer intento ya lo hizo.
+  - `contentItem.complete` también acepta un quiz, pero solo cuando está aprobado o no quedan intentos. Eso cubre un límite de intentos reducido por debajo de lo que un estudiante ya usó, donde no es posible ningún envío más.
+- **Tarea de carga:** se completa sola. El primer envío del estudiante registra la finalización en la misma transacción que el `assignmentSubmission`, y lo cuenta una vez en `studentActivityCount`. Reenviar reemplaza el archivo y aumenta la `version` del envío; no lo cuenta de nuevo. `contentItem.complete` devuelve una finalización existente para una tarea pero nunca crea una: sin un envío falla con "Submit your work to complete it".
+- **Preguntas en videos:** responder una pregunta en un video no es una finalización. No crea ningún `itemCompletion` y no cambia el progreso de la lección ni del curso, sin importar cuántas preguntas se respondan, fallen o se omitan; el video sigue completándose solo con **Mark as done**. La respuesta se registra en su propio `videoAnswerSheet` (consulta <Link path="design/quizzes">Quizzes</Link>). Sí cuenta como el primer registro del estudiante sobre el video para `studentActivityCount` y establece `lastActivityAt`, y **Mark as done** no cuenta al estudiante por segunda vez.
+- **Última actividad:** completar un ítem, enviar un intento de quiz o una tarea, o responder una pregunta de video establece el `lastActivityAt` de la inscripción en la misma transacción, y solo avanza. Ordena los cursos del estudiante, el más recientemente activo primero, para que el inicio con sesión iniciada pueda ofrecer continuar donde lo dejó. El recálculo de progreso no lo toca: el cambio de un instructor no es actividad del estudiante.
+
+### Leer el progreso
+
+- **Finalizaciones:** `course.myItemCompletions` devuelve las finalizaciones de un estudiante en un curso, incluidas las de ítems ocultados o archivados después. Cuáles siguen contando se decide a partir del currículo actual.
+- **Progreso de lecciones:** `course.myLessonProgress` devuelve los registros de progreso de lecciones de un estudiante en un curso, tal como los escribió por última vez el recálculo de progreso; una lección sin registro no se ha iniciado. El resumen a nivel de curso viene con la inscripción (`course.myEnrolment`).
+- **Entre cursos:** `course.myEnrolments` lista las inscripciones de un estudiante que no están dropped, la más recientemente activa primero, cada una con su progreso, la siguiente lección (la primera lección efectivamente visible cuyo progreso no es `completed`) y cuántos ítems son nuevos. Alimenta el inicio con sesión iniciada y Mi aprendizaje.
+
+## Finalización de lecciones y cursos
+
+- Una lección está `completed` cuando todo ítem **efectivamente visible** en ella tiene un `itemCompletion`.
+- `progressPercent` es la proporción de los ítems efectivamente visibles del curso que el estudiante ha completado. Siempre se **recalcula** a partir del currículo actual, nunca se incrementa, así que añadir, quitar u ocultar contenido no puede dejarlo mal.
+- Al 100 % la inscripción recibe `status: 'completed'` y `completedAt`.
+- **La finalización es permanente**, tanto para lecciones como para cursos. Añadir contenido a algo que un estudiante ha completado nunca lo hace incompleto. `progressPercent` puede bajar de 100 después, pero el estudiante ve **Completed ✓ · 2 new items**, y los ítems nuevos reciben una insignia **New**.
+
+La página del curso del estudiante puede calcular el progreso al leer para mostrarlo de inmediato. Eso es solo para mostrar y nunca escribe.
+
+## Lambda de recálculo de progreso
+
+Una Lambda en `packages/events` es el único escritor del `progress` de las lecciones y del `progressPercent`, `status` y `completedAt` de la inscripción.
+
+### Disparador
+
+El stream de la tabla core (imágenes nueva y antigua), a través del <Link path="design/stream-event-router">enrutador de eventos del stream</Link>: los filtros de la función `progress-recalculation` (`PROGRESS_STREAM_FILTERS`) coinciden con el nombre de entidad que ElectroDB almacena en cada registro (`__edb_e__`), así que la Lambda solo se ejecuta para:
+
+| Evento del stream | Recalcula |
+|---|---|
+| `itemCompletion` insertado | Solo a ese estudiante, en ese curso |
+| Módulo, lección o ítem de contenido: `visibility` o `archivedAt` cambió, o el registro se eliminó | A todo estudiante inscrito en el curso que no haya abandonado |
+| `quizSummary` insertado o modificado | Solo a ese estudiante, cuando aparece `passedAt` o sube la mejor puntuación de un quiz ya aprobado; cualquier otro cambio se ignora |
+| `assignmentSubmission` modificado | Solo a ese estudiante, únicamente cuando `status`, `points` o `returnedAt` difieren entre la imagen antigua y la nueva; un reenvío no cambia ninguno |
+| `course` modificado | A todo estudiante inscrito que no haya abandonado, únicamente cuando `certificateCriteria.version` o `certificatesEnabled` difieren entre la imagen antigua y la nueva; cualquier otra edición del curso se ignora |
+| Ítem de contenido quiz: `settings.passMarkPercent` cambió | A todo estudiante inscrito que no haya abandonado. Una aprobación cuenta solo mientras la mejor puntuación alcance la nota actual, así que bajar una nota puede hacer elegible a un estudiante, y una nota que cruza 0 cambia a quién se evalúa |
+
+Un filtro no puede comparar las imágenes antigua y nueva de un registro, así que todo cambio en un módulo, lección, ítem de contenido, resumen de quiz o curso llega a la Lambda. La Lambda entonces ignora los que dejan `visibility` y `archivedAt` como estaban (la nota de aprobación de un quiz es la excepción, véase arriba): un título nuevo, un orden o un `studentActivityCount`. Las propias escrituras de la Lambda, en `progress`, `enrolment` y `certificate`, no coinciden con ningún filtro, así que nunca se dispara a sí misma.
+
+### Qué hace
+
+Para cada (estudiante, curso) afectado:
+
+1. Carga el currículo del curso una vez (la colección `curriculum`, todas las páginas) y conserva los ítems efectivamente visibles con `filterEffectivelyVisible` de `@discava/core-table`, la misma regla que usan las vistas de curso de core-api.
+2. Lee los registros `itemCompletion` del estudiante y el `progress` de lecciones del curso (pk `userId`, prefijo de sk `courseId`). Un estudiante que no está inscrito, o que abandonó, se deja en paz.
+3. Escribe el `progress` de cada lección, pero solo donde cambió:
+   - Una lección está `completed` cuando todos sus ítems efectivamente visibles lo están, `in_progress` cuando algunos lo están, y `not_started` en otro caso.
+   - Una lección sin ítems efectivamente visibles no tiene progreso.
+   - Sin registro significa no iniciada, así que una lección intacta no se escribe.
+   - `completed` solo se establece, nunca se borra: la escritura está condicionada a que el registro no esté ya `completed`.
+4. Escribe el `progressPercent` de la inscripción (redondeado hacia abajo, así que es 100 solo cuando todo está hecho) si cambió. Al 100 %, establece `status: 'completed'` y `completedAt`, condicionado a que la inscripción siga `active`. Un curso sin nada visible nunca se completa.
+5. Si la inscripción está `completed`, el estudiante aún no tiene certificado y el curso emite certificados, comprueba los criterios de certificado del curso (`evaluateCertificateCriteria`, consulta <Link path="design/certificates">Certificados</Link>) y llama a `issueCertificate` solo cuando se cumplen. Los resúmenes de quiz y los envíos calificados del estudiante se leen solo cuando los criterios los necesitan.
+6. Si el estudiante tiene un certificado, programa su único recordatorio de LinkedIn, a menos que ya se haya programado o enviado, se haya registrado un clic en LinkedIn, o ya haya vencido.
+
+Los estudiantes se recalculan de diez en diez, y el currículo de cada curso se carga una vez por lote.
+
+### Fallos
+
+Un lote que falla vuelve a la cola de la función y se reintenta. Un mensaje que sigue fallando tras `maxReceiveCount` recepciones pasa a la cola de fallos de la función en lugar de bloquear cambios posteriores (consulta <Link path="design/stream-event-router">Enrutador de eventos del stream</Link>). Como cada ejecución recalcula desde cero, el siguiente cambio para los mismos estudiantes también repara lo que un lote fallido haya omitido.
+
+Las inscripciones comparten la clave de partición del curso, así que listar los estudiantes a recalcular es una sola consulta. Un cambio de currículo cuesta una consulta por estudiante inscrito.
+
+### Idempotencia
+
+Cada ejecución recalcula desde cero, así que un registro duplicado del stream o una ráfaga de ediciones del instructor solo producen el mismo resultado otra vez. La cola de la función espera hasta cinco segundos para reunir un lote de como máximo 100 registros, y los registros de un lote se agrupan para que cada estudiante en cada curso se recalcule una vez por lote, sin importar cuántos registros lo nombren. Dos ejecuciones para el mismo estudiante en el mismo momento (una finalización y un cambio de currículo llegan en shards distintos del stream) recalculan ambas a partir de lo que leyeron. Ninguna puede deshacer la finalización de la otra, porque las escrituras de finalización están condicionadas a que no estén ya completadas.
+
+### Consecuencias
+
+- Quitar la última lección que un estudiante no había terminado lo marca como `completed` aunque nunca vuelva.
+- Las listas de cursos y los informes de instructores leen valores almacenados, así que nunca esperan a que un estudiante vuelva.
+- Los valores almacenados se retrasan respecto a la escritura que los dispara por el retraso del stream y el procesamiento por lotes de la cola, normalmente unos pocos segundos.
+
+Consulta <Link path="design/live-course-editing">Edición de cursos en vivo</Link> para saber qué acciones del instructor disparan un recálculo.

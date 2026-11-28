@@ -1,0 +1,77 @@
+---
+title: Guide de l'administrateur
+description: "Ce que fait un administrateur dans le portail admin : gérer les catégories du catalogue, rechercher, révoquer et restaurer des certificats, et où lire sur la modération des avis, l'image de marque et les paiements."
+---
+
+import Link from '@components/link.astro';
+
+Cette page est la vue d'ensemble du portail admin. Seuls les comptes du groupe `admin` de la plateforme peuvent l'utiliser.
+
+## S'orienter
+
+La barre latérale a cinq pages :
+
+| Page | À quoi elle sert |
+| --- | --- |
+| **Home** | Une carte pour chacun des domaines ci-dessous |
+| **Categories** | Les catégories sous lesquelles les instructeurs classent leurs cours |
+| **Reviews** | Supprimer les avis de cours qui enfreignent les règles |
+| **Certificates** | Rechercher un certificat pour le révoquer ou le restaurer |
+| **Payments** | Connecter le compte Stripe sur lequel les étudiants paient |
+
+Le menu du compte contient **Branding**, **Notification settings** et **Sign out**.
+
+## Catégories
+
+Les catégories sont la liste parmi laquelle les instructeurs choisissent dans les **Catalogue details** d'un cours. Les étudiants parcourent et filtrent le catalogue grâce à elles.
+
+**Ajouter une catégorie**
+
+1. Ouvrez **Categories**.
+2. Saisissez le nom dans **New category name**.
+3. Choisissez **Add category**.
+
+Un nom déjà utilisé est refusé.
+
+**Renommer une catégorie**
+
+1. Choisissez **Rename** sur la catégorie.
+2. Changez le nom.
+3. Choisissez **Save**. Échap ou **Cancel** la laisse telle quelle.
+
+**Archiver une catégorie**
+
+1. Choisissez **Archive** sur la catégorie.
+2. Lisez la boîte de dialogue : elle indique combien de cours ont cette catégorie.
+3. Confirmez avec **Archive**.
+
+Une catégorie archivée n'est plus proposée aux instructeurs. Les cours qui l'ont la gardent. Sa page dans le portail étudiant indique que la catégorie n'est plus disponible. La liste montre chaque catégorie comme **Active** ou **Archived**, et le portail admin n'a aucun moyen de rétablir une catégorie archivée.
+
+## Certificats
+
+1. Ouvrez **Certificates**.
+2. Saisissez le **Certificate ID** et choisissez **Look up**. L'identifiant figure sur la page du certificat et dans son PDF.
+3. Le certificat apparaît comme **Valid** ou **Revoked**, avec son historique indiquant qui l'a révoqué ou restauré et quand.
+
+- **Revoke** demande un **Reason** : Academic integrity, Issued in error, Order refunded ou Other. Other demande une **Note**. Confirmez avec **Revoke certificate**. La page publique du certificat indique alors qu'il a été révoqué, et l'étudiant en est informé.
+- **Restore**, confirmé avec **Restore certificate**, le rend de nouveau valide avec le même identifiant, et l'étudiant en est informé.
+
+Un administrateur peut restaurer n'importe quel certificat. Un instructeur ne peut pas restaurer un certificat qu'un administrateur a révoqué.
+
+<Link path="guides/certificates">Certificats</Link> couvre le reste : ce qui permet d'en obtenir un, et ce que voient les étudiants et les instructeurs.
+
+## Avis
+
+**Reviews** liste les avis d'un cours et vous permet d'en supprimer un qui enfreint les règles, avec un motif. Un avis supprimé ne compte plus dans la note du cours, et son auteur ne peut pas en publier un autre. Voir la section sur la suppression par un administrateur dans <Link path="guides/reviews">Notes et avis</Link>.
+
+## Image de marque
+
+**Branding**, dans le menu du compte, définit le nom, le logo, l'icône, l'image de partage et la couleur de la plateforme pour les trois portails et les pages publiques. Voir <Link path="guides/branding">Image de marque</Link>.
+
+## Paiements
+
+**Payments** connecte le compte Stripe sur lequel les étudiants paient. Tant qu'il n'est pas connecté, tous les cours sont gratuits et les instructeurs ne peuvent pas fixer de prix. Voir <Link path="guides/payments">Cours payants et paiements</Link> pour connecter, remplacer la clé, déconnecter et rembourser, et <Link path="guides/earnings-and-payouts">Revenus et versements</Link> pour ce que demande le paiement des instructeurs.
+
+## Notifications
+
+**Notification settings**, dans le menu du compte, choisit quelles notifications vous parviennent aussi par e-mail. Voir <Link path="guides/notifications">Notifications</Link>.

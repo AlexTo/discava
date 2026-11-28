@@ -1,0 +1,60 @@
+---
+title: Image de marque
+description: Définir le logo, l'icône, le nom, l'image de partage et la couleur de la plateforme en tant qu'administrateur, les règles pour chaque fichier, le délai pour qu'un changement atteigne les visiteurs, et ce qui n'est pas personnalisé.
+sidebar:
+  order: 7
+---
+
+Un administrateur peut donner à la plateforme son propre aspect sans déploiement. Dans le portail admin, ouvrez le menu du compte et choisissez **Branding**, ou choisissez la carte **Branding** sur Home. La marque s'applique aux portails étudiant, instructeur et admin, ainsi qu'aux pages publiques de cours et de profils.
+
+## Ce que vous pouvez définir
+
+| Élément | Où les visiteurs le voient |
+|---|---|
+| **Logo** | L'en-tête de chaque portail et les pages publiques |
+| **Name** | L'en-tête (à côté du logo, si vous le laissez activé), le titre de l'onglet du navigateur, les aperçus de liens et les textes qui nomment la plateforme |
+| **Icon** | L'onglet du navigateur, et l'icône d'écran d'accueil sur les téléphones |
+| **Share image** | L'image dans les aperçus de liens d'un cours ou d'un profil qui n'a pas d'image propre |
+| **Colour** | Les boutons, les anneaux de focus et les liens dans les portails et les pages publiques |
+
+Chaque élément est facultatif. Un élément laissé vide garde la marque Discava par défaut. Le bas de la page indique « Using the default Discava brand » quand rien n'est personnalisé, et sinon qui a modifié la marque en dernier et quand.
+
+La **Preview** sur la page montre vos changements avant l'enregistrement. Rien n'est appliqué tant que vous ne choisissez pas **Save**.
+
+## Règles des fichiers
+
+La page vérifie chaque fichier au moment où vous le choisissez et indique quelle règle il enfreint. Le serveur le vérifie de nouveau à l'enregistrement.
+
+| Élément | Types | Taille max | Forme |
+|---|---|---|---|
+| Logo | PNG, JPEG, WebP ou SVG | 1 Mo | Largeur d'au plus 4 fois la hauteur, et pas plus haut que large |
+| Icône | PNG | 1 Mo | Carrée, d'au moins 192 × 192 pixels. Nous suggérons 512 × 512 |
+| Image de partage | PNG, JPEG ou WebP | 2 Mo | Au moins 1200 × 630 pixels, de 1,8 à 2 fois plus large que haute |
+
+Un logo SVG ne peut contenir ni scripts, ni pages intégrées, ni gestionnaires d'événements, ni liens vers d'autres fichiers. Un fichier qui en contient est refusé, et votre fichier n'est jamais réécrit.
+
+Le nom doit comporter de 1 à 50 caractères. Désactivez **Show the name beside the logo** si le logo l'écrit déjà en toutes lettres : le nom reste dans les titres d'onglets et les aperçus de liens.
+
+## La couleur et la lisibilité
+
+Choisissez la couleur avec le sélecteur de couleur, ou saisissez une valeur hexadécimale comme `#1d4ed8`.
+
+- Le texte des boutons est choisi pour vous, clair ou sombre, selon ce qui se lit le mieux.
+- Une couleur sur laquelle ni l'un ni l'autre ne se lirait bien est refusée, avec une note vous invitant à choisir une teinte plus foncée ou plus claire.
+- Les liens n'utilisent votre couleur que là où elle est lisible sur une page blanche, et la couleur de texte par défaut sinon. Une couleur de marque pâle ne rend jamais les liens difficiles à lire.
+- Les couleurs d'erreur et d'état ne sont pas modifiées.
+
+## Combien de temps prennent les changements
+
+Le portail admin montre votre changement dès que vous enregistrez. Tous les autres le voient dans les 5 minutes : un navigateur garde la marque publiée jusqu'à une minute, et le réseau de diffusion de contenu jusqu'à quatre. À la première visite, la marque par défaut peut s'afficher environ une seconde ; les visites suivantes montrent immédiatement la marque.
+
+Si deux administrateurs modifient en même temps, le second à enregistrer est informé que quelqu'un d'autre a changé la marque et doit recharger pour voir ses changements.
+
+## Réinitialiser
+
+Chaque élément a son propre bouton de réinitialisation, comme **Reset the logo to default**. **Reset all to default** réinitialise tout, et demande d'abord confirmation. Une réinitialisation prend effet à l'enregistrement. Les images remplacées cessent d'être servies depuis leur ancienne adresse dans les 5 minutes et sont supprimées un jour plus tard.
+
+## Ce qui n'est pas personnalisé
+
+- Les pages de connexion hébergées par Amazon Cognito gardent leur aspect par défaut.
+- Ce site de documentation.

@@ -1,0 +1,183 @@
+---
+title: ステージ設定
+description: ステージの設定方法、コミットせずに設定を上書きする方法、カスタムドメイン、メール、新しいステージの追加方法。
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+## 設定の場所
+
+すべてのステージは1つのファイル `packages/common/infra-config/src/stages.config.ts` で定義します。ステージは、`infra` の下に**コンポーネント**ごとの設定を並べます。
+
+| コンポーネント | 内容 |
+| --- | --- |
+| `identity` | Cognito ユーザープール |
+| `coreApi`, `instructorApi`, `adminApi` | 3つの API |
+| `payments` | Stripe webhook API |
+| `coreTable` | DynamoDB テーブル |
+| `streamRouter` | テーブルの変更をハンドラーに運ぶキュー |
+| `studentPortal`, `instructorPortal`, `adminPortal` | 3つのウェブサイト |
+| `lessonMedia`, `publicMedia` | 動画と画像のバケット、およびその CloudFront ディストリビューション |
+| `search` | OpenSearch Serverless コレクション |
+| `notifications` | メール送信 |
+
+**セキュリティ設定はすべて既定でオンです。** ステージには、緩める設定とサイズの設定だけを書きます。`discava-development` は費用を抑えるため多くの保護をオフにし、`discava-production` は強化した値をそのまま明記しています。
+
+主な設定は次のとおりです。
+
+| 設定 | 意味 |
+| --- | --- |
+| `enableWaf` | コンポーネントの前に WAF の web ACL を置く |
+| `enableKmsEncryption`, `enableKeyRotation` | カスタマー管理の KMS キーで暗号化し、キーをローテーションする |
+| `retainOnDelete`, `enableDeletionProtection` | スタックを削除してもデータを残す。誤った削除を拒否する |
+| `throttleRateLimit`, `throttleBurstLimit` | API Gateway のメソッドごとのリクエスト制限 |
+| `reservedConcurrency` | API の関数が同時に処理できるリクエストの最大数 |
+| `maxReadRequestUnits`, `maxWriteRequestUnits` | テーブルのスループット上限 |
+| `min…CapacityInOcu`, `max…CapacityInOcu` | 検索の容量。最小値が 0 なら、アイドル時にゼロまでスケールダウンします |
+| `timeoutSeconds`, `logLevel`, `enableTracing` | API のリクエストタイムアウト、最低ログレベル（`DEBUG`、`INFO`、`WARN`、`ERROR`）、X-Ray トレーシング |
+| `publicThrottle…`, `publicSuggestThrottle…` | サインイン不要の呼び出しと検索サジェストに対する、core API の別枠の制限 |
+| `enableSelfSignUp`, `enableMfa` | 誰でもアカウントを作成できるか、MFA を必須にするか |
+| `studentPortal.allowSearchEngineIndexing` | 公開ページを検索エンジンにインデックスさせる。設定しない限りオフ。`discava-production` ではオンです |
+| `studentPortal.linkedInOrganizationId` | LinkedIn の組織ページ ID。受講生が LinkedIn に追加する証明書に記載されます |
+
+`packages/common/infra-config/src/stages.types.ts` に、すべての設定とその既定値が記載されています。
+
+WAF をオフにした場合、リクエストの急増による費用を抑えるのはスロットル、同時実行数、スループットの制限です。実際の利用が増えたら引き上げてください。
+
+## コミットせずに上書きする
+
+ドメインや証明書 ARN など、アカウント固有の値は、公開フォークにコミットしないほうがよいでしょう。代わりに、コンポーネントの設定は次の名前の変数でも指定できます。
+
+```
+<STAGE>_INFRA_<COMPONENT>_<FIELD>
+```
+
+名前はアッパースネークケースです。たとえば `discava-development` の `coreApi.throttleRateLimit` は `DISCAVA_DEVELOPMENT_INFRA_CORE_API_THROTTLE_RATE_LIMIT` になります。
+
+これを**ステージの GitHub environment の変数**として設定します。Deploy ワークフローは、ステージのプレフィックスで始まる変数をすべて転送します。
+
+```sh
+gh variable set DISCAVA_DEVELOPMENT_INFRA_CORE_API_THROTTLE_RATE_LIMIT \
+  --env discava-development --body 5
+```
+
+値は1行のプレーンテキストです。`true` か `false`、整数、または `…_DOMAIN_NAMES` 設定ではカンマ区切りのリストを使います。種類の違う値を入れると、デプロイは失敗します。
+
+コンポーネント以外では次のものがあります。
+
+- `<STAGE>_REGION` と `<STAGE>_ACCOUNT` は、ステージの `region` と `account` を上書きします
+- `<STAGE>_CAPTION_TRANSLATION_ENABLED` と `<STAGE>_CAPTION_TRANSLATION_MAX_LANGUAGES_PER_COURSE` は[字幕の翻訳](#字幕の翻訳)を上書きします
+- `credentials` と `payouts` は上書きできません。`stages.config.ts` で変更してください
+
+## カスタムドメイン
+
+API、ポータル、メディアのディストリビューションには、それぞれ独自のドメインを設定できます。それぞれに必要なものは次のとおりです。
+
+- 自分で管理している**ドメイン名**
+- そのドメインをカバーする、正しいリージョンで**発行済みの ACM 証明書**
+- そのドメインを指す **DNS レコード**（デプロイ後に作成します）
+
+| コンポーネント | ドメインの変数 | 証明書のリージョン |
+| --- | --- | --- |
+| Core API | `…_INFRA_CORE_API_DOMAIN_NAME` | ステージのリージョン |
+| Instructor API | `…_INFRA_INSTRUCTOR_API_DOMAIN_NAME` | ステージのリージョン |
+| Admin API | `…_INFRA_ADMIN_API_DOMAIN_NAME` | ステージのリージョン |
+| Payments (Stripe webhook API) | `…_INFRA_PAYMENTS_DOMAIN_NAME` | ステージのリージョン |
+| Student portal | `…_INFRA_STUDENT_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| Instructor portal | `…_INFRA_INSTRUCTOR_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| Admin portal | `…_INFRA_ADMIN_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| Lesson media | `…_INFRA_LESSON_MEDIA_DOMAIN_NAMES` | `us-east-1` |
+| Public media | `…_INFRA_PUBLIC_MEDIA_DOMAIN_NAMES` | `us-east-1` |
+
+それぞれに、対応する `…_CERTIFICATE_ARN` も指定します。ドメインは、証明書も設定されている場合にだけ適用されます。ポータルとメディアはカンマ区切りで複数のドメインを指定できますが、API は1つだけです。
+
+**設定する最も簡単な方法は、セットアップスクリプトをもう一度実行することです。** ルートドメインを渡すと、各コンポーネントをそのサブドメイン（固定）で提供し、ACM から各コンポーネントの発行済み証明書を探して、変数を書き込みます。証明書のないコンポーネントがある場合は、足りないものを一覧にして、何も変更する前に止まります。admin API と payments API にはまだ対応していないので、その変数は自分で設定してください。次回以降の実行では、提示されたルートドメインを Enter で維持します。空にすると、スクリプトが設定したドメイン変数が削除されます。
+
+```sh
+./scripts/setup-stage.sh discava-development
+```
+
+| コンポーネント | ルートが `example.com` の場合のドメイン |
+| --- | --- |
+| Core API | `core-api.example.com` |
+| Instructor API | `instructor-api.example.com` |
+| Student portal | `example.com`, `www.example.com` |
+| Instructor portal | `instructor.example.com` |
+| Admin portal | `admin.example.com` |
+| Lesson media | `lesson-media.example.com` |
+| Public media | `media.example.com` |
+
+これ以外のドメインは、GitHub environment の変数を自分で設定してください。
+
+知っておくべきルールが3つあります。
+
+- **各 API には、そのドメインだけを正確に指す専用の証明書が必要です。** ワイルドカードや、他の API と共有する証明書は使えません。そうしないと、ブラウザが1つの接続を2つの API で再利用し、誤った API からエラーが返ることがあります。
+- **動画の再生には、共通の親ドメインが必要です。** lesson media にカスタムドメインを設定すると、再生は API と lesson media の間で共有する Cookie で認可されます。そのため両方を1つの親ドメインの下に置き、`…_INFRA_LESSON_MEDIA_COOKIE_DOMAIN` で指定する必要があります。セットアップスクリプトはこれをルートドメインに設定します。
+- **DNS は自分で管理します。** デプロイ後、各ドメインを対象に向けてください。ポータルとメディアは CloudFront ディストリビューション（スタックの出力 `…DistributionDomainName`）、API は API Gateway のカスタムドメイン（その API のスタックの出力 `…DomainNameAlias`）です。それまでドメインは名前解決されませんが、ポータルはすでにそれらを使っています。
+
+ポータルのドメインは、API が許可する CORS オリジンと、Cognito のサインイン・サインアウトのアドレスとして自動的に取り込まれます。
+
+## 通知メール
+
+メールは SES で送信されます。ステージのリージョンで、SES のドメインまたはアドレスを検証してください。ルートドメインがある場合、残りはセットアップスクリプトが行います。ルートが検証済みの SES ドメイン ID になった後でスクリプトをもう一度実行すると、`notifications@<root>` としてメールが送信されます。別の送信元を使うには、次の変数を自分で設定してください。スクリプトは、再実行しても自分で設定した送信元を維持します。
+
+| 変数 | 例 |
+| --- | --- |
+| `…_INFRA_NOTIFICATIONS_FROM_ADDRESS` | `notifications@example.com` |
+| `…_INFRA_NOTIFICATIONS_SES_IDENTITY` | `example.com` |
+
+どちらも設定しなければ、メールは送信されず、1通ずつスキップとして記録されます。アプリ内通知は関係なく動作します。新しい SES アカウントはサンドボックスにあり、AWS が本番アクセスを許可するまで、検証済みのアドレスにしか送信できません。
+
+## 支払い
+
+Stripe には**デプロイ時の設定は不要**です。作成するシークレットも、登録する webhook もありません。デプロイ後、管理者が管理ポータルの Payments ページに Stripe のキーを貼り付けると、Discava がステージの webhook アドレスを自分で登録します。手順は <Link path="guides/payments">有料コースと支払い</Link> にあります。
+
+webhook API には独自のドメインを設定できます。上の表の `…_INFRA_PAYMENTS_DOMAIN_NAME` です。Stripe を接続した後でこれを追加または変更した場合は、新しいアドレスが登録されるように、Payments ページでキーをもう一度保存してください。
+
+講師に支払うには、Stripe アカウントで Connect を有効にしておく必要があります。制限付きキーには、Accounts、Account Links、Login Links、Transfers（支払いが呼び出す API）への書き込み権限が必要と見込まれます。このリストは実際の制限付きキーでまだ確認していないので、オンボーディングや支払いが拒否される場合は、シークレットキーを使ってください。接続している Stripe アカウントやモードを切り替えると、すべての講師の未払い収益が保留されます。収益は Held と表示され、支払い処理はそれらを送金しません。講師から見た画面は <Link path="guides/earnings-and-payouts">収益と支払い</Link> にあります。
+
+### 支払い設定
+
+`stages.config.ts` のステージの `payouts` エントリーで、プラットフォームが受け取る額と、講師への支払い時期を設定します。
+
+| 設定 | 意味 | 既定値 |
+| --- | --- | --- |
+| `platformFeeBasisPoints` | 支払額に対するプラットフォーム手数料（ベーシスポイント。2000 は 20%）。変更後に記録された売上に適用されます | `2000` |
+| `holdDays` | 返金に備えて、売上の収益を支払い可能になるまで保留する日数 | `14` |
+| `minimumPayoutMinor` | 送金する最小の支払い額（通貨の最小単位。1000 は 10.00）。これより小さい残高は待機します | `1000` |
+
+`discava-development` は収益を1日だけ保留するので、テスト担当者はすぐに支払い可能になるのを確認できます。手数料が 10000 を超えるなど、金額を誤らせる値は、ビルドを失敗させます。支払い処理は毎日実行されます。
+
+## 字幕の翻訳
+
+動画の字幕は Amazon Translate で機械翻訳されます。料金は文字数ごとに課金されます。ステージの `captionTranslation` エントリーで、この費用に上限を設けます。
+
+| 設定 | 意味 | 既定値 |
+| --- | --- | --- |
+| `enabled` | ステージで字幕を翻訳するかどうか | `true` |
+| `maxLanguagesPerCourse` | 1つのコースが選べる字幕言語の最大数（0 から 9） | `9` |
+
+`discava-development` では、1コースあたり3言語までです。
+
+## ステージの追加
+
+1. `stages.config.ts` に、既存の2つの隣へエントリーを追加し、緩める設定を書きます。既定値が合わない場合は `payouts` も追加します。
+2. コミットしてプッシュします。
+3. `./scripts/setup-stage.sh <new-stage>` を実行して、ロールと GitHub environment を作成します。
+4. 新しいステージ名で Deploy ワークフローを実行します。
+
+他に変更するものはありません。CDK アプリは、ファイル内のエントリーごとにステージを作成します。
+
+環境変数による上書きを使って、新しいステージを自分のマシンからデプロイする予定なら、`packages/infra/project.json` の `synth` ターゲットの `inputs` にそのプレフィックスも追加してください。上書きが変わったことを Nx のキャッシュが検知できるようになります。
+
+## 本番環境へ
+
+`discava-production` は、そのままデプロイできる状態です。実際のユーザーが来る前に、次のことを行ってください。
+
+- セットアップスクリプトを実行し、求められたら `us-east-1` で CDK をブートストラップします（WAF ルールがそこにあります）
+- <Link path="deploy/setup">その GitHub environment を保護</Link>し、必須レビュアーを設定します
+- カスタムドメインと、検証済みの SES ID を設定します
+- `stages.config.ts` のリクエスト制限を、想定するトラフィックに照らして見直します
+- コースを販売する場合は、`payouts` の設定を見直し、管理ポータルの Payments ページで**本番**の Stripe キーを接続します

@@ -1,0 +1,69 @@
+---
+title: Solução de problemas
+description: Motivos comuns pelos quais um setup ou deploy falha, e como corrigir cada um.
+sidebar:
+  order: 7
+---
+
+## O script de setup
+
+**"Couldn't authenticate with AWS."** Seu AWS CLI não tem credenciais válidas. Faça login (`aws sso login --profile <profile>` ou `aws configure`) e execute o script de novo.
+
+**"`<stage>` is configured for account … ; switch credentials and re-run."** O stage indica uma conta em `stages.config.ts` e você está autenticado em outra.
+
+**"Unknown stage."** O stage não está em `stages.config.ts`. Adicione-o lá primeiro.
+
+**"The origin remote isn't a GitHub repository."** Mostrado com `--yes`; sem ele, o script pergunta o repositório. Defina você mesmo: `GITHUB_REPOSITORY=<you>/discava ./scripts/setup-stage.sh`.
+
+**"stdin isn't a terminal."** O script não consegue fazer perguntas. Execute-o em um terminal, ou passe `--yes` para aceitar os padrões.
+
+**"uses a custom OIDC subject claim template."** Seu repositório ou organização personaliza o subject do token OIDC. Defina `GITHUB_OIDC_SUBJECT_PREFIX` com a parte do subject antes de `:environment:` e execute o script de novo.
+
+**"no issued certificate in … covers …" ou "… is for exactly …"** Com um domínio raiz, o script precisa de um certificado emitido para cada componente. Ele lista cada um que não encontrou e para antes de alterar qualquer coisa. Solicite-os no ACM, na região que a mensagem indica: a região do stage para as duas APIs, `us-east-1` para os portais e a mídia. Espere até que cada um esteja **Issued** e execute o script de novo. Cada API precisa de um certificado que nomeie exatamente o seu próprio domínio (`core-api.<root>`, `instructor-api.<root>`), não um wildcard. Os portais e a mídia podem compartilhar um certificado para `<root>` e `*.<root>`. Para fazer deploy sem domínios personalizados, deixe o domínio raiz em branco.
+
+## O workflow Deploy
+
+**O workflow nunca começa depois de um push em `main`.** Os deploys automáticos precisam de três coisas: a variável de repositório `AUTO_DEPLOY_STAGE`, workflows ativados no fork e uma execução de CI que **passou**. Confira a execução do CI: um job **Deploy Docs** falho (GitHub Pages não ativado) ou um job **Trivy** falho faz o CI inteiro falhar.
+
+**"Unknown stage".** O stage que você digitou não está em `stages.config.ts` no commit que está sendo implantado.
+
+**"Not authorized to perform sts:AssumeRoleWithWebIdentity".** A AWS recusou o token do workflow. As causas usuais:
+
+- O nome do environment do GitHub não é exatamente o nome do stage
+- O script de setup foi executado a partir de um clone de outro repositório (o original em vez do seu fork), então o role confia naquele
+- O fork foi renomeado ou transferido depois do setup
+
+Execute o script de setup de novo a partir de um clone do repositório que executa o workflow.
+
+**"Credentials could not be loaded" ou um role vazio.** O environment não tem a variável `AWS_DEPLOY_ROLE_ARN`. Execute o script de setup, ou crie as variáveis que ele mostrou.
+
+**"Invalid value for `<STAGE>_INFRA_…`".** Um override de configuração tem o tipo de valor errado. Booleanos são `true` ou `false`, números são inteiros e um nível de log é `DEBUG`, `INFO`, `WARN` ou `ERROR`. Corrija a variável no environment do GitHub e faça o deploy de novo.
+
+**"SSM parameter /cdk-bootstrap/hnb659fds/version not found".** O CDK não tem bootstrap em uma região para a qual o stage faz deploy. Execute o script de setup de novo e aceite o bootstrap, lembrando de `us-east-1` para stages com WAF.
+
+**Acesso negado enquanto o CloudFormation cria um recurso.** O CloudFormation roda como o role de execução, `cfn-execution-<stage>`. Esse role só pode fazer o que o Discava cria, e apenas em recursos cujos nomes começam com o nome do stage (`discava-development-…`, ou `discavadevelopment…` para alguns tipos).
+
+Se você acabou de baixar uma versão mais nova do Discava, execute o script de setup de novo primeiro: ele atualiza as permissões do role para o que aquela versão precisa. Se o erro continuar, ou se você adicionou um recurso por conta própria, veja quem o erro nomeia:
+
+- **`cfn-execution-<stage>` é recusado.** Adicione a ação às políticas do role de execução em `scripts/setup-stage.sh`. Se o nome do recurso não começar com o nome do stage, dê a ele um nome explícito que comece: o `Names.uniqueResourceName` do CDK constrói um a partir do caminho do construct. Depois execute o script de novo.
+- **O role de uma função é recusado quando ela executa.** Adicione a ação ao permissions boundary no mesmo script e execute-o de novo. Todo role que o stage cria carrega esse boundary. O role de execução não o carrega, então adicionar uma ação ao boundary nunca corrige um deploy.
+
+Um deploy a partir da sua própria máquina usa os roles padrão do CDK, que podem fazer qualquer coisa. Portanto, uma stack que faz deploy localmente ainda pode falhar no workflow Deploy.
+
+**A etapa do Trivy falha.** Uma dependência tem uma vulnerabilidade crítica conhecida com correção disponível, ou um secret foi commitado. Atualize a dependência. Um achado que você revisou e aceitou vai em `.trivyignore`, um ID por linha.
+
+**Uma stack está presa em `ROLLBACK_COMPLETE`.** Uma stack que falhou na primeira criação não pode ser atualizada. Exclua-a no console do CloudFormation e faça o deploy de novo.
+
+## Depois do deploy
+
+**Um portal mostra um erro de login.** Verifique se o usuário está no grupo de que aquele portal precisa (`student`, `instructor` ou `admin`).
+
+**Um domínio personalizado não resolve.** Os registros DNS não são criados para você. Aponte o domínio para a distribuição CloudFront ou para o domínio personalizado do API Gateway.
+
+**As chamadas de API falham com erros de CORS depois de adicionar um domínio de portal.** Faça o deploy de novo. As origens permitidas das APIs são tiradas dos domínios dos portais no momento do deploy.
+
+**A primeira busca é lenta.** Em `discava-development`, a busca reduz a zero. A primeira consulta depois de um período de inatividade espera de 10 a 30 segundos por capacidade.
+
+**Nenhum e-mail chega.** Verifique se as duas variáveis `NOTIFICATIONS` estão definidas, se a identity do SES está verificada na região do stage e se a sua conta do SES ainda está no sandbox.
+
+**Um vídeo continua em "processing".** Veja a lista de jobs do console do MediaConvert na região do stage em busca de um job falho e seu erro.

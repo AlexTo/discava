@@ -1,0 +1,199 @@
+---
+title: Reproductor de video y subtítulos
+description: Cómo el reproductor de video de las lecciones retoma la reproducción, cambia la velocidad, responde al teclado y muestra subtítulos, y cómo se generan o se suben los subtítulos.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+**Especificación:** [`specs/_archive/20261115-204517-video-player/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204517-video-player/)
+
+**Especificación:** [`specs/20261120-002950-transcript-search/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002950-transcript-search/)
+
+**Especificación:** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/)
+
+**Especificación:** [`specs/20261120-154712-caption-translation/spec.md`](https://github.com/AlexTo/discava/blob/main/specs/20261120-154712-caption-translation/spec.md) (subtítulos traducidos)
+
+Ambos portales reproducen los videos de las lecciones con el mismo reproductor, `HlsVideo` en `packages/common/shadcn`. Su barra de controles (`VideoControls`) reemplaza la del navegador: reproducir, buscar, volumen, silencio, velocidad, subtítulos, transcripción, imagen en imagen y pantalla completa. Las reglas que no son de interfaz (velocidades, asignación de teclas, preferencias guardadas, cuándo informar una posición) están en `@discava/common-web-utils/video-player`.
+
+## Retomar
+
+El reproductor guarda la posición del estudiante cada 10 segundos aproximadamente mientras reproduce, y cuando pausa, termina una búsqueda o abandona la página. La próxima vez que abre el video, salta a ese punto, queda en pausa y muestra "Resumed at m:ss" con un botón **Start over** hasta que reproduce o pasan 8 segundos.
+
+- `contentItem.saveVideoPosition` (core-api) escribe un registro `videoPosition` por estudiante y por video, sobrescrito en cada guardado. `contentItem.videoUrl` lo devuelve como el lugar donde retomar.
+- Una posición pertenece a una versión del video. Cuando se reemplaza el video, la posición anterior se ignora.
+- Una posición no es una finalización, ni actividad del estudiante, ni progreso.
+- La vista previa del instructor no guarda una posición.
+
+## Velocidad, volumen y preferencias
+
+La velocidad va de 0.5x a 2x (0.5, 0.75, 1, 1.25, 1.5, 1.75, 2). La velocidad, el volumen, el silencio, la elección de subtítulos y si la transcripción está abierta se recuerdan en el localStorage del navegador. Si el almacenamiento no está disponible, se aplican los valores por defecto sin avisar.
+
+## Atajos de teclado
+
+Funcionan mientras el foco esté en cualquier parte del reproductor. Se ignoran en campos de texto y con Ctrl, Alt o Meta presionadas, y una tecla que el control con foco ya usa (Espacio en un botón, flechas en un control deslizante) se le deja a ese control.
+
+| Tecla | Acción |
+|-----|--------|
+| Space, K | Reproducir o pausar |
+| J, L | Retroceder, avanzar 10 segundos |
+| Left, Right | Retroceder, avanzar 5 segundos |
+| Up, Down | Subir, bajar el volumen 5% |
+| M | Silenciar |
+| C | Activar o desactivar subtítulos |
+| F | Pantalla completa |
+| `<`, `>` | Velocidad anterior, siguiente |
+| 0 a 9 | Saltar del 0% al 90% del video |
+
+## Subtítulos
+
+Cuando un video tiene pistas de subtítulos, el reproductor muestra un menú de subtítulos: **Off**, y luego cada pista por idioma, con la predeterminada marcada. Una pista que no carga se omite con un aviso breve y el video sigue reproduciéndose.
+
+- **Generados automáticamente:** cuando un video termina de transcodificarse, Amazon Transcribe genera una pista en segundo plano. Esto nunca retrasa que el video quede listo.
+- **Subidos por un instructor:** un instructor puede adjuntar un archivo WebVTT (`.vtt`) a un video listo (`contentItem.captionUploadUrl`, luego `attachCaption`; `removeCaption` elimina una pista). Subir un archivo para un idioma que ya tiene una pista la reemplaza y conserva su estado de predeterminada, así que una subida que reemplaza la pista generada automáticamente pasa a ser la predeterminada. Un resultado posterior de Transcribe nunca sobrescribe una pista subida.
+- **Límites:** un archivo puede pesar como máximo 1 MB, un video tiene como máximo 10 pistas, y hay una pista por idioma, de una lista de diez idiomas (`CAPTION_LANGUAGES`).
+- **Dónde viven las pistas:** en el `contentItem` del video, en `captionTracks`. Cada escritor calcula la lista nueva con `applyCaptionChange` (`core-table/src/helpers/caption-tracks.ts`) y la escribe condicionada a `captionTracksRev`, de modo que dos escritores no pueden sobrescribirse.
+
+### Estado de los subtítulos
+
+El `captionsStatus` de un video es `pending` mientras Transcribe trabaja, y luego `ready` o `failed`. Un trabajo que sigue pendiente después de 2 horas se informa como `failed`. Un fallo solo afecta a los subtítulos; el video sigue siendo reproducible. La fila de la lección del instructor muestra el estado y el número de pistas.
+
+## Subtítulos traducidos
+
+Un instructor elige los **caption languages** de un curso (hasta 9, de los diez idiomas en que se puede subir un subtítulo). Cada video del curso, y su vista previa, recibe una pista de subtítulos en cada uno de esos idiomas, creada por Amazon Translate a partir de la **source track** del video: su pista predeterminada, ya sea creada por Transcribe o subida. Una pista traducida nunca es la predeterminada, y el menú de subtítulos la muestra como "*idioma* (auto-translated)".
+
+El [panel de transcripción](#transcripción) (#590), una función relacionada, muestra la pista que haya elegido el menú, de modo que una pista traducida también da una transcripción traducida.
+
+### Tiempos
+
+Los tiempos nunca se envían al servicio:
+
+1. El WebVTT de origen se analiza en cues, y solo se traducen las palabras de cada cue.
+2. El archivo nuevo copia sin cambios cada identificador y cada línea de tiempo del origen, en el mismo orden.
+3. Las etiquetas de cue se eliminan antes de traducir y el texto se escapa de nuevo después, de modo que el texto traducido no pueda formar una etiqueta ni la flecha `-->`.
+4. Antes de escribir, el handler comprueba que el número de cues y cada línea de tiempo coincidan. Si no, registra un fallo para ese idioma.
+
+Cada cue se traduce por separado, así que una oración repartida en varios cues puede leerse con menos fluidez que una traducción a nivel de oración.
+
+### Qué inicia una traducción
+
+La función `caption-translation` del <Link path="design/stream-event-router">stream router</Link> (`packages/events/src/media/caption-translation.ts`) se ejecuta cuando cambia una entrada de la traducción, y por nada más. Editar un título, la actividad de los estudiantes y las escrituras del propio handler no enrutan nada.
+
+| Disparador | Cambio que llega al handler |
+|---------|---------------------------------|
+| Video nuevo o reemplazado | cambian las pistas no traducidas del video (o de la vista previa del curso) |
+| Subtítulos de origen reemplazados o eliminados, o una pista subida eliminada | lo mismo |
+| Cambian los idiomas de los subtítulos o el idioma de enseñanza del curso | el registro del curso; el handler marca para traducción cada video del curso (y su vista previa), un mensaje de cola por cada uno |
+| **Translate again** | se establece `captionTranslationRequestedAt` en el video, o en cada video del curso |
+
+La finalización de Transcribe y la API del instructor nunca llaman a Amazon Translate y no pueden fallar por su causa.
+
+### Precedencia
+
+Todas las reglas están en `applyCaptionChange` y `planCaptionTranslations`, en los helpers `caption-tracks` de la tabla core. Una pista subida siempre gana: el handler escribe con la misma comprobación de revisión que cualquier otro escritor de subtítulos, así que sea cual sea el orden en que lleguen una subida y una traducción, lo que queda es la subida.
+
+| Situación | Resultado |
+|-----------|--------|
+| Llega una pista traducida para un idioma que ya tiene una pista automática o subida | Se descarta |
+| Llega una pista traducida y su origen no es la pista predeterminada actual de la versión | Se descarta |
+| Llega una pista automática o subida para un idioma que tiene una pista traducida | La reemplaza |
+| Una subida en el límite de 10 pistas | Desaloja una pista traducida: aquella cuyo idioma está al final de la lista del curso |
+| La pista predeterminada se reemplaza o se elimina | Todas las pistas traducidas de esa versión se descartan en la misma escritura y se rehacen a partir del nuevo origen |
+| La pista predeterminada se elimina | La pista más antigua que no es traducida pasa a ser la predeterminada |
+| La pista de origen automática no está en el idioma de enseñanza del curso | No se traduce (`language-mismatch`); un origen subido siempre se traduce |
+
+### Fallo y "Translate again"
+
+Un fallo se registra en el video (`captionTranslation`), nunca en `status`, `captionsStatus` ni en ninguna pista, y la reproducción nunca espera a la traducción.
+
+- El motivo es `failed` o `too-long` (un origen de más de 300.000 caracteres).
+- Los errores que un reintento no puede arreglar se registran sin hacer fallar el mensaje de la cola, así que no llenan la cola de fallos.
+- Los mensajes que sí fallan se reciben hasta cinco veces y luego llegan a la cola de fallos y a la alarma de la función.
+
+El diálogo Captions muestra el estado de cada idioma: translated, uploaded, translating, failed, too long, no room, o not translated con el motivo.
+
+- **Translate again** (`contentItem.retryCaptionTranslation`) borra el resultado registrado y vuelve a pedir el video.
+- **Translate missing captions again** en la configuración del curso (`course.retryCaptionTranslations`) lo hace para cada video.
+- Un mensaje perdido antes de que el handler se ejecute deja "Translating" a la vista, y **Translate again** es el remedio.
+
+### Desarrollo local
+
+Con `LOCAL_DEV=true`, el cliente de Translate llama a `translateLocally` (`packages/events/src/local/translator.ts`) en lugar del SDK.
+
+- Cada texto vuelve como `[<target tag>] <text>`, por ejemplo `[es-ES] Hello`, para que quede claro qué pista se está mostrando.
+- Un origen que contiene `[[fail-translation]]`, o `[[fail-translation:es-ES]]` para un solo idioma, hace que esa solicitud falle como un par de idiomas rechazado, que se registra como fallido sin reintento.
+- Todo lo demás (stream router, cola, handler, reglas de pistas, S3Mock) es el código real.
+
+La salida real de Amazon Translate, su comportamiento con los saltos de línea, la limitación de velocidad y las métricas solo se ejecutan en una etapa desplegada.
+
+### Costo
+
+Amazon Translate cobra por carácter enviado, espacios en blanco incluidos. El costo de un video es sus caracteres de origen multiplicados por el número de idiomas traducidos; no se cobra nada por un idioma que ya tiene una pista traducida reciente o una subida, ni cuando la función está desactivada. Esta página no cita ningún precio: consulta la <a href="https://aws.amazon.com/translate/pricing/">página de precios de Amazon Translate</a> y confírmalo para la región de la etapa.
+
+- **Métricas:** el handler emite métricas `CaptionTranslation` con las dimensiones `Stage` y `TargetLanguage`: `TranslatedCharacters`, `TranslatedTracks`, `TranslationFailures` y `ChunkFallbacks` (fragmentos cuyo número de líneas no coincidió y se enviaron de nuevo, un cue por solicitud). `Stage` separa las etapas que comparten una cuenta. Las métricas propias de Translate son por cuenta y región, así que la función no depende de ellas.
+- **Línea de log:** una por pista traducida, con el curso, el video, el idioma, los caracteres y el número de solicitudes. Logs Insights puede responder "qué curso costó más".
+- **Configuración de etapa:** `captionTranslation.enabled` (cuando es `false`, los instructores no pueden elegir idiomas, no se traduce nada y las pistas traducidas existentes se quedan) y `maxLanguagesPerCourse` (9 por defecto; 3 en `discava-development`).
+- **Límites:** el mismo origen no se traduce dos veces al mismo idioma, una etapa puede reducir los idiomas por curso o desactivar la función, y un origen de más de 300.000 caracteres no se traduce. No hay una cuota de gasto por curso ni por instructor, y todavía no hay un panel ni una alarma sobre caracteres por día.
+
+## Transcripción
+
+Un botón **Transcript** en la barra de controles abre un panel (`TranscriptPanel`) con cada línea de los subtítulos del video, cada una con su tiempo.
+
+- Solo está en el reproductor de lecciones del estudiante, y solo cuando el video tiene al menos una pista de subtítulos. La vista previa y el portal del instructor no lo muestran.
+- El panel se ubica debajo del reproductor en cualquier ancho, con una altura de como máximo 20rem o la mitad del viewport. Al lado del reproductor, dejaría el video demasiado estrecho para su barra de controles.
+- Se oculta mientras el reproductor está en pantalla completa.
+- Nada se desplaza lateralmente en el ancho de un teléfono.
+
+- **Qué pista:** la que haya elegido el menú de subtítulos. Elegir otro idioma cambia las líneas y el nombre del panel, "Transcript (language)". Con los subtítulos en **Off**, el panel sigue mostrando la pista recordada, o la predeterminada. Si no carga el archivo de ninguna pista, el panel dice "This transcript couldn't be loaded." y el video sigue reproduciéndose.
+- **Elegir una línea:** hacer clic o tocar una línea salta a su inicio y reproduce.
+- **Seguimiento:** la línea actual está marcada (un borde izquierdo y un peso de fuente mayor, más `aria-current="true"`) y el panel se desplaza solo para mantenerla a la vista. Nunca desplaza la página ni mueve el foco. Desplazarse, usar la rueda, tocar o mover el foco dentro del panel pausa el seguimiento y muestra **Jump to current line**; ese botón, o elegir una línea, lo reanuda. Con movimiento reducido activado, el desplazamiento no se anima.
+- **Lectores de pantalla:** no hay región en vivo, porque los subtítulos y el audio ya transmiten el contenido en vivo. Cada línea se lee como su tiempo en palabras ("12 minutes 40 seconds") y luego su texto.
+- **Estado abierto recordado:** abierto o cerrado se recuerda en el navegador junto con las demás preferencias del reproductor (`transcriptOpen`, cerrado por defecto).
+
+### Teclas de la transcripción
+
+El panel está fuera del contenedor de atajos del reproductor, así que los atajos de arriba no se aplican dentro de él: Espacio, las flechas y las letras nunca cambian el video desde ahí.
+
+| Tecla | Acción |
+|-----|--------|
+| Tab | Entra a la lista, sobre la línea actual (la primera línea antes de cualquier cue); un Tab más sale de ella |
+| Down, Up | Da foco a la línea siguiente, anterior |
+| Home, End | Da foco a la primera, última línea |
+| Enter, Space | Salta a la línea con foco y reproduce; el foco se queda en ella |
+
+### Construido en el navegador
+
+No hay API de transcripción. El reproductor ya obtiene el archivo WebVTT de cada pista para la capa de subtítulos. El panel analiza ese mismo texto una vez (`parseWebVtt`, en `@discava/common-web-utils/webvtt`) en cues, así que no hace ninguna solicitud adicional y tiene exactamente el acceso que tienen los subtítulos.
+
+- El texto de los cues se reduce a texto plano (se descartan los ajustes de cue y las etiquetas `<v>`, `<c>`, `<i>` y de marca de tiempo, y se decodifican las cinco entidades de WebVTT) y se renderiza como nodos de texto.
+- Se renderiza toda la transcripción, sin lista virtual, de modo que la búsqueda en la página y los comandos de lectura de un lector de pantalla funcionan sobre ella.
+- El indexador de la <Link path="design/search">búsqueda en transcripciones</Link> usa el mismo analizador, así que el panel y el índice coinciden en lo que es una línea.
+
+### Buscar en las transcripciones de un curso
+
+El reproductor del curso tiene un cuadro de búsqueda, "Search what was said". Al enviar al menos 2 caracteres se abre la página de resultados del curso (`/learn/<courseId>/search`), que llama a `transcript.search` con el idioma de subtítulos recordado del estudiante. Cada resultado nombra el módulo, la lección y el video, muestra las palabras coincidentes en un fragmento, y enlaza a la lección en ese momento (abajo). Cómo se construye el índice y cómo se aplica el acceso están en <Link path="design/search">Search</Link>.
+
+### Abrir una lección en un momento concreto
+
+La dirección de una lección acepta dos parámetros opcionales: `?item=<contentItemId>&t=<seconds>`. Un resultado de búsqueda en transcripciones enlaza así.
+
+- Con `item` nombrando un video de la lección, la lección se desplaza hasta él, mueve el foco a su reproductor, salta a `t`, queda en pausa y muestra "Starting at m:ss" sin botón **Start over**.
+- `t` ocupa el lugar de la posición guardada para esa visita, y el salto no guarda nada.
+- Cualquier otra cosa en los parámetros se ignora y la lección se abre como de costumbre.
+- Los parámetros no otorgan nada: la lección sigue cargándose con las comprobaciones habituales de inscripción y visibilidad.
+
+## Preguntas
+
+Un instructor puede poner preguntas en un video (consulta <Link path="design/quizzes">Quizzes</Link> para ver cómo se almacenan y se guardan). El reproductor las lee con `videoQuestion.view` y registra una respuesta con `videoQuestion.answer` (core-api); la tarjeta de pregunta es `VideoQuestionCard`, controlada por el hook `useVideoQuestions`. Un video sin preguntas se reproduce exactamente como se describió arriba y no hace ninguna solicitud de preguntas.
+
+- **Cuándo se hace una pregunta:** cuando la reproducción normal llega al momento de una pregunta que el estudiante no ha respondido ni omitido en esta visita, el video se pausa y la pregunta aparece sobre él dentro del reproductor, de modo que se mantiene la pantalla completa. El foco del teclado pasa a la pregunta y se anuncia su encabezado. Varias preguntas en un mismo momento se hacen una tras otra, en el orden del instructor. Una pregunta en 0:00 se hace cuando empieza la reproducción.
+- **Responder:** el estudiante elige una opción y presiona **Submit answer**, y luego ve si fue correcta (un icono y palabras, no solo color), las opciones correctas y la explicación cuando la hay, anunciada cuando llega. **Continue** retoma el video desde donde se detuvo, reproduciendo de nuevo si estaba reproduciendo. **Skip** (o Escape) cierra la pregunta, no registra nada y no vuelve a hacerla en esta visita. Una pregunta de opción múltiple dice "Select all that apply" y se califica todo o nada. Si el guardado falla, la pregunta sigue abierta con la elección conservada y **Skip** sigue funcionando.
+- **Atajos mientras hay una pregunta abierta:** la barra de controles está inerte y los atajos del reproductor (Espacio, flechas, teclas numéricas y el resto) no actúan sobre el video de debajo. En imagen en imagen, el video vuelve a la página para que se pueda ver la pregunta.
+- **Buscar en el video:** buscar nunca abre una pregunta, ni arrastrando, ni con un atajo, ni al retomar en una posición guardada, incluso en una primera visualización. Una pregunta solo se hace cuando la reproducción llega a su momento, o cuando el estudiante elige su marcador.
+- **Marcadores:** la barra de búsqueda tiene un marcador por cada pregunta con tiempo y uno al final cuando hay una verificación final. Cada uno es un botón que nombra su tiempo y estado ("Question at 1:30, not answered"), y las respondidas y las no respondidas se distinguen por una marca de verificación y un punto además del color. Elegir un marcador va a ese momento, pausa y abre la pregunta: una sin responder para responderla, una respondida para revisarla con la respuesta registrada, la clave y la explicación. **Try again** ahí es práctica, calificada en el navegador y no registrada.
+- **La verificación final:** cuando el video termina y tiene preguntas finales sin responder, la primera aparece sola ("Question 1 of 2"), luego la siguiente, y un resumen indica cuántas preguntas finales ha respondido correctamente el estudiante. Cada una se puede omitir y la verificación se puede cerrar. Una vez respondidas todas las preguntas finales, no vuelve a empezar sola, y el marcador final abre las respuestas. Una pregunta con tiempo posterior al final del video en reproducción se hace con la verificación final.
+- **Retomar antes de una pregunta abierta:** un estudiante que se va con una pregunta abierta vuelve justo antes de ella, de modo que se le hace de nuevo. A un estudiante cuya posición guardada está después de una pregunta sin responder no se le hace al retomar; su marcador la muestra sin responder.
+- **Registrado y no registrado:** se registra la primera respuesta a cada pregunta, y nada más. Las omisiones y **Try again** no se registran. Una respuesta nunca cambia si el video está completo (eso sigue siendo **Mark as done**), el progreso ni los certificados.
+- **Fallos:** si las preguntas no cargan, el video se reproduce como si no las tuviera. En un curso archivado los videos se reproducen sin sus preguntas.
+- **Pantallas pequeñas y movimiento:** una pregunta más alta que el video se extiende por debajo y se desplaza con la página, sin desplazamiento lateral a 375 px. Con movimiento reducido activado, aparece sin animación.

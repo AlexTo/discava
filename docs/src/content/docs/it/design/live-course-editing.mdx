@@ -1,0 +1,327 @@
+---
+title: Modifica live del corso
+description: Cosa succede quando gli istruttori aggiungono, rimuovono, nascondono, ripristinano o modificano moduli, lezioni ed elementi di contenuto in un corso pubblicato.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+Gli istruttori continuano a modificare un corso dopo che è stato pubblicato. Questo design rende quelle modifiche sicure per gli studenti già iscritti: nulla di costruito a metà diventa visibile, nulla di ciò che uno studente ha fatto va perso, e i progressi restano corretti.
+
+Lo stato del corso decide come si comporta una modifica:
+
+| Stato del corso | Modifiche |
+|---|---|
+| **Draft** [Bozza] | Si applicano subito, e l'eliminazione è definitiva. Una bozza non è mai stata aperta agli studenti, quindi nulla lì può influire su di loro |
+| **Published** [Pubblicato] | Seguono le regole di questa pagina. Gli studenti possono avere progressi e tentativi |
+| **Archived** [Archiviato] | Il curriculum è di sola lettura (vedi [Ciclo di vita di un corso](#ciclo-di-vita-di-un-corso)) |
+
+Le procedure sono in instructor-api (`procedures/course.ts`, `module.ts`, `lesson.ts` e i file `content-item-*.ts`).
+
+## Flusso di lavoro
+
+### Ciclo di vita di un corso
+
+```d2 title="Lifecycle of a course: a draft is published once it has content; archiving makes it read-only and keeps whether it was ever published, and restore returns it there"
+direction: right
+
+new: "Created" {shape: oval}
+draft: Draft
+published: Published
+archived_draft: "Archived, read-only\n(never published)" {style.stroke-dash: 3}
+archived_published: "Archived, read-only\n(was published)" {style.stroke-dash: 3}
+
+new -> draft
+draft -> published: "publish\n(needs visible content)"
+draft -> archived_draft: archive
+published -> archived_published: archive
+archived_draft -> draft: restore
+archived_published -> published: restore
+```
+
+**Pubblicazione**
+
+- Solo una **bozza** può essere pubblicata, e solo quando ha almeno un elemento di contenuto che gli studenti vedrebbero, così un corso non viene mai aperto vuoto. Un elemento di contenuto nascosto o archiviato, o uno sotto un modulo o una lezione nascosti o archiviati, non conta.
+- La pubblicazione è rifiutata per un corso archiviato: ripristinalo prima.
+- Pubblicare un corso non cambia alcun record sotto di esso. I record `visible` nella bozza diventano visibili agli studenti insieme al corso, e quelli nascosti restano nascosti finché non vengono pubblicati.
+
+**Ripristino**
+
+- Il corso registra `publishedAt` la prima volta che viene pubblicato e non lo azzera mai. È così che un corso archiviato ricorda se è mai stato aperto agli studenti.
+- **Il ripristino riporta a Published un corso che era pubblicato, e a Draft uno che non lo è mai stato.** Un corso che gli studenti hanno usato non torna mai in bozza, dove l'eliminazione è permanente.
+
+**Un corso archiviato è di sola lettura**
+
+- Nulla nel suo curriculum può essere aggiunto, modificato, pubblicato, nascosto, archiviato, riordinato o ripristinato, e nessun video può esservi caricato. Ognuna di queste azioni restituisce `PRECONDITION_FAILED` ("Restore the course first"). Questo copre moduli, lezioni, elementi di contenuto e quiz.
+- Ciò che resta possibile: vedere il corso, ripristinarlo, ed **eliminare definitivamente i record già archiviati**. Un corso archiviato può così essere ripulito senza ripristinarlo, il che lo mostrerebbe di nuovo agli studenti. Queste eliminazioni mantengono le proprie protezioni (vedi [Eliminazione definitiva](#eliminazione-definitiva)).
+- Le impostazioni proprie del corso (prezzo, interruttore e criteri del certificato, il suggerimento della prima lezione) possono essere cambiate in qualsiasi stato.
+
+**Ripetizioni e corse**
+
+- Ripetere un'azione non scrive nulla: pubblicare un corso pubblicato, o ripristinare un corso non archiviato, restituisce il corso com'è. Un retry dopo un timeout è sicuro.
+- Ogni modifica è condizionata allo stato che ha letto. Se il corso è cambiato nel frattempo, la richiesta restituisce `CONFLICT`.
+- **Pubblicazione contro una modifica concorrente.** In un corso in bozza, il contenuto può essere eliminato, nascosto o archiviato in qualsiasi momento. La transazione di pubblicazione quindi controlla che uno degli elementi di contenuto visibili che ha contato, e la lezione e il modulo sotto cui si trova, siano ancora presenti e ancora visibili. Se no, nulla viene pubblicato e la richiesta restituisce `CONFLICT`. Ritentare conta di nuovo.
+- **Eliminazione contro una pubblicazione concorrente.** Se un'eliminazione è permanente o un'archiviazione dipende dallo stato del corso quando la richiesta l'ha letto. Un'eliminazione permanente in un corso in bozza (di un modulo, una lezione o un elemento di contenuto) viene quindi eseguita in una transazione che controlla anche che il corso sia ancora una bozza. Se nel frattempo è stato pubblicato, nulla viene eliminato e la richiesta restituisce `CONFLICT`. Ritentare archivia invece.
+- **Qualsiasi scrittura contro un'archiviazione concorrente.** Il controllo che il corso non sia archiviato fa parte della stessa transazione di ogni scrittura, accanto ai controlli su modulo e lezione. Una richiesta che ha perso quella corsa restituisce "Restore the course first".
+
+### Ciclo di vita di un modulo, una lezione o un elemento di contenuto
+
+```d2 title="Lifecycle of a module, lesson or content item: the course's status decides where a new record starts and what delete does; then publish, hide, archive, restore and delete"
+direction: down
+
+new_draft: "Created in a\nDraft course" {shape: oval}
+new_live: "Created in a\nPublished course" {shape: oval}
+
+live: "Not archived" {
+  visible: Visible
+  hidden: Hidden
+
+  hidden -> visible: publish
+  visible -> hidden: hide
+}
+
+archived: "Archived\n(frozen until restored,\nwith everything under it)" {
+  style.stroke-dash: 3
+}
+
+deleted: Deleted permanently {shape: oval}
+
+new_draft -> live.visible
+new_live -> live.hidden
+live -> archived: "delete\n(course not Draft)"
+archived -> live: restore
+live -> deleted: "delete\n(course Draft)"
+archived -> deleted: "delete permanently\n(see below)"
+```
+
+- Il diagramma segue un solo modulo, lezione o elemento di contenuto. Lo stato del corso è separato (vedi sopra), e nessuna di queste azioni lo cambia. Decide dove parte un nuovo record e se l'eliminazione archivia il record o lo rimuove. In un corso archiviato nessuna di queste azioni è consentita, tranne eliminare definitivamente un record archiviato.
+- Gli studenti vedono un record solo finché è **Visible** e lo è anche ogni antenato (vedi [Visibilità effettiva](#visibilità-effettiva)).
+- Pubblicare un modulo o una lezione pubblica anche ogni record nascosto e non archiviato sotto di esso che non è mai stato pubblicato. Un record nascosto di proposito dopo essere stato visibile resta nascosto. Nascondere, archiviare e ripristinare cambiano solo il record stesso.
+- Un record archiviato mantiene la sua visibilità, quindi ripristinarlo lo riporta **Visible** o **Hidden**, com'era. Può essere ripristinato solo quando il modulo o la lezione genitore non è archiviato.
+- Un record archiviato, e tutto ciò che sta sotto di esso, è congelato: nulla in esso può essere pubblicato, nascosto o modificato, e nulla può esservi aggiunto.
+- Fuori da un corso in bozza, ogni modifica a ciò che gli studenti possono vedere attiva un ricalcolo dei progressi per tutti gli iscritti.
+
+### Controlli prima di un'eliminazione definitiva
+
+```d2 title="Checks a permanent delete goes through before anything is removed, for a module or lesson and for a single content item"
+direction: down
+
+start: "Delete permanently\n(from the Archived view;\nallowed in an archived course)" {shape: oval}
+is_archived: "Is the record itself\narchived?" {shape: diamond}
+kind: "Module or lesson,\nor content item?" {shape: diamond}
+
+activity: "Student activity on any\nitem under it, or a\ndiscussion question on\na lesson?" {shape: diamond}
+limit: "More than 100 records\nincluding everything\nunder it?" {shape: diamond}
+transaction: "One transaction: each item\nconditioned on its checked\nupdatedAt and no student\nactivity, the parent on\nits checked archivedAt"
+
+item_activity: "Student activity\non the item?" {shape: diamond}
+item_delete: "One delete, conditioned on\nno student activity and the\nitem still being archived"
+
+changed: "Did a condition\nfail?" {shape: diamond}
+
+refused_archive: "PRECONDITION_FAILED:\narchive it first"
+refused_activity: "PRECONDITION_FAILED:\nit can stay archived,\nbut is never deleted"
+refused_limit: "PRECONDITION_FAILED:\ndelete some of its lessons\n(or content items) first,\nthen retry"
+conflict: "CONFLICT:\nnothing deleted"
+done: "Deleted; a video's transcode\ncanceled, and video and\nfile objects removed from S3" {shape: oval}
+
+start -> is_archived
+is_archived -> refused_archive: no
+is_archived -> kind: yes
+kind -> activity: module or lesson
+kind -> item_activity: content item
+activity -> refused_activity: yes
+activity -> limit: no
+limit -> refused_limit: yes
+limit -> transaction: no
+item_activity -> refused_activity: yes
+item_activity -> item_delete: no
+transaction -> changed
+item_delete -> changed
+changed -> conflict: yes
+changed -> done: no
+```
+
+## Modello dei dati
+
+Attributi sulle entità `curriculum` che supportano la modifica live:
+
+| Attributo | Su | Scopo |
+|---|---|---|
+| `visibility: 'hidden' \| 'visible'` | Moduli, lezioni, elementi di contenuto | Obbligatorio. Le procedure di creazione impostano `visible` nei corsi in bozza e `hidden` in quelli pubblicati, così un nuovo quiz, lezione o modulo non viene mai visto a metà. L'istruttore fa clic su **Publish** per mostrarlo |
+| `archivedAt` | Moduli, lezioni, elementi di contenuto | Eliminazione logica. Impostato solo sul record archiviato stesso. I suoi figli sono nascosti perché il loro genitore è archiviato, non perché siano archiviati essi stessi |
+| `publishedAt` | Moduli, lezioni, elementi di contenuto | Quando il record è diventato visibile per la prima volta: alla creazione in un corso in bozza, o alla prima pubblicazione. Mai azzerato (vedi [Pubblicazione](#pubblicazione)) |
+| `studentActivityCount` | Elementi di contenuto | Numero di studenti distinti con dati per l'elemento. Mai decrementato |
+| `lastChildOrder` | Corsi, moduli, lezioni | L'ultimo `order` assegnato a un figlio. Aggiungere o ripristinare un figlio reclama il successivo nella stessa transazione, quindi due record aggiunti insieme non possono condividere un `order` |
+
+**Cosa conta come attività dello studente.** `studentActivityCount` viene incrementato (`ADD 1`) nella stessa transazione che crea il **primo** record di uno studente per l'elemento:
+
+| Elemento | Primo record |
+|---|---|
+| Quiz | Il `quizSummary` |
+| Video | L'`itemCompletion` o il `videoAnswerSheet`, quello che viene per primo. Una risposta a una domanda video conta uno studente quanto un completamento |
+| Compito da caricare | L'`assignmentSubmission` o l'`itemCompletion` |
+| Testo, file | L'`itemCompletion` |
+
+Ogni scrittore costruisce la sua transazione da `studentActivityWrites` (`core-table/src/helpers/student-activity.ts`), e le invarianti in `helpers/invariants/student-activity.ts` controllano il conteggio rispetto ai record.
+
+`studentActivityCount` vive nella partizione del curriculum, quindi sommarlo o controllarlo per tutto ciò che sta sotto un modulo o una lezione è una sola query. I record lato studente che conta hanno come chiave l'utente e non possono rispondere a "chi ha usato questo elemento?" senza una scansione.
+
+## Visibilità effettiva
+
+Un record è mostrato agli studenti solo se lui e ogni antenato sono `visible` e non archiviati. Questo viene controllato su:
+
+- ogni lettura dello studente: `course.view` e `course.publicView` di core-api, e `quiz.view`;
+- ogni scrittura dello studente: invio di un quiz, segnare un elemento come completato;
+- ogni calcolo dei progressi.
+
+Quindi nascondere o archiviare un modulo impedisce anche l'invio di un quiz al suo interno, e rimuove i suoi elementi dai progressi di tutti.
+
+La regola è implementata una volta sola, in `core-table/src/helpers/curriculum.ts`: `isShown` per un record e `filterEffectivelyVisible` per un intero curriculum. Le viste del corso di core-api la usano, e così il calcolo dei progressi di core-table, che la Lambda di ricalcolo in `packages/events` esegue. Ciò che gli studenti vedono e ciò che i loro progressi contano non possono mai essere in disaccordo.
+
+Gli istruttori modificano tramite `course.view` di instructor-api, che restituisce l'intero curriculum, inclusi i record nascosti e archiviati con la loro `visibility`, `archivedAt` e `studentActivityCount`. È limitato agli istruttori che insegnano il corso. L'editor del corso lascia fuori dall'elenco principale i record archiviati e contrassegna quelli nascosti **Hidden**.
+
+## Azioni in un corso pubblicato
+
+| Azione | Cosa vedono gli studenti | I loro dati e progressi | Progressi ricalcolati per |
+|---|---|---|---|
+| **Add module** | Nulla finché non è pubblicato. Pubblicarlo pubblica anche le sue lezioni e i suoi elementi nascosti, così appare tutto insieme | Una volta pubblicato, `progressPercent` scende per tutti. Le lezioni e i corsi completati restano completati | Tutti gli studenti iscritti, alla pubblicazione |
+| **Remove module** | Archiviato: sparisce dall'indice al caricamento successivo. Uno studente su una delle sue pagine vede "This lesson has been removed by your instructor" | Conservati (completamenti, tentativi, migliori punteggi), non più conteggiati. Uno studente che aveva finito tutto il resto diventa `completed`. Ripristinabile, e allora tutto conta di nuovo | Tutti gli studenti iscritti |
+| **Edit module** (titolo, descrizione) | Si applica subito | Nessun effetto | Nessuno |
+| **Add lesson** | Nulla finché non è pubblicata (insieme ai suoi elementi nascosti) | Come per aggiungere un modulo | Tutti gli studenti iscritti, alla pubblicazione |
+| **Remove lesson** | Come per rimuovere un modulo | Come per rimuovere un modulo | Tutti gli studenti iscritti |
+| **Edit lesson** (titolo, descrizione) | Si applica subito | Nessun effetto | Nessuno |
+| **Add content item** | Nulla finché non è pubblicato, e solo quando sono pubblicati anche la sua lezione e il suo modulo | Una volta pubblicato, `progressPercent` scende. Se la sua lezione era già completata, la lezione resta completata e l'elemento appare come **New** | Tutti gli studenti iscritti, alla pubblicazione |
+| **Remove content item** | Archiviato: sparisce al caricamento successivo. Inviare un quiz al suo interno o segnarlo come completato viene rifiutato con "no longer available" | Conservati, non conteggiati. Se era l'unico elemento non finito di uno studente, la lezione (e forse il corso) diventa completata. Ripristinabile | Tutti gli studenti iscritti |
+| **Edit content item**: titolo, descrizione, testo | Si applica subito | Completamento conservato | Nessuno |
+| **Edit content item**: sostituzione del video | Passa dal flusso di sostituzione e ri-transcodifica del video. Gli studenti continuano a riprodurre la versione precedente finché la nuova non è pronta, e ancora se la sua transcodifica fallisce; i file della versione precedente vengono eliminati quando la nuova è pronta da più tempo di quanto durino i cookie firmati di uno spettatore | Completamento conservato | Nessuno |
+| **Edit content item**: domande video | Vedi <Link path="design/quizzes">Quiz</Link>: una modifica alla sola chiave o spiegazione è invisibile; una modifica al testo, al tipo o alle opzioni di una domanda fa restituire `CONFLICT` a una risposta in corso e non registra nulla; spostare o rimuovere una domanda non tocca mai le risposte registrate | Completamento e progressi non toccati. Risposte registrate conservate, mai rivalutate | Nessuno |
+| **Edit content item**: quiz | Vedi <Link path="design/quizzes">Quiz</Link>: le modifiche alla sola chiave delle risposte sono invisibili; le modifiche alle domande fanno restituire `CONFLICT` a un invio in corso | Tentativi, migliori punteggi e superamenti conservati, mai rivalutati | Nessuno |
+| **Hide** (a qualsiasi livello) | Sparisce come una rimozione, ma non è nella vista Archived | Conservati, non conteggiati; contano di nuovo quando viene mostrato | Tutti gli studenti iscritti |
+| **Reorder** (a qualsiasi livello) | Si applica subito | Nessun effetto | Nessuno |
+
+Il "ricalcolo dei progressi" è fatto dalla Lambda lato server descritta in <Link path="design/progress-and-completion">Progressi e completamento</Link>, mai dal browser dello studente.
+
+## Pubblicazione
+
+Pubblicare un modulo o una lezione imposta lui e tutti i suoi discendenti nascosti **nuovi** a `visible` in **una transazione**. Gli studenti vedono una nuova lezione con tutti i suoi elementi insieme, non pezzo per pezzo.
+
+Quali discendenti vengono pubblicati con il loro genitore:
+
+| Discendente | Pubblicato con il genitore? |
+|---|---|
+| Nascosto, senza `publishedAt` (contenuto nuovo) | Sì |
+| Nascosto, con un `publishedAt` (nascosto di proposito dopo che gli studenti potevano vederlo) | No, resta nascosto |
+| Archiviato, o un elemento di contenuto sotto una lezione archiviata | No, lasciato com'è |
+
+- Il record che pubblichi tu stesso è sempre pubblicato, qualunque sia la sua storia.
+- Ogni modulo, lezione ed elemento di contenuto registra `publishedAt` la prima volta che diventa visibile (quando viene creato in un corso in bozza, o alla prima pubblicazione) e non lo azzera mai.
+- L'unico caso che questo non può distinguere è un record nascosto prima di essere mai pubblicato (per esempio, nascondere l'elemento di una nuova lezione mentre lo si costruisce ancora in un corso pubblicato). Conta comunque come nuovo, e viene pubblicato con il suo genitore.
+- **Archiviato mentre la pubblicazione è in corso.** Ogni lezione ed elemento che la pubblicazione cambia (e la lezione di ogni elemento che pubblica) deve essere ancora non archiviato quando la transazione fa commit. Altrimenti nulla viene pubblicato e la richiesta restituisce `CONFLICT`. Ritentare rilegge il modulo o la lezione e salta il record appena archiviato.
+
+Nascondere non è propagato: cambia solo il record stesso, e i suoi figli mantengono la propria `visibility`. Gli studenti smettono comunque di vedere i figli, dato che un record è mostrato solo sotto antenati visibili.
+
+## Riordino
+
+I moduli sono ordinati nel loro corso, le lezioni nel loro modulo e gli elementi di contenuto nella loro lezione, ciascuno per il proprio `order`. Ogni livello ha un solo modo per cambiarlo: `module.reorder`, `lesson.reorder` e `contentItem.reorder`. `module.update` e `lesson.update` non accettano un `order`.
+
+- Nel portale istruttore, l'impugnatura di ogni riga è una maniglia di trascinamento (mouse, tocco o tastiera). Non ci sono maniglie in un corso archiviato, o dove c'è un solo record da ordinare.
+- Il riordino è una modifica come le altre, quindi segue le regole di archiviazione: è rifiutato in un corso archiviato, e sotto un modulo o una lezione archiviati ("Restore the course (module, lesson) first").
+- Si applica allo stesso modo a ogni tipo di elemento di contenuto.
+- Spostare una lezione in un altro modulo, o un elemento di contenuto in un'altra lezione, non è supportato: le loro chiavi includono l'id del genitore.
+
+Ogni procedura prende gli id di **ogni record nel genitore che non è archiviato**, nell'ordine in cui devono apparire, e scrive ogni `order` (1, 2, 3, ...) in una transazione, così un singolo trascinamento è una modifica atomica.
+
+- L'elenco deve corrispondere esattamente al genitore. Se manca un record, ne include uno archiviato o rimosso, o include un id sconosciuto, la richiesta restituisce `CONFLICT` e non scrive nulla: l'editor lavorava da un elenco non aggiornato, quindi ricarica e riprova. Un id che compare due volte è un `BAD_REQUEST`.
+- Ogni record è condizionato al non essere ancora archiviato, nella stessa transazione dei controlli sui suoi antenati, quindi un record archiviato mentre la richiesta è in corso annulla l'intero riordino, così come un antenato archiviato in quel momento.
+- I record archiviati non fanno parte dell'elenco. Mantengono l'`order` che avevano.
+- Ripetere un ordine che il genitore ha già non scrive nulla.
+- La transazione contiene al massimo 100 record, inclusi i controlli sugli antenati, quindi i limiti sono:
+
+  | Procedura | Controlli | Massimo di record |
+  |---|---|---|
+  | `module.reorder` | corso | 99 moduli in un corso |
+  | `lesson.reorder` | corso, modulo | 98 lezioni in un modulo |
+  | `contentItem.reorder` | corso, modulo, lezione | 97 elementi di contenuto in una lezione |
+
+  Un genitore più grande viene rifiutato con `PRECONDITION_FAILED`, come per le altre operazioni su tutto il genitore.
+- Un record aggiunto nello stesso momento di un riordino finisce dopo quelli riordinati, e l'editor lo mostra quando ricarica.
+- Un record ripristinato va in fondo al suo genitore (vedi [Ripristino](#ripristino)), quindi non condivide mai un `order` con un altro record.
+
+## Rimozione (archiviazione)
+
+Fuori da un corso in bozza, l'eliminazione archivia sempre, e il portale istruttore etichetta l'azione **Archive** (in un corso in bozza è **Delete** per moduli e lezioni, e **Remove** per gli elementi di contenuto). La finestra di conferma mostra l'impatto da `studentActivityCount`:
+
+- un elemento di contenuto: quanti studenti lo hanno usato, per esempio "12 students have used it".
+- un modulo o una lezione: quanti degli elementi sottostanti gli studenti hanno usato, per esempio "Students have used 3 items in it". Sommare gli studenti tra gli elementi conterebbe uno studente una volta per elemento usato, quindi il conteggio è di elementi, non di studenti.
+
+In entrambi i casi aggiunge che i loro progressi sono conservati, e contano di nuovo se il record viene ripristinato.
+
+### Rimosso mentre uno studente lo sta seguendo
+
+| Dove si trova lo studente | Cosa succede |
+|---|---|
+| Altrove nel corso | Il modulo o la lezione sparisce dall'indice al prossimo caricamento |
+| Nella pagina di quella lezione | Il contenuto già a schermo resta leggibile. Il successivo recupero dei dati (navigazione, focus della finestra) mostra **"This lesson has been removed by your instructor"** con un link per tornare all'indice, mai un semplice 404 |
+| A metà di un quiz al suo interno | L'invio è rifiutato ("This quiz is no longer available"); bozza locale scartata; nessun tentativo usato |
+| Segnare un elemento come completato | Rifiutato allo stesso modo |
+| Vecchio link o segnalibro | La stessa pagina "rimosso" |
+
+L'archiviazione attiva un ricalcolo dei progressi per ogni studente iscritto, quindi il contenuto rimosso smette subito di contare, senza che nessuno ricarichi.
+
+### Cosa non si può fare a un record archiviato
+
+Un record archiviato, e tutto ciò che sta sotto di esso, resta esattamente com'era quando è stato archiviato finché non viene ripristinato, così un ripristino riporta ciò che gli studenti vedevano. Un **corso** archiviato è congelato allo stesso modo (vedi [Ciclo di vita di un corso](#ciclo-di-vita-di-un-corso)), e il corso viene nominato per primo quando è archiviato: "Restore the course first". Tutte queste azioni sono rifiutate con `PRECONDITION_FAILED`:
+
+- Pubblicare, nascondere o modificare il record archiviato stesso: "Restore the module (lesson, content item) before publishing (hiding, editing) it".
+- Pubblicare, nascondere o modificare qualsiasi cosa sotto di esso, per esempio una lezione in un modulo archiviato o un elemento di contenuto in una lezione archiviata: "Restore the module first" o "Restore the lesson first". Il modulo è nominato per primo quando sono archiviati entrambi.
+- Aggiungere qualsiasi cosa sotto di esso: nessuna nuova lezione in un modulo archiviato, e nessun nuovo contenuto in un modulo o una lezione archiviati.
+- Caricare un file video: nessun URL di caricamento viene emesso per un corso, un modulo o una lezione archiviati, né per sostituire il file di un elemento di contenuto archiviato.
+
+I record sotto un modulo o una lezione archiviati possono comunque essere archiviati essi stessi, e poi eliminati definitivamente, purché il corso non sia archiviato.
+
+Queste regole valgono anche quando le richieste si sovrappongono. Ogni scrittura sotto un modulo o una lezione viene eseguita in una transazione DynamoDB, insieme ai controlli che il suo corso, modulo (e lezione) esistano ancora e non siano archiviati, e che il record stesso non sia archiviato. Se un'altra richiesta archivia o elimina il genitore nel frattempo, l'intera scrittura viene rifiutata con lo stesso errore, e nulla viene scritto. Quindi un modulo che viene archiviato o eliminato definitivamente non può ottenere una nuova lezione, e una lezione non può ottenere un nuovo elemento, all'ultimo momento.
+
+Un video archiviato mentre è ancora in transcodifica continua a transcodificare. Quando il job finisce, l'elemento viene contrassegnato `ready` (o `failed`) senza toccare `archivedAt` o `visibility`, quindi viene riprodotto se ripristinato e resta nascosto fino ad allora.
+
+## Ripristino
+
+La pagina del corso dell'istruttore ha una sezione **Archived** che elenca ogni record archiviato di per sé, il più recente per primo: un modulo archiviato, una lezione archiviata in un modulo attivo, o un elemento archiviato in una lezione attiva. I record sotto un genitore archiviato non sono elencati separatamente, dato che tornano con esso. Ogni riga mostra dove si trovava il record, quando è stato archiviato, cosa contiene e se gli studenti lo hanno usato, con **Restore** e **Delete permanently**.
+
+- Ripristinare azzera `archivedAt` e mette il record in **fondo** al suo genitore (`writeAtEnd`). Il suo `order` diventa uno oltre il più alto tra tutti i suoi fratelli, archiviati inclusi, e oltre il `lastChildOrder` del genitore. Si ordina per ultimo e non collide mai con un altro record archiviato ripristinato più tardi. L'istruttore lo trascina dove vuole.
+- La sua posizione prima dell'archiviazione non viene conservata: altri record potrebbero essere stati riordinati nel frattempo, quindi quella posizione potrebbe essere già occupata.
+- Una lezione può essere ripristinata solo se il suo modulo non è archiviato, e un elemento di contenuto solo se non lo sono né il suo modulo né la sua lezione. Altrimenti è rifiutato con "Restore the module first" o "Restore the lesson first", nominando il modulo per primo quando sono archiviati entrambi.
+- Nulla può essere ripristinato mentre il corso stesso è archiviato: è rifiutato con "Restore the course first".
+- Un quiz ripristinato mantiene la sua versione, i tentativi e i migliori punteggi.
+- Il ripristino attiva un ricalcolo dei progressi, e tutto conta di nuovo come prima.
+
+## Eliminazione definitiva
+
+Offerta solo dalla vista Archived, e solo quando valgono tutte queste condizioni:
+
+- il record è esso stesso archiviato (uno sotto un genitore archiviato deve essere archiviato prima);
+- `studentActivityCount` è 0 per l'elemento, o per ogni elemento sotto una lezione o un modulo;
+- per una lezione o un modulo, nessuna domanda di discussione è stata posta sulla lezione, o su qualsiasi lezione del modulo. Anche le domande sono dati dello studente.
+
+Qualsiasi cosa che uno studente abbia usato può essere archiviata ma mai eliminata definitivamente. L'editor mostra **Delete permanently** come non disponibile per essa, con quel motivo. Funziona anche in un corso archiviato: è l'unica modifica al curriculum che quel corso consente.
+
+I controlli e l'eliminazione sono chiamate separate, quindi l'eliminazione stessa porta delle condizioni:
+
+- **Un modulo o una lezione** viene eliminato con tutto ciò che sta sotto in una transazione. L'eliminazione di ogni elemento di contenuto è condizionata all'`updatedAt` che è stato controllato (qualsiasi scrittura lo incrementa) e a `studentActivityCount = 0`. L'eliminazione del modulo o della lezione stessa è condizionata all'`archivedAt` che è stato controllato, quindi un ripristino arrivato nel mezzo la annulla. Le lezioni sotto un modulo vengono eliminate senza una condizione propria.
+- **Un singolo elemento di contenuto** è una sola eliminazione, condizionata a `studentActivityCount = 0` e all'elemento ancora archiviato.
+
+Se una condizione fallisce, l'eliminazione è rifiutata con `CONFLICT` e nulla viene rimosso. Qualsiasi altro fallimento della transazione viene riportato come `INTERNAL_SERVER_ERROR`, anch'esso senza rimuovere nulla.
+
+Dopo l'eliminazione, la transcodifica in corso di un video viene annullata e gli oggetti S3 di video e file vengono rimossi. Quella pulizia è best-effort: un errore viene registrato, non lanciato.
+
+## Limiti e richieste ripetute
+
+- **Solo insiemi interi.** Pubblicare un modulo o una lezione ed eliminarne uno (in un corso in bozza o definitivamente) legge ogni pagina di discendenti, non solo il primo 1 MB, così nulla resta non pubblicato o orfano. Anche entrambi i `course.view` leggono ogni pagina del curriculum.
+- **Transazioni da 100 item.** Pubblicare un modulo o una lezione, ed eliminarne uno (in un corso in bozza o definitivamente), avviene in una singola transazione DynamoDB tutto-o-niente, che contiene al massimo 100 record. Il controllo sul corso (e sul modulo, quando si pubblica una lezione) conta verso quel limite. Un modulo o una lezione più grande può comunque essere pubblicato o eliminato, solo a passi:
+  - pubblica prima alcune delle sue lezioni (o elementi di contenuto), poi il modulo (o la lezione);
+  - in un corso in bozza, elimina prima alcune delle sue lezioni (o elementi di contenuto), poi il modulo (o la lezione);
+  - altrimenti, archivia prima alcune delle sue lezioni (o elementi di contenuto) ed eliminale definitivamente, poi il modulo (o la lezione).
+
+  Quando un'operazione supererebbe il limite, è rifiutata con `PRECONDITION_FAILED` e un messaggio che nomina quel passo successivo. Non viene mai divisa in più transazioni dietro le quinte: se una di esse fallisse, parte del modulo sarebbe già sparita, lasciando lezioni o elementi senza genitore.
+- **Le ripetizioni non scrivono nulla.** Archiviare qualcosa già archiviato mantiene il suo `archivedAt` originale. Pubblicare un elemento di contenuto che è visibile, o un modulo o una lezione senza nulla di nascosto in o sotto di esso, nascondere ciò che è nascosto e ripristinare ciò che non è archiviato restituiscono tutti il record invariato. Una richiesta ritentata, per esempio dopo un timeout lato client, è innocua. L'eccezione è un'eliminazione che rimuove il record (in un corso in bozza, o definitivamente): ritentarla restituisce `NOT_FOUND`, dato che il record è già sparito.

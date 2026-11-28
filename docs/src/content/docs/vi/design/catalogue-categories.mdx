@@ -1,0 +1,50 @@
+---
+title: Danh mục của catalogue
+description: "Hệ phân loại danh mục do quản trị viên quản lý, các trường catalogue của một khóa học và cách chúng cung cấp cho facet tìm kiếm."
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/_archive/20261115-000000-catalogue-categories/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-000000-catalogue-categories/)
+
+Khóa học có thể được sắp xếp theo một **danh mục** (mỗi khóa học một danh mục, lấy từ hệ phân loại do quản trị viên quản lý) và được mô tả bằng bốn trường tùy chọn khác. Học viên lọc catalogue theo tất cả các trường này.
+
+## Các trường catalogue của khóa học
+
+| Trường | Quy tắc |
+|---|---|
+| `categoryId` | Một danh mục có sẵn và đang **active** khi được đặt hoặc thay đổi |
+| `tags` | Tối đa 8, mỗi tag từ 1 đến 30 ký tự. Được lưu sau khi cắt khoảng trắng và chuyển thành chữ thường, đã loại trùng |
+| `level` | `beginner`, `intermediate` hoặc `advanced` |
+| `language` | Một mã trong danh sách cố định |
+| `durationHours` | Một số nguyên từ 1 đến 500 |
+
+Cả năm trường đều là tùy chọn. Giảng viên đặt chúng từ cổng giảng viên bằng `course.updateCatalogue` của instructor-api, và chọn danh mục từ `category.listActive`. `courseCatalogueWrites` trong `helpers/course-catalogue.ts` của core-table là nơi duy nhất ghi năm trường này, nên mọi nơi ghi đều kiểm tra chúng theo cùng một cách.
+
+## Hệ phân loại danh mục
+
+Một danh mục có:
+
+- `name`: 1 đến 60 ký tự, duy nhất không phân biệt hoa thường và khoảng trắng;
+- `slug`: an toàn cho URL, được tạo từ tên khi tạo danh mục và không bao giờ đổi. Nếu slug đã bị dùng, một con số sẽ được thêm vào (`design`, `design-2`);
+- `status`: `active` hoặc `archived`.
+
+Toàn bộ hệ phân loại nằm trong một partition của core-table, nên liệt kê nó chỉ cần một truy vấn. Danh mục không bao giờ bị xóa: lưu trữ một danh mục sẽ ẩn nó khỏi các lựa chọn cho các lần gán mới, còn các khóa học đã dùng nó vẫn giữ nguyên.
+
+Tính duy nhất được bảo đảm bằng các bản ghi `categoryClaim` được ghi trong cùng transaction với danh mục, một cho slug và một cho tên đã chuẩn hóa. Khi đổi tên, claim của tên được chuyển đi còn slug giữ nguyên, nên URL trang đích của danh mục không bao giờ đổi. `helpers/category.ts` trong core-table là nơi duy nhất ghi cả hai bản ghi.
+
+Các kiểm tra bất biến `course-category-exists` và `category-claims-consistent` bảo đảm một khóa học chỉ trỏ đến danh mục tồn tại, và mỗi danh mục có đúng hai claim của nó.
+
+## Cổng quản trị và `admin-api`
+
+Quản trị viên (nhóm Cognito `admin`) quản lý danh mục trong cổng quản trị, cổng này gọi **`admin-api`**: một API tRPC riêng với Lambda và API Gateway riêng, được xây dựng giống instructor-api, nên chỉ quản trị viên mới truy cập được các procedure của nó. Các procedure là `category.list`, `create`, `rename` và `archive`.
+
+Học viên và khách truy cập đọc danh mục qua `category.list` và `category.bySlug` công khai của core-api, được các trang đích của danh mục sử dụng.
+
+Một stage mới chưa có danh mục nào. `pnpm nx run @discava/tooling-deploy:seed-categories` ghi một bộ danh mục khởi đầu và bỏ qua những danh mục đã tồn tại.
+
+## Facet tìm kiếm
+
+Danh mục, tag, level, language và duration được lập chỉ mục trong chỉ mục tìm kiếm `courses`, và tìm kiếm trả về số lượng facet cho từng trường. Xem <Link path="design/search">Tìm kiếm</Link> để biết truy vấn facet và lần lập chỉ mục lại một lần cần chạy sau khi triển khai.

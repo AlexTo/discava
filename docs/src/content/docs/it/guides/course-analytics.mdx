@@ -1,0 +1,74 @@
+---
+title: Analisi dei corsi
+description: La Dashboard dell'istruttore e la pagina di analisi di ogni corso, il significato di ogni dato, le viste a 30 e 90 giorni, l'abbandono per lezione, l'attivazione e i risultati di quiz e domande nei video.
+---
+
+import Link from '@components/link.astro';
+
+**Dashboard** nel portale istruttori mostra come stanno andando i tuoi corsi. Solo gli istruttori di un corso possono vedere i suoi dati.
+
+## La Dashboard
+
+C'è una scheda per ogni corso che insegni, qualunque sia il suo stato.
+
+| Dato | Significato |
+| --- | --- |
+| **Enrolments** | Tutti quelli che si sono iscritti |
+| **Active this week** | Gli studenti che hanno fatto qualcosa nel corso in questa settimana di calendario, da lunedì a domenica in UTC |
+| **Completion rate** | Tra gli studenti ancora iscritti, la quota che ha completato il corso, in percentuale intera arrotondata per difetto. "No data" finché non c'è un iscritto |
+
+Ogni scheda indica anche quando i suoi dati sono cambiati l'ultima volta, oppure "No activity yet". Scegli il titolo di un corso per aprire la sua pagina di analisi.
+
+## La pagina di analisi di un corso
+
+### Totali
+
+| Dato | Significato |
+| --- | --- |
+| **Enrolments** | Tutti quelli che si sono iscritti |
+| **Active** | Iscritti, che non hanno né completato né lasciato il corso |
+| **Completed** | Hanno completato il corso |
+| **Dropped** | Hanno lasciato il corso o la cui iscrizione è terminata |
+| **Completion rate** | Come nella Dashboard |
+| **Active this week** | Come nella Dashboard |
+
+### 30 o 90 giorni
+
+I due grafici coprono gli ultimi 90 giorni. Scegli **30 days** o **90 days** in alto nella pagina per cambiare vista.
+
+- **New enrolments per day**
+- **Active learners per day**
+
+I giorni sono giorni UTC. Finché nessuno si iscrive la pagina dice "No learners have enrolled yet".
+
+### Abbandono per lezione
+
+Per ogni lezione mostrata agli studenti: tra gli studenti che l'hanno iniziata, la quota che l'ha completata. La lezione con la quota più bassa è segnata come **Lowest completion**. Una lezione che nessuno ha iniziato lo dice.
+
+Gli studenti che hanno lasciato il corso non vengono contati.
+
+### Attivazione
+
+Quanti studenti iscritti hanno iniziato, come numero e come percentuale. Iniziare significa aver completato un elemento o inviato un tentativo di quiz. Gli studenti recenti possono ancora iniziare, quindi sono dati parziali.
+
+La scheda indica anche quanti studenti hanno risposto al suggerimento della prima lezione e quanti l'hanno chiuso. Vedi <Link path="guides/lesson-discussions">Discussioni sulle lezioni</Link>.
+
+### Quiz
+
+C'è un pannello per ogni quiz. **Show analysis** apre:
+
+- **Most-missed questions**: tentativi, errori e tasso di errore di ogni domanda, dalla più sbagliata. Una domanda con meno di 5 tentativi non viene classificata e mostra "Not enough attempts".
+- **Best score per student**: un grafico di come si distribuiscono i punteggi migliori.
+
+### Domande nei video
+
+Il pannello **Video questions** elenca i video che pongono domande. **Show results** su un video apre il momento del video di ogni domanda, le risposte, gli errori e il tasso di errore. Una domanda con poche risposte mostra "Not enough answers yet".
+
+Vedi <Link path="guides/video-lessons">Lezioni video</Link> per aggiungere domande a un video.
+
+## Leggere i dati
+
+- Uno studente conta una sola volta in un giorno o in una settimana, qualunque cosa abbia fatto.
+- Se la pagina di un corso dice "Course not found", il corso non esiste o non lo insegni tu.
+
+<Link path="design/course-analytics">Analisi dei corsi</Link> descrive come vengono mantenuti i dati.

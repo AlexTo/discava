@@ -1,0 +1,82 @@
+---
+title: Chứng chỉ
+description: Bật chứng chỉ cho một khóa học và đặt điều kiện để nhận, thẻ yêu cầu của học viên, xem, tải về và chia sẻ chứng chỉ, trang công khai, và thu hồi cùng khôi phục.
+---
+
+import Link from '@components/link.astro';
+
+Một khóa học có thể cấp chứng chỉ hoàn thành cho mỗi học viên đáp ứng các yêu cầu của nó. Mỗi chứng chỉ có một ID và một trang công khai để bất kỳ ai cũng có thể kiểm tra.
+
+## Dành cho giảng viên: cấp chứng chỉ
+
+1. Mở khóa học từ **My Courses** và vào mục **Certificates** của nó.
+2. Bật **Issue a certificate on completion**.
+3. Tùy chọn, đánh dấu **Require passing every quiz**. Bài kiểm tra có điểm đạt là 0% không được tính.
+4. Tùy chọn, đánh dấu **Require graded assignments to be returned with at least** một tỷ lệ phần trăm, và nhập một số nguyên từ 1 đến 100.
+
+Hoàn thành mọi mục trong khóa học luôn là điều kiện bắt buộc.
+
+Thay đổi yêu cầu chỉ ảnh hưởng đến những học viên chưa có chứng chỉ. Học viên đủ điều kiện sau đó sẽ nhận chứng chỉ tự động, và không ai bị mất chứng chỉ.
+
+**Issued certificates**, trong cùng mục, liệt kê từng người học, ID chứng chỉ, ngày hoàn thành và trạng thái.
+
+## Dành cho học viên: nhận chứng chỉ
+
+Thẻ **Certificate** của khóa học liệt kê những gì bạn còn cần:
+
+| Yêu cầu | Hiển thị gì |
+| --- | --- |
+| Complete every item | Bạn đã hoàn thành mọi thứ hay chưa |
+| Pass every quiz | Mỗi bài kiểm tra là Passed, Not attempted hoặc Not passed yet |
+| Graded assignments returned with at least a percentage | Mỗi bài tập là Done, Not submitted hoặc Waiting to be graded, hoặc điểm mà nó được trả về |
+
+Bài kiểm tra hết lượt làm sẽ hiện "Not passed, no attempts left. Ask your instructor for another attempt."
+
+Khi mọi điều kiện đều đạt, thẻ hiện "Your certificate is being prepared." và sau đó đưa ra:
+
+- **View**: mở trang của chứng chỉ.
+- **Download PDF**.
+- **Copy link**: sao chép địa chỉ trang của chứng chỉ.
+- **Add to LinkedIn**.
+
+Bạn cũng được thông báo ở chuông và qua email, kèm một lời nhắc sau đó để thêm nó vào LinkedIn. Xem <Link path="guides/notifications">Thông báo</Link>.
+
+## Trang của chứng chỉ
+
+Trang tại `/certificates/<certificate ID>` là công khai. Nó hiển thị "Certificate of completion", tên người học, khóa học, ngày, điều mà chứng chỉ xác nhận và ID chứng chỉ. Bất kỳ ai có liên kết đều đọc được mà không cần đăng nhập.
+
+ID không tồn tại sẽ hiện "Certificate not found".
+
+## Thêm vào LinkedIn
+
+1. Chọn **Add to LinkedIn**, trên thẻ **Certificate** của khóa học hoặc trên trang chứng chỉ của bạn khi đã đăng nhập.
+2. Chọn **Continue to LinkedIn**.
+3. Lưu mục này trên LinkedIn.
+
+Trang chứng chỉ của bạn cũng liệt kê những gì LinkedIn yêu cầu, phòng khi bạn điền biểu mẫu thủ công: tổ chức cấp, ngày cấp, ID chứng chỉ và URL chứng chỉ.
+
+## Thu hồi và khôi phục
+
+Chứng chỉ bị thu hồi không còn hiệu lực. Trang công khai của nó ghi "This certificate has been revoked and is no longer valid." Học viên được thông báo, và thẻ khóa học của họ hiển thị ngày và lý do. Khôi phục làm nó có hiệu lực trở lại với cùng ID, và học viên lại được thông báo.
+
+| Ai | Ở đâu | Lý do họ có thể đưa ra |
+| --- | --- | --- |
+| Giảng viên của khóa học | **Issued certificates** trong mục **Certificates** của khóa học | Academic integrity, Issued in error, Other |
+| Quản trị viên | **Certificates** trong cổng quản trị | Như trên, và thêm Order refunded |
+
+**Dành cho giảng viên:** chọn **Revoke** trên một chứng chỉ, chọn **Reason**, thêm **Note** nếu muốn, và xác nhận. **Restore** hoàn tác việc đó. **History** cho biết ai đã thu hồi và khôi phục, và khi nào.
+
+**Dành cho quản trị viên:**
+
+1. Mở **Certificates** trong cổng quản trị.
+2. Nhập **Certificate ID** và chọn **Look up**. Chứng chỉ hiển thị là **Valid** hoặc **Revoked**.
+3. Chọn **Revoke**, chọn **Reason**, và xác nhận bằng **Revoke certificate**. Lý do Other cần thêm **Note**.
+
+**Restore**, xác nhận bằng **Restore certificate**, hoàn tác việc đó.
+
+Ai có thể hoàn tác việc của ai:
+
+- Quản trị viên có thể khôi phục mọi chứng chỉ.
+- Giảng viên có thể khôi phục chứng chỉ do một giảng viên thu hồi, nhưng không thể khôi phục chứng chỉ do quản trị viên thu hồi. Nó hiện là "Revoked by an administrator".
+
+Hoàn tiền toàn bộ một khóa học trả phí không tự nó làm mất chứng chỉ. Xem <Link path="guides/payments">Khóa học trả phí và thanh toán</Link>.

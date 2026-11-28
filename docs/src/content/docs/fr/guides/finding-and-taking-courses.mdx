@@ -1,0 +1,85 @@
+---
+title: Trouver et suivre des cours
+description: Rechercher et parcourir le catalogue en tant qu'étudiant, la page publique d'un cours, les aperçus gratuits et les profils d'instructeurs, s'inscrire à un cours gratuit et le quitter, et My Learning.
+---
+
+import Link from '@components/link.astro';
+
+Vous pouvez rechercher, parcourir et lire des pages de cours sans compte. Vous vous connectez pour vous inscrire.
+
+## Recherche
+
+La zone de recherche dans l'en-tête affiche « What do you want to learn? ».
+
+1. Saisissez au moins 3 caractères. Les cours correspondants sont suggérés pendant que vous tapez.
+2. Choisissez une suggestion avec les flèches et Entrée, ou en la sélectionnant, pour ouvrir ce cours.
+3. Ou appuyez sur Entrée sans en choisir une pour voir tous les résultats.
+
+Sur la page de résultats, vous pouvez :
+
+- **Sort by** Relevance, Highest rated ou Newest.
+- Filtrer par catégorie, niveau, langue, durée et tags.
+- Définir une **Minimum rating** : 4.5, 4.0, 3.5 ou 3.0 et plus.
+- Choisir **Clear filters** pour recommencer.
+
+<Link path="guides/reviews">Notes et avis</Link> explique comment les notes influencent l'ordre.
+
+## Parcourir
+
+- **Browse courses**, à `/courses`, liste le catalogue. Choisissez une catégorie pour restreindre, ou **All**.
+- Une catégorie a sa propre page, avec une zone de recherche pour cette catégorie.
+- Une catégorie que la plateforme a archivée indique qu'elle n'est plus disponible, avec un lien vers **Browse all courses**.
+
+## La page du cours
+
+La page d'un cours publié est publique. Elle montre ce que couvre le cours, son contenu, son prix ou « Free », sa note et ses avis, et ses instructeurs.
+
+- **Play preview** lit la vidéo d'aperçu du cours, s'il en a une.
+- Une leçon marquée **Free preview** s'ouvre sans connexion ni inscription. Vous pouvez regarder ses vidéos, lire son texte et télécharger ses fichiers. Ses quiz restent verrouillés : « Enrol to take this quiz ». Rien n'est enregistré pour vous tant que vous ne vous inscrivez pas.
+- **View profile** sur la carte d'un instructeur ouvre son profil, avec les cours qu'il enseigne.
+
+Si un instructeur cesse de proposer un aperçu, son adresse indique « This preview is no longer available. » avec **View the course**.
+
+## S'inscrire à un cours gratuit
+
+1. Sur la page du cours, choisissez **Enrol now**.
+2. Si vous n'êtes pas connecté, choisissez **Continue to sign in** et connectez-vous. Vous revenez au cours.
+3. La première leçon que vous n'avez pas terminée s'ouvre, avec « You're enrolled in » et le nom du cours.
+
+Si vous vous inscrivez depuis une leçon en aperçu gratuit, vous restez sur cette leçon et pouvez choisir **Start this lesson**.
+
+Un cours avec un prix affiche **Buy now** à la place. Voir <Link path="guides/payments">Cours payants et paiements</Link>.
+
+## Quitter un cours
+
+Pour un cours que vous n'avez pas payé, la page du cours affiche **Leave course**.
+
+1. Choisissez **Leave course**.
+2. Confirmez avec **Leave course**.
+
+Votre inscription prend fin et votre progression est conservée. Vous pouvez vous réinscrire à tout moment et continuer, sauf si le cours a reçu un prix depuis : il faudrait alors l'acheter.
+
+Un cours que vous avez payé n'a pas de **Leave course**. Demandez plutôt un remboursement.
+
+## My Learning
+
+**My Learning** dans l'en-tête liste vos cours dans deux onglets, **In progress** et **Completed**. Chaque carte montre votre progression et un bouton :
+
+| Bouton | Quand |
+| --- | --- |
+| **Start** | Vous n'avez encore rien terminé |
+| **Continue** | Vous êtes à mi-parcours |
+| **Review** | Vous avez terminé le cours |
+| **See what's new** | Vous avez terminé le cours et l'instructeur y a ajouté du contenu depuis |
+
+Quand vous êtes connecté, la page d'accueil vous accueille avec **Continue learning** pour le cours que vous suiviez, vos autres cours, et des cours à commencer.
+
+La page d'un cours auquel vous êtes inscrit montre votre progression en pourcentage, avec **Start learning** ou **Continue learning**. Un cours terminé affiche **Completed**, la date et **Review course**.
+
+## Pour aller plus loin
+
+- <Link path="guides/video-lessons">Leçons vidéo</Link> : le lecteur, les sous-titres et la recherche de ce qui a été dit.
+- <Link path="guides/quizzes-and-assignments">Quiz et devoirs</Link>.
+- <Link path="guides/lesson-discussions">Discussions de leçon</Link> : poser des questions dans une leçon.
+- <Link path="guides/certificates">Certificats</Link>.
+- <Link path="guides/notifications">Notifications</Link> : la cloche et les réglages d'e-mail.
