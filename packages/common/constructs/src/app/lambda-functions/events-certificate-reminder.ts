@@ -12,6 +12,7 @@ export class EventsCertificateReminder extends Function {
   constructor(scope: Construct, id: string) {
     super(scope, id, {
       timeout: Duration.seconds(30),
+      memorySize: 256,
       runtime: Runtime.NODEJS_24_X,
       handler: 'index.handler',
       code: Code.fromAsset(

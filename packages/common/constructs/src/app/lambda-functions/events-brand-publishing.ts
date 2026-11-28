@@ -18,6 +18,7 @@ export class EventsBrandPublishing extends Function {
     super(scope, id, {
       // One table read and one small put, however large the batch.
       timeout: Duration.seconds(30),
+      memorySize: 256,
       runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
       handler: 'index.handler',

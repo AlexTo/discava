@@ -18,6 +18,7 @@ export class EventsTranscodeComplete extends Function {
   constructor(scope: Construct, id: string) {
     super(scope, id, {
       timeout: Duration.seconds(30),
+      memorySize: 256,
       runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
       handler: 'index.handler',

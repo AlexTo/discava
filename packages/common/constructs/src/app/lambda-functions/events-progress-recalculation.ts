@@ -18,6 +18,7 @@ export class EventsProgressRecalculation extends Function {
     super(scope, id, {
       // A curriculum change recalculates everyone enrolled in the course.
       timeout: Duration.minutes(5),
+      memorySize: 256,
       runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
       handler: 'index.handler',

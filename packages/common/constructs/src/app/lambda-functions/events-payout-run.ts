@@ -18,6 +18,7 @@ export class EventsPayoutRun extends Function {
     super(scope, id, {
       // Pays every instructor with released earnings, one Stripe transfer each.
       timeout: Duration.minutes(5),
+      memorySize: 256,
       runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
       handler: 'index.handler',
