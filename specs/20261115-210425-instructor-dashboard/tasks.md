@@ -178,7 +178,7 @@ description: "Task list for the instructor dashboard and course analytics"
 - [ ] T058 **(human)** After deploying `discava-development` and the router stack, check the `analytics-update` failure queue stays empty and its alarm does not fire under the e2e load, that TTL deletes expired markers (plan R6), and that redriving one message from the failure queue by hand (or a replayed batch) leaves the figures unchanged (plan R1). Add a short operations note to the contributor docs: redrive only messages less than 14 days old, and run `rebuild-analytics` for a course in doubt.
 - [ ] T061 **(human)** Check SC-003 on a deployed or seeded course with at least 1,000 enrolments: the dashboard (20 courses) and the course analytics page each load their figures in under 2 seconds, and the number of table reads per request does not grow with enrolments; note the numbers on the PR.
 - [x] T059 **(human)** Run `rebuild-analytics` for a deployed course and confirm the figures before and after are equal; note the result on the PR. *(Checked on discava-development on 2026-11-24 on a test course with a paid enrolment: `rebuild-analytics` ran against the stage's table, and the instructor dashboard's figures before and after are identical except `totals.updatedAt`, the rebuild's own timestamp.)*
-- [ ] T060 **(human)** Update issue #278: tick off its scope items, and make the PR that merges the last phase say "Closes #278"; earlier PRs say "Refs #278".
+- [x] T060 **(human)** Update issue #278: tick off its scope items, and make the PR that merges the last phase say "Closes #278"; earlier PRs say "Refs #278".
 
 ---
 

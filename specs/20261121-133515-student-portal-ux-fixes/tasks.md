@@ -206,7 +206,7 @@ description: "Task list for the student portal UX fixes"
 
 **Goal**: Confirm on a running stack what tests cannot.
 
-- [ ] T049 (human) On the local stack with all phases merged, walk [quickstart.md](./quickstart.md) at 375px and 1440px, saving screenshots to `tmp/screenshots/pr-<number>/`. Compare the network panel with `main` for the course page, a lesson and a search: the same requests, in the same order.
+- [x] T049 (human) On the local stack with all phases merged, walk [quickstart.md](./quickstart.md) at 375px and 1440px, saving screenshots to `tmp/screenshots/pr-<number>/`. Compare the network panel with `main` for the course page, a lesson and a search: the same requests, in the same order.
 - [ ] T050 (human) On a real phone (or the browser's device mode with touch), enrol in a course, take a quiz and search with filters; confirm nothing needs a sideways scroll or a zoom to tap, and that no control you had to use is smaller than 24px. At 1440px with the browser's text zoom at 200%, confirm the lesson and search pages still do not scroll sideways.
 - [x] T051 Record in `spec.md`'s Assumptions, as a note with the date, anything the walk found that this spec left out of scope, so the next audit starts from it. Do not widen this feature.
 

@@ -665,7 +665,7 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Goal**: Confirm on a running stack what tests cannot.
 
-- [ ] T087 (human) With all phases merged, walk [quickstart.md](./quickstart.md) at 375px and 1440px on the local stack, saving screenshots to `tmp/screenshots/pr-<number>/`. Compare the network panel with `main` on the course editor, a submission and earnings: the same requests, in the same order (FR-031).
+- [x] T087 (human) With all phases merged, walk [quickstart.md](./quickstart.md) at 375px and 1440px on the local stack, saving screenshots to `tmp/screenshots/pr-<number>/`. Compare the network panel with `main` on the course editor, a submission and earnings: the same requests, in the same order (FR-031).
 - [ ] T088 (human) On a real phone, or the browser's device mode with touch:
   - rename a lesson, hide it, save a quiz edit, and grade a submission. Confirm nothing needs a sideways scroll or a zoom to reach (SC-003);
   - at 1440px with the browser's text zoom at 200%, confirm that the course editor and a dialog still don't scroll sideways.
