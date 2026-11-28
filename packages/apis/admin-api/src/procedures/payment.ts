@@ -29,6 +29,7 @@ import {
   completeDisconnect,
   getConnection,
   listChanges,
+  listFailedRefunds,
   OpenCheckoutError,
   type PaymentChangeRecord,
   type PaymentConnectionRecord,
@@ -44,6 +45,7 @@ import {
   DisconnectPaymentOutputSchema,
   type IPaymentStatus,
   PaymentStatusOutputSchema,
+  RefundFailuresOutputSchema,
 } from '../schema/index.js';
 
 // The administrator's Stripe connection (research R-14 to R-17). `status` is
@@ -134,6 +136,35 @@ export const paymentStatus = adminProcedure
       new Date().toISOString(),
     ),
   );
+
+// Refunded orders whose refund failed, so support can refund the student.
+export const refundFailures = adminProcedure
+  .output(RefundFailuresOutputSchema)
+  .query(async ({ ctx }) => {
+    const orders = await listFailedRefunds(ctx.coreTable);
+    const failures = await Promise.all(
+      orders.map(async (order) => {
+        const { data: user } = await ctx.coreTable.entities.user
+          .get({ userId: order.userId })
+          .go();
+        const name = [user?.givenName, user?.familyName]
+          .filter(Boolean)
+          .join(' ');
+        return {
+          orderId: order.orderId,
+          studentName: name || order.userId,
+          courseTitle: order.courseTitle,
+          amount: order.amount,
+          currency: order.currency,
+          ...(order.paymentIntentId && {
+            paymentIntentId: order.paymentIntentId,
+          }),
+          refundFailedAt: order.refundFailedAt as string,
+        };
+      }),
+    );
+    return { failures };
+  });
 
 // Maps what a save can fail with to a tRPC error with a fixed message.
 const toTrpcError = (error: unknown): TRPCError => {

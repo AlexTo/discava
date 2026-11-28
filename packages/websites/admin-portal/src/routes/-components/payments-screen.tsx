@@ -23,6 +23,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAdminApi } from '../../api';
 import { ChangesTable } from './payments/changes-table';
 import { KeyForm, KeyHelp } from './payments/connect-form';
+import { RefundFailures } from './payments/refund-failures';
 import { StatusCard } from './payments/status-card';
 
 export const POLL_MS = 5000;
@@ -37,6 +38,7 @@ export function PaymentsScreen() {
       query.state.data?.state === 'changing' ? POLL_MS : false,
   });
   const statusQuery = useQuery(statusOptions);
+  const failuresQuery = useQuery(trpc.payment.refundFailures.queryOptions());
   const connect = useMutation(trpc.payment.connect.mutationOptions());
   const disconnect = useMutation(trpc.payment.disconnect.mutationOptions());
   const [replacing, setReplacing] = useState(false);
@@ -143,6 +145,19 @@ export function PaymentsScreen() {
         >
           {apiErrorMessage(statusQuery.error)}
         </ErrorAlert>
+      )}
+
+      {failuresQuery.isError && (
+        <ErrorAlert
+          type="error"
+          header="Couldn't load the failed refunds"
+          onRetry={() => failuresQuery.refetch()}
+        >
+          {apiErrorMessage(failuresQuery.error)}
+        </ErrorAlert>
+      )}
+      {failuresQuery.data && (
+        <RefundFailures failures={failuresQuery.data.failures} />
       )}
 
       {error && (

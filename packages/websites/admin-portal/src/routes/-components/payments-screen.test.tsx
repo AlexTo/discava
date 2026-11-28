@@ -40,12 +40,39 @@ const notConnected = { state: 'not-connected', changes: [] };
 
 const render = (status: object, handlers: Record<string, Handler> = {}) =>
   renderWithAdminApi(<PaymentsScreen />, {
-    handlers: { 'payment.status': () => status, ...handlers },
+    handlers: {
+      'payment.status': () => status,
+      'payment.refundFailures': () => ({ failures: [] }),
+      ...handlers,
+    },
   });
 
 const keyField = () => screen.getByLabelText('Stripe secret key');
 
 describe('the Payments page', () => {
+  it('lists refunds that failed for a course bought again', async () => {
+    render(active, {
+      'payment.refundFailures': () => ({
+        failures: [
+          {
+            orderId: 'o1',
+            studentName: 'Sam Lee',
+            courseTitle: 'Algebra',
+            amount: 1999,
+            currency: 'USD',
+            paymentIntentId: 'pi_1',
+            refundFailedAt: '2026-11-28T00:19:25.000Z',
+          },
+        ],
+      }),
+    });
+
+    expect(await screen.findByText('Sam Lee')).toBeInTheDocument();
+    expect(screen.getByText('Algebra')).toBeInTheDocument();
+    expect(screen.getByText('pi_1')).toBeInTheDocument();
+    expect(screen.getByText('Refunds that failed')).toBeInTheDocument();
+  });
+
   it.each([['not-connected'], ['disconnected']])(
     'offers to connect when the state is %s',
     async (state) => {
@@ -282,6 +309,7 @@ describe('the Payments page', () => {
           if (fail) throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
           return active;
         },
+        'payment.refundFailures': () => ({ failures: [] }),
       },
     });
 

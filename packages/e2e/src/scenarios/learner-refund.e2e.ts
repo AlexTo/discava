@@ -15,6 +15,7 @@ import {
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {
+  failHeldRefund,
   failNextRefund,
   holdNextRefund,
   sessionIdOf,
@@ -25,7 +26,7 @@ import {
   startFirstLesson,
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
-import { newUser, signIn, uniqueName } from '../helpers/users.js';
+import { newUser, signIn, testUser, uniqueName } from '../helpers/users.js';
 
 const TERMS =
   "14-day refund while you've completed less than half of the course. One refund per course.";
@@ -283,6 +284,100 @@ test('a failed refund gives the access back and is shown to the student', async 
       student.getByRole('button', { name: 'Request a refund' }),
     ).toHaveCount(0);
     await screenshot(student, 'refund-failed');
+  });
+});
+
+// The refund is still pending when the student buys the course again, and then
+// fails. The new order and enrolment stay as they are, the old order is marked
+// and listed for support, and the student is told to contact support.
+test('a failed refund for a course bought again is shown to the student and to an admin', async ({
+  browser,
+}) => {
+  const title = uniqueName('E2E repurchase failed refund course');
+  await connectLocalStripe();
+
+  await test.step('an instructor publishes a course priced at 19.99', async () => {
+    const instructor = await browser.newPage();
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Rae', ['instructor']));
+    await createCourse(instructor, {
+      title,
+      summary: 'A course bought again after a refund that then fails.',
+    });
+    await instructor.getByLabel('Price', { exact: true }).fill('19.99');
+    await instructor.getByRole('button', { name: 'Save price' }).click();
+    await expect(instructor.getByText('Saved', { exact: true })).toBeVisible();
+    await addModule(instructor, 'Module one');
+    await addLesson(instructor, 'Lesson one');
+    await addTextItem(instructor, { title: 'Reading one', body: 'Refund.' });
+    await publishCourse(instructor);
+  });
+
+  const student = await browser.newPage();
+  let firstSessionId = '';
+  await test.step('a student buys the course and asks for a refund that stays pending', async () => {
+    await openCourse(student, title);
+    await student.getByRole('button', { name: 'Sign in to buy' }).click();
+    await student
+      .getByRole('dialog', { name: 'Sign in to buy' })
+      .getByRole('link', { name: 'Continue to sign in' })
+      .click();
+    await signIn(student, newUser('Gus', ['student']));
+    await student.getByRole('button', { name: 'Buy now' }).click();
+    await student.waitForURL(/\/stripe\/pay\//);
+    firstSessionId = sessionIdOf(student.url());
+    await student.getByRole('button', { name: 'Pay', exact: true }).click();
+    await student.waitForURL(
+      /\/learn\/[0-9a-f-]+\/(lesson\/[0-9a-f-]+|home)$/,
+      { timeout: 30_000 },
+    );
+    await holdNextRefund(firstSessionId);
+    await openCourse(student, title);
+    await student.getByRole('button', { name: 'Request a refund' }).click();
+    await student
+      .getByRole('dialog', { name: 'Request a refund' })
+      .getByRole('button', { name: 'Request refund' })
+      .click();
+    await expect(student.getByText(/Your enrolment has ended\./)).toBeVisible({
+      timeout: 30_000,
+    });
+  });
+
+  await test.step('the student buys the course again', async () => {
+    await openCourse(student, title);
+    await buy(student);
+  });
+
+  await test.step('Stripe fails the first refund, and the student is told', async () => {
+    await failHeldRefund(firstSessionId);
+    await student.goto(`${PORTALS.student}/my-learning`);
+    await student
+      .getByRole('button', { name: /^Notifications/ })
+      .click({ timeout: 30_000 });
+    await expect(
+      student.getByRole('button', {
+        name: new RegExp(
+          `Unread: Your refund for your earlier purchase of ${title} failed`,
+        ),
+      }),
+    ).toBeVisible({ timeout: 30_000 });
+    await screenshot(student, 'refund-failed-for-a-course-bought-again');
+    // The second purchase keeps its access.
+    await openCourse(student, title);
+    await expect(student.getByText(/Your enrolment has ended\./)).toHaveCount(
+      0,
+    );
+  });
+
+  await test.step('an admin sees the order on the Payments page', async () => {
+    const admin = await browser.newPage();
+    await admin.goto(`${PORTALS.admin}/payments`);
+    await signIn(admin, testUser('Carol'));
+    await expect(
+      admin.getByRole('heading', { name: 'Failed refunds' }),
+    ).toBeVisible();
+    await expect(admin.getByText(title)).toBeVisible();
+    await screenshot(admin, 'payments-failed-refunds-listed');
   });
 });
 

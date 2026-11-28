@@ -255,6 +255,20 @@ describe('payments: price, orders and the connection', () => {
       expect(violationsOf('order-shape')).toEqual([]);
     });
 
+    it('accepts a refunded order with refundFailedAt after refundRequestedAt', () => {
+      paidTable();
+      Object.assign(table.orders[0], {
+        status: 'refunded',
+        refundedAt: LATER,
+        refundedAmount: 1999,
+        refundReason: 'requested',
+        refundRequestedAt: LATER,
+        refundFailedAt: LATER,
+      });
+      table.enrolments[0].orderId = 'o2';
+      expect(violationsOf('order-shape')).toEqual([]);
+    });
+
     it('reports a paid order with refundFailedAt that still has refundedAt', () => {
       paidTable();
       Object.assign(table.orders[0], {

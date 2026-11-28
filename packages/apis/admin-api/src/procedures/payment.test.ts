@@ -5,7 +5,12 @@
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { connectPayment, disconnectPayment, paymentStatus } from './payment.js';
+import {
+  connectPayment,
+  disconnectPayment,
+  paymentStatus,
+  refundFailures,
+} from './payment.js';
 
 const mocks = vi.hoisted(() => ({
   getConnection: vi.fn(),
@@ -18,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   abandonChange: vi.fn(),
   recordChange: vi.fn(),
   listChanges: vi.fn(),
+  listFailedRefunds: vi.fn(),
   userGet: vi.fn(),
   verifyKey: vi.fn(),
   registerEndpoint: vi.fn(),
@@ -40,6 +46,7 @@ vi.mock('@discava/core-table', async (importActual) => ({
   abandonChange: mocks.abandonChange,
   recordChange: mocks.recordChange,
   listChanges: mocks.listChanges,
+  listFailedRefunds: mocks.listFailedRefunds,
   createCoreTableService: vi.fn(async () => ({
     entities: { user: { get: mocks.userGet } },
   })),
@@ -72,6 +79,7 @@ import { ChangeInProgressError, OpenCheckoutError } from '@discava/core-table';
 
 const router = t.router({
   status: paymentStatus,
+  refundFailures,
   connect: connectPayment,
   disconnect: disconnectPayment,
 });
@@ -770,5 +778,44 @@ describe('the key never leaves', () => {
     for (const row of rows) {
       expect(row.keyLast4 === undefined || row.keyLast4.length <= 4).toBe(true);
     }
+  });
+});
+
+describe('refundFailures', () => {
+  it('lists refunded orders whose refund failed, with the student named', async () => {
+    mocks.listFailedRefunds.mockResolvedValue([
+      {
+        orderId: 'o1',
+        userId: 'u1',
+        courseTitle: 'Course',
+        amount: 1999,
+        currency: 'USD',
+        paymentIntentId: 'pi_1',
+        refundFailedAt: '2026-11-28T00:19:25.000Z',
+        refundedAmount: 1999,
+      },
+    ]);
+    mocks.userGet.mockReturnValue({
+      go: async () => ({ data: { givenName: 'Sam', familyName: 'Lee' } }),
+    });
+    expect(await callAs().refundFailures()).toEqual({
+      failures: [
+        {
+          orderId: 'o1',
+          studentName: 'Sam Lee',
+          courseTitle: 'Course',
+          amount: 1999,
+          currency: 'USD',
+          paymentIntentId: 'pi_1',
+          refundFailedAt: '2026-11-28T00:19:25.000Z',
+        },
+      ],
+    });
+  });
+
+  it('refuses a caller who is not an admin', async () => {
+    await expect(callAs(['student']).refundFailures()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
   });
 });

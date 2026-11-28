@@ -80,6 +80,10 @@ export const failNextRefund = (sessionId: string) =>
 export const holdNextRefund = (sessionId: string) =>
   control<{ nextRefund: string }>('hold-next-refund', { sessionId });
 
+// Reports the refund `holdNextRefund` left pending as failed, now.
+export const failHeldRefund = (sessionId: string) =>
+  control<{ failed: string }>('fail-held-refund', { sessionId });
+
 // Every refund the stand-in made for the session's payment.
 export const sessionRefunds = async (sessionId: string) =>
   (await control<{ refunds: { amount: number }[] }>('refunds', { sessionId }))
