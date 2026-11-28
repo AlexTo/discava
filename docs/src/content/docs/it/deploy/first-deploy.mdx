@@ -86,10 +86,10 @@ I corsi sono organizzati in categorie gestite da un admin. Puoi accedere al port
 TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
   --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
 
-DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}" pnpm nx run @discava/tooling-deploy:seed-categories
+DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE pnpm nx run @discava/tooling-deploy:seed-categories
 ```
 
-Usa le credenziali AWS e la regione nella tua shell, che devono essere quelle dello stage, e salta le categorie che esistono già. Senza `DISCAVA_DYNAMODB_CORE_TABLE` scrive invece nella tabella di sviluppo locale.
+Usa le credenziali AWS e la regione nella tua shell, che devono essere quelle dello stage, e salta le categorie che esistono già. Senza `DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME` scrive invece nella tabella di sviluppo locale.
 
 ## 5. Provalo da capo a fondo
 

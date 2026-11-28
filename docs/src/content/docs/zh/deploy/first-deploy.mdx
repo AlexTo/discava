@@ -86,10 +86,10 @@ aws cloudformation describe-stacks \
 TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
   --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
 
-DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}" pnpm nx run @discava/tooling-deploy:seed-categories
+DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE pnpm nx run @discava/tooling-deploy:seed-categories
 ```
 
-它使用你 shell 中的 AWS 凭证和区域，这些必须属于该阶段，并且会跳过已存在的分类。如果没有 `DISCAVA_DYNAMODB_CORE_TABLE`，它会改为写入本地开发表。
+它使用你 shell 中的 AWS 凭证和区域，这些必须属于该阶段，并且会跳过已存在的分类。如果没有 `DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME`，它会改为写入本地开发表。
 
 ## 5. 完整试用一遍
 

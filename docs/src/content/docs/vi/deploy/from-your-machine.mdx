@@ -69,7 +69,7 @@ Hai lệnh cuối ghi thẳng vào bảng. Hãy trỏ chúng tới bảng của 
 ```sh
 TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
   --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
-export DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}"
+export DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE
 ```
 
 ## Hủy

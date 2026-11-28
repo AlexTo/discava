@@ -86,10 +86,10 @@ Các khóa học được tổ chức theo danh mục do quản trị viên qu�
 TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
   --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
 
-DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}" pnpm nx run @discava/tooling-deploy:seed-categories
+DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE pnpm nx run @discava/tooling-deploy:seed-categories
 ```
 
-Nó dùng thông tin xác thực AWS và region trong shell của bạn, vốn phải là của stage, và bỏ qua các danh mục đã tồn tại. Nếu không có `DISCAVA_DYNAMODB_CORE_TABLE`, nó ghi vào bảng phát triển cục bộ.
+Nó dùng thông tin xác thực AWS và region trong shell của bạn, vốn phải là của stage, và bỏ qua các danh mục đã tồn tại. Nếu không có `DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME`, nó ghi vào bảng phát triển cục bộ.
 
 ## 5. Thử từ đầu đến cuối
 

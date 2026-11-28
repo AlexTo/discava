@@ -66,8 +66,9 @@ Stripe는 `POST /stripe/webhook`으로 요청을 보냅니다. 이는 `Payments`
 | `checkout.session.completed` | 주문이 결제 완료 처리되며, 전달할 수 없으면 환불됩니다. 아직 결제되지 않은 세션은 무시합니다 |
 | `checkout.session.expired` | `pending` 주문이 `expired`가 되고 쿠폰 선점이 해제됩니다 |
 | `charge.refunded` | 환불이 주문에 기록됩니다 |
+| `refund.failed`, `charge.refund.updated`(`status: failed`) | `paid` 주문에 `refundFailedAt`이 설정됩니다. `charge.refunded`가 이미 `refunded`로 바꾼 주문은 `paid`로 되돌아가고 수강 등록이 복원됩니다 |
 
-Stripe에 등록되는 이벤트는 이 세 가지뿐입니다.
+Stripe에 등록되는 이벤트는 이것들뿐입니다. 이 목록은 엔드포인트를 등록할 때 연결에 기록됩니다. 목록이 위와 다르면(이벤트가 추가되기 전에 저장된 연결) 관리자 결제 페이지가 키를 다시 저장하라고 안내하며, 그렇게 저장하면 기존 엔드포인트의 URL, ID, 서명 시크릿은 바꾸지 않고 이벤트만 갱신합니다.
 
 ### 정확히 한 번 전달하기
 
@@ -160,6 +161,14 @@ core-api의 `payment.requestRefund`는 학생이 자신의 구매를 환불할 �
 
 `requestRefund`는 주문 ID로 만든 멱등성 키와 함께 Stripe에 금액 중 남은 부분의 환불을 요청한 다음 주문에 `refundRequestedAt`을 설정합니다. 주문이나 수강 등록을 직접 바꾸지는 않으며, 뒤이어 오는 `charge.refunded`가 바꿉니다. 표시보다 Stripe 호출이 먼저이므로 둘 사이에 충돌이 나더라도 알림이 기록하는 환불만 남을 뿐, 환불 없는 표시가 남는 일은 없습니다.
 
+Stripe는 환불이 만들어지는 즉시, 아직 `pending` 상태여도 `charge.refunded`를 보내며, 은행이 돈을 반환하면 이후에 환불을 실패 처리할 수 있습니다. 그래서 실패는 대개 이미 `refunded`인 주문과 이미 `dropped`인 수강 등록에 대해 도착합니다. 실패한 환불은 되돌려, 학생이 돈과 강의를 모두 잃지 않게 합니다. Stripe가 환불을 실패로 알리면(`refund.failed`, 또는 `status: failed`인 `charge.refund.updated`) 다음과 같이 처리합니다.
+
+- 사유 `requested`로 `refunded` 상태인 주문에는 `reverseRefund`가 한 트랜잭션을 실행합니다. 주문은 `paid`로 돌아가고, `refundedAt`과 `refundedAmount`는 제거되며, `refundFailedAt`이 설정되고 `refundRequestedAt`은 유지됩니다. 수강 등록은 `dropped`에서 `active`로(`completedAt`이 있으면 `completed`로) 돌아가지만, 여전히 이 주문을 가리킬 때만 그렇습니다. 학생이 환불 후 강의를 다시 구매했다면 수강 등록은 새 주문을 가리키므로 `reverseRefund`는 주문도 수강 등록도 바꾸지 않습니다. 이전 주문이 `paid`로 돌아가면 이 강의에 결제된 주문이 둘이 되기 때문입니다. 알림은 전송되지 않으며, 실패한 환불은 지원팀에 맡겨집니다. 주문이 `refunded`일 때만 실행되므로 실패 이벤트가 반복되어도 아무것도 바뀌지 않습니다. `refundOrder`는 주문의 `refundFailedAt`보다 먼저 Stripe가 만든 `charge.refunded`(실패한 환불에 대해 다시 전달되었거나 늦게 도착한 알림)를 무시하므로 접근 권한을 두 번 끝낼 수 없으며, 그 이후에 만들어진 환불은 새 환불로 적용됩니다. 학생에게는 주문 ID로 중복을 방지하는 `order.refund_failed` 알림("Your refund failed; your access is back. Contact support about your refund")이 전송됩니다. 수료증은 건드리지 않습니다. 환불로 인한 수료증 취소는 운영자만 할 수 있습니다.
+- **수익:** 주문 변경은 `refundFailedAt`이 있고 `refundedAmount`가 없는 `paid` 주문으로 수익 기록기에 전달되며, `recordRefundReversal`이 되돌려진 환불을 기록합니다. 강사별로 환불 수치를 부호만 바꾼 `refund` 항목(항목 ID `refund-reversal-<orderId>-<total>`)을 `refundFailedAt` 날짜로 만들고, `earningOrder.refundedMinor`를 다시 0으로 되돌리며, 이 모두를 한 트랜잭션으로 처리합니다. 원래의 환불 항목은 수정하지 않으므로, 정산이 이미 차감한 환불은 다음 정산에서 돌려받고, 판매 수익은 환불 요청 이전과 같아집니다. 되돌린 시각은 원장에 아직 환불이 없었더라도 `earningOrder.reversedAt`에 보관되며, `recordRefund`는 그 시각과 같거나 이전 날짜의 환불을 제외합니다. 따라서 반복 전달, 되돌린 뒤에 전달된 환불 이미지, 되돌리기 전에 전달된 환불 이미지는 아무것도 기록하지 않고, 같은 주문의 이후 환불(지원팀이 다시 환불하는 경우)은 새 환불로 기록되어 다시 되돌릴 수 있습니다.
+- 아직 `paid`인 주문에는 `markRefundFailed`가 `refundFailedAt`을 설정합니다.
+
+주문은 `refundRequestedAt`이 유지된 `paid` 상태이므로 두 번째 요청은 제공되지 않습니다. `payment.myOrder`는 `refundFailedAt`을 반환하며, 강의 페이지는 환불이 실패했으니 지원팀에 문의하라고 학생에게 안내하고 "Request a refund" 버튼은 표시하지 않습니다. 강의 페이지는 대기 중인 환불을 제한된 시간(2분) 동안 폴링한 뒤, 아직 처리 중이라고 안내하고 다시 확인하는 버튼을 제공합니다.
+
 `dropped` 수강 등록은 진행률과 완료 내역을 유지합니다. 학생은 다시 돌아올 수 있습니다.
 
 - **다시 구매하기.** 새 주문을 결제 완료 처리하면 수강 등록이 복원되며, 강의를 마쳤다면 `completed`로, 진행률과 함께 복원됩니다.
@@ -207,7 +216,7 @@ core-table의 `helpers/invariants/`에 있는 두 파일은 모든 엔드 투 �
 
 이벤트 러너에는 Stripe 대역(`packages/events/src/local/stripe-stand-in.ts`)이 포함되어 있습니다. Stripe의 API, **Pay**, **Decline card**, **Cancel**이 있는 호스팅 결제 페이지, 그리고 포트 2024의 `/stripe/webhook`으로 가는 서명된 웹훅 전달을 제공합니다. 키 `sk_test_local`로 Carol로서 연결하세요. 키는 Secrets Manager 대신 git에서 무시되는 `tmp/local-dev/secrets/`에 보관됩니다.
 
-`/stripe/test/` 아래의 컨트롤은 실제 Stripe 계정이 하는 일을 대신 수행합니다. `refund`, `refunds`(결제의 환불 목록), `replay`(확인을 다시 전달), `expire`, `forge`(잘못 서명된 메시지), `endpoints`가 있습니다.
+`/stripe/test/` 아래의 컨트롤은 실제 Stripe 계정이 하는 일을 대신 수행합니다. `refund`, `refunds`(결제의 환불 목록), `fail-next-refund`(다음 환불을 `charge.refunded`로 알린 뒤 잠시 후 실패로 보고하며, 결제는 더 이상 환불된 상태가 아닙니다), `hold-next-refund`(`charge.refunded`로 알린 뒤 끝내 처리하지 않음), `replay`(확인을 다시 전달), `expire`, `forge`(잘못 서명된 메시지), `endpoints`가 있습니다.
 
 `LOCAL_CHECKOUT_TTL_SECONDS`는 결제의 한 시간 수명을 줄이며, 로컬 개발에서만 사용합니다.
 

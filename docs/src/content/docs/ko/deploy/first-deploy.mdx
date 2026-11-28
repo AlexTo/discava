@@ -86,10 +86,10 @@ aws cloudformation describe-stacks \
 TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
   --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
 
-DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}" pnpm nx run @discava/tooling-deploy:seed-categories
+DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE pnpm nx run @discava/tooling-deploy:seed-categories
 ```
 
-셸의 AWS 자격 증명과 리전을 사용하므로 스테이지의 것이어야 하며, 이미 있는 카테고리는 건너뜁니다. `DISCAVA_DYNAMODB_CORE_TABLE`이 없으면 대신 로컬 개발 테이블에 씁니다.
+셸의 AWS 자격 증명과 리전을 사용하므로 스테이지의 것이어야 하며, 이미 있는 카테고리는 건너뜁니다. `DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME`이 없으면 대신 로컬 개발 테이블에 씁니다.
 
 ## 5. 처음부터 끝까지 써보기
 

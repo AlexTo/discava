@@ -66,8 +66,9 @@ O Stripe envia para `POST /stripe/webhook`, uma API do API Gateway própria no s
 | `checkout.session.completed` | O pedido é liquidado, ou reembolsado se não puder ser entregue. Uma sessão que ainda não foi paga é ignorada |
 | `checkout.session.expired` | Um pedido `pending` vira `expired`, e a reserva de seu cupom é liberada |
 | `charge.refunded` | O reembolso é registrado no pedido |
+| `refund.failed`, `charge.refund.updated` (`status: failed`) | `refundFailedAt` é definido em um pedido `paid`; um pedido que `charge.refunded` já moveu para `refunded` volta para `paid` e a matrícula é restaurada |
 
-Estes três são os únicos eventos registrados no Stripe.
+Estes são os únicos eventos registrados no Stripe. A lista é gravada na conexão quando o endpoint é registrado. Se ela difere desta (uma conexão salva antes de um evento ser adicionado), a página de pagamentos do admin pede que a chave seja salva de novo, e esse salvamento atualiza os eventos do endpoint existente sem mudar sua URL, seu ID nem seu segredo de assinatura.
 
 ### Entregar exatamente uma vez
 
@@ -160,6 +161,14 @@ O `payment.requestRefund` do core-api permite que um aluno reembolse a própria 
 
 `requestRefund` pede ao Stripe que reembolse o que resta do valor, com uma chave de idempotência montada a partir do ID do pedido, e então define `refundRequestedAt` no pedido. Ele nunca move o pedido ou a matrícula por conta própria: o `charge.refunded` que se segue faz isso. O Stripe é chamado antes da marca, então uma queda entre os dois deixa um reembolso que o aviso ainda registra, nunca uma marca sem reembolso.
 
+O Stripe envia `charge.refunded` assim que um reembolso é criado, mesmo enquanto ele ainda está `pending`, e pode falhar o reembolso depois, se o banco devolver o dinheiro. Por isso uma falha costuma chegar para um pedido que já está `refunded` e uma matrícula que já está `dropped`. Um reembolso que falha é desfeito, para que o aluno não perca o dinheiro e o curso. Se o Stripe informa que o reembolso falhou (`refund.failed`, ou `charge.refund.updated` com `status: failed`):
+
+- Para um pedido `refunded` com motivo `requested`, `reverseRefund` executa uma transação: o pedido volta para `paid`, `refundedAt` e `refundedAmount` são removidos, `refundFailedAt` é definido e `refundRequestedAt` é mantido; a matrícula passa de `dropped` de volta para `active` (`completed` se tiver `completedAt`), mas só enquanto ainda nomear este pedido. Se o aluno comprou o curso de novo após o reembolso, a matrícula nomeia o novo pedido e `reverseRefund` não muda nada, nem pedido nem matrícula: o pedido antigo de volta em `paid` seria um segundo pedido pago para o curso. Nenhuma notificação é enviada, e o reembolso que falhou fica com o suporte. Ele é condicionado a o pedido estar `refunded`, então um evento de falha repetido não muda nada. `refundOrder` ignora um `charge.refunded` que o Stripe criou antes do `refundFailedAt` do pedido (um aviso reenviado ou atrasado do reembolso que falhou), para não encerrar o acesso uma segunda vez; um reembolso criado depois dele é aplicado como um novo. O aluno recebe uma notificação `order.refund_failed` ("Seu reembolso falhou; seu acesso foi restaurado. Fale com o suporte sobre o reembolso"), deduplicada pelo ID do pedido. Os certificados não são tocados: só um admin revoga um por reembolso.
+- **Ganhos:** a mudança no pedido chega ao registrador de ganhos como um pedido `paid` com `refundFailedAt` e sem `refundedAmount`, e `recordRefundReversal` lança o reembolso desfeito: uma entrada `refund` por instrutor com os valores do reembolso negados (ID da entrada `refund-reversal-<orderId>-<total>`), datada em `refundFailedAt`, e `earningOrder.refundedMinor` de volta a 0, em uma transação. As entradas de reembolso originais nunca são editadas, então um reembolso que um repasse já descontou é devolvido pelo próximo repasse, e os ganhos da venda ficam iguais aos de antes do pedido de reembolso. O momento da reversão fica em `earningOrder.reversedAt`, mesmo quando o livro-razão ainda não tinha nenhum reembolso, e `recordRefund` deixa de fora um reembolso datado nele ou antes. Assim, uma repetição, uma imagem de reembolso entregue depois da reversão, ou uma entregue antes dela, não registra nada, enquanto um reembolso posterior do mesmo pedido (o suporte reembolsa de novo) é registrado como novo e pode ser revertido por sua vez.
+- Para um pedido ainda `paid`, `markRefundFailed` define `refundFailedAt`.
+
+O pedido fica `paid` com `refundRequestedAt` mantido, então nenhum segundo pedido é oferecido; `payment.myOrder` retorna `refundFailedAt` e a página do curso informa ao aluno que o reembolso falhou e que ele deve falar com o suporte, sem o botão "Request a refund". A página do curso consulta um reembolso pendente por um tempo limitado (2 minutos), depois diz que ele ainda está sendo processado e oferece um botão para verificar de novo.
+
 Uma matrícula `dropped` mantém seu progresso e suas conclusões. O aluno pode voltar:
 
 - **Comprando de novo.** Liquidar o novo pedido restaura a matrícula, como `completed` se ele tinha terminado o curso, com seu progresso.
@@ -207,7 +216,7 @@ Dois arquivos em `helpers/invariants/` do core-table verificam as regras que abr
 
 O executor de eventos inclui um substituto do Stripe (`packages/events/src/local/stripe-stand-in.ts`): a API do Stripe, uma página de checkout hospedada com **Pay**, **Decline card** e **Cancel**, e entregas de webhook assinadas para `/stripe/webhook` na porta 2024. Conecte-o como Carol com a chave `sk_test_local`. A chave é guardada em `tmp/local-dev/secrets/`, ignorado pelo git, no lugar do Secrets Manager.
 
-Os controles em `/stripe/test/` conduzem o que uma conta real do Stripe faria: `refund`, `refunds` (lista os reembolsos de um pagamento), `replay` (entrega uma confirmação de novo), `expire`, `forge` (uma mensagem com assinatura errada) e `endpoints`.
+Os controles em `/stripe/test/` conduzem o que uma conta real do Stripe faria: `refund`, `refunds` (lista os reembolsos de um pagamento), `fail-next-refund` (o próximo reembolso é anunciado com `charge.refunded` e, um instante depois, informado como falho, e a cobrança deixa de estar reembolsada), `hold-next-refund` (anunciado com `charge.refunded`, nunca concluído), `replay` (entrega uma confirmação de novo), `expire`, `forge` (uma mensagem com assinatura errada) e `endpoints`.
 
 `LOCAL_CHECKOUT_TTL_SECONDS` encurta a vida de uma hora de um checkout, apenas no desenvolvimento local.
 

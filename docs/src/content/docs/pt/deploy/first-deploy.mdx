@@ -86,10 +86,10 @@ Os cursos são organizados por categorias que um admin gerencia. Entre no portal
 TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
   --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
 
-DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}" pnpm nx run @discava/tooling-deploy:seed-categories
+DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE pnpm nx run @discava/tooling-deploy:seed-categories
 ```
 
-Ele usa as credenciais e a região da AWS do seu shell, que devem ser as do stage, e ignora categorias que já existem. Sem `DISCAVA_DYNAMODB_CORE_TABLE`, ele grava na tabela de desenvolvimento local.
+Ele usa as credenciais e a região da AWS do seu shell, que devem ser as do stage, e ignora categorias que já existem. Sem `DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME`, ele grava na tabela de desenvolvimento local.
 
 ## 5. Teste de ponta a ponta
 

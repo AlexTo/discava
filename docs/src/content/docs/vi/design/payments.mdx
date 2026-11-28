@@ -66,8 +66,9 @@ Stripe gửi đến `POST /stripe/webhook`, một API Gateway API riêng trong s
 | `checkout.session.completed` | Đơn hàng được chốt, hoặc hoàn tiền nếu không giao được. Một phiên chưa được thanh toán thì bị bỏ qua |
 | `checkout.session.expired` | Một đơn hàng `pending` thành `expired`, và claim coupon của nó được giải phóng |
 | `charge.refunded` | Khoản hoàn tiền được ghi vào đơn hàng |
+| `refund.failed`, `charge.refund.updated` (`status: failed`) | `refundFailedAt` được đặt trên một đơn hàng `paid`; một đơn hàng mà `charge.refunded` đã chuyển sang `refunded` được đưa về `paid` và lượt ghi danh được khôi phục |
 
-Ba sự kiện này là những sự kiện duy nhất được đăng ký với Stripe.
+Đây là những sự kiện duy nhất được đăng ký với Stripe. Danh sách này được ghi trên kết nối khi endpoint được đăng ký. Nếu nó khác danh sách này (một kết nối được lưu trước khi có thêm một sự kiện), trang thanh toán của admin yêu cầu lưu lại khóa, và lần lưu đó cập nhật các sự kiện của endpoint hiện có mà không đổi URL, ID hay signing secret của nó.
 
 ### Giao đúng một lần
 
@@ -160,6 +161,14 @@ Sau một lần hoàn tiền toàn bộ, webhook xuất bản một thông báo 
 
 `requestRefund` yêu cầu Stripe hoàn số tiền còn lại, với khóa idempotency dựng từ ID đơn hàng, rồi đặt `refundRequestedAt` trên đơn hàng. Nó không bao giờ tự chuyển đơn hàng hay lượt ghi danh: `charge.refunded` theo sau mới làm. Stripe được gọi trước khi đánh dấu, nên một sự cố giữa hai bước để lại một khoản hoàn tiền mà thông báo vẫn ghi nhận, không bao giờ là một dấu đánh dấu mà không có hoàn tiền.
 
+Stripe gửi `charge.refunded` ngay khi một khoản hoàn tiền được tạo, kể cả khi nó vẫn đang `pending`, và có thể làm khoản hoàn tiền thất bại sau đó nếu ngân hàng trả tiền lại. Vì vậy một lần thất bại thường đến với một đơn hàng đã `refunded` và một lượt ghi danh đã `dropped`. Một khoản hoàn tiền thất bại được hoàn tác, để học viên không mất cả tiền lẫn khóa học. Nếu Stripe báo khoản hoàn tiền thất bại (`refund.failed`, hoặc `charge.refund.updated` với `status: failed`):
+
+- Với đơn hàng `refunded` có lý do `requested`, `reverseRefund` chạy một transaction: đơn hàng quay về `paid`, `refundedAt` và `refundedAmount` bị xóa, `refundFailedAt` được đặt và `refundRequestedAt` được giữ; lượt ghi danh chuyển từ `dropped` về `active` (`completed` nếu có `completedAt`), nhưng chỉ khi nó vẫn nêu tên đơn hàng này. Nếu học viên đã mua lại khóa học sau lần hoàn tiền, lượt ghi danh nêu tên đơn hàng mới và `reverseRefund` không đổi gì, cả đơn hàng lẫn lượt ghi danh: đơn hàng cũ quay về `paid` sẽ là đơn hàng đã trả tiền thứ hai của khóa học. Không có thông báo nào được gửi, và khoản hoàn tiền thất bại được để cho bộ phận hỗ trợ. Nó có điều kiện là đơn hàng đang `refunded`, nên một sự kiện thất bại lặp lại không đổi gì. `refundOrder` bỏ qua một `charge.refunded` mà Stripe tạo trước `refundFailedAt` của đơn hàng (một thông báo bị giao lại hoặc đến trễ về khoản hoàn tiền đã thất bại), nên nó không thể kết thúc quyền truy cập lần thứ hai; một khoản hoàn tiền được tạo sau đó được áp dụng như một khoản mới. Học viên nhận thông báo `order.refund_failed` ("Hoàn tiền của bạn không thành công; quyền truy cập của bạn đã được khôi phục. Hãy liên hệ bộ phận hỗ trợ về khoản hoàn tiền"), loại trùng theo ID đơn hàng. Chứng chỉ không bị đụng đến: chỉ admin mới thu hồi một chứng chỉ vì hoàn tiền.
+- **Earnings:** thay đổi của đơn hàng đến bộ ghi earnings dưới dạng một đơn hàng `paid` có `refundFailedAt` và không có `refundedAmount`, và `recordRefundReversal` ghi nhận khoản hoàn tiền bị lấy lại: một bút toán `refund` cho mỗi giảng viên với các số liệu của khoản hoàn tiền được đổi dấu (ID bút toán `refund-reversal-<orderId>-<total>`), ghi ngày tại `refundFailedAt`, và `earningOrder.refundedMinor` về lại 0, trong một transaction. Các bút toán hoàn tiền gốc không bao giờ bị sửa, nên một khoản hoàn tiền mà một đợt chi trả đã trừ sẽ được trả lại ở đợt chi trả kế tiếp, và earnings của lần bán giống như trước yêu cầu hoàn tiền. Thời điểm đảo ngược được giữ trên `earningOrder.reversedAt`, kể cả khi sổ cái chưa có khoản hoàn tiền nào, và `recordRefund` bỏ qua một khoản hoàn tiền có ngày bằng hoặc trước nó. Vì vậy một lần lặp lại, một refund image được giao sau khi đảo ngược, hoặc được giao trước đó, không ghi gì, còn một khoản hoàn tiền sau đó của cùng đơn hàng (hỗ trợ hoàn tiền lại) được ghi như mới và có thể bị đảo ngược lần nữa.
+- Với đơn hàng vẫn còn `paid`, `markRefundFailed` đặt `refundFailedAt`.
+
+Đơn hàng là `paid` với `refundRequestedAt` được giữ, nên không có yêu cầu thứ hai nào được đưa ra; `payment.myOrder` trả về `refundFailedAt` và trang khóa học báo cho học viên rằng hoàn tiền thất bại và hãy liên hệ bộ phận hỗ trợ, không có nút "Request a refund". Trang khóa học thăm dò một khoản hoàn tiền đang chờ trong một thời gian giới hạn (2 phút), rồi báo rằng nó vẫn đang được xử lý và đưa ra một nút để kiểm tra lại.
+
 Một lượt ghi danh đã dropped giữ tiến độ và các lần hoàn thành của nó. Học viên có thể quay lại:
 
 - **Bằng cách mua lại.** Chốt đơn hàng mới khôi phục lượt ghi danh, là `completed` nếu họ đã học xong khóa học, cùng tiến độ của họ.
@@ -207,7 +216,7 @@ Hai tệp trong `helpers/invariants/` của core-table kiểm tra các quy tắc
 
 Event runner có một Stripe stand-in (`packages/events/src/local/stripe-stand-in.ts`): API của Stripe, một trang checkout được host với **Pay**, **Decline card** và **Cancel**, và các lần giao webhook có chữ ký đến `/stripe/webhook` trên cổng 2024. Kết nối nó với tư cách Carol bằng khóa `sk_test_local`. Khóa được giữ trong `tmp/local-dev/secrets/` bị git bỏ qua thay cho Secrets Manager.
 
-Các điều khiển dưới `/stripe/test/` điều khiển những gì một tài khoản Stripe thật sẽ làm: `refund`, `refunds` (liệt kê các lần hoàn tiền của một khoản thanh toán), `replay` (giao lại một xác nhận), `expire`, `forge` (một thông điệp ký sai) và `endpoints`.
+Các điều khiển dưới `/stripe/test/` điều khiển những gì một tài khoản Stripe thật sẽ làm: `refund`, `refunds` (liệt kê các lần hoàn tiền của một khoản thanh toán), `fail-next-refund` (khoản hoàn tiền kế tiếp được báo bằng `charge.refunded`, rồi ít lâu sau được báo là thất bại, và khoản thu không còn ở trạng thái đã hoàn), `hold-next-refund` (được báo bằng `charge.refunded`, không bao giờ được chốt), `replay` (giao lại một xác nhận), `expire`, `forge` (một thông điệp ký sai) và `endpoints`.
 
 `LOCAL_CHECKOUT_TTL_SECONDS` rút ngắn vòng đời một giờ của checkout, chỉ trong phát triển cục bộ.
 

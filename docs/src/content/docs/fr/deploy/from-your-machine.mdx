@@ -69,7 +69,7 @@ Les deux dernières écrivent directement dans la table. Pointez-les d'abord ver
 ```sh
 TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
   --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
-export DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}"
+export DISCAVA_DYNAMODB_CORE_TABLE_TABLE_NAME=$TABLE
 ```
 
 ## Détruire

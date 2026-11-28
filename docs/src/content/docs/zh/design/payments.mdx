@@ -66,8 +66,9 @@ Stripe 向 `POST /stripe/webhook` 发送请求，这是 `Payments` 堆栈中独�
 | `checkout.session.completed` | 订单被结算，如果无法交付则退款。尚未支付的会话会被忽略 |
 | `checkout.session.expired` | `pending` 订单变为 `expired`，其优惠券占用被释放 |
 | `charge.refunded` | 退款记录到订单上 |
+| `refund.failed`、`charge.refund.updated`（`status: failed`） | 在 `paid` 订单上设置 `refundFailedAt`；`charge.refunded` 已经移到 `refunded` 的订单会被放回 `paid`，加入记录也会恢复 |
 
-这三个是在 Stripe 注册的仅有的事件。
+这些是在 Stripe 注册的仅有的事件。事件列表在注册端点时记录在连接上。如果它与这里的列表不一致（连接是在新增某个事件之前保存的），管理员的支付页面会要求重新保存密钥，这次保存会更新现有端点的事件，而不改变它的地址、ID 或签名密钥。
 
 ### 只交付一次
 
@@ -160,6 +161,14 @@ core-api 的 `payment.requestRefund` 让学生退还自己的购买，`payment.m
 
 `requestRefund` 请求 Stripe 退还金额的剩余部分，幂等键由订单 ID 构成，然后在订单上设置 `refundRequestedAt`。它自己从不改变订单或加入记录：随后的 `charge.refunded` 才会这样做。先调用 Stripe 再做标记，所以两者之间崩溃时，留下的是通知仍会记录的退款，而不会是没有退款的标记。
 
+Stripe 在退款创建时就会发送 `charge.refunded`，即使退款仍是 `pending`，之后如果银行退回这笔钱，它还可能让退款失败。所以失败通常到达时，订单已经是 `refunded`，加入记录已经是 `dropped`。失败的退款会被撤销，这样学生不会既失去钱又失去课程。如果 Stripe 报告退款失败（`refund.failed`，或 `status: failed` 的 `charge.refund.updated`）：
+
+- 对于 `refunded` 且原因是 `requested` 的订单，`reverseRefund` 在一个事务中执行：订单回到 `paid`，移除 `refundedAt` 和 `refundedAmount`，设置 `refundFailedAt`，保留 `refundRequestedAt`；加入记录从 `dropped` 回到 `active`（如果有 `completedAt` 则为 `completed`），但仅当它仍指向这个订单。如果学生在退款之后又买了这门课程，加入记录指向的是新订单，`reverseRefund` 不会改变任何东西，订单和加入记录都不变：旧订单回到 `paid` 会让该课程出现第二个已支付订单。不会发送通知，失败的退款交给客服处理。它以订单为 `refunded` 作为条件，所以重复的失败事件不会产生任何变化。`refundOrder` 会忽略 Stripe 在订单的 `refundFailedAt` 之前创建的 `charge.refunded`（即已失败退款的重新投递或迟到的通知），所以它不会第二次终止访问权限；在它之后创建的退款会作为新的退款应用。学生会收到一条 `order.refund_failed` 通知（"Your refund failed; your access is back. Contact support about your refund"），以订单 ID 去重。证书不受影响：只有管理员才能因退款而撤销证书。
+- **收入：** 订单的变化会以带有 `refundFailedAt` 且没有 `refundedAmount` 的 `paid` 订单到达收入记录程序，`recordRefundReversal` 记录被收回的退款：为每位讲师写一条 `refund` 条目，退款的各项数字取负（条目 ID 为 `refund-reversal-<orderId>-<total>`），日期为 `refundFailedAt`，并把 `earningOrder.refundedMinor` 恢复为 0，全部在一个事务中完成。原有的退款条目从不被编辑，所以已被某次结算扣除的退款会由下一次结算退还，这笔销售的收入与退款请求之前相同。冲销的时间保存在 `earningOrder.reversedAt` 中，即使账本里还没有退款也是如此，`recordRefund` 会略过日期等于或早于它的退款。所以重复的事件、在冲销之后到达的退款镜像，或在冲销之前到达的退款镜像，都不会记录任何内容，而同一订单之后的退款（客服再次退款）会作为新的退款记录，也可以再被冲销。
+- 对于仍为 `paid` 的订单，`markRefundFailed` 设置 `refundFailedAt`。
+
+订单为 `paid` 且保留 `refundRequestedAt`，所以不会再提供第二次请求；`payment.myOrder` 返回 `refundFailedAt`，课程页面会告诉学生退款失败并请联系客服，不显示 "Request a refund" 按钮。课程页面对待处理的退款只轮询有限的时间（2 分钟），然后说明它仍在处理中，并提供一个再次检查的按钮。
+
 被终止的加入记录保留其进度和完成记录。学生可以回来：
 
 - **再次购买。** 结算新订单会恢复加入记录，如果他们已完成课程则恢复为 `completed`，并保留进度。
@@ -207,7 +216,7 @@ core-table 的 `helpers/invariants/` 中有两个文件，在每个端到端场�
 
 事件运行器包含一个 Stripe 替身（`packages/events/src/local/stripe-stand-in.ts`）：Stripe 的 API、带有 **Pay**、**Decline card** 和 **Cancel** 的托管结账页面，以及发往端口 2024 上 `/stripe/webhook` 的已签名 webhook 投递。以 Carol 的身份用密钥 `sk_test_local` 连接它。密钥保存在被 git 忽略的 `tmp/local-dev/secrets/` 中，代替 Secrets Manager。
 
-`/stripe/test/` 下的控制项可以驱动真实 Stripe 账户会做的事：`refund`、`refunds`（列出一笔付款的退款）、`replay`（再次投递确认）、`expire`、`forge`（签名错误的消息）和 `endpoints`。
+`/stripe/test/` 下的控制项可以驱动真实 Stripe 账户会做的事：`refund`、`refunds`（列出一笔付款的退款）、`fail-next-refund`（下一笔退款先以 `charge.refunded` 通知，稍后再报告失败，且该扣款不再是已退款状态）、`hold-next-refund`（以 `charge.refunded` 通知，但永不完成）、`replay`（再次投递确认）、`expire`、`forge`（签名错误的消息）和 `endpoints`。
 
 `LOCAL_CHECKOUT_TTL_SECONDS` 可以缩短结账一小时的有效期，仅限本地开发。
 

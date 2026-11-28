@@ -66,8 +66,9 @@ Stripe は `POST /stripe/webhook` に送信します。これは `Payments` ス�
 | `checkout.session.completed` | 注文が決済処理されるか、届けられない場合は返金される。まだ支払われていないセッションは無視される |
 | `checkout.session.expired` | `pending` の注文が `expired` になり、そのクーポンのクレームが解放される |
 | `charge.refunded` | 返金が注文に対して記録される |
+| `refund.failed`、`charge.refund.updated`（`status: failed`） | `paid` の注文に `refundFailedAt` が設定される。`charge.refunded` がすでに `refunded` に移した注文は `paid` に戻され、受講登録が復元される |
 
-Stripe に登録されているイベントは、この3つだけです。
+Stripe に登録されているイベントは、これだけです。このリストは、エンドポイントの登録時に連携に記録されます。ここに挙げたものと異なる場合（イベントが追加される前に保存された連携）、管理者の支払いページはキーをもう一度保存するよう求め、その保存は、URL、ID、署名シークレットを変えずに、既存のエンドポイントのイベントを更新します。
 
 ### ちょうど1回の配信
 
@@ -160,6 +161,14 @@ core-api の `payment.requestRefund` は、受講生が自分の購入を返金�
 
 `requestRefund` は、注文 ID から作った冪等キーで、金額の残りの返金を Stripe に依頼し、その後、注文に `refundRequestedAt` を設定します。注文や受講登録を自分で動かすことはなく、それに続く `charge.refunded` が行います。印の前に Stripe が呼ばれるため、その間でクラッシュしても、通知が引き続き記録する返金が残るだけで、返金のない印が残ることはありません。
 
+Stripe は、返金が作られるとすぐに、まだ `pending` の間でも `charge.refunded` を送り、銀行がお金を返してきた場合は、その後で返金を失敗にすることがあります。そのため、失敗は多くの場合、すでに `refunded` の注文と、すでに `dropped` の受講登録に対して届きます。失敗した返金は元に戻されるので、受講生がお金とコースの両方を失うことはありません。Stripe が返金を失敗と報告した場合（`refund.failed`、または `status: failed` の `charge.refund.updated`）は、次のとおりです。
+
+- 理由 `requested` で `refunded` の注文では、`reverseRefund` が1つのトランザクションを実行します。注文は `paid` に戻り、`refundedAt` と `refundedAmount` は削除され、`refundFailedAt` が設定され、`refundRequestedAt` は保持されます。受講登録は `dropped` から `active` に戻り（`completedAt` があれば `completed`）、ただし、受講登録がまだこの注文を指している場合に限ります。返金の後に受講生がコースをもう一度購入した場合、受講登録は新しい注文を指しており、`reverseRefund` は注文も受講登録も変更しません。古い注文を `paid` に戻すと、コースに支払い済みの注文が2つできてしまうためです。通知は送られず、失敗した返金はサポートに任されます。これは注文が `refunded` であることを条件とするので、失敗イベントが繰り返されても何も変わりません。`refundOrder` は、注文の `refundFailedAt` より前に Stripe が作った `charge.refunded`（失敗した返金の、再配信された通知や遅れて届いた通知）を無視するため、アクセスを2度終わらせることはありません。その後に作られた返金は、新しい返金として適用されます。受講生には `order.refund_failed` 通知（"Your refund failed; your access is back. Contact support about your refund"）が届き、重複排除キーは注文 ID です。証明書には触れません。返金を理由に証明書を取り消せるのは、管理者だけです。
+- **収益:** 注文の変更は、`refundFailedAt` を持ち `refundedAmount` のない `paid` の注文として収益の記録処理に届き、`recordRefundReversal` が取り戻された返金を計上します。講師ごとの `refund` エントリは、返金の数値の符号を反転したもの（エントリ ID は `refund-reversal-<orderId>-<total>`）で、日付は `refundFailedAt`、そして `earningOrder.refundedMinor` は 0 に戻ります。これらは1つのトランザクションで行われます。元の返金エントリは編集されないため、支払いがすでに差し引いた返金は次の支払いで返され、販売の収益は返金リクエスト前と同じになります。取り消しの時刻は、台帳にまだ返金がなかった場合でも `earningOrder.reversedAt` に保持され、`recordRefund` はその時刻以前の日付の返金を除外します。そのため、繰り返し、取り消しの後に届いた返金イメージ、取り消しより前に届いたものは何も記録せず、同じ注文への後の返金（サポートが再度返金する場合）は新しいものとして記録され、同様に取り消すことができます。
+- まだ `paid` の注文では、`markRefundFailed` が `refundFailedAt` を設定します。
+
+注文は `refundRequestedAt` が保持されたまま `paid` なので、2回目のリクエストは提示されません。`payment.myOrder` は `refundFailedAt` を返し、コースページは受講生に返金が失敗したこととサポートへの連絡を伝え、「返金をリクエスト」ボタンは表示しません。コースページは、保留中の返金を一定時間（2分）ポーリングし、その後はまだ処理中であることを伝え、もう一度確認するボタンを提示します。
+
 `dropped` の受講登録は、進捗と完了状況を保持します。受講生は次の方法で戻れます。
 
 - **再度購入する。** 新しい注文が決済処理されると受講登録が復元され、コースを修了していた場合は `completed` として、進捗とともに復元されます。
@@ -207,7 +216,7 @@ core-table の `helpers/invariants/` にある2つのファイルが、エンド
 
 イベントランナーには Stripe のスタンドイン（`packages/events/src/local/stripe-stand-in.ts`）が含まれます。Stripe の API、**Pay**、**Decline card**、**Cancel** を備えたホスト型チェックアウトページ、そしてポート 2024 の `/stripe/webhook` への署名付き Webhook 配信です。Carol としてキー `sk_test_local` で連携してください。キーは Secrets Manager の代わりに、git の対象外である `tmp/local-dev/secrets/` に保持されます。
 
-`/stripe/test/` 配下のコントロールは、実際の Stripe アカウントが行うことを動かします。`refund`、`refunds`（支払いの返金を一覧）、`replay`（確認をもう一度配信）、`expire`、`forge`（誤って署名されたメッセージ）、`endpoints` です。
+`/stripe/test/` 配下のコントロールは、実際の Stripe アカウントが行うことを動かします。`refund`、`refunds`（支払いの返金を一覧）、`fail-next-refund`（次の返金は `charge.refunded` で通知され、少し後に失敗と報告され、課金はもう返金済みではなくなる）、`hold-next-refund`（`charge.refunded` で通知され、確定されない）、`replay`（確認をもう一度配信）、`expire`、`forge`（誤って署名されたメッセージ）、`endpoints` です。
 
 `LOCAL_CHECKOUT_TTL_SECONDS` は、チェックアウトの1時間の有効期間を短くします。ローカル開発のみです。
 
