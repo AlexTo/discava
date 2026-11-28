@@ -309,6 +309,7 @@ describe('the Payments page', () => {
           if (fail) throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
           return active;
         },
+        'payment.refundFailures': () => ({ failures: [] }),
       },
     });
 

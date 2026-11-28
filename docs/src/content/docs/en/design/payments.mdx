@@ -216,7 +216,7 @@ Two files in core-table's `helpers/invariants/` check the rules that span record
 
 The event runner includes a Stripe stand-in (`packages/events/src/local/stripe-stand-in.ts`): Stripe's API, a hosted checkout page with **Pay**, **Decline card** and **Cancel**, and signed webhook deliveries to `/stripe/webhook` on port 2024. Connect it as Carol with the key `sk_test_local`. The key is kept in the git-ignored `tmp/local-dev/secrets/` in place of Secrets Manager.
 
-Controls under `/stripe/test/` drive what a real Stripe account would: `refund`, `refunds` (list a payment's refunds), `fail-next-refund` (the next refund is announced with `charge.refunded`, then reported failed a moment later, and the charge is no longer refunded), `hold-next-refund` (announced with `charge.refunded`, never settled), `replay` (deliver a confirmation again), `expire`, `forge` (a wrongly signed message) and `endpoints`.
+Controls under `/stripe/test/` drive what a real Stripe account would: `refund`, `refunds` (list a payment's refunds), `fail-next-refund` (the next refund is announced with `charge.refunded`, then reported failed a moment later, and the charge is no longer refunded), `hold-next-refund` (announced with `charge.refunded`, never settled), `fail-held-refund` (reports that held refund as failed, however much later), `replay` (deliver a confirmation again), `expire`, `forge` (a wrongly signed message) and `endpoints`.
 
 `LOCAL_CHECKOUT_TTL_SECONDS` shortens a checkout's one-hour life, in local dev only.
 

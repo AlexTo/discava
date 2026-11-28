@@ -787,6 +787,33 @@ describe('fail-next-refund control', () => {
     ]);
   });
 
+  it('fails a held refund when asked, and answers 404 when none is held', async () => {
+    const hook = await receiver();
+    const { secret, stripe, session } = await paid(hook.url);
+    const control = (name: string) =>
+      request(`/stripe/test/${name}`, {
+        method: 'POST',
+        body: JSON.stringify({ sessionId: session.id }),
+      });
+    expect((await control('fail-held-refund')).status).toBe(404);
+    await control('hold-next-refund');
+    const refund = await stripe.refunds.create({
+      payment_intent: session.payment_intent as string,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    hook.deliveries.length = 0;
+    const failed = await control('fail-held-refund');
+    expect(failed.body).toEqual({ failed: refund.id });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const [delivery] = hook.deliveries as { body: string; signature: string }[];
+    expect(
+      Stripe.webhooks.constructEvent(delivery.body, delivery.signature, secret)
+        .type,
+    ).toBe('refund.failed');
+    expect((await control('refunds')).body.refunds).toEqual([]);
+    expect((await control('fail-held-refund')).status).toBe(404);
+  });
+
   it('answers 404 for a session with no payment', async () => {
     const response = await request('/stripe/test/fail-next-refund', {
       method: 'POST',
