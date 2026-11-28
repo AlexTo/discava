@@ -24,6 +24,7 @@ import {
   connectPayment,
   disconnectPayment,
   paymentStatus,
+  refundFailures,
 } from './procedures/payment.js';
 import {
   listAdminReviews,
@@ -52,6 +53,7 @@ export const appRouter = router({
   }),
   payment: router({
     status: paymentStatus,
+    refundFailures,
     connect: connectPayment,
     disconnect: disconnectPayment,
   }),

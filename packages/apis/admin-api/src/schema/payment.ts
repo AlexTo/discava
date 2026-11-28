@@ -58,3 +58,21 @@ export const ConnectPaymentOutputSchema = PaymentStatusOutputSchema.extend({
 });
 
 export const DisconnectPaymentOutputSchema = ConnectPaymentOutputSchema;
+
+// An order refunded at the student's request whose refund then failed after
+// they bought the course again: they paid twice and got nothing back.
+export const RefundFailureSchema = z.object({
+  orderId: z.string(),
+  studentName: z.string(),
+  courseTitle: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  paymentIntentId: z.string().optional(),
+  refundFailedAt: z.string(),
+});
+
+export const RefundFailuresOutputSchema = z.object({
+  failures: z.array(RefundFailureSchema),
+});
+
+export type IRefundFailures = z.output<typeof RefundFailuresOutputSchema>;

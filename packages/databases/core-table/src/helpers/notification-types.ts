@@ -248,6 +248,20 @@ export const NOTIFICATION_TYPES: Record<string, NotificationType> = {
       link: { portal: 'student', path: `/learn/${p.courseId}` },
     }),
   }),
+  'order.refund_failed_repurchased': defineType({
+    id: 'order.refund_failed_repurchased',
+    name: 'Refunds',
+    description:
+      'A refund of an earlier purchase of a course you bought again has failed.',
+    params: ['courseTitle', 'courseId'],
+    emailPolicy: 'required',
+    emailPreferenceType: 'order.refund_failed',
+    build: (p) => ({
+      title: `Your refund for your earlier purchase of ${p.courseTitle} failed`,
+      body: `Your refund for your earlier purchase of ${p.courseTitle} failed. Contact support to get your money back.`,
+      link: { portal: 'student', path: `/learn/${p.courseId}` },
+    }),
+  }),
   'review.received': defineType({
     id: 'review.received',
     name: 'Course reviews',

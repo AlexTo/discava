@@ -1722,7 +1722,7 @@ describe('reverseRefund', () => {
     const { fake } = setup();
     fake.put('order', refunded());
     fake.put('enrolment', enrolment());
-    await expect(reverse(fake)).resolves.toBe(true);
+    await expect(reverse(fake)).resolves.toBe('reversed');
     const stored = fake.row('order', { orderId: 'order-1' });
     expect(stored).toMatchObject({
       status: 'paid',
@@ -1755,18 +1755,38 @@ describe('reverseRefund', () => {
     expect(fake.row('order', { orderId: 'order-1' })).toEqual(before);
   });
 
-  it('leaves an order bought again after the refund, and its enrolment, alone', async () => {
+  it('marks an order bought again after the refund, leaving the order and enrolment as they are', async () => {
     const { fake } = setup();
     fake.put('order', refunded());
     fake.put('enrolment', enrolment({ status: 'active', orderId: 'order-2' }));
-    const before = structuredClone(fake.row('order', { orderId: 'order-1' }));
-    await expect(reverse(fake)).resolves.toBe(false);
+    await expect(reverse(fake)).resolves.toBe('repurchased');
     // A second paid order for the course would break "paid exactly once".
-    expect(fake.row('order', { orderId: 'order-1' })).toEqual(before);
+    expect(fake.row('order', { orderId: 'order-1' })).toMatchObject({
+      status: 'refunded',
+      refundedAt: NOW,
+      refundedAmount: 1999,
+      refundFailedAt: LATER,
+    });
     expect(fake.row('enrolment', key)).toMatchObject({
       status: 'active',
       orderId: 'order-2',
     });
+  });
+
+  it('marks an order bought again only once', async () => {
+    const { fake } = setup();
+    fake.put('order', refunded());
+    fake.put('enrolment', enrolment({ status: 'active', orderId: 'order-2' }));
+    await reverse(fake);
+    const before = structuredClone(fake.row('order', { orderId: 'order-1' }));
+    await expect(
+      reverseRefund({
+        coreTable: fake.coreTable,
+        order: { orderId: 'order-1' },
+        now: '2027-01-01T00:00:00.000Z',
+      }),
+    ).resolves.toBe(false);
+    expect(fake.row('order', { orderId: 'order-1' })).toEqual(before);
   });
 
   it.each(['duplicate', 'unavailable', 'mismatch'] as const)(

@@ -75,13 +75,21 @@ vi.mock('@discava/core-table', () => ({
     if (current.status !== 'refunded' || current.refundReason !== 'requested') {
       return false;
     }
+    if (
+      state.enrolment?.orderId &&
+      state.enrolment.orderId !== current.orderId
+    ) {
+      if (current.refundFailedAt) return false;
+      current.refundFailedAt = now;
+      return 'repurchased';
+    }
     Object.assign(current, { status: 'paid', refundFailedAt: now });
     current.refundedAt = undefined;
     current.refundedAmount = undefined;
     if (state.enrolment?.orderId === current.orderId) {
       state.enrolment.status = 'active';
     }
-    return true;
+    return 'reversed';
   }),
   publishNotification: vi.fn(async (_: unknown, input: any) => {
     if (state.publishError) {
@@ -629,6 +637,30 @@ describe('a failed refund', () => {
     expect(state.notifications.size).toBe(1);
     expect([...state.notifications.values()][0]).toMatchObject({
       type: 'order.refund_failed',
+      dedupeKey: 'o1',
+    });
+  });
+
+  it('marks an order bought again, tells the student once, and leaves the new order alone', async () => {
+    const order = state.orders.get('o1');
+    Object.assign(order, {
+      status: 'refunded',
+      refundReason: 'requested',
+      refundedAt: '2026-11-19T08:00:01.000Z',
+      refundedAmount: 1000,
+    });
+    state.enrolment = { status: 'active', orderId: 'o2' } as any;
+    await send(failedEvent('refund.failed'));
+    await send(failedEvent('refund.failed'));
+    expect(state.orders.get('o1')).toMatchObject({
+      status: 'refunded',
+      refundedAmount: 1000,
+      refundFailedAt: '2026-11-19T09:00:00.000Z',
+    });
+    expect(state.enrolment).toMatchObject({ status: 'active', orderId: 'o2' });
+    expect(state.notifications.size).toBe(1);
+    expect([...state.notifications.values()][0]).toMatchObject({
+      type: 'order.refund_failed_repurchased',
       dedupeKey: 'o1',
     });
   });

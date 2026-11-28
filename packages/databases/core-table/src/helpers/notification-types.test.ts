@@ -32,6 +32,7 @@ describe('NOTIFICATION_TYPES', () => {
       'discussion.answered',
       'discussion.reply',
       'order.refund_failed',
+      'order.refund_failed_repurchased',
       'order.refunded',
       'review.received',
     ]);
@@ -61,6 +62,7 @@ describe('NOTIFICATION_TYPES', () => {
       'discussion.answered': 'default-on',
       'discussion.accepted': 'default-off',
       'order.refund_failed': 'required',
+      'order.refund_failed_repurchased': 'required',
       'order.refunded': 'required',
       'review.received': 'default-off',
     });
@@ -76,7 +78,13 @@ describe('emailPreferenceType', () => {
     expect(NOTIFICATION_TYPES['certificate.reminder'].emailPreferenceType).toBe(
       'certificate.issued',
     );
-    expect(followers.map((type) => type.id)).toEqual(['certificate.reminder']);
+    expect(
+      NOTIFICATION_TYPES['order.refund_failed_repurchased'].emailPreferenceType,
+    ).toBe('order.refund_failed');
+    expect(followers.map((type) => type.id)).toEqual([
+      'certificate.reminder',
+      'order.refund_failed_repurchased',
+    ]);
   });
 
   it.each(followers.map((type) => type.id))(

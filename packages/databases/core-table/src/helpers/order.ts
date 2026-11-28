@@ -643,10 +643,13 @@ export const refundOrder = async ({
  * setting `refundFailedAt` (`refundRequestedAt` stays), and restores the
  * enrolment `dropped` to `completed` (if it has `completedAt`) or `active`.
  * An order the student bought again after the refund (the enrolment names
- * another order) is left alone, order and enrolment, so a re-purchase is not
- * touched and the student keeps one paid order for the course. It
- * is conditioned on the order being `refunded`, so a repeated or retried
- * failure changes nothing. Returns whether it made the move.
+ * another order) is not moved back, so the student keeps one paid order for
+ * the course and the enrolment is untouched; the order stays `refunded` and
+ * only gets `refundFailedAt`, so support can find the student who paid twice
+ * and was never refunded. Both writes are conditioned on the order being
+ * `refunded` (the second also on `refundFailedAt` being absent), so a repeated
+ * or retried failure changes nothing. Returns `reversed` for the move,
+ * `repurchased` for the mark, and `false` when nothing was written.
  */
 export const reverseRefund = async ({
   coreTable,
@@ -656,7 +659,7 @@ export const reverseRefund = async ({
   coreTable: CoreTable;
   order: Pick<OrderRecord, 'orderId'>;
   now: string;
-}): Promise<boolean> => {
+}): Promise<false | 'reversed' | 'repurchased'> => {
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const order = await get(coreTable, named.orderId);
     if (!order) throw new NotFoundError();
@@ -669,7 +672,20 @@ export const reverseRefund = async ({
     // Bought again after the refund: the enrolment names the new order, and
     // this one back at `paid` would be a second paid order for the course.
     if (enrolment?.orderId && enrolment.orderId !== order.orderId) {
-      return false;
+      try {
+        await coreTable.entities.order
+          .patch({ orderId: order.orderId })
+          .set({ refundFailedAt: now })
+          .where(
+            (attr, op) =>
+              `${op.eq(attr.status, 'refunded')} AND ${op.eq(attr.refundReason, 'requested')} AND ${op.notExists(attr.refundFailedAt)}`,
+          )
+          .go();
+        return 'repurchased';
+      } catch (error) {
+        if (!isConditionalFailure(error)) throw error;
+        return false;
+      }
     }
     const restore =
       enrolment?.orderId === order.orderId && enrolment.status === 'dropped';
@@ -701,9 +717,29 @@ export const reverseRefund = async ({
           : []),
       ])
       .go();
-    if (!canceled) return true;
+    if (!canceled) return 'reversed';
   }
   throw new Error('Could not reverse the refund; try again');
+};
+
+/**
+ * The orders a student paid for, was refunded on request, and whose refund
+ * then failed after they bought the course again: `refunded` with
+ * `refundFailedAt`. The student is out of pocket until support refunds them,
+ * so an admin sees these. Oldest failure first.
+ */
+export const listFailedRefunds = async (
+  coreTable: CoreTable,
+): Promise<OrderRecord[]> => {
+  const { data } = await coreTable.entities.order.scan
+    .where(
+      (attr, op) =>
+        `${op.eq(attr.status, 'refunded')} AND ${op.exists(attr.refundFailedAt)}`,
+    )
+    .go({ pages: 'all' });
+  return (data as OrderRecord[]).sort((a, b) =>
+    (a.refundFailedAt ?? '').localeCompare(b.refundFailedAt ?? ''),
+  );
 };
 
 export type RestoreResult = 'restored' | 'course-unavailable' | 'not-dropped';

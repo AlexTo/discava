@@ -17,7 +17,9 @@ import type { WebhookDeps } from '../webhook-deps.js';
  * with no request alone). An order `charge.refunded` already moved to
  * `refunded` is undone by `reverseRefund`: it is `paid` again and the
  * enrolment is restored, and the student is told (the notification's key is
- * the order, so a repeat is a duplicate). An unknown order is logged and
+ * the order, so a repeat is a duplicate). If the student bought the course
+ * again, the order stays `refunded` and only gets `refundFailedAt`; the
+ * student is told the money didn't come back and to contact support. An unknown order is logged and
  * answered 200; a failure is thrown, so the answer is 500 and Stripe retries.
  */
 export const handleRefundFailed = async (
@@ -56,15 +58,18 @@ export const handleRefundFailed = async (
     return;
   }
   const now = deps.now();
-  const reversing = order.status === 'refunded';
-  const recorded = reversing
-    ? await reverseRefund({ coreTable, order, now })
-    : await markRefundFailed({ coreTable, order, now });
-  if (!recorded) return;
-  if (reversing) {
+  const outcome =
+    order.status === 'refunded'
+      ? await reverseRefund({ coreTable, order, now })
+      : (await markRefundFailed({ coreTable, order, now })) && 'marked';
+  if (!outcome) return;
+  if (outcome !== 'marked') {
     // A publish error is not caught: the delivery fails and Stripe redelivers.
     await publishNotification(coreTable, {
-      type: 'order.refund_failed',
+      type:
+        outcome === 'repurchased'
+          ? 'order.refund_failed_repurchased'
+          : 'order.refund_failed',
       userId: order.userId,
       params: { courseTitle: order.courseTitle, courseId: order.courseId },
       dedupeKey: orderId,
