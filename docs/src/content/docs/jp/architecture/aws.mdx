@@ -1,0 +1,162 @@
+---
+title: AWS へのデプロイ
+description: Discava のステージを構成する CloudFormation スタック、各スタックの AWS リソース、およびそれらの依存関係。
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+デプロイされたインストールを**ステージ**と呼びます。ステージは CloudFormation スタックのグループで、すべて `<stage>-<Stack>`（例: `discava-production-Data`）という名前です。1つの AWS アカウントに複数のステージを置いても、互いに干渉しません。
+
+## スタック
+
+アプリケーションは10個のスタックに分かれています。1つのスタックでは CloudFormation の上限である500リソースを超えてしまいます。また、状態を持つリソースとコードを分けることで、日常的なデプロイがデータに触れないようにしています。
+
+```d2 title="Stacks and their dependencies (an arrow points at what a stack needs)"
+direction: up
+
+websites: "Websites"
+data: "Data"
+payments: "Payments"
+media: "MediaPipeline"
+core: "CoreApi"
+router: "StreamRouter"
+payouts: "Payouts"
+instr: "InstructorApi"
+admin: "AdminApi"
+rc: "PortalConfig"
+
+data -> websites
+payments -> data
+payouts -> data
+admin -> payments
+media -> data
+core -> data
+core -> media
+core -> websites
+router -> data
+router -> core
+router -> websites
+instr -> data
+instr -> media
+instr -> core
+instr -> websites
+admin -> data
+admin -> core
+admin -> websites
+rc -> core
+rc -> instr
+rc -> admin
+```
+
+`PortalConfig` は他のすべてのスタックに依存します。図には3つの API への矢印だけを描いています。
+
+デプロイは次の順に行われます。
+
+```
+Websites → Data → Payments → MediaPipeline → CoreApi → StreamRouter → Payouts → InstructorApi → AdminApi → PortalConfig
+```
+
+| スタック | 含まれるもの | 分けている理由 |
+| --- | --- | --- |
+| **Websites** | 3つのポータル（それぞれ S3 バケットと CloudFront ディストリビューション）。受講生ポータルにはページレンダラー関数もあります | 何にも依存しません。他のスタックが、CORS とサインインのリダイレクトのためにポータルのアドレスを必要とします |
+| **Data** | Cognito ユーザープールとそのトリガー、コアテーブル、レッスンメディアと公開メディアのバケットとその CloudFront ディストリビューション、アップロード用バケット、検索コレクションとそのインデックスを作成する関数、配信停止リンクと Stripe のシークレット | 状態を持つものすべて。変更は稀で、他のすべてのバックエンドスタックが依存します |
+| **Payments** | Stripe webhook API（API Gateway と関数） | 呼び出し元は Stripe であり、サインイン済みのユーザーではありません。そのため、ファイアウォール、リクエスト制限、ドメインを他の API と切り離して設定します |
+| **MediaPipeline** | MediaConvert パイプライン、トランスコードや文字起こしの完了に反応する関数、クリーンアップのスケジュール、失敗キュー | 動画処理。core-api と instructor-api の両方が使います |
+| **CoreApi** | core-api の API Gateway と関数、検索の再インデックス関数、メールの配信停止ルート | すべてのユーザーが呼び出す API |
+| **StreamRouter** | テーブルストリームのルーター関数、機能ごとのキューと失敗キュー、機能ハンドラー、証明書リマインダー関数、トランスクリプトの再インデックス関数 | データ変更に対するバックグラウンドの反応。CoreApi のリソース枠から切り離しています |
+| **Payouts** | 毎日の支払い処理とそのスケジュール | どのスタックもリソース上限に近づかないよう分けています。テーブルと Stripe キーだけを読み取ります |
+| **InstructorApi** | instructor-api の API Gateway と関数、およびメディアとトランスコードの権限 | 講師向け API |
+| **AdminApi** | admin-api の API Gateway と関数（Stripe キーを保存する関数を含む） | 管理者向け API |
+| **PortalConfig** | 各ポータルの `runtime-config.json` | 他のすべてのスタックから値を読み取るため、最後にデプロイされます |
+
+ポータルやメディアのディストリビューションで WAF をオンにすると、その web ACL は `us-east-1` の小さな追加スタックになります。CloudFront がそこに置くことを求めるためです。
+
+## 各レイヤーの内容
+
+### エッジ: CloudFront と API Gateway
+
+| エントリーポイント | サービス | オリジン |
+| --- | --- | --- |
+| 各ポータル | CloudFront | 静的ファイルを置く非公開の S3 バケット |
+| 受講生ポータルの公開ページ（`/learn/*`、`/instructors/*`、`/certificates/*`、`/sitemap.xml`、`/robots.txt`） | 受講生ポータルの CloudFront ディストリビューション | ページレンダラー関数。CloudFront だけが呼び出せる関数 URL 経由 |
+| レッスンメディア | CloudFront（署名付きリクエストのみ） | 非公開の S3 バケット |
+| 公開メディア | CloudFront | 非公開の S3 バケット |
+| 各 API | API Gateway（REST、リージョン） | Lambda |
+| Stripe webhook | API Gateway（REST、リージョン） | Lambda |
+
+公開されている S3 バケットはありません。CloudFront は Origin Access Control を通じて各バケットにアクセスします。
+
+### コンピュート: Lambda
+
+コードはすべて Node.js 24 の Lambda で動きます。
+
+- **API 関数。** 各 API は、ほとんどのプロシージャを共有の1つの関数で提供します。基本のアクセス（テーブル、および core-api では検索の読み取り）を超える権限が必要なプロシージャは、専用の関数で動きます。これにより、強力な権限が、他のすべてのリクエストを処理する関数に渡らないようにしています。
+
+  | API | 専用の関数 |
+  | --- | --- |
+  | core-api | メディアリクエストの署名、課題のアップロード、チェックアウトまたは返金の開始（Stripe キーを読み取る） |
+  | instructor-api | メディアリクエストの署名、レッスンメディアの書き込みとトランスコードの送信、コース画像とプロフィール写真、支払いアカウント（Stripe キーを読み取る） |
+  | admin-api | Stripe シークレットの保存（唯一の書き込み手）、ブランド画像 |
+
+- **イベント関数。** 仕事ごとに1つ。2つの Cognito トリガー、ストリームルーターとその機能ハンドラー、メディアパイプラインの完了・復旧・クリーンアップのハンドラー、証明書リマインダー、Stripe webhook、毎日の支払い処理、メールの配信停止リンクがあります。
+- **ページレンダラー。** core-api の2つ目のハンドラーで、受講生ポータルと一緒にデプロイされます。テーブルを読み取るだけです。
+- **運用関数。** トリガーがなく、デプロイ時またはオペレーターが呼び出したときに動くものが3つあります。デプロイごとに検索インデックスを作成または更新する関数と、courses と transcripts のインデックスを再構築する2つの関数です。
+
+### データ
+
+| リソース | サービス | 備考 |
+| --- | --- | --- |
+| コアテーブル | DynamoDB（オンデマンド、スループット上限あり） | 変更ストリームがストリームルーターに流れます |
+| 検索 | OpenSearch Serverless | インデックスは courses と transcripts の2つ。開発ステージではゼロまでスケールダウンできます |
+| メディア | S3 | 3つのバケット: レッスンメディア、アップロード、公開メディア |
+| ユーザー | Cognito ユーザープール | グループ: `student`、`instructor`、`admin` |
+| 設定 | Lambda 環境変数 | リソース名とアドレス。デプロイ時に設定され、関数が環境から読み取ります。ページレンダラーは Systems Manager パラメータを1つ読み取ります |
+| シークレット | Secrets Manager | レッスンメディアのリクエストに署名するキー、配信停止リンクに署名するキー、管理者が保存する Stripe のシークレットキーと webhook 署名シークレット |
+
+### メディア処理
+
+| サービス | 用途 |
+| --- | --- |
+| MediaConvert | アップロードされた動画を HLS のレンディションにトランスコードする |
+| Transcribe | 各動画の自動字幕 |
+| Translate | 字幕をコースの他の字幕言語に翻訳する |
+
+### メッセージングとスケジュール
+
+| サービス | 用途 |
+| --- | --- |
+| DynamoDB Streams | コアテーブルへのすべての変更 |
+| SQS | ストリーム機能ごとに1つのキューと失敗キュー。加えて、メディアパイプラインと証明書リマインダーの失敗キュー |
+| EventBridge | MediaConvert や Transcribe のジョブ完了時に動くルール、止まった動画を見つけるスケジュール、毎日の支払い処理のスケジュール |
+| EventBridge Scheduler | 1回限りのスケジュール。使われなくなったメディアの遅延クリーンアップと、証明書リマインダー |
+| SES | 通知メール |
+
+## ランタイム設定
+
+デプロイされたコードに、リソース名を直接書き込むことはありません。
+
+- **バックエンド関数**は、テーブル名、バケット名、エンドポイントを、スタックのデプロイ時に設定される自身の**環境変数**（`DISCAVA_*`）から読み取ります。実行時に取得するものはなく、関数にはそのコードが読む設定だけが渡されます。例外はページレンダラーです。テーブル名と公開メディアのアドレスを持つ `Data` スタックより前の `Websites` でデプロイされるため、それらを1つの Systems Manager パラメータから読み取ります。
+- **ポータル**は、読み込み時に自身のオリジンから `runtime-config.json` を取得します。ここには API のアドレス、Cognito の ID、他のポータルのアドレスが入っています。
+
+ポータルのファイルは、他のスタックがエクスポートする値から `PortalConfig` スタックが書き出します。これが最後にデプロイされる理由です。
+
+## アカウントを共有するステージ
+
+3つの仕組みでステージを分けています。
+
+- **名前。** すべてのスタックと生成されるリソース名はステージ名で始まり、IAM の権限はそのプレフィックスに限定されます。
+- **アセット。** 各ステージは、共有の CDK バケット内の自分専用のプレフィックスの下にビルド出力をアップロードします。そのため、あるステージが、別のステージがデプロイしようとしているものを上書きすることはありません。
+- **Permissions boundary。** ステージが作成するすべての IAM ロールには、そのステージの boundary ポリシーが付き、ステージ自身のコードに付与できる権限に上限を設けます。
+
+## コードでの定義
+
+| 内容 | 場所 |
+| --- | --- |
+| 存在するステージと、その設定 | `packages/common/infra-config/src/stages.config.ts` |
+| CDK アプリ: 設定されたステージごとに1つの `ApplicationStage` | `packages/infra/src/main.ts` |
+| スタックの構成と接続の方法 | `packages/infra/src/stages/application-stage.ts` と `packages/infra/src/stacks/` |
+| 部品（API、バケット、ウェブサイト） | `packages/common/constructs` |
+
+**コンストラクト**は、1つのコンポーネントのリソースを管理し、`grantRead` のようなヘルパーを公開します。**スタック**は、コンストラクトを接続し、ステージの設定をコンストラクトのオプションに変換します。設定については <Link path="deploy/configuration">ステージ設定</Link> を参照してください。

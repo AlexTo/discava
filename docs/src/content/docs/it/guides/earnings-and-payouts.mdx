@@ -1,0 +1,101 @@
+---
+title: Guadagni e pagamenti
+description: Come vengono calcolati i guadagni di un istruttore, la pagina Earnings, configurare un account per i payout, quando vengono inviati i payout e cosa fa un cambio di account di pagamento.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+Quando uno studente acquista il tuo corso, la tua quota viene registrata in pochi secondi e ti viene pagata tramite Stripe.
+
+## Come vengono calcolati i guadagni
+
+Per ogni vendita:
+
+> netto = importo pagato − commissione della piattaforma
+
+- L'**importo pagato** è ciò che lo studente ha pagato, dopo l'eventuale coupon. Uno **sconto** lo riduce, e quindi riduce la tua quota: guadagni sull'importo pagato, mai sul prezzo di listino.
+- La **commissione della piattaforma** è una percentuale dell'importo pagato, stabilita dalla piattaforma (20% salvo modifiche). Una vendita mantiene la commissione con cui è stata registrata.
+- Se un corso ha **più istruttori**, si dividono ogni vendita in parti uguali.
+- Un **rimborso** ti toglie la tua quota dell'importo rimborsato e restituisce la commissione su di esso. Un rimborso completo porta la vendita a zero.
+
+Ogni valuta è tenuta separata. Nulla viene convertito.
+
+Una vendita conta nel giorno in cui è stata pagata e un rimborso nel giorno in cui è stato effettuato, quindi il rimborso di una vendita del mese scorso riduce i dati di questo mese. I giorni sono giorni UTC.
+
+## La pagina Earnings
+
+**Earnings** nella barra laterale del portale istruttori ha quattro parti.
+
+**Payout account**: il suo stato e l'unica cosa da fare al riguardo. Vedi [Configurare i payout](#configurare-i-payout).
+
+**Balance**, per valuta:
+
+| Dato | Significato |
+| --- | --- |
+| **On hold** | Guadagnato, ma ancora nel periodo di attesa. La pagina mostra la prossima data di rilascio |
+| **Waiting for account setup** | Oltre il periodo di attesa, ma non hai un account payout attivo |
+| **Ready** | Partirà con il prossimo payout |
+
+**Report**: all'inizio il mese corrente. Scegli un altro mese, oppure scegli **Custom range** e imposta una data From e To distanti al massimo 366 giorni.
+
+- Per ogni corso mostra il numero di ordini, lordo, sconti, rimborsi, commissione della piattaforma e netto, con un totale per valuta.
+- **Show orders** su un corso elenca ogni vendita e rimborso con un riferimento d'ordine. Non mostra mai chi ha acquistato.
+- I giorni sono contati in UTC.
+
+**Payouts**: data, importo e stato di ogni payout.
+
+## Configurare i payout
+
+1. Apri **Earnings**.
+2. Nella scheda **Payout account**, scegli **Set up payouts**.
+3. Fornisci a Stripe la tua identità e i dati bancari nelle sue pagine. Stripe ti riporta a Earnings quando hai finito.
+
+La scheda mostra a che punto sei:
+
+| Stato | Cosa fare |
+| --- | --- |
+| **Not set up** | **Set up payouts** |
+| **In progress** | **Continue setup**: il modulo di Stripe non è finito |
+| **Active** | Niente. **Open Stripe dashboard** ti porta al tuo account Stripe |
+| **Restricted** | **Fix account**: Stripe ha bisogno di qualcosa in più da te |
+
+Se la scheda dice "Payouts aren't available yet", la piattaforma non ha collegato Stripe. Chiedi a un amministratore.
+
+I guadagni vengono registrati che tu abbia configurato i payout o no. Aspettano finché non lo fai.
+
+## Quando vieni pagato
+
+- Ogni vendita è **trattenuta** per un numero di giorni stabilito dalla piattaforma (14 nello stage di produzione salvo modifiche), così un rimborso in quel periodo non deve mai esserti riscosso.
+- Un'esecuzione dei payout avviene **una volta al giorno**. Invia tutto ciò che è pronto, un payout per valuta.
+- Un saldo sotto il **payout minimo** (10,00 salvo modifiche) aspetta un'esecuzione successiva.
+
+Lo stato di un payout è uno tra:
+
+- **Pending**: è in corso di invio.
+- **Sent**: Stripe lo ha accettato.
+- **Failed**: Stripe lo ha rifiutato, con il motivo. I suoi guadagni tornano nel tuo saldo e vengono ritentati.
+
+## Rimborsi dopo che sei stato pagato
+
+Un rimborso effettuato dopo che la sua vendita è stata pagata lascia un **saldo negativo**. Viene dedotto dal tuo prossimo payout. Nulla viene prelevato dal tuo conto bancario.
+
+## Guadagni trattenuti
+
+Se la piattaforma cambia l'account Stripe con cui incassa, i guadagni precedenti al cambio che non erano stati pagati appaiono come **Held**: "Earned before the platform changed its payment account. Contact the platform to be paid." Il tuo account payout risulta non configurato, perché apparteneva al vecchio account. Configuralo di nuovo per le vendite da ora in poi.
+
+## Per gli amministratori
+
+- I payout richiedono **Connect** abilitato sull'account Stripe della piattaforma. Senza, a un istruttore che sceglie **Set up payouts** viene detto "This platform can't set up payout accounts yet".
+- Una chiave con restrizioni deve anche gestire account collegati, link degli account, link di accesso e trasferimenti, oltre a ciò che serve per <Link path="guides/payments">incassare i pagamenti</Link>.
+- La commissione, il periodo di attesa e il payout minimo si impostano per stage. Lo stage di sviluppo trattiene le vendite per 1 giorno, non 14. Vedi <Link path="deploy/configuration">Configurazione dello stage</Link>.
+- Cambiare account o modalità Stripe trattiene i guadagni non pagati di ogni istruttore. Lascia che l'esecuzione giornaliera paghi prima ciò che è pronto e paga a mano i guadagni trattenuti.
+
+## Limiti
+
+- Nessun modulo fiscale, fattura o calcolo delle imposte.
+- Nessuna conversione di valuta.
+- Contestazioni e chargeback non compaiono nel report.
+
+<Link path="design/instructor-payouts">Payout degli istruttori</Link> descrive come funziona.

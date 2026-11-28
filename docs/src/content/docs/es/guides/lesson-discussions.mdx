@@ -1,0 +1,75 @@
+---
+title: Debates en las lecciones
+description: Preguntar, responder, votar y aceptar respuestas en una lección, el área Questions del instructor, qué hacen ocultar y eliminar, los límites y qué ocurre con las lecciones archivadas.
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Cada lección tiene una sección **Questions** donde los estudiantes inscritos en el curso hacen preguntas y se responden entre sí, y donde intervienen los instructores del curso.
+
+## Para estudiantes
+
+En una lección, debajo del contenido, la sección **Questions** lista las preguntas de la lección, las más recientes primero.
+
+- **Preguntar**: rellena **Question title** (hasta 120 caracteres) y **Details**, y luego elige **Post question**.
+- **Responder**: elige **Open question**, escribe tu respuesta y elige **Post reply**. Un hilo admite hasta 500 respuestas.
+- **Upvote** una pregunta o respuesta escrita por otra persona. **Remove upvote** lo retira.
+- **Aceptar** una respuesta: quien hizo la pregunta puede elegir **Mark as answer** en cualquier respuesta. Aparece fijada sobre las demás respuestas como **Accepted answer**, y la pregunta se muestra como **Answered**. **Remove answer** lo retira.
+- **Report** una publicación de otra persona que incumple las reglas. Los instructores la ven en su lista Reported.
+- **Delete** tu propia pregunta o respuesta, tras confirmar. Eliminar tu pregunta también elimina su respuesta aceptada. No se puede deshacer.
+
+En un curso archivado se pueden leer las preguntas, pero no se puede publicar nada nuevo.
+
+### El aviso de la primera lección
+
+Cuando te inscribes, llegas a la primera lección del curso, y su sección **Questions** muestra un aviso sobre la lista, por ejemplo "What do you want to be able to do with what this course teaches?". Tiene un cuadro de texto, **Post** y **Not now**.
+
+- Puedes responder una vez. **Post** añade tu respuesta a la lista de la lección, marcada como **Answer to the course prompt**. Tus compañeros pueden responderla y votarla como una pregunta.
+- **Not now** cierra el aviso sin publicar nada.
+- En cualquier caso, el aviso no vuelve, en ningún dispositivo, aunque elimines tu respuesta.
+- Todos los del curso pueden leer tu respuesta, y también sus instructores.
+
+Aparece solo en la primera lección que se muestra a los estudiantes, y no toma el foco del teclado al abrir la lección.
+
+La campana te avisa cuando alguien responde a tu publicación, cuando se marca una respuesta a tu pregunta y cuando tu respuesta se marca como la respuesta. Los dos primeros también envían un correo, salvo que lo desactives. Consulta <Link path="guides/notifications">Notificaciones</Link>.
+
+## Para instructores
+
+Abre el curso desde **My Courses** y elige **Questions** en la parte superior de su página. La página tiene tres pestañas:
+
+- **Unanswered**: preguntas sin respuesta de un instructor ni respuesta aceptada, las más antiguas primero. **Open** una pregunta para responder. Tu respuesta muestra una insignia **Instructor** y saca la pregunta de la lista. No necesitas estar inscrito.
+- **Reported**: publicaciones que los estudiantes reportaron, con el número de reportes. **Hide** una publicación, **Delete** o **Dismiss reports**.
+- **By lesson**: elige una lección para ver todos sus hilos, y **Open thread** para leer uno.
+
+En un hilo abierto también puedes elegir **Mark as answer** en cualquier respuesta, y **Hide** o **Delete** en cualquier publicación.
+
+No puedes responder en un curso archivado, ni en una lección que los estudiantes no pueden abrir porque está oculta o archivada.
+
+### El aviso de la primera lección
+
+En la página del curso, la sección **First-lesson prompt** te permite reemplazar el texto del aviso (texto plano, hasta 200 caracteres). Borrarlo restaura el predeterminado. Cambiarlo no vuelve a mostrar el aviso a los estudiantes que ya lo respondieron o descartaron.
+
+Las respuestas al aviso no están en **Unanswered**, porque no son preguntas que esperan a un instructor. Léelas en **By lesson**, en la primera lección del curso. Puedes responderlas, ocultarlas o eliminarlas como cualquier publicación, y una reportada aparece en **Reported**.
+
+### Ocultar y eliminar
+
+- **Hide** es reversible. Los estudiantes ven "This post was hidden by an instructor." en lugar de la publicación, sin autor ni texto. **Unhide** la devuelve tal como estaba.
+- **Delete** es definitivo. Todos, instructores incluidos, ven "This post was deleted." y el texto desaparece.
+
+Ocultar o eliminar una pregunta también oculta sus respuestas. Una pregunta oculta o eliminada sale de la lista Unanswered.
+
+## Límites
+
+- Las publicaciones son texto plano. El marcado, como HTML, se muestra tal como se escribe, nunca se interpreta.
+- El título de una pregunta tiene hasta 120 caracteres, y una pregunta o respuesta hasta 4,000 caracteres.
+- Una pregunta admite hasta 500 respuestas visibles.
+
+## Quién puede leerlas
+
+Los estudiantes con una inscripción vigente, en las lecciones que pueden abrir, y los instructores del curso en cualquier lección. Se rechaza a un estudiante que abandonó el curso, a uno no inscrito y a los visitantes. Un estudiante no puede usar las colas ni la moderación del instructor.
+
+## Lecciones archivadas
+
+Archivar una lección (quitarla de un curso publicado) la oculta a los estudiantes, que ya no pueden abrirla ni ver sus preguntas. Los instructores siguen leyendo sus hilos en **By lesson**, y restaurar la lección devuelve el debate intacto. Una lección con preguntas puede seguir archivada, pero no se puede eliminar de forma permanente.

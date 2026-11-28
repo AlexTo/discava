@@ -1,0 +1,77 @@
+---
+title: 강좌 만들기
+description: 강사 포털에서 강좌를 만들고, 모듈, 레슨, 콘텐츠를 추가하고, 게시하고 숨기고, 게시된 강좌를 변경하고, 카탈로그 정보를 설정하는 방법을 설명합니다.
+---
+
+import Link from '@components/link.astro';
+
+강좌는 모듈로 구성됩니다. 모듈에는 레슨이 들어 있고, 레슨에는 동영상, 텍스트, 퀴즈, 파일 같은 콘텐츠가 들어 있습니다. 이 모든 것을 강사 포털의 강좌 페이지에서 만듭니다.
+
+## 강좌 만들기
+
+1. 강사 포털에서 **My Courses**를 엽니다.
+2. **Create a course**를 선택합니다.
+3. **Course title**(최대 200자)과 **Course summary**를 입력합니다.
+4. 강좌를 만듭니다. 처음에는 수강생에게 보이지 않는 **Draft** 상태입니다.
+
+강좌 카드의 **Open course**를 선택하면 강좌 페이지가 열립니다.
+
+## 콘텐츠 추가
+
+강좌 페이지의 **Course content** 섹션에서 작업합니다.
+
+1. **New module**을 선택하고 이름을 입력합니다.
+2. 모듈에서 **New lesson**을 선택합니다. 채점하는 과제라면 **New assignment**를 선택합니다.
+3. 레슨에 **Video**, **Text**, **Quiz**, **File** 중 콘텐츠를 추가합니다.
+4. 모듈, 레슨, 콘텐츠 항목의 손잡이를 끌어서 이동합니다.
+
+자막은 모든 동영상에 자동으로 추가됩니다.
+
+- 퀴즈 설정, 과제, 채점은 <Link path="guides/quizzes-and-assignments">퀴즈와 과제</Link>에서 다룹니다.
+- 자막과 동영상 안의 질문은 <Link path="guides/video-lessons">동영상 레슨</Link>에서 다룹니다.
+
+## 카탈로그용 설명 작성
+
+**Catalogue details** 섹션에서 다음을 설정합니다.
+
+| 필드 | 선택 사항 |
+| --- | --- |
+| Category | 플랫폼의 카테고리 중 하나 또는 "No category" |
+| Level | Beginner, Intermediate, Advanced |
+| Language | 강좌를 진행하는 언어 |
+| Duration | 시간 단위, 최대 500 |
+| Tags | 최대 8개, 각각 최대 30자 |
+
+수강생은 이 항목으로 카탈로그를 필터링하고 검색합니다. 강좌 이미지도 추가하세요. 강좌 카드와 페이지에 표시됩니다.
+
+**Landing page** 섹션, 공개 프로필, 무료 미리보기 레슨은 <Link path="guides/instructor-guide">강사 가이드</Link>에서 다룹니다.
+
+## 게시
+
+강좌 페이지 상단의 **Publish**를 선택하고 확인합니다. 이제 수강생이 강좌와 그 안의 모든 것을 볼 수 있습니다.
+
+강좌를 게시하면 두 가지가 달라집니다.
+
+- **새 콘텐츠는 숨김으로 시작합니다.** 추가한 모듈, 레슨, 콘텐츠 항목에는 해당 항목에서 **Publish**를 선택하기 전까지 **Hidden** 배지가 표시됩니다. **Hide**는 수강생에게 보이지 않게 되돌립니다.
+- **삭제하면 보관됩니다.** 모듈, 레슨, 콘텐츠 항목을 삭제하면 지워지지 않고 보관됩니다.
+
+게시된 강좌를 변경할 때 수강생에게 무엇이 보이는지는 <Link path="design/live-course-editing">라이브 강좌 편집</Link>을 참고하세요.
+
+## 보관된 콘텐츠
+
+강좌 페이지 하단의 **Archived** 섹션에는 게시된 강좌에서 삭제한 항목이 나열됩니다.
+
+- **Restore**는 항목을 원래 위치의 끝에 되돌려 놓습니다.
+- **Delete permanently**는 항목을 완전히 삭제합니다. 수강생이 사용한 항목은 거부되며 "Students have used it, so it stays archived."가 표시됩니다.
+
+## 보관된 강좌
+
+보관된 강좌는 편집할 수 없습니다. 페이지에 "This course is archived, so it can't be edited. Restore it to make changes."가 표시됩니다. 다시 작업하려면 페이지 상단의 **Restore**를 선택하세요.
+
+강사 포털에는 강좌 전체를 보관하는 버튼이 없습니다.
+
+## 다음 단계
+
+- 가격 설정: <Link path="guides/payments">유료 강좌와 결제</Link>.
+- 수료증 제공: <Link path="guides/certificates">수료증</Link>.
+- 강좌 현황 확인: <Link path="guides/course-analytics">강좌 분석</Link>.

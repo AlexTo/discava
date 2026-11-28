@@ -1,0 +1,157 @@
+---
+title: Páginas públicas
+description: "Cómo las páginas de aterrizaje de cursos y los perfiles de instructores llegan a los rastreadores y a las vistas previas de enlaces: el renderizador de páginas, el caché y la frescura, la reescritura de la SPA, el ajuste de indexación y lo que expone el video de vista previa."
+sidebar:
+  order: 9
+---
+
+import Link from '@components/link.astro';
+
+**Especificación:** [`specs/20261118-223240-public-course-pages/`](https://github.com/AlexTo/discava/tree/main/specs/20261118-223240-public-course-pages/)
+
+**Especificación:** [`specs/_archive/20261120-154626-free-preview-lessons/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261120-154626-free-preview-lessons/) (lecciones de vista previa gratis)
+
+La página de aterrizaje de un curso (`/learn/<courseId>`) y el perfil de un instructor (`/instructors/<handle>`) son públicos: cualquiera puede abrirlos sin iniciar sesión. El portal del estudiante es una aplicación de una sola página, así que un rastreador o una vista previa de enlace que no ejecuta scripts vería un cascarón vacío. El **renderizador de páginas** lo soluciona respondiendo a esas direcciones con HTML real.
+
+## El renderizador de páginas
+
+El renderizador es un segundo handler de Lambda en `@discava/core-api` (`src/page-renderer/handler.ts`). La distribución de CloudFront del portal del estudiante lo usa como origen para `/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml` y `/robots.txt`. Lo construye el constructo `StudentPortal` en el stack Websites, con una Function URL que solo CloudFront puede llamar. Responde solo a `GET` y `HEAD`.
+
+En local, `pnpm dev` lo inicia en el puerto 2026 (`src/local-page-renderer.ts`). Los navegadores siguen usando el servidor de Vite, y las respuestas para rastreadores se obtienen de ese puerto.
+
+| Ruta | Respuesta |
+|---|---|
+| `/learn/<courseId>` | La página de aterrizaje de un curso publicado, si no un `404` |
+| `/learn/<courseId>/<anything>` | El `index.html` simple con `noindex` (las rutas de aprendizaje con sesión iniciada). No lee nada |
+| `/instructors/<handle>` | El perfil de un instructor que imparte un curso publicado, si no un `404` |
+| `/certificates/<ID>` | Un head para la vista previa del enlace (el estudiante, el curso, la fecha y el nombre de la plataforma), siempre `noindex`; un ID desconocido es un `404` |
+| `/certificates/<ID>/<anything>` | El `index.html` simple con `noindex` (la ruta de LinkedIn) |
+| Cualquier otra | Un `404` |
+| `/sitemap.xml` | Todo curso publicado, perfil público y categoría activa, con `lastmod` |
+| `/robots.txt` | Consulta [el ajuste de indexación](#el-ajuste-de-indexación) |
+
+Para una página, el renderizador toma el `index.html` compilado y añade:
+
+- las etiquetas del head: título, descripción, dirección canónica, etiquetas Open Graph y de tarjeta de Twitter, y JSON-LD de schema.org (`Course`, o `ProfilePage` con una `Person`);
+- una renderización estática dentro de `#root`: título, imagen, datos clave, resultados, requisitos, descripción, el esquema del currículo, el resumen de valoraciones, la primera página de reseñas y las tarjetas de instructores;
+- un elemento `<script type="application/json" id="discava-page-data">` con las salidas de procedimientos que usó;
+- la marca de la plataforma: su icono, color y documento de marca, para que la página muestre la marca definida por el administrador desde el primer pintado (consulta <Link path="design/branding">Marca</Link>). Si no se puede leer la marca, la página se renderiza con la marca predeterminada.
+
+Al arrancar, el portal lee y elimina el elemento de datos de página y siembra React Query con él (`src/lib/page-data.ts`). El primer render de la aplicación es entonces la página completa, sin parpadeo cuando reemplaza el marcado estático. Todo el texto se escapa como HTML, y el JSON se serializa con `<`, `>` y `&` escapados, así que el título de un curso no puede salirse de la página.
+
+**Una única fuente de verdad sobre lo que es público.** El renderizador llama a `course.publicView`, `review.summary`, `review.list`, `instructorProfile.publicView` y `certificate.verify` en el mismo proceso, mediante `appRouter.createCaller` con un contexto anónimo. Por lo tanto, un rastreador nunca ve más de lo que devuelve la API. Un curso en borrador, un curso archivado y un ID desconocido dan páginas `404` idénticas byte a byte. Esto vale para todos, incluidos los estudiantes inscritos en el curso. Su acceso mediante Mi aprendizaje no cambia.
+
+**La dirección canónica** usa el host del visitante, que una CloudFront Function copia en `x-discava-host`. El host se usa solo si es uno de los dominios del portal del estudiante de la etapa (o un host `*.cloudfront.net` cuando no hay ninguno configurado). Cualquier otro host recurre al primer dominio configurado, así que apuntar un dominio a la distribución no puede envenenar las canónicas.
+
+**Cuando falla una dependencia** (la tabla, el parámetro de ajustes o la lectura de `index.html`), la respuesta es un `503` de texto plano (`Service temporarily unavailable`) con `Cache-Control: no-store`, `X-Robots-Tag: noindex` y `Retry-After: 5`. Nunca se guarda en caché y nunca se convierte en un `404`. No tiene HTML, así que un visitante que carga una página de aterrizaje o un perfil durante una caída ve ese texto, no la aplicación. La navegación dentro de la aplicación no llega al renderizador y sigue funcionando.
+
+## Caché y frescura
+
+CloudFront guarda en caché cada respuesta:
+
+| Respuesta | `Cache-Control` |
+|---|---|
+| Una página o cascarón | `max-age=0, s-maxage=300`: CloudFront la conserva 5 minutos, los navegadores siempre revalidan |
+| Un no encontrado | `max-age=0, s-maxage=60` |
+| `sitemap.xml`, `robots.txt` | `max-age=300, s-maxage=300` |
+| Un `503` | `no-store` |
+
+La clave de caché es solo la ruta. No se reenvían cadena de consulta, cookies ni encabezado `Authorization`, así que una respuesta nunca depende de quién preguntó.
+
+Eso limita la antigüedad a **5 minutos** sin invalidación. Un cambio en un curso o perfil llega a los rastreadores y a las vistas previas de enlaces en 5 minutos, y un curso archivado o un perfil que deja de ser público empieza a responder `404` en el mismo tiempo. Los visitantes en un navegador ven el cambio en la siguiente carga, porque la aplicación lee la API.
+
+El renderizador comprueba el `index.html` del portal en cada fallo de caché con un `GetObject` condicional (`If-None-Match`, normalmente un `304`), y nunca recurre a una copia más antigua. Un despliegue del portal elimina los activos con hash antiguos y luego invalida toda la distribución, así que ninguna página en caché sigue apuntando a un bundle que ya no existe.
+
+## La reescritura de la aplicación de una sola página
+
+Una CloudFront Function en el comportamiento predeterminado (`spa-rewrite.js`, en el constructo compartido `StaticWebsite`) reescribe a `/index.html` toda ruta cuyo último segmento no tiene extensión de archivo. Un activo que falta recibe el error de S3, y el `404` del renderizador llega al visitante. Los tres portales obtienen esto del constructo compartido.
+
+La distribución no tiene respuestas de error que conviertan un `404` o `403` en `/index.html` con un `200`. Estas se aplican a todos los orígenes de una distribución, así que convertirían el `404` del renderizador en una página de éxito que los motores de búsqueda tratan como un soft 404.
+
+## El ajuste de indexación
+
+`studentPortal.allowSearchEngineIndexing` es un ajuste por etapa que por defecto es `false` y es `true` solo para `discava-production`. (No se llama solo "indexing", porque eso ya significa indexación de OpenSearch aquí.)
+
+| | Ajuste desactivado (cualquier otra etapa, desarrollo local) | Ajuste activado (producción) |
+|---|---|---|
+| Páginas | `<meta name="robots" content="noindex">` y `X-Robots-Tag: noindex` en cada respuesta del renderizador | `noindex` solo en respuestas de no encontrado y cascarones de `/learn/*` que no son de aterrizaje; `/certificates/*` es siempre `noindex` |
+| Archivos de S3 | La política de encabezados de respuesta añade `X-Robots-Tag: noindex` | Sin marca |
+| `/robots.txt` | `Disallow: /` | No permite `/learn/*/`, `/my-learning`, `/signin` y `/search`, permite el resto y lista el mapa del sitio |
+
+El contenido para rastreadores y las tarjetas sociales se sirven en todas las etapas, así que pueden probarse antes de producción.
+
+El mapa del sitio se construye bajo petición a partir de lecturas por clave e índices declarados, nunca un escaneo (`helpers/sitemap.ts`). Es un solo archivo, que el protocolo de mapas de sitio limita a 50.000 URLs. Un índice de mapas de sitio es un seguimiento posterior a ese límite.
+
+## Reglas de exposición del video de vista previa
+
+Un curso puede tener un video de vista previa, subido por un instructor como su propio archivo y de no más de 5 minutos. Se transcodifica y subtitula como un video de lección, y un reemplazo mantiene reproduciéndose la versión anterior hasta que la nueva esté lista. Su registro, `coursePreview`, es independiente de `course`, así que un cambio de estado de transcodificación o subtítulos no mueve `course.updatedAt` ni dispara una reindexación de búsqueda.
+
+Cualquiera puede reproducirlo, con sesión iniciada o no, pero solo bajo estas reglas:
+
+- `course.previewVideoUrl` es público, y responde solo mientras el curso está **publicado** y la vista previa tiene una **versión reproducible**. Si no, se comporta como con un curso que no existe.
+- Las cookies firmadas que establece cubren **solo la carpeta de esa versión** (sus renditions y pistas de subtítulos), con la misma duración que las de un estudiante inscrito. Ningún video de lección, archivo u otro contenido del curso se vuelve accesible sin inscripción.
+- Un curso archivado deja de servir su vista previa de inmediato, y la reproduce de nuevo si se restaura. Una versión reemplazada o eliminada no emite direcciones nuevas, y sus archivos se borran más tarde, como con los videos de lecciones.
+- El procedimiento está en `PUBLIC_OPERATIONS`, así que recibe los límites de peticiones públicas, y el firewall web de la etapa donde esté habilitado.
+
+## Lecciones de vista previa gratis
+
+Un instructor puede marcar una lección ordinaria como vista previa gratis. Cualquiera, con sesión iniciada o no, inscrito o no, puede entonces abrirla en `/learn/<courseId>/preview/<lessonId>`. Esta es la única excepción deliberada a "los usuarios que no han pagado no pueden obtener contenido de pago".
+
+**La marca.** Una lección lleva un atributo opcional `freePreview`, almacenado solo como `true` y eliminado cuando se desmarca la lección (`lesson.setFreePreview` en instructor-api). Solo una lección de tipo `lesson` puede llevarlo: una lección de tarea no puede marcarse, y la invariante de tabla `free-preview-on-ordinary-lesson` señala una que lo esté.
+
+Una lección es una vista previa **abierta** cuando se cumple `isOpenFreePreview` (en `@discava/core-table`). Esa función es la única definición de "abierta":
+
+- el curso está publicado;
+- el módulo y la lección se muestran (visibles y no archivados);
+- la lección es una lección ordinaria, y está marcada.
+
+**Tres operaciones públicas propias.** `freePreview.lesson`, `freePreview.videoUrl` y `freePreview.fileUrl` son consultas públicas en core-api, listadas en `PUBLIC_OPERATIONS`. Nunca leen al llamante, así que un visitante sin sesión, un usuario no inscrito y un estudiante inscrito obtienen la misma respuesta.
+
+Los procedimientos para inscritos (`course.view`, `contentItem.videoUrl`, `contentItem.fileUrl`, `quiz.view`, los de progreso, finalización, tareas y discusiones, y el resto) no se tocan y siguen requiriendo una inscripción, para las lecciones marcadas como para cualquier otra. Una operación pública no tiene claims, así que una sola operación no podría servir tanto a un visitante como a un estudiante inscrito.
+
+**Qué contiene una respuesta.** Cada ítem se construye campo por campo, así que nada sale si no se nombra:
+
+| Ítem | Qué obtiene un visitante |
+|---|---|
+| Video | Título, descripción, duración y si puede reproducirse ahora |
+| Texto | Su cuerpo |
+| Archivo | Nombre, tamaño y tipo |
+| Quiz | Solo título y número de preguntas, mostrados como una tarjeta bloqueada. Sin preguntas, clave de respuestas ni ajustes |
+| Tarea | Omitida |
+
+No se devuelve ninguna clave de almacenamiento, estado ni atributo de trabajo. Un llamante que nombra una lección que no es una vista previa abierta, o un ítem que no se muestra bajo ella, recibe el mismo `NOT_FOUND` sea cual sea el motivo, y no se firma nada.
+
+**Firma.**
+
+- Las cookies de un video cubren solo la carpeta de esa versión, se establecen con ese `Path`, y duran **una hora** (`FREE_PREVIEW_COOKIE_LIFETIME_SECONDS`), frente a las cuatro horas que recibe un estudiante inscrito.
+- La página pide la dirección cuando el visitante pulsa reproducir y de nuevo cada 30 minutos mientras se reproduce un video, lo que renueva las cookies.
+- Un enlace de archivo cubre un objeto durante cinco minutos. El texto no necesita firma.
+- La hora nunca excede la duración de cookie que `RETIRED_VERSION_DELAY_MINUTES` ya cubre, así que los archivos de una versión reemplazada sobreviven a toda cookie de vista previa. Una prueba unitaria lo fija.
+
+**Qué hace desmarcar.** Las operaciones leen la lección en cada petición y nada las guarda en caché. Desde la primera petición tras la escritura (o después de que la lección, su módulo o su curso se oculten o archiven) las tres responden `NOT_FOUND`: no hay acceso nuevo. Una dirección de vista previa compartida entonces muestra "This preview is no longer available".
+
+**Qué no hace desmarcar.** No retira lo que ya se entregó:
+
+- las cookies de video siguen funcionando hasta que caducan, como máximo una hora después de emitirse, y nunca se renuevan;
+- un enlace de archivo funciona como máximo cinco minutos;
+- el texto en una pantalla, un archivo descargado o una grabación no pueden retirarse.
+
+La página de aterrizaje puede mostrar la etiqueta "Free preview" hasta cinco minutos, porque el renderizador de páginas la guarda en caché.
+
+**No se registra nada.** Una vista previa no realiza ninguna escritura y no lee nada sobre el llamante. No hay finalizaciones, progreso, posición de video guardada, intentos de quiz ni conteos de actividad de estudiantes, ni discusión. El video empieza desde el principio en cada visita. Esto mantiene todo registro de estudiante ligado a una inscripción, lo que `student-records-enrolled` comprueba después de cada prueba e2e.
+
+**La regla del contenido de pago.** La forma de datos de la regla, `paid-course-enrolment-paid`, no cambia: una vista previa no crea inscripción. Su forma de API se prueba en `paid-access.test.ts`, que ejecuta cada procedimiento de contenido como un usuario con sesión no inscrito contra un curso con precio, y de nuevo contra una lección de vista previa abierta, con los mismos rechazos `FORBIDDEN`. Las lecciones de vista previa abiertas son la única excepción nombrada, y sus propias pruebas están en `procedures/free-preview.test.ts` (una matriz de rechazos de cada forma en que un destino no es una vista previa abierta).
+
+**Rastreadores.** El renderizador marca cada lección de vista previa abierta en el esquema de una página de aterrizaje: su título enlaza a la dirección de vista previa, seguido de "Free preview". El contenido de la lección no se renderiza para rastreadores. La propia dirección de vista previa se sirve con la página simple con `noindex`, está prohibida por `robots.txt` (`/learn/*/`) y no está en el mapa del sitio. Renderizar el texto dejaría legible una lección desmarcada en las cachés de los motores de búsqueda.
+
+**Nota para el operador: ancho de banda.** La plataforma paga la entrega de los videos de vista previa, y una firma puede transmitir durante una hora. El límite público acota la frecuencia con que se emite una firma, no cuántos bytes transmite una, y cualquiera puede transmitir un video de vista previa, como con el video promocional. Vigila las métricas de transferencia de datos de CloudFront de la distribución de medios (la distribución que está delante del bucket de medios, en la consola de CloudFront o en CloudWatch) y los conteos de 429 en los métodos `freePreview.*` de la etapa de gateway de la API core. Una regla de tasa por visitante o un tope de lecciones marcadas por curso es un posible seguimiento.
+
+## Perfiles y handles
+
+El perfil de un instructor se crea con su primer curso, así que una tarjeta de instructor siempre tiene a dónde enlazar. `course.create` llama a `ensureInstructorProfile` (en `@discava/core-table`) justo antes de la transacción del propio curso. Es idempotente, y un perfil sin curso no rompe ninguna invariante.
+
+- La URL usa un **handle**, nunca el ID de cuenta: de 3 a 30 caracteres de letras minúsculas, dígitos y guiones simples. Es único entre instructores mediante un registro de reclamo (`profileHandleClaim`), como los nombres de categoría.
+- Un perfil es público si y solo si su propietario imparte al menos un curso publicado, y lista exactamente esos cursos. No hay opción de exclusión.
+- La salida pública no lleva direcciones de correo ni identificadores de cuenta.
+
+<Link path="guides/instructor-guide">La guía del instructor</Link> cubre el lado del instructor.

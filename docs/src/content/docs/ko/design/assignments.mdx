@@ -1,0 +1,78 @@
+---
+title: 과제 채점과 피드백
+description: 강사가 업로드 과제를 점수와 피드백과 함께 돌려주고, 재제출을 요청하고, 대기 중인 과제를 확인하는 방법과 그 뒤에 있는 레코드와 규칙을 설명합니다.
+sidebar:
+  order: 12
+---
+
+**Spec:** [`specs/20261120-230057-assignment-grading/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-230057-assignment-grading/)
+
+학생은 업로드 과제에 파일 하나를 제출하며, 과제가 반환되기 전까지는 파일을 교체할 수 있습니다. 강좌의 강사는 수강 중인 모든 학생의 제출물을 목록으로 보고, 제출물을 열어 점수와 피드백을 붙여 최종으로 반환하거나, 피드백만 붙여 재제출을 요청합니다. 제출물을 목록으로 보거나 읽거나 반환할 수 있는 사람은 해당 강좌의 강사뿐입니다.
+
+| 대상 | API | 프로시저 |
+|---|---|---|
+| 학생 | core-api | `assignment.uploadUrl`, `submit`, `mySubmission`, `submissionFileUrl` |
+| 강사 | instructor-api | `assignmentSubmission.list`, `get`, `fileUrl`, `return`, `requestResubmission`, `amendGrade`, `gradingQueue.list` |
+
+## 제출과 채점
+
+제출물은 학생 한 명당 과제 하나마다 `assignmentSubmission` 레코드 하나입니다. `status`는 다음과 같이 바뀝니다.
+
+| 전환 | 주체 | 조건 | 결과 |
+|---|---|---|---|
+| 제출(최초) | 학생 | 아직 제출물 없음 | `submitted`, `version` 1, 대기 인덱스에 들어감 |
+| 재제출 | 학생 | `version`이 그대로이고 상태가 `submitted` 또는 `resubmission_requested` | `submitted`, `version` + 1, 다시 대기 인덱스에 들어감 |
+| 재제출 요청 | 강사 | `version`과 `reviewRevision`이 그대로이고 상태가 `submitted` | `resubmission_requested`, 대기 인덱스에서 빠짐 |
+| 최종 반환 | 강사 | `version`과 `reviewRevision`이 그대로이고 상태가 `submitted` 또는 `resubmission_requested` | `returned`, 점수 설정, 학생의 재제출 차단 |
+| 성적 수정 | 강사 | `reviewRevision`이 그대로이고 상태가 `returned` | 점수와 피드백이 바뀌고 상태는 `returned` 유지 |
+
+- **동시성.** 강사가 작업할 때마다 `reviewRevision`이 1씩 늘어나며, 모든 쓰기는 강사가 보고 있던 `version`과 `reviewRevision`을 조건으로 합니다. 학생이 그사이 교체한 파일에는 반환이 적용될 수 없고, 강사 두 명이 동시에 작업하면 정확히 한 명만 성공합니다.
+- **점수**는 0부터 과제의 `maxPoints`까지의 숫자이며 소수점 이하 두 자리까지 허용합니다. `pointsOutOf`는 나중에 `maxPoints`가 바뀔 경우를 대비해 채점 당시의 만점을 보관합니다.
+- **떠난 학생.** 더 이상 수강하지 않는 학생에게는 반환과 수정이 거부됩니다. 강사는 그 학생의 제출물을 여전히 읽을 수 있습니다.
+- **완료 처리는 그대로입니다.** 채점은 학생의 완료 상태나 콘텐츠 항목의 `studentActivityCount`를 바꾸지 않습니다. 재제출 요청이 완료를 취소하지 않으며, 재제출이 학생을 두 번 집계하지도 않습니다.
+
+## 피드백 라운드
+
+강사의 작업은 `submissionFeedback` 레코드 하나를 남깁니다. 재제출 요청, 최종 반환, 수정이 각각 해당합니다. 피드백은 재제출 요청에서는 필수이고 반환에서는 선택입니다.
+
+- 라운드는 추가만 가능하며 제출물과 시간으로 키가 정해지므로, 학생의 이력은 최신순 쿼리 한 번으로 조회됩니다. 학생은 재제출을 거치면서도 이전 피드백을 볼 수 있어 무엇을 요청받았는지 알 수 있습니다.
+- 제출물에는 현재 성적만 보관합니다. 각 라운드는 Tiptap JSON을 최대 20 000자까지 담을 수 있고 개수에 제한이 없으므로 별도 레코드로 둡니다. 제출물에 목록으로 넣으면 DynamoDB의 항목 크기 제한에 닿을 수 있기 때문입니다.
+
+학생은 각 작업마다 앱과 이메일(기본값 켜짐)로 알림을 받습니다. 알림은 `assignment.returned`, `assignment.resubmission_requested`, `assignment.grade_updated`이며 각각 라운드의 `feedbackId`로 중복을 제거합니다. 알림과 라운드는 제출물 변경과 같은 트랜잭션에서 기록됩니다.
+
+## 대기 인덱스와 수강 등록
+
+강사를 기다리는 제출물(상태 `submitted`)은 `waitingCourseId`와 `waitingSince`를 가지며, 이 둘이 희소 인덱스(`byWaiting`)의 키가 됩니다. 강좌가 파티션 키이고 제출 시각이 정렬 키입니다. `status`를 바꾸는 모든 쓰기는 `waitingKeys`를 통해 두 속성을 함께 설정하거나 제거합니다.
+
+따라서 강사 홈 페이지의 채점 대기열(`gradingQueue.list`)은 강사가 가르치는 강좌마다 쿼리 한 번이며, 각 결과는 이미 오래된 순으로 정렬되어 있고 메모리에서 합칩니다. 대기 중인 항목을 모두 읽으므로 총계가 정확합니다.
+
+**수강 등록 여부는 읽는 시점에 적용합니다.** 대기열은 목록에 나온 학생들의 수강 등록을 일괄 조회하여, 등록 상태가 `dropped`이거나 없는 학생을 제외합니다. 수강 등록을 인덱스에 저장하면 환불과 결제 시 학생의 해당 강좌 제출물을 모두 다시 써야 하고, 그것이 각자의 트랜잭션 안에서 일어나게 됩니다. 읽는 시점에 확인하면 결제 코드를 건드리지 않아도 되고, 다시 등록한 학생은 쓰기 없이 대기열에 다시 나타납니다.
+
+수강 등록이 없으면 학생이 숨겨지므로, 일부만 읽은 결과가 전체처럼 취급되어서는 안 됩니다. 스로틀링으로 DynamoDB가 키를 처리하지 못하고 남기면, 대기열은 간격을 늘려 가며 최대 세 번까지 다시 요청하고, 그래도 안 되면 더 짧은 대기열을 반환하는 대신 요청을 실패시킵니다.
+
+과제별 목록은 강좌의 모든 제출물과 모든 수강 등록을 읽고(단일 파티션 쿼리 두 번), 합친 뒤 메모리에서 한 번에 50행씩 페이지로 나눕니다. 커서는 마지막 행의 정렬 위치를 인코딩합니다. 제출물이 없는 학생은 "제출 안 함", 떠난 학생은 "더 이상 수강하지 않음"으로 표시됩니다.
+
+## 일일 알림
+
+강사는 `assignment.submissions_received`로 새 제출물을 알림받으며, 과제당 강사당 하루(UTC)에 최대 한 번, 앱 안에서 전달되고 이메일은 기본값이 꺼짐입니다. 작은 `submissionNotice` 레코드(과제당 하루에 하나, 이틀 뒤 만료)가 표식 역할을 합니다. `submit`은 먼저 이 레코드를 읽고, 없으면 같은 트랜잭션에서 레코드를 만들고 강사마다 알림을 기록합니다. 트랜잭션이 DynamoDB의 100개 항목 제한을 넘지 않도록 알림 수에는 상한이 있습니다. 다른 제출이 경합에서 이기면 기존 재시도가 표식과 알림 없이 다시 실행됩니다. 이렇게 "하루에 최대 한 번"이 타이밍에 기대는 희망이 아니라 데이터베이스상의 사실이 됩니다.
+
+## 제출 파일 미리보기
+
+검토 페이지는 채점 양식 옆에 PDF와 이미지(png, jpg, jpeg, gif, webp)를 보여 주며, 그 밖의 파일 형식은 세부 정보와 Download 버튼을 보여 줍니다.
+
+- **이미지**는 다운로드와 같은 5분짜리 서명된 CloudFront URL을 쓰는 `<img>`입니다. 브라우저는 이미지에 대해 `Content-Disposition`을 무시합니다.
+- **PDF**는 서명된 URL에서 가져와 `react-pdf`(PDF.js)로 캔버스에 그리며, 검토 페이지에서만 로드됩니다. 저장된 파일은 `Content-Disposition: attachment`로 제공되고 포털의 CSP가 `<iframe>`과 `<embed>`를 막기 때문에, 캔버스에 그리는 방식은 배포, CSP, 저장된 객체를 바꿀 필요가 없습니다.
+
+**알려진 한계: JPEG 2000과 JBIG2.** PDF.js는 이 내장 이미지 형식을 WebAssembly로 디코딩하는데, 포털의 CSP(`script-src 'self'`, `'wasm-unsafe-eval'` 없음)가 이를 막습니다. 이런 이미지는 그려지지 않을 수 있지만 페이지의 나머지는 렌더링되고 Download도 동작합니다. 이를 위해 공유 CSP를 완화할 가치는 없다고 판단했습니다.
+
+강사가 아직 보내지 않은 점수와 피드백은 제출물별로 강사의 브라우저에만 보관되며 서버에는 저장되지 않습니다.
+
+## 검사가 강제하는 규칙
+
+core-table의 `helpers/assignment-grading.ts`에 있는 공유 헬퍼만이 성적 필드와 `submissionFeedback`을 쓸 수 있습니다. `helpers/assignment-submission.ts`의 학생 제출은 같은 `waitingKeys`로 대기 키를 설정합니다. `helpers/invariants/assignment-grading.ts`의 검사는 다음을 확인합니다.
+
+- 성적 형태: `returned`는 `pointsOutOf` 범위 안의 점수, 반환한 사람, 시각을 가지며 다른 상태는 이를 갖지 않습니다.
+- 대기 키가 `status`와 일치합니다.
+- 모든 라운드가 어떤 제출물에 속하며 라운드의 형태가 올바릅니다.
+- 최신 라운드가 제출물의 상태 및 `reviewRevision`과 일치합니다.
+- 일일 알림 표식의 형태.

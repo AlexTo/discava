@@ -1,0 +1,228 @@
+---
+title: クイズ
+description: "クイズのコンテンツアイテム: データモデル、採点、受験回数、受験中の編集、そして受講者と講師の体験。"
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+**仕様:** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/) (動画内の問題)
+
+クイズはコンテンツアイテム(`type: 'quiz'`)で、レッスンの並びの中に、動画、テキスト、ファイルのアイテムと並んで置かれます。1つ以上の問題があり、それぞれ**単一選択**または**複数選択**です。
+
+クイズは、課題レッスン(`kind: 'assignment'` のレッスン)の唯一のアイテムにもなれます。これは `lesson.createQuizAssignment` で作成され、その後は他のクイズと同じように編集、受験されます。動画の中で出す短い問題は、クイズの問題の形をそのまま再利用します。[動画内の問題](#動画内の問題)を参照してください。
+
+## データモデル
+
+### クイズのコンテンツアイテム
+
+クイズ固有の `contentItem` の属性です。他の種類と同じく、種類ごとにどの属性が必須かは ElectroDB ではなく、instructor-api の zod スキーマ(`schema/quiz.ts`)が強制します。
+
+| 属性 | 形 |
+|---|---|
+| `questions` | `[{ questionId, kind: 'single' \| 'multiple', prompt, options: [{ optionId, text }] }]`。`prompt` は Tiptap JSON。受講者に送っても安全 |
+| `answerKey` | `{ [questionId]: { correctOptionIds: string[], explanation? } }`。`explanation` は Tiptap JSON。**採点時を除き、core-api は決して読み取らない** |
+| `settings` | `{ passMarkPercent, attemptsAllowed /* null = 無制限 */, shuffleOptions, revealAnswers: 'after_each_attempt' \| 'after_final_attempt' \| 'never' }` |
+| `quizVersion` | 数値で、保存のたびに加算される。保存時にはエディターが読み込んだバージョンを指定し、クイズがすでに先へ進んでいれば拒否される([クイズの保存](#クイズの保存)を参照) |
+| `questionsHash` | `questions` だけ(キーや `settings` は含まない)のハッシュ。保存のたびに再計算される(`hashQuizQuestions`) |
+
+`questions` と `answerKey` を別の属性にしているのは、コンテンツアイテムを受講者にそのまま渡しても答えが漏れないようにするためです。コースの読み取り(`course.view`、`course.publicView`)は、クイズをタイトルと位置だけで一覧します。`questions` や `answerKey` は決して含まれません。
+
+`questionId` と `optionId` はクライアントが供給し、保存をまたいで同じままでなければなりません。回答キー、受講者の回答、後述の整合ステップがすべてそれらを参照するからです。
+
+### `quizAttempt`
+
+- pk `userId`, sk `courseId / contentItemId / attemptId`。`attemptId` は UUIDv7 なので、受講者のそのクイズへの受験は提出順に並びます。
+- `answers`(`{ [questionId]: optionId[] }`)、`correctQuestionIds`、`scorePercent`、`passed`、`quizVersion`、`questionsHash`、`submittedAt`、それに `moduleId` と `lessonId` を保持します。`correctQuestionIds` は、その時点でどの問題が正解と採点されたかを記録します。キーは後で変わることがあるからです。
+- 一度書き込まれたら更新されません。
+
+### 受講者ごとのクイズ集計(`quizSummary`)
+
+- pk `userId`, sk `courseId / contentItemId`。`attemptsUsed`、`bestScore`、`bestAttemptId`、`passedAt`、それに `moduleId` と `lessonId` を保持します。
+- 各受験と同じトランザクションで書き込まれます。最初の受験が作成し、以降の受験は、読み取った `attemptsUsed` を条件にします。そのため、2つの提出が競合しても受験回数の上限は守られ、負けた側は読み直して拒否されます。
+- `bestScore` は増える一方です。`passedAt` は最初に合格した受験が設定し、解除されることはありません。
+- 受講者の集計を作成すると、クイズの `studentActivityCount` が加算されます(<Link path="design/live-course-editing">コースのライブ編集</Link>を参照)。
+- 合格した受験、または最後の受験回数を使った受験は、まだなければ、同じトランザクションでクイズの `itemCompletion` も記録します(<Link path="design/progress-and-completion">進捗と完了</Link>を参照)。
+- `quiz-summary-matches-attempts` 不変条件(`core-table/src/helpers/invariants/student-activity.ts`)が、すべての集計がその受験と一致していること、すべての受験に集計があることを確認します。
+
+## 採点
+
+- サーバー側のみ、core-api で行います。クライアントは提出前に `answerKey` を受け取りません。
+- 各問題は完全一致方式です。選択されたオプションが `correctOptionIds` と完全に等しくなければなりません。
+- スコアは正解した問題の割合で、整数に切り捨てられるため、受講者に実際のスコアより高い値が表示されることはありません。`passed` は `score >= passMarkPercent` です。
+- すべての受験、およびすべてのクイズバージョンを通じた**最高**スコアが採用されます。
+- 一度記録された合格は、後から合格点が引き上げられたり、クイズが編集されたりしても永続的です。
+- 過去の受験が自動的に再採点されることはありません。
+
+## 受講者向け API
+
+core-api には3つのプロシージャがあり(`procedures/quiz.ts`)、それぞれクイズの `courseId`、`moduleId`、`lessonId`、`contentItemId` を受け取ります。3つとも次を必要とします。
+
+- `dropped` ではない受講登録(公開済みのコースで受講登録がなければ `FORBIDDEN`、それ以外は `NOT_FOUND`)
+- 実効的に表示されているクイズ。つまりクイズ、そのレッスン、そのモジュールが表示状態でアーカイブされていないこと。そうでなければ `NOT_FOUND` "This quiz is no longer available"
+
+**`quiz.view`** は問題、設定、`quizVersion`、`questionsHash` を返し、回答キーは決して返しません。コースの他の部分と同じく、アーカイブされたコースでも動作します。
+
+**`quiz.submitAttempt`** は `answers` と、受講者が回答した `questionsHash` を受け取ります。サーバーで採点し、受験と集計を1つのトランザクションで書き込みます。同じトランザクションで次を確認します。
+
+- コースがまだ公開されていること
+- モジュール、レッスン、クイズがまだ表示状態でアーカイブされていないこと
+- クイズが、採点した `quizVersion` のままであること
+- 受講登録がまだ退会になっていないこと
+
+その間に何かが変わっていれば何も書き込まれず、提出は読み直されて再採点されます。これを最大3回行い、それでもだめなら `CONFLICT` です。
+
+| 拒否 | 条件 |
+|---|---|
+| `PRECONDITION_FAILED` | コースがアーカイブされている、または残りの受験回数がない |
+| `CONFLICT` | 受講者が読み込んだ後に問題が変更された([下記](#受験中にクイズが編集された場合)を参照)、または3回とも競合に負けた |
+| `BAD_REQUEST` | 回答が不明な問題やオプションを指している、オプションを重複させている、または単一選択の問題に複数のオプションを与えている |
+
+**`quiz.myAttempts`** は、受講者の集計(または `null`)と受験を、新しいものから順に1ページずつ返します(`cursor` と `limit`。デフォルトは10、最大100)。受験回数が無制限だと履歴に上限がないため、ページ分割されています。
+
+各受験の結果には、どの問題が正解だったかが示されます。正しいオプションと解説(`reveal`)が `submitAttempt` と `myAttempts` から返されるのは、`revealAnswers` が許可している場合に限られます。
+
+| `revealAnswers` | `reveal` が返されるとき |
+|---|---|
+| `after_each_attempt` | 受講者が1回受験したあと |
+| `after_final_attempt` | 残りの受験回数がなくなったあと。受験回数が無制限の間は返されない |
+| `never` | 返されない |
+
+## 受験中にクイズが編集された場合
+
+提出のたびに、クライアントは表示した問題の `questionsHash` を送ります。
+
+| 講師が変更した内容 | 提出の結果 |
+|---|---|
+| 回答キーまたは解説のみ(ハッシュは一致) | 受理され、**現在の**キーで採点される。受講者は何も気づかない |
+| 問題文、問題の種類、オプションの文言、数、順序のいずれか(ハッシュが異なる) | `CONFLICT` となり、**受験回数は消費されない**。クライアントは再取得して整合させる(下記) |
+| 合格点 | 受理され、現在の合格点で採点される。すでに記録された合格はそのまま |
+| `attemptsAllowed` を `attemptsUsed` 以下に下げた | "No attempts remaining" で拒否され、最高スコアが表示される |
+| クイズ、またはそのレッスンかモジュールがアーカイブまたは非表示になった | "This quiz is no longer available" で拒否され、ローカルの下書きは破棄される |
+
+「回答キーのみ」とは、受講者の画面が変更の前後で同じに見えることを意味します。例を挙げます。
+
+- どのオプションが正解かの修正。たとえば "Which service runs containers without managing servers?" のキーが EC2 だったものを Fargate に直す場合です。
+- 複数選択の問題に正解のオプションを追加すること。画面は変わりません。常に "Select all that apply" と表示され、正解がいくつあるかは示されないからです。
+- 解説の追加や書き直し。
+
+オプションの並べ替えは、害がなくても変更として扱います。ルールを単純に保つためで、画面の見た目が変わりうるなら、受講者は確認し直します。
+
+### `CONFLICT` 後の整合
+
+クライアントは、古い `questions` と新しい `questions` を `questionId` で比較します。
+
+- **変更なし:** 回答は保持されます。
+- **削除:** 回答は破棄されます。
+- **新規:** 未回答で始まり、**New** と表示されます。
+- **問題文、オプション、種類の変更:** まだ存在するオプションを指す回答は保持され(単一選択に切り替えられた問題では、ちょうど1つ残る場合に限る)、問題には **Updated** と表示されます。
+
+これを行うのは `@discava/common-web-utils/quiz` の `reconcile` です。受講者は "This quiz was updated. Check the marked questions before submitting." と表示された確認画面に移ります。クイズのクエリは、確認画面を開いたときとウィンドウにフォーカスが戻ったときにも再取得するため、バナーは通常、受講者が Submit を押す前に表示されます。保証になるのは `CONFLICT` です。
+
+## 受講者の体験
+
+レッスンは、アイテムが `order` の順に並んだ1つのスクロールするページです。上部のステップバーが各アイテムの状態(✓ 完了、⚠ 合格せずに終えたクイズ、それ以外はアイテムの種類のアイコン)を示し、クリックするとそこへスクロールします。**不合格のクイズが先へ進むのを妨げることはありません。**
+
+クイズはレッスンの流れの中のカードです(`common/shadcn` の `QuizCard`。講師のプレビューと共有)。4つの画面を順に移ります。
+
+| 画面 | 表示内容 | ボタン |
+|---|---|---|
+| 概要 | "5 questions · Pass 80% · 1 of 3 attempts used"、最高スコア、Passed バッジ | **Start quiz**、**Resume quiz**(保存された下書きがある場合)、または **Retake quiz**。残りがなければ "No attempts remaining" |
+| 問題 | 1問ずつ表示。複数選択は "Select all that apply" とチェックボックス、単一選択はラジオボタン | **Back**、**Next**、最後の問題では **Review answers** |
+| 確認 | すべての回答。未回答の問題にはフラグが付く | **Back**、**Submit answers** |
+| 結果 | "This attempt: 60% · Not passed"、各問題の正誤、`revealAnswers` が許可する場合は正しいオプションと解説 | **Done**、**Retake quiz** |
+
+- **問題ナビゲーター。** 問題が複数あるクイズでは、オプションの上に番号付きボタンの列が表示されます。各ボタンはその問題へ移動し、回答済みになると塗りつぶされ、スクリーンリーダーには状態が伝えられます("Question 2, answered")。
+- フィードバックは提出後にだけ表示され、問題ごとには表示されません。キーをオプション1つずつ探られないようにするためです。
+- 入力途中の回答は、クイズごとに localStorage に保存されます(`readQuizDraft`、`writeQuizDraft`)。受験がサーバーに作成されるのは、提出したときだけです。
+- 前より低いスコアで再受験した場合は "Your best score of 80% still counts." と表示されます。
+- アクセシビリティ: 問題ごとに番号と問題文でラベル付けされた `fieldset`、正誤はアイコンとテキストで示し(色だけにしない)、キーボード操作に完全対応しています。
+- 問題文と解説は、`common/shadcn` から共有される読み取り専用の Tiptap レンダラーを使います。
+
+## クイズの保存
+
+クイズの作成と、その後のすべての保存は、クイズ全体を1つのドキュメントとして書き込みます。2人のエディター、または古いタブが互いを上書きしないようにするのが `quizVersion` です。
+
+```d2 title="What happens when an instructor saves a quiz: access and archive checks, the version check, then one conditional write"
+direction: down
+
+start: "contentItem.updateQuiz\n(sends the quizVersion\nthe editor loaded)" {shape: oval}
+access: "Instructor of this\ncourse, and the item\nis a quiz?" {shape: diamond}
+archived: "Quiz, its lesson, module\nor course archived?" {shape: diamond}
+stale: "Stored quizVersion\n= the one sent?" {shape: diamond}
+write: "One transaction: course, module and lesson\nstill exist and aren't archived, quiz isn't\narchived and is still at that quizVersion.\nWrites the new content, quizVersion + 1\nand the recomputed questionsHash"
+landed: "Did a condition fail?" {shape: diamond}
+
+forbidden: "FORBIDDEN or BAD_REQUEST"
+frozen: "PRECONDITION_FAILED:\nrestore it first"
+conflict: "CONFLICT: the quiz changed since it\nwas loaded; reload and retry.\nNothing written"
+done: "Saved as quizVersion + 1" {shape: oval}
+
+start -> access
+access -> forbidden: no
+access -> archived: yes
+archived -> frozen: yes
+archived -> stale: no
+stale -> conflict: no
+stale -> write: yes
+write -> landed
+landed -> conflict: "yes, and nothing is archived"
+landed -> frozen: "yes, and something was archived"
+landed -> done: no
+```
+
+- 同じバージョンから行われた2つの保存のうち、成功するのはちょうど1つで、もう一方は `CONFLICT` になります。この確認は書き込みのトランザクション内でも繰り返されるため、一方が他方の後に続く場合だけでなく、同時に保存された場合でも成り立ちます。
+- 保存が成功すると新しい `quizVersion` が返され、エディターは次の保存にそれを使います。
+- `questionsHash` は `questions` だけから再計算されるため、回答キー、解説、設定だけを変える保存ではハッシュは同じままです。
+- クイズの作成は `quizVersion` 1 から始まります。他の新しいコンテンツと同じく、下書きのコースでは `visible`、それ以外では `hidden` で始まり、アーカイブされたモジュールやレッスンの下、またはアーカイブされたコースでは作成も編集もできません(<Link path="design/live-course-editing">コースのライブ編集</Link>を参照)。
+
+## 講師の体験
+
+- レッスンのコンテンツ行にある **Video**、**Text**、**File** ボタンの隣に **Quiz** ボタンがあります。これを押すと新しいクイズのビルダーが開き、クイズは最初の保存で作成されます。以降の保存は更新になります。
+- ビルダーは大きなダイアログで開きます。新しいクイズの場合も、クイズの **Edit** ボタンの場合も、Text や Video のダイアログと同じです。未保存の変更がある状態で閉じようとすると、先に確認されます。
+  - 設定: タイトル、説明、合格点、受験可能回数、オプションのシャッフル、回答を表示するタイミング。
+  - 問題ごとのカード: Tiptap の問題文(エディターは展開されたカードにだけマウントされる)、Single/Multiple の切り替え、正解マーカー付きのオプション行(単一選択はラジオボタン、複数選択はチェックボックス)、オプションの追加、削除、並べ替え、任意の解説。
+  - ドラッグで問題を並べ替え。
+  - 問題の横にある目次パネルが、番号と問題文の冒頭で問題を一覧し、修正が必要なものに印を付けます。クリックするとその問題が開き、そこへスクロールします。
+  - **Preview as student**。実際の受講者用コンポーネント(`QuizCard`)を、ビルダー内のクイズの現在の状態(保存済みかどうかを問わず)で使います。core-api と同じルールでブラウザ内で採点され、何も送信も保存もされず、正解と解説は常に表示されます。受験は、開いている間だけ数えられます。
+  - クイズ全体が1つのドキュメントとして保存されます。`contentItem.updateQuiz` が、ビルダーが読み込んだ `quizVersion` に対して、問題、キー、設定をまとめて置き換えます。`CONFLICT` になると、ビルダーは最新バージョンの再読み込みを提案します。
+  - クイズ、またはその上位のものがアーカイブされている間は、理由が示された読み取り専用になります。
+- 検証は、フォームと zod の両方で行われます(フォームの動作にかかわらず、API がそのすべてを強制します)。
+  - 問題は1〜50問で、それぞれオプションは2〜10個。オプションのテキストは1〜500文字。
+  - 単一選択: 正解はちょうど1つ。複数選択: 正解は1つ以上。すべての正解 ID はその問題のオプションのいずれかであること。
+  - すべての問題に回答キーのエントリーがあり、キーに他の問題のエントリーがないこと。問題 ID は一意で、オプション ID は問題内で一意であること。
+  - 問題文と解説は、エディターのスキーマ(同じ `StarterKit` のノードとマーク)に適合する Tiptap ドキュメントで、JSON 文字列として保存されます。
+  - 合格点は 0 から 100 の整数。受験可能回数は 1 以上の整数、または無制限。
+  - 問題と回答キーを合わせて最大 300 KB で、DynamoDB のアイテム上限 400 KB を十分に下回ります。
+  - 複数選択から単一選択に切り替えるとき、正解が2つ以上あれば、どれを残すか尋ねられます。
+- 受験者のいるクイズを編集すると、"N students have attempted this quiz" という警告が表示されます。
+
+講師向けのクイズ統計(スコアの分布、問題ごとの結果)は、`analytics-update` ストリーム機能が受験から構築します。<Link path="design/course-analytics">コース分析</Link>を参照してください。
+
+## 動画内の問題
+
+講師は、動画アイテムに最大20問の問題を置けます。それぞれ動画の特定の時点、または最後に出されます。これらは重みの小さいもので、合格点も、受験回数の上限も、保存されるスコアもなく、進捗を妨げることもありません。プレーヤーがどのように問題を出すかは、<Link path="design/video-player">動画プレーヤーと字幕</Link>にあります。
+
+- **保存先:** 動画自身の `contentItem` の中で、クイズが使う `questions`、`answerKey`、`quizVersion` の各属性を使います。各問題は、クイズの問題に `atSeconds`(整数の秒、または最後の問題の場合は `null`)とサーバーが設定する `contentHash` を加えたものです。動画には `settings` も `questionsHash` もありません。
+- **バージョン付きの保存:** `contentItem.updateVideoQuestions` は、`updateQuiz` と同様に、エディターが読み込んだ `quizVersion` に対して問題の集合全体を置き換えます。バージョン 0 は一度も保存されていないことを意味します。同じバージョンから行われた2つの保存のうち、成功するのはちょうど1つで、もう一方は `CONFLICT` になります。これは `contentItem.updateVideo` とは別なので、メディアに触れずに問題を変更できます。作成できるのはコースの講師だけで、アーカイブされた動画、レッスン、モジュール、コースの下では拒否されます。
+- **問題ごとのハッシュ:** `contentHash` は、1つの問題の ID、種類、問題文、オプションを対象とし、時点やキーは対象外です。クイズでの `questionsHash` の役割を問題ごとに果たすため、1つの問題を編集しても、別の問題に答えている受講者に影響しません。問題の時点を動かしても何も変わりません。
+- **回答シート:** 受講者の1本の動画への回答は、1つの `videoAnswerSheet` レコード(pk `userId`、sk `courseId / contentItemId`)です。回答した問題ごとに、選んだオプション、その時点のキーに照らして正解だったか、そしていつ回答したかを保持します。`answerCount` がすべての書き込みの条件になるため、2つのタブが両方とも書き込みに成功することはありません。シートに増えるのはエントリーだけです。
+- **最初の回答のみ:** 問題への最初の回答が記録され、変更、置き換え、再採点されることは決してありません。再度提出すると、記録済みの回答が返されます。キーと解説が受講者に届くのは、その回答が記録されてからです。**Try again** は練習で、すでに表示されているキーに照らしてブラウザ内で採点され、何も記録しません。スキップも何も記録しません。
+- **重みが小さい:** 回答は `itemCompletion` を作らず、進捗、クイズの結果、修了証を変えません。受講者がその動画を利用したこと(<Link path="design/live-course-editing">コースのライブ編集</Link>を参照)、およびその日にアクティブだったことは数えられます。
+
+### 回答中に動画の問題が編集された場合
+
+回答のたびに、クライアントは表示した問題の `contentHash` を送ります。
+
+| 講師が変更した内容 | 提出の結果 |
+|---|---|
+| 正解のオプションまたは解説のみ(ハッシュは一致) | 受理され、**現在の**キーで採点される。受講者は何も気づかない |
+| 問題文、種類、オプションの文言、数、順序のいずれか(ハッシュが異なる) | `CONFLICT` となり、何も記録されない。受講者には問題が更新されたことが伝えられ、更新後の問題が表示される |
+| 問題の時点 | 受理される。記録済みの回答は影響を受けず、まだ回答していない受講者には新しい時点で出題される |
+| 問題の削除 | 見つからないものとして拒否され、何も記録されない。動画は再開する。記録済みの回答は保持されるが、その問題はもう出題されず、結果にも一覧されない |
+| 動画、レッスン、モジュール、コースがアーカイブまたは非表示になった | "no longer available" で拒否される |
+
+記録された回答が再採点されることはありません。誤答だった受講者は、キーが修正された後も「不正解」のままです。回答済みの問題を開き直した受講者には、記録された結果の横に現在のキーと解説が表示されます。
+
+動画の問題を開いた講師に対して、エディターは、すでに受講者が利用している場合、その回答は保持され、再採点されないことを警告します。エディター内のプレビューは、講師自身のキーでブラウザ内で採点し、何も記録しません。

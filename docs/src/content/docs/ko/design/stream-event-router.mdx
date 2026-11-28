@@ -1,0 +1,131 @@
+---
+title: 스트림 이벤트 라우터
+description: "기능이 코어 테이블의 변경에 반응하는 방법: 등록, 큐와 실패 큐, 핸들러의 의무, 로컬 동작, 재처리(redrive)."
+sidebar:
+  order: 7
+---
+
+**스펙:** [`specs/20261116-183449-stream-event-router/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-183449-stream-event-router/)
+
+코어 테이블의 DynamoDB 스트림에는 **읽는 주체가 하나** 있습니다. 바로 스트림 라우터입니다. 라우터는 각 변경을 그것을 원하는 모든 기능의 큐로 보내고, 각 기능의 핸들러는 자신의 큐를 읽습니다.
+
+테이블 변경에 반응하는 기능은 등록, 핸들러, 핸들러의 연결(아래)을 추가합니다. 자체 큐, 알람, 스트림 매핑은 추가하지 않습니다. 현재 여덟 개의 기능이 등록되어 있으며, [아래 표](#확인할-지표)에 나열되어 있습니다.
+
+```d2 title="One stream reader, one queue and failure queue per feature"
+table: "Core table"
+stream: "DynamoDB Stream"
+router: "Stream router"
+pq: "progress-recalculation queue"
+sq: "search-indexing queue"
+pf: "progress failure queue"
+sf: "search failure queue"
+ph: "progress handler"
+sh: "search handler"
+
+table -> stream
+stream -> router
+router -> pq: "filters match"
+router -> sq: "filters match"
+pq -> ph
+sq -> sh
+pq -> pf: "after maxReceiveCount"
+sq -> sf: "after maxReceiveCount"
+```
+
+## 등록
+
+`packages/databases/core-table/src/helpers/stream-features.ts`의 `STREAM_FEATURES`는 배포된 스택과 로컬 이벤트 러너가 모두 읽는 유일한 정의입니다.
+
+| 필드 | 의미 |
+|---|---|
+| `name` | 고유하며 kebab-case입니다. 큐, 실패 큐, 알람, 핸들러의 이름이 됩니다 |
+| `filters` | 기능이 원하는 레코드: `eventName`(`INSERT`, `MODIFY`, `REMOVE`), 살펴볼 `image`(`NewImage` 또는 `OldImage`), `entities`(ElectroDB 엔터티 이름). 어느 필터라도 통과한 레코드는 그 기능으로 갑니다 |
+| `handler` | 기능의 큐를 읽는 `events-*` 함수 |
+| `batch` | `maxRecords`와 `windowSeconds`: 핸들러 실행당 몇 개의 변경을 모으며, 이를 모으기 위해 얼마나 기다리는지 |
+| `maxReceiveCount` | 메시지가 실패 큐로 가기 전에 수신되는 횟수 |
+| `maxConcurrency` | 동시 핸들러 실행의 선택적 상한(최소 2, 이벤트 소스 매핑의 최솟값) |
+
+`featuresFor(record)`가 유일한 매칭 로직입니다. 라우터와 로컬 러너가 모두 이를 호출하므로 서로 어긋날 수 없습니다. 레코드는 일치하는 필터가 있는 모든 기능에 각각 자체 사본으로 가며 다른 곳에는 가지 않습니다. 어느 것과도 일치하지 않는 레코드는 아무것도 만들지 않습니다.
+
+각 기능의 필터와 매처는 레지스트리 옆의 자체 모듈에 있으며(`PROGRESS_STREAM_FILTERS`와 `matchesProgressStreamFilters`가 있는 `progress-stream.ts`, `search-stream.ts` 등) `featuresFor`가 이 매처들을 호출합니다.
+
+이름이 반복되거나, 필터가 코어 테이블에 정의되지 않은 엔터티를 지정하거나, 필터가 샘플 레코드에서 아무것도 일치시키지 못하거나(`stream-features.test.ts`), `handler`가 어떤 함수도 지정하지 않으면(`packages/events`의 `handlers.test.ts`) 테스트가 실패합니다.
+
+## 기능 추가
+
+1. `STREAM_FEATURES`에 항목을 추가합니다.
+2. `packages/events`에 핸들러를 작성하고 `ts#lambda-function`으로 `events-*` 래퍼를 만듭니다. 레코드는 큐의 메시지를 스트림 레코드로 풀어 주는 `sqsToStreamRecords`(`src/router/sqs-stream-records.ts`)를 통해 읽습니다.
+3. 핸들러를 `packages/events/src/router/handlers.ts`의 `HANDLERS`에 추가하며, 로컬 러너가 이를 통해 디스패치합니다. 등록의 `handler`가 여기에 없거나 어떤 기능도 쓰지 않는 핸들러가 있으면 `handlers.test.ts`가 실패합니다.
+4. 핸들러의 Lambda를 `StreamRouterStack`(`packages/infra/src/stacks/stream-router-stack.ts`)에서 `createProgressRecalculationLambda`와 `createSearchIndexingLambda`가 하는 방식으로 만듭니다. `events-*` 함수를 만들고, 읽고 쓰는 것(코어 테이블, 배포 시점 설정 등)을 부여하고, 기능의 이름을 키로 `StreamRouter`에 전달하는 `handlers` 객체에 추가합니다. 이것이 없으면 `StreamRouter`는 synth 시점에 `No handler given for stream feature '<name>'`을 던집니다.
+5. 핸들러가 전달되면 `StreamRouter` 구성 요소가 항목으로부터 큐, 실패 큐, 알람, 이벤트 소스 매핑을 만들고, 로컬 러너는 그에 해당하는 것을 만듭니다.
+6. 핸들러의 중복 전달 및 순서 뒤바뀜 테스트를 작성합니다(아래).
+7. 기능의 큐 지표를 [아래 목록](#확인할-지표)에 추가합니다.
+
+## 기능마다 구성 요소가 만드는 것
+
+- **큐**: 가시성 제한 시간은 핸들러 제한 시간의 여섯 배입니다.
+- **실패 큐**: `maxReceiveCount`번 수신된 뒤의 메시지를 보관하며 14일간 유지합니다.
+- **알람**: 실패 큐에 메시지가 하나라도 있으면 알람 상태가 됩니다. 알림 대상은 없으며 CloudWatch 콘솔에 표시됩니다.
+- **이벤트 소스 매핑**: 큐에서 핸들러로 가며 등록의 `batch`와 `maxConcurrency`를 사용합니다.
+
+모든 큐는 로테이션이 설정된 하나의 고객 관리형 KMS 키를 공유합니다. 스테이지는 코어 테이블처럼 `enableKmsEncryption: false`로 SQS 관리형 암호화로 전환할 수 있습니다. 메시지에는 테이블 레코드 전체가 들어 있으므로 테이블 데이터로 취급하세요.
+
+라우터에는 절대 보낼 수 없는 레코드(메시지로 보내기에 너무 크거나 큐가 거부함)를 위한 자체 실패 큐와 알람(`StreamRouterFailures`)이 있습니다. 여기에는 테이블에서 찾을 수 있도록 레코드에 대한 설명(이벤트 ID, 키, 엔터티, 기능, 크기, 사유이며 내용은 아님)이 담깁니다. 스트림 매핑 자체의 실패한 배치(샤드와 시퀀스 번호)도 여기로 갑니다. 일시적인 이유로 실패한 전송은 스트림 매핑이 해당 레코드에 한해 재시도합니다.
+
+## 핸들러의 의무
+
+라우터는 레코드별 순서나 정확히 한 번의 전달을 약속하지 않습니다. 모든 핸들러는 같은 레코드를 두 번 실행해도, 레코드가 어떤 순서로 오더라도 안전해야 하며, 어떻게 그런지를 파일 헤더 주석에 반드시 밝혀야 합니다.
+
+- 순서가 중요한 곳에서는 레코드만으로가 아니라 **현재 데이터로부터 결과를 도출**하세요. 검색 색인은 변경에서 강의의 식별 정보만 읽고 코어 테이블에서 강의를 다시 읽은 다음, 게시되어 있으면 색인하고 게시되지 않았거나 없으면 제거합니다. 진행률 재계산은 실행할 때마다 커리큘럼과 완료 내역으로 각 학생의 진행률을 다시 계산합니다.
+- 처리할 수 없는 변경(예: 어떤 강의도 지정하지 않음)은 건너뛰지 말고 **실패**시키세요. 그러면 누군가 볼 수 있는 실패 큐에 남습니다.
+- 레코드 자체로부터 누적되는 카운터와 다른 값(변경을 두 번 또는 순서 없이 적용하면 값이 어긋남)은 중복 및 순서가 뒤바뀐 전달이 같은 결과를 내는지 별도로 확인해야 하며, 그렇지 않으면 테이블에서 다시 계산해야 합니다.
+
+새 기능의 테스트에는 중복 전달과 순서가 뒤바뀐 전달이 포함됩니다.
+
+## 실패와 재처리
+
+예외를 던지는 핸들러는 가시성 제한 시간이 지나면 메시지를 큐로 돌려보냅니다. `maxReceiveCount`번 수신된 뒤에는 메시지가 해당 기능의 실패 큐로 이동하며 이후의 변경을 더 이상 막지 않습니다. 다른 기능은 영향을 받지 않습니다.
+
+원인을 고친 뒤에는 큐 서비스 자체의 재처리(redrive)로 메시지를 다시 재생하세요. 핸들러를 다시 실행해도 안전하므로 별도의 재생 도구는 만들지 않았습니다.
+
+배포된 스테이지에서는 SQS 콘솔에서 실패 큐를 열고 기능의 큐로 **Start DLQ redrive**를 선택합니다(또는 `aws sqs start-message-move-task --source-arn <failure queue ARN> --destination-arn <feature queue ARN>`을 사용). 실패 큐의 알람이 OK로 돌아오는지 확인하세요.
+
+## 확인할 지표
+
+모든 SQS 큐는 `QueueName` 차원과 함께 `AWS/SQS` 네임스페이스 아래에 깊이와 경과 시간 지표를 게시합니다.
+
+- 기능의 큐에서 **`ApproximateNumberOfMessagesVisible`**: 대기 중인 변경입니다. 폭주 사이에는 0에 가깝게 돌아와야 합니다.
+- 기능의 큐에서 **`ApproximateAgeOfOldestMessage`**: 핸들러가 얼마나 뒤처져 있는지입니다. 깊이는 그대로인데 경과 시간이 오르면 핸들러가 멈췄거나 스로틀링되고 있는 것입니다.
+- 기능의 실패 큐에서 **`ApproximateNumberOfMessagesVisible`**: 0보다 크면 따로 빼 둔 작업이 있다는 뜻이며 기능의 알람이 울립니다.
+
+| 기능 | 큐 | 실패 큐 |
+|---|---|---|
+| `progress-recalculation` | `ProgressRecalculationQueue` | `ProgressRecalculationFailures` |
+| `search-indexing` | `SearchIndexingQueue` | `SearchIndexingFailures` |
+| `transcript-indexing` | `TranscriptIndexingQueue` | `TranscriptIndexingFailures` |
+| `analytics-update` | `AnalyticsUpdateQueue` | `AnalyticsUpdateFailures` |
+| `earnings-recording` | `EarningsRecordingQueue` | `EarningsRecordingFailures` |
+| `notification-delivery` | `NotificationDeliveryQueue` | `NotificationDeliveryFailures` |
+| `caption-translation` | `CaptionTranslationQueue` | `CaptionTranslationFailures` |
+| `brand-publishing` | `BrandPublishingQueue` | `BrandPublishingFailures` |
+
+이름은 구성 요소의 논리적 ID입니다(배포된 큐 이름에는 스택의 접두사와 접미사가 붙습니다). 새 기능은 여기에 행을 추가합니다.
+
+## 로컬 동작
+
+`pnpm dev`는 이벤트 러너(`packages/events/src/local`)에서 같은 라우터를 실행하며, 큐로는 ElasticMQ(SQS API 호환, Docker, 인메모리)를, 등록마다 하나의 기능 러너를 사용합니다. 배포된 라우터와 같은 `STREAM_FEATURES`와 `featuresFor`를 사용하고 각 기능의 배치 크기와 대기 시간을 유지합니다. `maxReceiveCount`번 수신된 메시지는 기능의 실패 큐로 이동하며 로그가 남습니다. AWS 계정은 필요하지 않습니다.
+
+러너(포트 2024)에는 로컬 큐를 확인하고 재생하는 라우트가 있습니다.
+
+```sh
+# queue and failure queue counts per feature
+curl http://localhost:2024/router/queues
+
+# move a feature's failed messages back to its queue
+curl -X POST http://localhost:2024/router/redrive/search-indexing
+
+# make a feature's next 5 batches fail, to reproduce a failure end to end
+curl -X POST http://localhost:2024/router/fail/search-indexing -d '{"batches": 5}'
+```
+
+재처리는 작은 러너 헬퍼이며 ElasticMQ가 문서화하지 않은 큐 서비스의 재처리가 아닙니다. 큐는 인메모리이므로 `pnpm dev`를 중지하면 비워집니다.

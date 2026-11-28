@@ -1,0 +1,78 @@
+---
+title: Quizzes e trabalhos
+description: Como montar um quiz e suas configurações, fazer um como aluno, definir um trabalho, enviar o trabalho, trabalhos atrasados, e avaliar, devolver e pedir um reenvio.
+---
+
+import Link from '@components/link.astro';
+
+Um quiz é corrigido automaticamente. Um trabalho é algo que um aluno envia e um instrutor avalia.
+
+## Quizzes: para instrutores
+
+Em **Course content**, adicione um **Quiz** a uma aula. O construtor de quiz tem:
+
+- **Questions**: até 50. Cada uma é **Single choice** ou **Multiple choice**, com 2 a 10 opções e uma **Explanation** opcional.
+- **Pass mark (%)**: de 0 a 100.
+- **Attempts allowed**: **Unlimited**, ou um número de pelo menos 1.
+- **Show the correct answers**: After each attempt, After the last attempt ou Never.
+- **Shuffle the options for each student**.
+
+Não há limite de tempo.
+
+**Preview as student** permite fazer o quiz como um aluno faria. As respostas são verificadas e nada é salvo.
+
+Você pode editar um quiz depois que os alunos o tentaram. As tentativas e as melhores notas deles são mantidas e nunca recorrigidas. Um aluno que está no meio de uma tentativa é convidado a conferir as perguntas alteradas antes de enviar.
+
+## Quizzes: para alunos
+
+O quiz mostra o número de perguntas, a nota de aprovação e quantas tentativas você tem.
+
+1. Escolha **Start quiz**.
+2. Responda a cada pergunta. **Next** e **Back** movem entre elas.
+3. Escolha **Review answers** para ver o que você respondeu e o que ainda não tem resposta. **Change** leva você de volta a uma pergunta.
+4. Escolha **Submit answers**.
+
+O resultado mostra a nota desta tentativa e se você passou. Sua melhor nota é a que conta.
+
+- **Resume quiz** continua uma tentativa que você deixou.
+- **Retake quiz** inicia outra tentativa, enquanto você tiver tentativas restantes.
+- Passar no quiz, ou usar sua última tentativa, o marca como concluído.
+- Em um curso arquivado, os quizzes ficam fechados.
+
+## Trabalhos: para instrutores
+
+Em um módulo, escolha **New assignment** e selecione o tipo:
+
+- **Upload**: os alunos enviam um arquivo e você o avalia.
+- **Quiz**: um quiz que é avaliado automaticamente.
+
+Um trabalho de envio tem um **Assignment title**, **Instructions**, **Max points** (um número inteiro de 1 a 1000) e um prazo opcional.
+
+### Avaliação
+
+**Home** lista os envios **Waiting for grading**. O link **Submissions** de um trabalho em **Course content** lista todos os alunos, como Not submitted, Waiting, Resubmission requested ou Returned.
+
+1. Abra um envio.
+2. Leia o arquivo.
+3. Informe os **Points**, de 0 até o máximo, e seu **Feedback**.
+4. Escolha **Return** para dar a nota ao aluno, ou **Request resubmission** para pedir outra versão.
+
+Depois de devolver o trabalho, você ainda pode alterar a nota com **Save grade**. O aluno é avisado a cada vez. Você pode ler o trabalho de um aluno que saiu do curso, mas não avaliá-lo.
+
+## Trabalhos: para alunos
+
+O trabalho mostra as instruções, os **Maximum points** e o prazo, se tiver um.
+
+1. Escolha **Choose file** e selecione seu trabalho.
+2. Escolha **Submit**.
+
+- Você envia um arquivo de até 100 MB: pdf, docx, xlsx, pptx, odt, ods, odp, txt, csv, md, png, jpg, jpeg, gif, webp ou zip.
+- **Trabalhos atrasados são aceitos.** Depois do prazo, seu envio é marcado como **Late**.
+- **Resubmit** substitui seu arquivo até o instrutor devolvê-lo. Um trabalho devolvido não pode ser alterado.
+- Se o instrutor pede que você reenvie, você vê o feedback dele e pode enviar uma nova versão.
+- Um trabalho devolvido mostra seus pontos e o feedback.
+- Em um curso arquivado, não é mais possível enviar trabalhos.
+
+Você é avisado no sino, e por e-mail a menos que desative, quando um trabalho é devolvido, quando um reenvio é pedido e quando uma nota muda. Veja <Link path="guides/notifications">Notificações</Link>.
+
+As notas podem contar para um certificado. Veja <Link path="guides/certificates">Certificados</Link>.

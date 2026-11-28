@@ -1,0 +1,77 @@
+---
+title: Xây dựng khóa học
+description: Tạo khóa học trong cổng giảng viên, thêm module, bài học và nội dung, xuất bản và ẩn, thay đổi khóa học đã xuất bản và các thông tin catalogue của nó.
+---
+
+import Link from '@components/link.astro';
+
+Một khóa học gồm các module. Module chứa các bài học, và bài học chứa nội dung: video, văn bản, bài kiểm tra và tệp. Bạn xây dựng tất cả trên trang của khóa học trong cổng giảng viên.
+
+## Tạo khóa học
+
+1. Mở **My Courses** trong cổng giảng viên.
+2. Chọn **Create a course**.
+3. Nhập **Course title** (tối đa 200 ký tự) và **Course summary**.
+4. Tạo khóa học. Ban đầu nó ở trạng thái **Draft**, học viên không thấy được.
+
+**Open course** trên thẻ của khóa học sẽ mở trang của nó.
+
+## Thêm nội dung
+
+Làm việc trong mục **Course content** của trang khóa học.
+
+1. Chọn **New module** và đặt tên.
+2. Trong module, chọn **New lesson**. Với bài có chấm điểm, hãy chọn **New assignment**.
+3. Trong bài học, thêm nội dung: **Video**, **Text**, **Quiz** hoặc **File**.
+4. Kéo module, bài học hoặc mục nội dung bằng tay nắm để di chuyển.
+
+Phụ đề được thêm tự động vào mọi video.
+
+- <Link path="guides/quizzes-and-assignments">Bài kiểm tra và bài tập</Link> nói về cài đặt bài kiểm tra, bài tập và chấm điểm.
+- <Link path="guides/video-lessons">Bài học video</Link> nói về phụ đề và câu hỏi trong video.
+
+## Mô tả khóa học cho catalogue
+
+Trong mục **Catalogue details**, đặt:
+
+| Trường | Lựa chọn |
+| --- | --- |
+| Category | Một trong các danh mục của nền tảng, hoặc "No category" |
+| Level | Beginner, Intermediate hoặc Advanced |
+| Language | Ngôn ngữ giảng dạy của khóa học |
+| Duration | Số giờ, tối đa 500 |
+| Tags | Tối đa 8, mỗi tag tối đa 30 ký tự |
+
+Học viên lọc catalogue và tìm kiếm theo các trường này. Hãy thêm cả ảnh khóa học: nó hiển thị trên thẻ và trang của khóa học.
+
+Mục **Landing page**, hồ sơ công khai của bạn và các bài học xem trước miễn phí được nói trong <Link path="guides/instructor-guide">Hướng dẫn cho giảng viên</Link>.
+
+## Xuất bản
+
+Chọn **Publish** ở đầu trang khóa học và xác nhận. Từ lúc này học viên thấy được khóa học và mọi thứ trong đó.
+
+Hai điều thay đổi khi khóa học đã được xuất bản:
+
+- **Nội dung mới bắt đầu ở trạng thái ẩn.** Module, bài học hoặc mục nội dung bạn thêm sẽ có huy hiệu **Hidden** cho đến khi bạn chọn **Publish** trên nó. **Hide** đưa một thứ ra khỏi tầm nhìn của học viên.
+- **Xóa nghĩa là lưu trữ.** Xóa một module, bài học hoặc mục nội dung sẽ lưu trữ nó thay vì xóa hẳn.
+
+Xem <Link path="design/live-course-editing">Chỉnh sửa khóa học trực tiếp</Link> để biết học viên thấy gì khi bạn thay đổi khóa học đã xuất bản.
+
+## Nội dung đã lưu trữ
+
+Mục **Archived**, ở cuối trang khóa học, liệt kê những gì bạn đã xóa khỏi khóa học đã xuất bản.
+
+- **Restore** đặt một mục trở lại cuối vị trí cũ của nó.
+- **Delete permanently** xóa nó vĩnh viễn. Việc này bị từ chối với bất cứ thứ gì học viên đã dùng: "Students have used it, so it stays archived."
+
+## Khóa học đã lưu trữ
+
+Khóa học đã lưu trữ không thể chỉnh sửa. Trang của nó hiện "This course is archived, so it can't be edited. Restore it to make changes." Chọn **Restore** ở đầu trang để làm việc với nó trở lại.
+
+Cổng giảng viên không có nút để lưu trữ cả một khóa học.
+
+## Tiếp theo
+
+- Đặt giá: <Link path="guides/payments">Khóa học trả phí và thanh toán</Link>.
+- Cấp chứng chỉ: <Link path="guides/certificates">Chứng chỉ</Link>.
+- Xem khóa học đang diễn ra thế nào: <Link path="guides/course-analytics">Phân tích khóa học</Link>.

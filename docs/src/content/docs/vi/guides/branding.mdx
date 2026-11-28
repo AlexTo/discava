@@ -1,0 +1,60 @@
+---
+title: Thương hiệu
+description: Đặt logo, biểu tượng, tên, ảnh chia sẻ và màu của nền tảng với vai trò quản trị viên, quy tắc cho từng file, một thay đổi mất bao lâu để đến với khách truy cập, và những gì không được gắn thương hiệu.
+sidebar:
+  order: 7
+---
+
+Quản trị viên có thể tạo diện mạo riêng cho nền tảng mà không cần triển khai lại. Trong cổng quản trị, mở menu tài khoản và chọn **Branding**, hoặc chọn thẻ **Branding** trên Home. Thương hiệu áp dụng cho các cổng học viên, giảng viên và quản trị, cùng các trang khóa học và hồ sơ công khai.
+
+## Những gì bạn có thể đặt
+
+| Phần | Nơi khách truy cập nhìn thấy |
+|---|---|
+| **Logo** | Phần đầu của mọi cổng và các trang công khai |
+| **Name** | Phần đầu (bên cạnh logo, nếu bạn để bật), tiêu đề tab trình duyệt, bản xem trước liên kết và các văn bản nhắc đến tên nền tảng |
+| **Icon** | Tab trình duyệt, và biểu tượng trên màn hình chính của điện thoại |
+| **Share image** | Hình trong bản xem trước liên kết của khóa học hoặc hồ sơ không có hình riêng |
+| **Colour** | Nút, vòng focus và liên kết trên các cổng và trang công khai |
+
+Mọi phần đều không bắt buộc. Phần nào bạn để trống sẽ giữ thương hiệu Discava mặc định. Cuối trang ghi "Using the default Discava brand" khi chưa tùy chỉnh gì, và nếu có thì ghi ai đã thay đổi thương hiệu lần cuối và khi nào.
+
+Mục **Preview** trên trang cho thấy các thay đổi của bạn trước khi lưu. Không có gì được áp dụng cho đến khi bạn chọn **Save**.
+
+## Quy tắc cho file
+
+Trang kiểm tra từng file ngay khi bạn chọn và cho biết file vi phạm quy tắc nào. Máy chủ kiểm tra lại khi lưu.
+
+| Phần | Loại file | Lớn nhất | Hình dạng |
+|---|---|---|---|
+| Logo | PNG, JPEG, WebP hoặc SVG | 1 MB | Chiều rộng tối đa gấp 4 lần chiều cao, và không cao hơn chiều rộng |
+| Icon | PNG | 1 MB | Vuông, tối thiểu 192 × 192 pixel. Chúng tôi đề xuất 512 × 512 |
+| Share image | PNG, JPEG hoặc WebP | 2 MB | Tối thiểu 1200 × 630 pixel, chiều rộng gấp 1,8 đến 2 lần chiều cao |
+
+Logo SVG không được chứa script, trang nhúng, trình xử lý sự kiện hoặc liên kết đến file khác. File nào có những thứ đó sẽ bị từ chối, và file của bạn không bao giờ bị viết lại.
+
+Tên phải dài từ 1 đến 50 ký tự. Tắt **Show the name beside the logo** nếu logo đã thể hiện rõ tên: tên vẫn nằm trong tiêu đề tab và bản xem trước liên kết.
+
+## Màu và khả năng đọc
+
+Chọn màu bằng bộ chọn màu, hoặc nhập giá trị hex như `#1d4ed8`.
+
+- Chữ trên nút được chọn tự động, sáng hoặc tối, tùy cái nào dễ đọc hơn.
+- Màu mà cả hai kiểu chữ đều khó đọc sẽ bị từ chối, kèm gợi ý chọn sắc độ đậm hơn hoặc nhạt hơn.
+- Liên kết chỉ dùng màu của bạn ở nơi nó dễ đọc trên trang nền trắng, còn lại dùng màu chữ mặc định. Màu thương hiệu quá nhạt không bao giờ làm liên kết khó đọc.
+- Màu lỗi và màu trạng thái không bị thay đổi.
+
+## Thay đổi mất bao lâu
+
+Cổng quản trị hiển thị thay đổi của bạn ngay khi bạn lưu. Mọi người khác thấy nó trong vòng 5 phút: trình duyệt giữ thương hiệu đã xuất bản tối đa một phút, và mạng phân phối nội dung tối đa bốn phút. Ở lần truy cập đầu, thương hiệu mặc định có thể hiện khoảng một giây; các lần sau hiển thị thương hiệu ngay.
+
+Nếu hai quản trị viên cùng chỉnh sửa một lúc, người lưu sau sẽ được báo rằng người khác đã thay đổi thương hiệu và nên tải lại trang để xem các thay đổi của họ.
+
+## Đặt lại
+
+Mỗi phần có nút đặt lại riêng, chẳng hạn **Reset the logo to default**. **Reset all to default** đặt lại mọi thứ, và hỏi xác nhận trước. Việc đặt lại có hiệu lực khi bạn lưu. Hình bị thay thế ngừng được phục vụ từ địa chỉ cũ trong vòng 5 phút và bị xóa một ngày sau đó.
+
+## Những gì không được gắn thương hiệu
+
+- Các trang đăng nhập do Amazon Cognito lưu trữ giữ nguyên diện mạo mặc định.
+- Trang tài liệu này.

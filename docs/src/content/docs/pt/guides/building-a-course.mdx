@@ -1,0 +1,77 @@
+---
+title: Como criar um curso
+description: Como criar um curso no portal do instrutor, adicionar módulos, aulas e conteúdo, publicar e ocultar, alterar um curso publicado e preencher seus detalhes de catálogo.
+---
+
+import Link from '@components/link.astro';
+
+Um curso é feito de módulos. Um módulo contém aulas, e uma aula contém seu conteúdo: vídeos, texto, quizzes e arquivos. Você monta tudo isso na página do curso, no portal do instrutor.
+
+## Crie o curso
+
+1. Abra **My Courses** no portal do instrutor.
+2. Escolha **Create a course**.
+3. Informe um **Course title** (até 200 caracteres) e um **Course summary**.
+4. Crie o curso. Ele começa como **Draft**, que os alunos não veem.
+
+**Open course** no cartão de um curso abre a página dele.
+
+## Adicione o conteúdo
+
+Trabalhe na seção **Course content** da página do curso.
+
+1. Escolha **New module** e dê um nome a ele.
+2. No módulo, escolha **New lesson**. Para trabalhos avaliados, escolha **New assignment**.
+3. Na aula, adicione o conteúdo: **Video**, **Text**, **Quiz** ou **File**.
+4. Arraste um módulo, aula ou item de conteúdo pela alça para movê-lo.
+
+As legendas são adicionadas a todo vídeo automaticamente.
+
+- <Link path="guides/quizzes-and-assignments">Quizzes e trabalhos</Link> cobre as configurações de quiz, os trabalhos e a avaliação.
+- <Link path="guides/video-lessons">Aulas em vídeo</Link> cobre as legendas e as perguntas dentro de um vídeo.
+
+## Descreva-o para o catálogo
+
+Na seção **Catalogue details**, defina:
+
+| Campo | Opções |
+| --- | --- |
+| Category | Uma das categorias da plataforma, ou "No category" |
+| Level | Beginner, Intermediate ou Advanced |
+| Language | O idioma em que o curso é ensinado |
+| Duration | Horas, até 500 |
+| Tags | Até 8, com até 30 caracteres cada |
+
+Os alunos filtram o catálogo e pesquisam por esses campos. Adicione também uma imagem do curso: ela aparece no cartão e na página do curso.
+
+A seção **Landing page**, seu perfil público e as aulas de prévia gratuitas estão no <Link path="guides/instructor-guide">Guia do instrutor</Link>.
+
+## Publique
+
+Escolha **Publish** no topo da página do curso e confirme. Os alunos já podem ver o curso e tudo que há nele.
+
+Duas coisas mudam depois que um curso é publicado:
+
+- **O conteúdo novo começa oculto.** Um módulo, aula ou item de conteúdo que você adiciona mostra um selo **Hidden** até você escolher **Publish** nele. **Hide** tira algo da vista dos alunos.
+- **Remover arquiva.** Remover um módulo, aula ou item de conteúdo o arquiva em vez de excluí-lo.
+
+Veja <Link path="design/live-course-editing">Edição de curso ao vivo</Link> para saber o que os alunos veem quando você altera um curso publicado.
+
+## Conteúdo arquivado
+
+A seção **Archived**, no fim da página do curso, lista o que você removeu de um curso publicado.
+
+- **Restore** devolve um item ao fim do lugar onde estava.
+- **Delete permanently** o remove de vez. É recusado para tudo que os alunos usaram: "Students have used it, so it stays archived."
+
+## Um curso arquivado
+
+Um curso arquivado não pode ser editado. A página dele diz "This course is archived, so it can't be edited. Restore it to make changes." Escolha **Restore** no topo da página para voltar a trabalhar nele.
+
+O portal do instrutor não tem botão para arquivar um curso inteiro.
+
+## Próximos passos
+
+- Defina um preço: <Link path="guides/payments">Cursos pagos e pagamentos</Link>.
+- Ofereça um certificado: <Link path="guides/certificates">Certificados</Link>.
+- Veja como o curso está indo: <Link path="guides/course-analytics">Análises do curso</Link>.

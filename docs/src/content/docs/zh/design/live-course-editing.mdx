@@ -1,0 +1,327 @@
+---
+title: 课程在线编辑
+description: 讲师在已发布的课程中添加、移除、隐藏、恢复或编辑模块、课时和内容项时会发生什么。
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+讲师在课程发布之后仍会继续编辑它。这个设计让这些编辑对已经选课的学生是安全的：半成品不会变得可见，学生做过的任何事都不会丢失，进度保持正确。
+
+课程的状态决定编辑的行为：
+
+| 课程状态 | 编辑 |
+|---|---|
+| **Draft** | 立即生效，删除是硬删除。草稿从未对学生开放，所以其中的任何内容都不会影响他们 |
+| **Published** | 遵循本页的规则。学生可能已有进度和作答 |
+| **Archived** | 课程结构为只读（见[课程的生命周期](#课程的生命周期)） |
+
+这些过程位于 instructor-api（`procedures/course.ts`、`module.ts`、`lesson.ts` 和 `content-item-*.ts` 文件）。
+
+## 工作流程
+
+### 课程的生命周期
+
+```d2 title="Lifecycle of a course: a draft is published once it has content; archiving makes it read-only and keeps whether it was ever published, and restore returns it there"
+direction: right
+
+new: "Created" {shape: oval}
+draft: Draft
+published: Published
+archived_draft: "Archived, read-only\n(never published)" {style.stroke-dash: 3}
+archived_published: "Archived, read-only\n(was published)" {style.stroke-dash: 3}
+
+new -> draft
+draft -> published: "publish\n(needs visible content)"
+draft -> archived_draft: archive
+published -> archived_published: archive
+archived_draft -> draft: restore
+archived_published -> published: restore
+```
+
+**发布**
+
+- 只有 **draft** 可以发布，并且只有在它至少有一个学生会看到的内容项之后才能发布，因此课程永远不会空着开放。隐藏或已归档的内容项，或位于隐藏或已归档的模块或课时之下的内容项，都不计算在内。
+- 已归档的课程不能发布：请先恢复它。
+- 发布课程不会改变它之下的任何记录。在草稿中为 `visible` 的记录会随课程一起对学生可见，隐藏的记录保持隐藏，直到它们被发布。
+
+**恢复**
+
+- 课程在第一次发布时记录 `publishedAt`，并且永不清除。已归档的课程正是靠它记得自己是否曾对学生开放过。
+- **恢复会把曾经发布过的课程恢复为 Published，把从未发布过的课程恢复为 Draft。** 学生用过的课程永远不会退回草稿，因为在草稿中删除是永久的。
+
+**已归档的课程是只读的**
+
+- 它的课程结构中的任何内容都不能添加、编辑、发布、隐藏、归档、重新排序或恢复，也不能向它上传视频。以上每一项都会返回 `PRECONDITION_FAILED`（"Restore the course first"）。这涵盖模块、课时、内容项和测验。
+- 仍然可以做的事：查看课程、恢复它，以及**永久删除已经归档的记录**。这样已归档的课程可以在不恢复它的情况下被清理，因为恢复会让学生再次看到它。这些删除保留它们自己的防护（见[永久删除](#永久删除)）。
+- 课程自身的设置（价格、证书开关和条件、首个课时的提示）在任何状态下都可以更改。
+
+**重复与竞争**
+
+- 重复一个操作不会写入任何内容：发布已发布的课程，或恢复未归档的课程，都会原样返回该课程。超时之后重试是安全的。
+- 每次更改都以它读到的状态为条件。如果课程在此期间发生了变化，请求会返回 `CONFLICT`。
+- **发布与并发编辑。** 在草稿课程中，内容可以在任何时刻被删除、隐藏或归档。因此发布事务会检查它所统计的可见内容项之一，以及它所在的课时和模块，是否仍然存在且仍然可见。如果不是，就不会发布任何内容，请求返回 `CONFLICT`。重试时会重新统计。
+- **删除与并发发布。** 删除是永久删除还是归档，取决于请求读取时课程的状态。因此在草稿课程中永久删除（模块、课时或内容项）会在一个事务中运行，该事务同时检查课程仍是草稿。如果它在此期间被发布了，就不会删除任何内容，请求返回 `CONFLICT`。重试时则会改为归档。
+- **任何写入与并发归档。** 课程未被归档的检查，与每次写入处于同一个事务中，紧挨着对模块和课时的检查。输掉这场竞争的请求会返回 "Restore the course first"。
+
+### 模块、课时或内容项的生命周期
+
+```d2 title="Lifecycle of a module, lesson or content item: the course's status decides where a new record starts and what delete does; then publish, hide, archive, restore and delete"
+direction: down
+
+new_draft: "Created in a\nDraft course" {shape: oval}
+new_live: "Created in a\nPublished course" {shape: oval}
+
+live: "Not archived" {
+  visible: Visible
+  hidden: Hidden
+
+  hidden -> visible: publish
+  visible -> hidden: hide
+}
+
+archived: "Archived\n(frozen until restored,\nwith everything under it)" {
+  style.stroke-dash: 3
+}
+
+deleted: Deleted permanently {shape: oval}
+
+new_draft -> live.visible
+new_live -> live.hidden
+live -> archived: "delete\n(course not Draft)"
+archived -> live: restore
+live -> deleted: "delete\n(course Draft)"
+archived -> deleted: "delete permanently\n(see below)"
+```
+
+- 该图跟随一个模块、课时或内容项。课程自身的状态是独立的（见上文），这些操作都不会改变它。它决定新记录从哪里开始，以及删除是归档记录还是移除记录。在已归档的课程中，这些操作都不允许，只有永久删除已归档的记录除外。
+- 只有当一条记录是 **Visible** 且它所有的祖先也都是时，学生才能看到它（见[有效可见性](#有效可见性)）。
+- 发布模块或课时，也会发布它之下每一条从未发布过的、隐藏且未归档的记录。在可见之后被特意隐藏的记录保持隐藏。隐藏、归档和恢复只改变记录本身。
+- 已归档的记录保持它的可见性，所以恢复它会让它回到 **Visible** 或 **Hidden**，与之前一样。只有当它的父模块或课时未被归档时，它才能被恢复。
+- 已归档的记录及其下的所有内容都是冻结的：其中的任何内容都不能发布、隐藏或编辑，也不能向其中添加任何内容。
+- 在草稿课程之外，每一次改变学生可见内容的更改，都会为所有已选课的学生触发一次进度重新计算。
+
+### 永久删除之前的检查
+
+```d2 title="Checks a permanent delete goes through before anything is removed, for a module or lesson and for a single content item"
+direction: down
+
+start: "Delete permanently\n(from the Archived view;\nallowed in an archived course)" {shape: oval}
+is_archived: "Is the record itself\narchived?" {shape: diamond}
+kind: "Module or lesson,\nor content item?" {shape: diamond}
+
+activity: "Student activity on any\nitem under it, or a\ndiscussion question on\na lesson?" {shape: diamond}
+limit: "More than 100 records\nincluding everything\nunder it?" {shape: diamond}
+transaction: "One transaction: each item\nconditioned on its checked\nupdatedAt and no student\nactivity, the parent on\nits checked archivedAt"
+
+item_activity: "Student activity\non the item?" {shape: diamond}
+item_delete: "One delete, conditioned on\nno student activity and the\nitem still being archived"
+
+changed: "Did a condition\nfail?" {shape: diamond}
+
+refused_archive: "PRECONDITION_FAILED:\narchive it first"
+refused_activity: "PRECONDITION_FAILED:\nit can stay archived,\nbut is never deleted"
+refused_limit: "PRECONDITION_FAILED:\ndelete some of its lessons\n(or content items) first,\nthen retry"
+conflict: "CONFLICT:\nnothing deleted"
+done: "Deleted; a video's transcode\ncanceled, and video and\nfile objects removed from S3" {shape: oval}
+
+start -> is_archived
+is_archived -> refused_archive: no
+is_archived -> kind: yes
+kind -> activity: module or lesson
+kind -> item_activity: content item
+activity -> refused_activity: yes
+activity -> limit: no
+limit -> refused_limit: yes
+limit -> transaction: no
+item_activity -> refused_activity: yes
+item_activity -> item_delete: no
+transaction -> changed
+item_delete -> changed
+changed -> conflict: yes
+changed -> done: no
+```
+
+## 数据模型
+
+支持在线编辑的 `curriculum` 实体上的属性：
+
+| 属性 | 位于 | 用途 |
+|---|---|---|
+| `visibility: 'hidden' \| 'visible'` | 模块、课时、内容项 | 必填。创建过程在草稿课程中设为 `visible`，在已发布的课程中设为 `hidden`，所以新的测验、课时或模块永远不会以半成品的状态被看到。讲师点击 **Publish** 来显示它 |
+| `archivedAt` | 模块、课时、内容项 | 软删除。只在被归档的记录本身上设置。它的子记录被隐藏是因为它们的父记录被归档，而不是它们自己被归档 |
+| `publishedAt` | 模块、课时、内容项 | 记录第一次变为可见的时间：在草稿课程中是创建时，否则是第一次发布时。永不清除（见[发布](#发布)） |
+| `studentActivityCount` | 内容项 | 对该内容项有任何数据的不同学生的数量。从不减少 |
+| `lastChildOrder` | 课程、模块、课时 | 最后分配给子记录的 `order`。添加或恢复子记录时，会在同一个事务中领取下一个值，所以同时添加的两条记录不会共用同一个 `order` |
+
+**什么算学生活动。** `studentActivityCount` 在创建学生对该内容项的**第一条**记录的同一个事务中递增（`ADD 1`）：
+
+| 内容项 | 第一条记录 |
+|---|---|
+| 测验 | `quizSummary` |
+| 视频 | `itemCompletion` 或 `videoAnswerSheet`，以先出现的为准。对视频提问的回答与完成一样，都会把学生计入 |
+| 上传类作业 | `assignmentSubmission` 或 `itemCompletion` |
+| 文本、文件 | `itemCompletion` |
+
+每个写入方都用 `studentActivityWrites`（`core-table/src/helpers/student-activity.ts`）构建它的事务，`helpers/invariants/student-activity.ts` 中的不变量会对照记录检查该计数。
+
+`studentActivityCount` 位于课程结构分区中，所以对某个模块或课时之下的所有内容求和或检查，只需一次查询。它所统计的学生侧记录以用户为键，不做扫描就无法回答"谁用过这个内容项？"。
+
+## 有效可见性
+
+只有当一条记录及其所有祖先都是 `visible` 且未归档时，才会向学生显示。这在以下位置检查：
+
+- 每一次学生读取：core-api 的 `course.view` 和 `course.publicView`，以及 `quiz.view`；
+- 每一次学生写入：提交测验，将内容项标记为完成；
+- 每一次进度计算。
+
+所以隐藏或归档某个模块，也会阻止其中的测验被提交，并把它的内容项从每个人的进度中移除。
+
+该规则只实现了一次，在 `core-table/src/helpers/curriculum.ts` 中：单条记录用 `isShown`，整个课程结构用 `filterEffectivelyVisible`。core-api 的课程视图使用它，core-table 的进度计算也使用它，`packages/events` 中的重新计算 Lambda 运行的就是后者。学生看到的内容与他们的进度所计入的内容永远不会不一致。
+
+讲师通过 instructor-api 的 `course.view` 进行编辑，它返回整个课程结构，包括隐藏和已归档的记录，以及它们的 `visibility`、`archivedAt` 和 `studentActivityCount`。它仅限教授该课程的讲师使用。课程编辑器会把已归档的记录排除在主列表之外，并把隐藏的记录标记为 **Hidden**。
+
+## 已发布课程中的操作
+
+| 操作 | 学生看到什么 | 他们的数据和进度 | 为谁重新计算进度 |
+|---|---|---|---|
+| **Add module** | 发布之前什么都看不到。发布时也会发布它之下隐藏的课时和内容项，所以它会一次性全部出现 | 一旦发布，每个人的 `progressPercent` 都会下降。已完成的课时和课程保持已完成 | 发布时，所有已选课的学生 |
+| **Remove module** | 已归档：下次加载时从大纲中消失。正在它的某个页面上的学生会看到 "This lesson has been removed by your instructor" | 保留（完成记录、作答、最高分），不再计入。已经完成其他所有内容的学生会变为 `completed`。可以恢复，恢复后一切重新计入 | 所有已选课的学生 |
+| **Edit module**（标题、描述） | 立即生效 | 无影响 | 无人 |
+| **Add lesson** | 发布之前什么都看不到（连同它隐藏的内容项一起） | 与添加模块相同 | 发布时，所有已选课的学生 |
+| **Remove lesson** | 与移除模块相同 | 与移除模块相同 | 所有已选课的学生 |
+| **Edit lesson**（标题、描述） | 立即生效 | 无影响 | 无人 |
+| **Add content item** | 发布之前什么都看不到，并且只有当它的课时和模块也已发布时才会看到 | 一旦发布，`progressPercent` 就会下降。如果它的课时此前已经完成，该课时保持已完成，该内容项显示为 **New** | 发布时，所有已选课的学生 |
+| **Remove content item** | 已归档：下次加载时消失。在其中提交测验或将其标记为完成，会被拒绝并提示 "no longer available" | 保留，不计入。如果它是某位学生唯一未完成的内容项，该课时（也可能是课程）会变为已完成。可以恢复 | 所有已选课的学生 |
+| **Edit content item**：标题、描述、文本正文 | 立即生效 | 完成状态保留 | 无人 |
+| **Edit content item**：替换视频 | 走视频替换和重新转码的流程。在新版本就绪之前，学生继续播放上一个版本，即使转码失败也一样；一旦新版本就绪的时间超过观看者签名 cookie 的有效期，上一个版本的文件就会被删除 | 完成状态保留 | 无人 |
+| **Edit content item**：视频提问 | 见<Link path="design/quizzes">测验</Link>：仅更改答案或解析是不可见的；更改题目的题干、题型或选项，会使进行中的回答返回 `CONFLICT` 且不记录任何内容；移动或移除题目从不影响已记录的回答 | 完成状态和进度不受影响。已记录的回答保留，从不重新评分 | 无人 |
+| **Edit content item**：测验 | 见<Link path="design/quizzes">测验</Link>：仅更改答案的编辑是不可见的；更改题目的编辑会使进行中的提交返回 `CONFLICT` | 作答、最高分和通过记录保留，从不重新评分 | 无人 |
+| **Hide**（任何层级） | 像移除一样消失，但不在 Archived 视图中 | 保留，不计入；重新显示时再次计入 | 所有已选课的学生 |
+| **Reorder**（任何层级） | 立即生效 | 无影响 | 无人 |
+
+"重新计算进度"由<Link path="design/progress-and-completion">进度与完成</Link>中描述的服务端 Lambda 完成，从不由学生的浏览器完成。
+
+## 发布
+
+发布模块或课时，会在**一个事务**中把它及其所有**新的**隐藏后代设为 `visible`。学生会一次性看到新课时及其所有内容项，而不是一点一点出现。
+
+哪些后代会随父记录一起发布：
+
+| 后代 | 是否随父记录一起发布？ |
+|---|---|
+| 隐藏，没有 `publishedAt`（新内容） | 是 |
+| 隐藏，有 `publishedAt`（在学生可以看到之后被特意隐藏） | 否，保持隐藏 |
+| 已归档，或位于已归档课时之下的内容项 | 否，保持原样 |
+
+- 你亲自发布的那条记录始终会被发布，无论它的历史如何。
+- 每个模块、课时和内容项在第一次变为可见时记录 `publishedAt`（在草稿课程中创建时，或第一次发布时），并且永不清除。
+- 这无法区分的一种情形是：在记录从未发布之前就被隐藏（例如，在已发布的课程中构建新课时的同时隐藏了它的一个内容项）。这仍然算作新内容，并随它的父记录一起发布。
+- **发布进行中被归档。** 发布所改变的每个课时和内容项（以及它所发布的每个内容项所在的课时），在事务提交时都必须仍未被归档。否则不会发布任何内容，请求返回 `CONFLICT`。重试时会重新读取模块或课时，并跳过刚被归档的记录。
+
+隐藏不会级联：它只改变记录本身，它的子记录保留各自的 `visibility`。学生无论如何都不会再看到这些子记录，因为记录只有在其祖先可见时才会显示。
+
+## 重新排序
+
+模块在课程内、课时在模块内、内容项在课时内，各自按 `order` 排序。每个层级只有一种改变它的方式：`module.reorder`、`lesson.reorder` 和 `contentItem.reorder`。`module.update` 和 `lesson.update` 不接收 `order`。
+
+- 在讲师门户中，每一行的抓手是拖动手柄（鼠标、触摸或键盘）。在已归档的课程中，或者只有一条记录需要排序的地方，没有手柄。
+- 重新排序和其他编辑一样，所以遵循归档规则：在已归档的课程中，以及在已归档的模块或课时之下，它会被拒绝（"Restore the course (module, lesson) first"）。
+- 它同样适用于每一种内容项类型。
+- 不支持把课时移到另一个模块，或把内容项移到另一个课时：它们的键中包含其父记录的 id。
+
+每个过程都接收父记录中**每一条未归档记录**的 id，按它们应当出现的顺序，并在一个事务中写入每个 `order`（1、2、3……），所以一次拖动就是一次原子更改。
+
+- 列表必须与父记录完全吻合。如果它漏掉了一条记录，包含了已归档或已移除的记录，或包含未知的 id，请求会返回 `CONFLICT` 且不写入任何内容：编辑器使用的是过期的列表，所以它会重新加载并再试一次。同一个 id 出现两次会返回 `BAD_REQUEST`。
+- 每条记录都以仍未被归档为条件，与对其祖先的检查在同一个事务中，所以在请求运行期间被归档的记录，会取消整个重新排序，在那一刻被归档的祖先也一样。
+- 已归档的记录不属于该列表。它们保留原有的 `order`。
+- 重复父记录已有的顺序不会写入任何内容。
+- 事务最多容纳 100 条记录，包括对祖先的检查，所以限制如下：
+
+  | 过程 | 检查 | 最多记录数 |
+  |---|---|---|
+  | `module.reorder` | 课程 | 一门课程中 99 个模块 |
+  | `lesson.reorder` | 课程、模块 | 一个模块中 98 个课时 |
+  | `contentItem.reorder` | 课程、模块、课时 | 一个课时中 97 个内容项 |
+
+  更大的父记录会被以 `PRECONDITION_FAILED` 拒绝，与其他针对整个父记录的操作相同。
+- 与重新排序同一时刻添加的记录会排在已重新排序的记录之后，编辑器会在重新加载之后显示它。
+- 被恢复的记录会放到它父记录的末尾（见[恢复](#恢复)），所以它永远不会与另一条记录共用 `order`。
+
+## 移除（归档）
+
+在草稿课程之外，删除总是归档，讲师门户把这个操作标为 **Archive**（在草稿课程中，模块和课时是 **Delete**，内容项是 **Remove**）。确认对话框会根据 `studentActivityCount` 显示影响：
+
+- 内容项：有多少学生用过它，例如 "12 students have used it"。
+- 模块或课时：它之下有多少内容项被学生用过，例如 "Students have used 3 items in it"。把各内容项上的学生人数相加，会让一位学生按其使用过的内容项数被重复计算，所以统计的是内容项，而不是学生。
+
+两种情况下，对话框都会补充说明他们的进度会被保留，并且在记录被恢复时重新计入。
+
+### 在学生学习时被移除
+
+| 学生所在位置 | 会发生什么 |
+|---|---|
+| 课程中的其他地方 | 下次加载时，该模块或课时从大纲中消失 |
+| 在该课时的页面上 | 已显示在屏幕上的内容仍可阅读。下一次数据重新获取（导航、窗口获得焦点）会显示 **"This lesson has been removed by your instructor"** 并附带返回大纲的链接，绝不会是光秃秃的 404 |
+| 正在做其中的测验 | 提交被拒绝（"This quiz is no longer available"）；本地草稿被丢弃；不消耗作答次数 |
+| 将内容项标记为完成 | 以同样的方式被拒绝 |
+| 旧链接或书签 | 同样的 "removed" 页面 |
+
+归档会为每位已选课的学生触发一次进度重新计算，所以被移除的内容会立即停止计入，无需任何人重新加载。
+
+### 对已归档的记录不能做什么
+
+已归档的记录及其下的所有内容，在被恢复之前，保持和归档时完全一样，因此恢复会带回学生之前看到的样子。已归档的**课程**也以同样的方式冻结（见[课程的生命周期](#课程的生命周期)），并且在归档时首先指出的是课程："Restore the course first"。以下这些都会以 `PRECONDITION_FAILED` 被拒绝：
+
+- 发布、隐藏或编辑已归档的记录本身："Restore the module (lesson, content item) before publishing (hiding, editing) it"。
+- 发布、隐藏或编辑它之下的任何内容，例如已归档模块中的课时，或已归档课时中的内容项："Restore the module first" 或 "Restore the lesson first"。两者都已归档时，先指出模块。
+- 向它之下添加任何内容：已归档的模块中不能新增课时，已归档的模块或课时中不能新增内容。
+- 上传视频文件：不会为已归档的课程、模块或课时签发上传 URL，也不会为替换已归档内容项的文件签发。
+
+只要课程没有被归档，已归档的模块或课时之下的记录仍然可以自己被归档，然后被永久删除。
+
+即使请求相互重叠，这些规则也成立。模块或课时之下的每次写入，都在一个 DynamoDB 事务中运行，同时检查它的课程、模块（和课时）仍然存在且未归档，以及记录本身未被归档。如果另一个请求在此期间归档或删除了父记录，整个写入会以相同的错误被拒绝，且不写入任何内容。因此，正在被归档或被永久删除的模块，不会在最后一刻新增课时，课时也不会新增内容项。
+
+在转码仍在进行时被归档的视频会继续转码。任务完成时，该内容项会被标记为 `ready`（或 `failed`），而不会触及 `archivedAt` 或 `visibility`，所以它在被恢复时可以播放，在此之前保持隐藏。
+
+## 恢复
+
+讲师的课程页面有一个 **Archived** 区域，列出每一条因自身被归档的记录，最近的在前：已归档的模块，在活跃模块中被归档的课时，或在活跃课时中被归档的内容项。位于已归档父记录之下的记录不会单独列出，因为它们会随父记录一起回来。每一行显示该记录原来所在的位置、归档的时间、其中包含什么，以及学生是否用过它，并带有 **Restore** 和 **Delete permanently**。
+
+- 恢复会清除 `archivedAt`，并把记录放到它父记录的**末尾**（`writeAtEnd`）。它的 `order` 变为所有同级记录（包括已归档的）中最大值加一，并且超过父记录的 `lastChildOrder`。它排在最后，并且永远不会与之后恢复的另一条已归档记录冲突。讲师可以把它拖到想要的位置。
+- 它在归档之前的位置不会保留：其他记录在此期间可能已被重新排序，所以那个位置可能已被占用。
+- 只有当课时的模块未被归档时，课时才能被恢复；只有当内容项的模块和课时都未被归档时，它才能被恢复。否则会被拒绝，提示 "Restore the module first" 或 "Restore the lesson first"，两者都已归档时先指出模块。
+- 课程本身已归档时，任何内容都不能被恢复：会被拒绝，提示 "Restore the course first"。
+- 被恢复的测验保留它的版本、作答和最高分。
+- 恢复会触发一次进度重新计算，一切都会像之前一样重新计入。
+
+## 永久删除
+
+只在 Archived 视图中提供，并且只有当以下条件全部成立时：
+
+- 记录本身已归档（位于已归档父记录之下的记录必须先被归档）；
+- 该内容项的 `studentActivityCount` 为 0，或者某个课时或模块之下每个内容项的都是 0；
+- 对于课时或模块，该课时或该模块的任何课时上都没有人提过讨论问题。问题也是学生数据。
+
+学生用过的任何内容都可以被归档，但永远不能被永久删除。编辑器会把它的 **Delete permanently** 显示为不可用，并说明这个原因。它在已归档的课程中也可用：这是该课程允许的唯一一种课程结构编辑。
+
+检查和删除是分开的调用，所以删除本身带有条件：
+
+- **模块或课时**连同它之下的所有内容在一个事务中被删除。每个内容项的删除，以检查时的 `updatedAt`（任何写入都会使它变化）以及 `studentActivityCount = 0` 为条件。模块或课时自身的删除，以检查时的 `archivedAt` 为条件，所以期间发生的恢复会取消它。模块之下的课时被删除时没有它们自己的条件。
+- **单个内容项**是一次删除，以 `studentActivityCount = 0` 以及该内容项仍已归档为条件。
+
+如果某个条件失败，删除会以 `CONFLICT` 被拒绝，并且不会移除任何内容。事务的任何其他失败都以 `INTERNAL_SERVER_ERROR` 报告，同样不会移除任何内容。
+
+删除之后，正在运行的视频转码会被取消，视频和文件的 S3 对象会被移除。这一清理是尽力而为的：失败会被记录，而不会抛出。
+
+## 限制与重复请求
+
+- **只处理完整的集合。** 发布模块或课时以及删除它（在草稿课程中或永久删除）会读取后代的每一页，而不只是第一个 1 MB，所以不会有内容未被发布或成为孤儿。两个 `course.view` 也会读取课程结构的每一页。
+- **100 个条目的事务。** 发布模块或课时以及删除它（在草稿课程中或永久删除）发生在一个要么全成功要么全失败的 DynamoDB 事务中，它最多容纳 100 条记录。对课程的检查（以及发布课时时对模块的检查）也计入该限制。更大的模块或课时仍然可以被发布或删除，只是要分步进行：
+  - 先发布它的一些课时（或内容项），再发布模块（或课时）；
+  - 在草稿课程中，先删除它的一些课时（或内容项），再删除模块（或课时）；
+  - 否则，先归档它的一些课时（或内容项）并永久删除它们，再处理模块（或课时）。
+
+  当某个操作会超出限制时，它会以 `PRECONDITION_FAILED` 被拒绝，并附带指出下一步的消息。它从不会在幕后被拆分成多个事务：如果其中一个失败，模块的一部分就已经没了，留下没有父记录的课时或内容项。
+- **重复不会写入任何内容。** 归档已归档的内容会保留它原来的 `archivedAt`。发布已经可见的内容项，或其中和其下没有任何隐藏内容的模块或课时，隐藏已隐藏的内容，以及恢复未归档的内容，都会原样返回该记录。重试请求（例如在客户端超时之后）是无害的。例外是会移除记录的删除（在草稿课程中，或永久删除）：重试它会返回 `NOT_FOUND`，因为记录已经不在了。

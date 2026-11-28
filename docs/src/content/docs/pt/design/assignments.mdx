@@ -1,0 +1,78 @@
+---
+title: Correção e feedback de tarefas
+description: Como os instrutores devolvem tarefas de envio de arquivo com pontos e feedback, pedem reenvios e veem o trabalho em espera, e os registros e regras por trás disso.
+sidebar:
+  order: 12
+---
+
+**Spec:** [`specs/20261120-230057-assignment-grading/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-230057-assignment-grading/)
+
+Um aluno envia um arquivo para uma tarefa de upload e pode substituí-lo até que ele seja devolvido. Um instrutor do curso lista o trabalho de todos os alunos matriculados, abre um envio e então o devolve como final com pontos e feedback, ou pede um reenvio apenas com feedback. Só os instrutores do curso podem listar, ler ou devolver envios.
+
+| Quem | API | Procedures |
+|---|---|---|
+| Aluno | core-api | `assignment.uploadUrl`, `submit`, `mySubmission`, `submissionFileUrl` |
+| Instrutor | instructor-api | `assignmentSubmission.list`, `get`, `fileUrl`, `return`, `requestResubmission`, `amendGrade` e `gradingQueue.list` |
+
+## Envios e correção
+
+Um envio é um registro `assignmentSubmission` por aluno por tarefa. Seu `status` muda assim:
+
+| Transição | Quem | Condição | Efeito |
+|---|---|---|---|
+| Enviar (primeira vez) | Aluno | Ainda sem envio | `submitted`, `version` 1, entra no índice de espera |
+| Reenviar | Aluno | `version` inalterada e status `submitted` ou `resubmission_requested` | `submitted`, `version` + 1, volta ao índice de espera |
+| Pedir reenvio | Instrutor | `version` e `reviewRevision` inalteradas, status `submitted` | `resubmission_requested`, sai do índice de espera |
+| Devolver como final | Instrutor | `version` e `reviewRevision` inalteradas, status `submitted` ou `resubmission_requested` | `returned`, define os pontos, impede o aluno de reenviar |
+| Alterar nota | Instrutor | `reviewRevision` inalterada, status `returned` | Pontos e feedback mudam, o status continua `returned` |
+
+- **Concorrência.** Toda ação do instrutor soma um a `reviewRevision`, e cada escrita é condicionada à `version` e à `reviewRevision` que o instrutor estava vendo. Uma devolução não pode cair sobre um arquivo que o aluno já substituiu, e quando dois instrutores agem ao mesmo tempo, só um vence.
+- **Pontos** são um número de 0 até o `maxPoints` da tarefa, com no máximo duas casas decimais. `pointsOutOf` guarda o máximo com que o trabalho foi corrigido, caso `maxPoints` mude depois.
+- **Alunos que saíram.** Devolver ou alterar a nota é recusado para um aluno que não está mais matriculado. O instrutor ainda pode ler o trabalho dele.
+- **A conclusão não é afetada.** A correção nunca muda a conclusão do aluno nem o `studentActivityCount` do item de conteúdo. Um pedido de reenvio não desfaz a conclusão, e um reenvio não conta o aluno uma segunda vez.
+
+## Rodadas de feedback
+
+Cada ação do instrutor grava um registro `submissionFeedback`: um pedido de reenvio, uma devolução final ou uma alteração. O feedback é obrigatório no pedido de reenvio e opcional na devolução.
+
+- As rodadas só recebem acréscimos e são indexadas por envio e horário, então o histórico de um aluno é uma única consulta, da mais nova para a mais antiga. O aluno vê o feedback anterior ao longo dos reenvios, então sabe o que foi pedido.
+- O envio guarda apenas a nota atual. As rodadas são registros separados porque cada uma pode ter 20 000 caracteres de JSON do Tiptap e o número delas não tem limite: uma lista dentro do envio poderia chegar ao limite de tamanho de item do DynamoDB.
+
+O aluno é avisado no app e por e-mail (ativado por padrão) de cada ação: `assignment.returned`, `assignment.resubmission_requested` e `assignment.grade_updated`, cada uma deduplicada pelo `feedbackId` da rodada. A notificação e a rodada são gravadas na mesma transação que a mudança do envio.
+
+## O índice de espera e a matrícula
+
+Os envios que aguardam um instrutor (status `submitted`) carregam `waitingCourseId` e `waitingSince`, que formam a chave de um índice esparso (`byWaiting`) com o curso como partição e o horário do envio como chave de ordenação. Toda escrita que muda o `status` define ou remove os dois atributos juntos por meio de `waitingKeys`.
+
+A fila de correção na página inicial do instrutor (`gradingQueue.list`) é, portanto, uma consulta por curso que o instrutor leciona, cada uma já com o mais antigo primeiro, combinadas na memória. Ela lê todas as entradas em espera, então seu total é exato.
+
+**A matrícula é aplicada no momento da leitura.** A fila lê em lote as matrículas dos alunos listados e deixa de fora os alunos cuja matrícula está `dropped` ou ausente. Guardar a matrícula no índice faria reembolsos e checkouts reescreverem todos os envios que um aluno tem no curso, dentro das próprias transações deles. Lê-la na hora deixa o código de pagamento intocado, e um aluno que se matricula de novo reaparece na fila sem nenhuma escrita.
+
+Como uma matrícula ausente esconde um aluno, uma leitura parcial não pode passar por completa. Quando o DynamoDB deixa chaves sem processar por limitação de taxa, a fila as pede de novo, até três vezes com uma pausa crescente, e depois falha a requisição em vez de devolver uma fila mais curta.
+
+A lista por tarefa lê todos os envios e todas as matrículas do curso (duas consultas de partição única), combina-os, e pagina na memória, 50 linhas por vez, com um cursor que codifica a posição de ordenação da última linha. Alunos sem envio aparecem como "not submitted" [não enviado], e os que saíram como "no longer enrolled" [não está mais matriculado].
+
+## O aviso diário
+
+Os instrutores são avisados de novos envios por `assignment.submissions_received`, no máximo uma vez por tarefa por dia (UTC) por instrutor, no app, com e-mail desativado por padrão. Um pequeno registro `submissionNotice` (um por tarefa por dia, que expira dois dias depois) é o marcador. O `submit` o lê primeiro; se ele não existir, a mesma transação o cria e grava uma notificação por instrutor, com um limite para que a transação fique abaixo do limite de 100 itens do DynamoDB. Se outro envio vencer a corrida, a nova tentativa existente roda de novo sem o marcador e sem as notificações. Isso faz de "no máximo uma vez por dia" um fato do banco de dados, e não uma esperança de timing.
+
+## Pré-visualização de um arquivo enviado
+
+A página de revisão mostra PDFs e imagens (png, jpg, jpeg, gif, webp) ao lado do formulário de correção; todos os outros tipos de arquivo mostram seus detalhes e um botão Download.
+
+- **Imagens** são um `<img>` que usa a mesma URL assinada do CloudFront, de cinco minutos, de um download. Os navegadores ignoram `Content-Disposition` para imagens.
+- **PDFs** são buscados da URL assinada e desenhados em canvas pelo `react-pdf` (PDF.js), carregado só na página de revisão. Os arquivos armazenados são servidos com `Content-Disposition: attachment` e a CSP do portal bloqueia `<iframe>` e `<embed>`, então desenhar em canvas não exige mudança na distribuição, na CSP nem nos objetos armazenados.
+
+**Limitação conhecida: JPEG 2000 e JBIG2.** O PDF.js decodifica esses formatos de imagem embutidos com WebAssembly, que a CSP do portal (`script-src 'self'`, sem `'wasm-unsafe-eval'`) bloqueia. Essas imagens podem não ser desenhadas, mas o resto da página é renderizado e o Download continua funcionando. Afrouxar uma CSP compartilhada por isso foi considerado não compensar.
+
+Os pontos e o feedback ainda não enviados de um instrutor ficam no próprio navegador dele, por envio, e não são salvos no servidor.
+
+## Regras que as verificações impõem
+
+Os helpers compartilhados em `helpers/assignment-grading.ts` do core-table são os únicos que escrevem nos campos de nota e em `submissionFeedback`. O envio do aluno, em `helpers/assignment-submission.ts`, define as chaves de espera pelo mesmo `waitingKeys`. As verificações em `helpers/invariants/assignment-grading.ts` cobrem:
+
+- formato da nota: `returned` tem pontos dentro de `pointsOutOf`, quem devolveu e horários, e nada mais tem;
+- chaves de espera de acordo com o `status`;
+- toda rodada pertencendo a um envio, e o formato da rodada;
+- a rodada mais recente correspondendo ao estado e à `reviewRevision` do envio;
+- o formato do marcador do aviso diário.

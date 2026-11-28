@@ -1,0 +1,77 @@
+---
+title: Crear un curso
+description: Crear un curso en el portal del instructor, agregar módulos, lecciones y contenido, publicar y ocultar, cambiar un curso publicado y sus detalles de catálogo.
+---
+
+import Link from '@components/link.astro';
+
+Un curso se compone de módulos. Un módulo contiene lecciones, y una lección contiene su contenido: videos, texto, cuestionarios y archivos. Todo se construye en la página del curso en el portal del instructor.
+
+## Crea el curso
+
+1. Abre **My Courses** en el portal del instructor.
+2. Elige **Create a course**.
+3. Escribe un **Course title** (hasta 200 caracteres) y un **Course summary**.
+4. Crea el curso. Empieza como **Draft**, que los estudiantes no pueden ver.
+
+**Open course** en la tarjeta de un curso abre su página.
+
+## Agrega el contenido
+
+Trabaja en la sección **Course content** de la página del curso.
+
+1. Elige **New module** y ponle nombre.
+2. En el módulo, elige **New lesson**. Para trabajos calificados, elige **New assignment**.
+3. En la lección, agrega su contenido: **Video**, **Text**, **Quiz** o **File**.
+4. Arrastra un módulo, una lección o un elemento de contenido por su agarre para moverlo.
+
+Los subtítulos se agregan a cada video de forma automática.
+
+- <Link path="guides/quizzes-and-assignments">Quizzes and assignments</Link> cubre la configuración de cuestionarios, las tareas y la calificación.
+- <Link path="guides/video-lessons">Video lessons</Link> cubre los subtítulos y las preguntas dentro de un video.
+
+## Descríbelo para el catálogo
+
+En la sección **Catalogue details**, define:
+
+| Campo | Opciones |
+| --- | --- |
+| Category | Una de las categorías de la plataforma, o "No category" |
+| Level | Beginner, Intermediate o Advanced |
+| Language | El idioma en que se imparte el curso |
+| Duration | Horas, hasta 500 |
+| Tags | Hasta 8, de hasta 30 caracteres cada una |
+
+Los estudiantes filtran y buscan en el catálogo con estos datos. Agrega también una imagen del curso: se muestra en la tarjeta y en la página del curso.
+
+La sección **Landing page**, tu perfil público y las lecciones de vista previa gratuita se tratan en la <Link path="guides/instructor-guide">Instructor guide</Link>.
+
+## Publica
+
+Elige **Publish** en la parte superior de la página del curso y confirma. Los estudiantes ya pueden ver el curso y todo lo que contiene.
+
+Dos cosas cambian una vez que el curso está publicado:
+
+- **El contenido nuevo empieza oculto.** Un módulo, una lección o un elemento de contenido que agregas muestra una insignia **Hidden** hasta que eliges **Publish** en él. **Hide** lo retira de la vista de los estudiantes.
+- **Quitar archiva.** Quitar un módulo, una lección o un elemento de contenido lo archiva en vez de eliminarlo.
+
+Consulta <Link path="design/live-course-editing">Live course editing</Link> para saber qué ven los estudiantes cuando cambias un curso publicado.
+
+## Contenido archivado
+
+La sección **Archived**, al final de la página del curso, lista lo que quitaste de un curso publicado.
+
+- **Restore** devuelve un elemento al final del lugar donde estaba.
+- **Delete permanently** lo elimina para siempre. Se rechaza para cualquier cosa que los estudiantes hayan usado: "Students have used it, so it stays archived."
+
+## Un curso archivado
+
+Un curso archivado no se puede editar. Su página dice "This course is archived, so it can't be edited. Restore it to make changes." Elige **Restore** en la parte superior de la página para volver a trabajar en él.
+
+El portal del instructor no tiene un botón para archivar un curso completo.
+
+## Siguientes pasos
+
+- Fija un precio: <Link path="guides/payments">Paid courses and payments</Link>.
+- Ofrece un certificado: <Link path="guides/certificates">Certificates</Link>.
+- Mira cómo le va al curso: <Link path="guides/course-analytics">Course analytics</Link>.

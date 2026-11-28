@@ -1,0 +1,157 @@
+---
+title: 公开页面
+description: "课程落地页和讲师主页如何送达爬虫和链接预览：页面渲染器，缓存与新鲜度，SPA 重写，索引设置，以及预览视频暴露的内容。"
+sidebar:
+  order: 9
+---
+
+import Link from '@components/link.astro';
+
+**规格：** [`specs/20261118-223240-public-course-pages/`](https://github.com/AlexTo/discava/tree/main/specs/20261118-223240-public-course-pages/)
+
+**规格：** [`specs/_archive/20261120-154626-free-preview-lessons/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261120-154626-free-preview-lessons/)（免费预览课时）
+
+课程的落地页（`/learn/<courseId>`）和讲师的主页（`/instructors/<handle>`）是公开的：任何人未登录也可以打开。学生门户是单页应用，所以不运行脚本的爬虫或链接预览只会看到一个空壳。**页面渲染器**通过用真正的 HTML 来响应这些地址，解决了这个问题。
+
+## 页面渲染器
+
+渲染器是 `@discava/core-api` 中的第二个 Lambda 处理程序（`src/page-renderer/handler.ts`）。学生门户的 CloudFront 分发把它用作 `/learn/*`、`/instructors/*`、`/certificates/*`、`/sitemap.xml` 和 `/robots.txt` 的源。它由 Websites 堆栈中的 `StudentPortal` 构造创建，带有一个只有 CloudFront 能调用的 Function URL。它只响应 `GET` 和 `HEAD`。
+
+在本地，`pnpm dev` 会在 2026 端口启动它（`src/local-page-renderer.ts`）。浏览器继续使用 Vite 服务器，爬虫的响应则从该端口获取。
+
+| 路径 | 响应 |
+|---|---|
+| `/learn/<courseId>` | 已发布课程的落地页，否则为 `404` |
+| `/learn/<courseId>/<anything>` | 带 `noindex` 的普通 `index.html`（登录后的学习路由）。它不读取任何内容 |
+| `/instructors/<handle>` | 教授至少一门已发布课程的讲师的主页，否则为 `404` |
+| `/certificates/<ID>` | 用于链接预览的 head（学习者、课程、日期和平台名称），始终为 `noindex`；未知的 ID 返回 `404` |
+| `/certificates/<ID>/<anything>` | 带 `noindex` 的普通 `index.html`（LinkedIn 路由） |
+| 其他任何路径 | `404` |
+| `/sitemap.xml` | 每门已发布的课程、公开主页和活跃分类，带有 `lastmod` |
+| `/robots.txt` | 见[索引设置](#索引设置) |
+
+对于页面，渲染器取已构建的 `index.html` 并添加：
+
+- head 标签：标题、描述、规范地址、Open Graph 和 Twitter 卡片标签，以及 schema.org JSON-LD（`Course`，或带有 `Person` 的 `ProfilePage`）；
+- `#root` 内的静态渲染：标题、图片、关键信息、学习成果、要求、描述、课程大纲、评分摘要、第一页评价和讲师卡片；
+- 一个 `<script type="application/json" id="discava-page-data">` 元素，保存它所用到的各过程的输出；
+- 平台品牌：它的图标、颜色和品牌文档，使页面从首次绘制起就显示管理员设置的品牌（见<Link path="design/branding">品牌</Link>）。如果无法读取品牌，页面使用默认品牌渲染。
+
+启动时，门户会读取并移除 page-data 元素，并用它为 React Query 预填数据（`src/lib/page-data.ts`）。这样应用的首次渲染就是完整的页面，替换静态标记时不会闪烁。所有文本都经过 HTML 转义，JSON 序列化时对 `<`、`>` 和 `&` 进行了转义，所以课程标题无法跳出页面。
+
+**关于什么是公开的，只有唯一的事实来源。** 渲染器在进程内通过 `appRouter.createCaller` 以匿名上下文调用 `course.publicView`、`review.summary`、`review.list`、`instructorProfile.publicView` 和 `certificate.verify`。因此爬虫看到的永远不会比 API 返回的更多。草稿课程、已归档课程和未知的 ID 给出逐字节相同的 `404` 页面。这对所有人都成立，包括已选该课程的学生。他们通过"我的学习"访问课程的方式不变。
+
+**规范地址**使用访问者的主机名，CloudFront Function 会把它复制到 `x-discava-host`。只有当该主机名是该 stage 的学生门户域名之一（或者没有配置域名时为 `*.cloudfront.net` 主机）时，才会使用它。任何其他主机名都会回退到第一个配置的域名，所以把某个域名指向该分发无法污染规范地址。
+
+**当依赖项失败时**（表、设置参数或 `index.html` 的读取），响应是纯文本的 `503`（`Service temporarily unavailable`），带有 `Cache-Control: no-store`、`X-Robots-Tag: noindex` 和 `Retry-After: 5`。它从不被缓存，也从不被转成 `404`。它没有 HTML，所以在故障期间加载落地页或主页的访客看到的是那行文本，而不是应用。应用内的导航不经过渲染器，继续正常工作。
+
+## 缓存与新鲜度
+
+CloudFront 会缓存每个响应：
+
+| 响应 | `Cache-Control` |
+|---|---|
+| 页面或外壳 | `max-age=0, s-maxage=300`：CloudFront 保留 5 分钟，浏览器总是重新验证 |
+| 未找到 | `max-age=0, s-maxage=60` |
+| `sitemap.xml`、`robots.txt` | `max-age=300, s-maxage=300` |
+| `503` | `no-store` |
+
+缓存键只有路径。不转发查询字符串、cookie 或 `Authorization` 头，所以响应从不取决于请求者是谁。
+
+这把过期程度限制在 **5 分钟**之内，且无需失效操作。对课程或主页的更改会在 5 分钟内到达爬虫和链接预览，被归档的课程或不再公开的主页也会在同样的时间内开始返回 `404`。浏览器中的访客在下一次加载时就能看到更改，因为应用读取的是 API。
+
+渲染器在每次缓存未命中时，都会用条件式 `GetObject`（`If-None-Match`，通常返回 `304`）检查门户的 `index.html`，并且从不回退到较旧的副本。门户部署会清理旧的带哈希的资源，然后使整个分发失效，所以没有缓存的页面会继续指向已不存在的包。
+
+## 单页应用重写
+
+默认行为上的一个 CloudFront Function（`spa-rewrite.js`，位于共享的 `StaticWebsite` 构造中）会把最后一段没有文件扩展名的任何路径重写为 `/index.html`。缺失的资源会得到 S3 的错误，渲染器的 `404` 会到达访问者。三个门户都从共享构造中获得这一行为。
+
+该分发没有把 `404` 或 `403` 转成带 `200` 的 `/index.html` 的错误响应。这类响应适用于分发的每一个源，所以它们会把渲染器的 `404` 变成一个成功页面，搜索引擎会把它当作软 404。
+
+## 索引设置
+
+`studentPortal.allowSearchEngineIndexing` 是一个按 stage 的设置，默认为 `false`，只有 `discava-production` 为 `true`。（它不单叫 "indexing"，因为在这里该词已经指 OpenSearch 的索引。）
+
+| | 设置关闭（其他所有 stage，本地开发） | 设置开启（生产） |
+|---|---|---|
+| 页面 | 每个渲染器响应都带有 `<meta name="robots" content="noindex">` 和 `X-Robots-Tag: noindex` | 只有未找到的响应和非落地页的 `/learn/*` 外壳带 `noindex`；`/certificates/*` 始终为 `noindex` |
+| 来自 S3 的文件 | 响应头策略添加 `X-Robots-Tag: noindex` | 没有标记 |
+| `/robots.txt` | `Disallow: /` | 禁止 `/learn/*/`、`/my-learning`、`/signin` 和 `/search`，允许其余部分并列出站点地图 |
+
+爬虫内容和社交卡片在每个 stage 上都会提供，所以可以在生产之前测试。
+
+站点地图是在请求时根据带键的读取和已声明的索引构建的，从不扫描（`helpers/sitemap.ts`）。它是一个文件，站点地图协议将其限制为 50,000 个 URL。超出之后需要站点地图索引，那是后续工作。
+
+## 预览视频的暴露规则
+
+一门课程可以有一个预览视频，由讲师作为单独的文件上传，时长不超过 5 分钟。它与课时视频一样被转码并生成字幕，替换时，在新版本就绪之前，上一个版本继续播放。它的记录 `coursePreview` 与 `course` 是分开的，所以转码或字幕状态的变化不会改动 `course.updatedAt`，也不会触发搜索重新索引。
+
+任何人都可以播放它，无论是否登录，但只能遵守以下规则：
+
+- `course.previewVideoUrl` 是公开的，只有当课程处于**已发布**状态且预览有**可播放的版本**时才会响应。否则它的表现与课程不存在时相同。
+- 它设置的签名 cookie **只覆盖该版本的文件夹**（它的各个码率版本和字幕轨道），有效期与已选课学生的相同。课程中的任何课时视频、文件或其他内容，都不会在未选课的情况下变得可访问。
+- 已归档的课程会立即停止提供它的预览，恢复之后又会重新播放。被替换或被移除的版本不再签发新的地址，它的文件之后会被删除，与课时视频相同。
+- 该过程在 `PUBLIC_OPERATIONS` 中，所以它适用公开请求限额，并且在启用的地方适用该 stage 的 Web 防火墙。
+
+## 免费预览课时
+
+讲师可以把一个普通课时标记为免费预览。之后任何人，无论是否登录、是否选课，都可以在 `/learn/<courseId>/preview/<lessonId>` 打开它。这是"未付费用户无法获得付费内容"这一规则唯一有意设置的例外。
+
+**标记。** 课时带有一个可选的 `freePreview` 属性，只以 `true` 存储，取消标记时被移除（instructor-api 中的 `lesson.setFreePreview`）。只有 `lesson` 类型的课时才能带有它：作业课时无法被标记，`free-preview-on-ordinary-lesson` 表不变量会标出被标记的作业课时。
+
+当 `isOpenFreePreview`（位于 `@discava/core-table`）成立时，一个课时是**开放**的预览。该函数是"开放"唯一的定义：
+
+- 课程已发布；
+- 模块和课时都是显示的（可见且未归档）；
+- 该课时是普通课时，并且已被标记。
+
+**三个专属的公开操作。** `freePreview.lesson`、`freePreview.videoUrl` 和 `freePreview.fileUrl` 是 core-api 上的公开查询，列在 `PUBLIC_OPERATIONS` 中。它们从不读取调用者，所以未登录的访客、未选课的用户和已选课的学生得到同样的答案。
+
+面向已选课用户的过程（`course.view`、`contentItem.videoUrl`、`contentItem.fileUrl`、`quiz.view`，进度、完成、作业和讨论相关的过程，以及其余过程）保持不变，对被标记的课时和任何其他课时一样仍需要选课。公开操作没有声明，所以一个操作无法同时服务访客和已选课的学生。
+
+**响应包含什么。** 每个条目都是逐字段构建的，所以任何没有点名的内容都不会流出：
+
+| 条目 | 访客得到什么 |
+|---|---|
+| 视频 | 标题、描述、时长，以及现在是否可以播放 |
+| 文本 | 它的正文 |
+| 文件 | 名称、大小和类型 |
+| 测验 | 只有标题和题目数量，以锁定的卡片显示。没有题目、答案或设置 |
+| 作业 | 被丢弃 |
+
+不会返回任何存储键、状态或任务属性。调用者如果指名了一个不是开放预览的课时，或者不在其下显示的条目，无论原因是什么，都会得到相同的 `NOT_FOUND`，并且不会签发任何内容。
+
+**签名。**
+
+- 视频的 cookie 只覆盖该版本的文件夹，使用该 `Path` 设置，持续**一小时**（`FREE_PREVIEW_COOKIE_LIFETIME_SECONDS`），而已选课学生是四小时。
+- 访客按下播放时页面会请求地址，视频播放期间每 30 分钟再请求一次，从而续期 cookie。
+- 文件链接覆盖一个对象，有效期五分钟。文本不需要签名。
+- 这一小时从不超过 `RETIRED_VERSION_DELAY_MINUTES` 已经覆盖的 cookie 有效期，所以被替换的版本的文件比每一个预览 cookie 的存续时间都长。一个单元测试固定了这一点。
+
+**取消标记会怎样。** 这些操作在每次请求时都读取课时，没有任何缓存。从写入之后的第一次请求起（或者在该课时、它的模块或它的课程被隐藏或归档之后），这三个操作都会返回 `NOT_FOUND`：不再有新的访问。此后，已分享的预览地址会显示 "This preview is no longer available"。
+
+**取消标记不会做什么。** 它不会收回已经发出的内容：
+
+- 视频 cookie 在过期之前继续有效，最多在签发之后一小时，并且不会被续期；
+- 文件链接最多有效五分钟；
+- 屏幕上的文本、已下载的文件或录像都无法收回。
+
+落地页可能会在最多五分钟内继续显示 "Free preview" 标签，因为页面渲染器缓存了它。
+
+**什么都不记录。** 预览不执行任何写入，也不读取关于调用者的任何信息。没有完成记录、进度、保存的视频位置、测验作答或学生活动计数，也没有讨论。视频每次访问都从头开始。这让每一条学生记录都与某个选课关联，`student-records-enrolled` 会在每个 e2e 测试之后检查这一点。
+
+**付费内容规则。** 该规则的数据形式 `paid-course-enrolment-paid` 保持不变：预览不会创建选课记录。它的 API 形式在 `paid-access.test.ts` 中测试：它以未选课的已登录用户身份，针对一门有价格的课程运行每一个内容过程，然后再针对一个开放的预览课时运行一遍，得到相同的 `FORBIDDEN` 拒绝。开放的预览课时是唯一被点名的例外，它们自己的测试在 `procedures/free-preview.test.ts` 中（一个拒绝矩阵，涵盖目标不是开放预览的所有情形）。
+
+**爬虫。** 渲染器会在落地页的大纲中标记每个开放的预览课时：它的标题链接到预览地址，后面跟着 "Free preview"。课时的内容不会为爬虫渲染。预览地址本身返回带 `noindex` 的普通页面，被 `robots.txt`（`/learn/*/`）禁止，并且不在站点地图中。渲染文本会使未标记的课时可以在搜索引擎的缓存中被读到。
+
+**运维说明：带宽。** 平台为分发预览视频付费，而且一次签名可以播放一小时。公开限流限制的是签名签发的频率，而不是一次签名播放多少字节，并且任何人都可以播放预览视频，与宣传视频一样。请关注媒体分发的 CloudFront 数据传输指标（媒体存储桶前面的分发，在 CloudFront 控制台或 CloudWatch 中），以及 core API 的网关 stage 上 `freePreview.*` 方法的 429 计数。按访客的速率规则，或者限制每门课程被标记的课时数量，是可能的后续工作。
+
+## 主页与 handle
+
+讲师的主页随他们的第一门课程一起创建，所以讲师卡片总有地方可链接。`course.create` 在课程自己的事务之前调用 `ensureInstructorProfile`（位于 `@discava/core-table`）。它是幂等的，没有课程的主页不会破坏任何不变量。
+
+- URL 使用 **handle**，从不使用账户 ID：3 到 30 个字符，由小写字母、数字和单个连字符组成。它通过一条占用记录（`profileHandleClaim`）在讲师之间保持唯一，与分类名称相同。
+- 当且仅当主页的所有者教授至少一门已发布课程时，主页才是公开的，并且它恰好列出这些课程。没有退出选项。
+- 公开输出不包含电子邮件地址和账户标识符。
+
+<Link path="guides/instructor-guide">讲师指南</Link>涵盖讲师一侧的内容。

@@ -1,0 +1,77 @@
+---
+title: Notes et avis
+description: Noter et évaluer un cours, comment les notes s'affichent et pèsent dans la recherche, les réponses des instructeurs, la suppression par un admin, la confidentialité et ce que les avis ne font pas encore.
+sidebar:
+  order: 4
+---
+
+Un étudiant peut noter un cours de 1 à 5 étoiles et ajouter un avis écrit. Les notes s'affichent sur la page du cours, sur les cartes de cours et dans la recherche.
+
+## Pour les étudiants
+
+Ouvrez la page du cours et repérez la section **Reviews**. Si vous êtes inscrit, vous pouvez :
+
+- **Post** un avis : choisissez une note en étoiles (obligatoire), écrivez éventuellement jusqu'à 2 000 caractères, puis choisissez **Post review**.
+- **Edit** votre avis, puis **Save changes**. Il affiche la mention « edited » et ne compte toujours qu'une fois.
+- **Delete review**, après confirmation. Le cours retrouve le récapitulatif qu'il avait sans cet avis, et vous pouvez en publier un nouveau.
+
+Les règles :
+
+- Chaque étudiant a un seul avis par cours. Publier deux fois en même temps, par exemple en double-cliquant, ne crée qu'un avis.
+- Vous devez être inscrit. Un étudiant qui a quitté le cours ne peut pas publier un nouvel avis.
+- Un cours non publié n'accepte aucun nouvel avis.
+- Vous pouvez toujours modifier ou supprimer un avis que vous avez déjà écrit, quel que soit le statut du cours.
+
+Les visiteurs non connectés voient le récapitulatif et les avis, avec le lien **Sign in and enrol to review**. Les étudiants connectés mais non inscrits voient « Enrol in this course to review it ».
+
+## Comment les notes s'affichent
+
+La page du cours affiche la moyenne avec une décimale (par exemple 4,6), le nombre de notes et la répartition du nombre de notes pour chaque nombre d'étoiles. Les cartes du catalogue et de la recherche affichent la même moyenne et le même nombre, ou « No ratings yet ».
+
+## Comment la recherche utilise les notes
+
+La recherche peut trier par **Relevance**, **Highest rated** ou **Newest**, et filtrer par note minimale (4,5, 4,0, 3,5 ou 3,0 et plus). Le filtre de note minimale utilise la moyenne simple, et les cours sans note n'y correspondent jamais.
+
+Le tri par note, et le léger effet des notes sur la pertinence, n'utilisent pas la moyenne simple, afin qu'une seule note de 5 étoiles ne puisse pas devancer un cours qui a beaucoup de bonnes notes. La recherche traite chaque cours comme s'il avait cinq notes supplémentaires de 3,5 étoiles :
+
+> weighted rating = (number of ratings × average + 5 × 3.5) ÷ (number of ratings + 5)
+
+Une seule note de 5 étoiles donne 3,75. Vingt notes de 4,5 en moyenne donnent 4,3, donc ce cours se classe plus haut.
+
+- Avec **Highest rated**, les cours sans note viennent en dernier.
+- Avec **Relevance**, la correspondance du texte domine toujours. Une note pondérée supérieure à 3,5 augmente le score et une note inférieure à 3,5 le diminue, de 15 % au maximum. Les cours sans note ne sont pas modifiés.
+- Un changement de note atteint la recherche en quelques secondes.
+
+## Réponses des instructeurs
+
+Ouvrez le cours depuis **My Courses** et choisissez **Reviews** en haut de sa page. La page affiche la moyenne, la répartition et chaque avis.
+
+- **Respond** à un avis avec jusqu'à 1 000 caractères, puis **Save response**. **Edit response** et **Delete response** la modifient ensuite.
+- Tout instructeur du cours peut modifier la réponse d'un autre.
+- La réponse s'affiche sous l'avis sur la page du cours, avec le nom de l'instructeur. Elle ne change pas la note et ne marque pas l'avis comme modifié.
+- Un avis supprimé n'accepte pas de réponse.
+
+Un nouvel avis apparaît dans votre cloche. Pour recevoir aussi un e-mail, activez **Course reviews** dans **Notification settings** : c'est désactivé par défaut.
+
+## Suppression par un admin
+
+Un admin peut supprimer un avis qui enfreint les règles :
+
+1. Ouvrez **Reviews** dans le portail admin.
+2. Choisissez le cours sous **Course**. Les cours publiés et archivés sont listés.
+3. Choisissez **Remove** sur l'avis.
+4. Saisissez une **Reason** (obligatoire, jusqu'à 200 caractères) et choisissez **Remove review**.
+
+Un avis supprimé disparaît de la page du cours, des cartes, de la moyenne et de la recherche. Cela ne peut pas être annulé. Les instructeurs du cours ne peuvent pas supprimer d'avis.
+
+L'auteur voit « Your review was removed by a moderator » avec le motif, et aucun formulaire : il ne peut pas publier un autre avis pour ce cours.
+
+## Confidentialité
+
+Les avis affichent le nom d'affichage de l'auteur sous forme abrégée, comme « Alex T. », jamais son e-mail. Les instructeurs ne reçoivent l'identifiant de l'étudiant que pour répondre à l'avis.
+
+## Limites
+
+- Pas de votes « utile ».
+- Pas de moyen de signaler un avis : la suppression est faite par un admin.
+- Aucune progression minimale n'est requise : tout étudiant inscrit peut donner son avis tout de suite.

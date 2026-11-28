@@ -1,0 +1,120 @@
+---
+title: Primeiro deploy
+description: Execute o workflow Deploy, encontre seus portais e crie os primeiros usuários e categorias.
+sidebar:
+  order: 3
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+Com o <Link path="deploy/setup">setup</Link> concluído, fazer o deploy é uma única execução de workflow.
+
+## 1. Execute o workflow Deploy
+
+Na aba **Actions** do seu fork, escolha **Deploy → Run workflow**, informe o nome do stage e execute. Ou pelo terminal:
+
+```sh
+gh workflow run deploy.yml -f stage=discava-development
+gh run watch
+```
+
+O primeiro deploy cria todos os recursos, incluindo várias distribuições CloudFront e uma collection do OpenSearch Serverless, então leva muito mais tempo que os seguintes.
+
+### O que o workflow faz
+
+<Steps>
+
+1. **Verifica se o stage existe** em `stages.config.ts`, para que um erro de digitação falhe antes de tocar na AWS.
+
+2. **Repassa os overrides de configuração.** Toda variável no environment do GitHub do stage (ou no repositório) cujo nome começa com o prefixo do stage (`DISCAVA_DEVELOPMENT_` para `discava-development`) é passada ao build. É assim que os domínios personalizados chegam a ele.
+
+3. **Analisa com o Trivy.** O deploy para diante de uma vulnerabilidade crítica conhecida que tenha correção, ou de um secret commitado.
+
+4. **Faz login na AWS** como o role de deploy, usando um token OIDC de curta duração.
+
+5. **Sintetiza** os templates do CloudFormation com o CDK, com o permissions boundary do stage aplicado a todo role.
+
+6. **Faz o deploy** de cada stack na ordem de dependência. O CloudFormation cria os recursos como o role de execução. Uma execução automática pula esta etapa se `main` já tiver um commit mais novo.
+
+</Steps>
+
+## 2. Encontre seus portais
+
+Cada portal é uma distribuição CloudFront. Os endereços são outputs da stack `Websites`. Com o AWS CLI configurado na região do stage:
+
+```sh
+aws cloudformation describe-stacks \
+  --stack-name discava-development-Websites \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `DistributionDomainName`)].[OutputKey,OutputValue]' \
+  --output table
+```
+
+Você recebe um endereço `*.cloudfront.net` para cada um dos portais de aluno, instrutor e admin. Abra o portal do aluno: você deve ver o catálogo, vazio por enquanto.
+
+## 3. Crie seus primeiros usuários
+
+Os usuários ficam em um user pool do Cognito, em três grupos que definem qual portal e qual API um usuário pode usar:
+
+| Grupo | Pode usar |
+| --- | --- |
+| `student` | Portal do aluno |
+| `instructor` | Portal do instrutor |
+| `admin` | Portal de admin |
+
+`discava-development` tem o **auto cadastro desativado**, então um estranho não pode criar uma conta no seu stage de teste. Você adiciona os usuários por conta própria:
+
+<Steps>
+
+1. Abra o console do **Cognito** na região do stage e escolha o user pool do stage. O id dele é um output da stack `discava-development-Data`.
+
+2. **Create user**, com um endereço de e-mail e uma senha temporária. Uma senha precisa ter pelo menos 8 caracteres, com uma letra maiúscula, uma minúscula, um dígito e um símbolo. A temporária expira em 3 dias.
+
+3. Abra o usuário, escolha **Add user to group** e adicione cada grupo de que ele precisa. Adicione você mesmo aos três para ver tudo.
+
+4. Entre em um portal com o endereço de e-mail. O Cognito pede que você defina uma senha permanente.
+
+</Steps>
+
+Em `discava-production`, o auto cadastro está ativado e o MFA é obrigatório. Quem se cadastra é adicionado automaticamente aos grupos `student` e `instructor`. Os admins são sempre adicionados manualmente, em todos os stages.
+
+## 4. Adicione categorias
+
+Os cursos são organizados por categorias que um admin gerencia. Entre no portal de admin e crie-as, ou grave o conjunto inicial (Science, Technology, Mathematics, Communication, Business) a partir do seu clone:
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+
+DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}" pnpm nx run @discava/tooling-deploy:seed-categories
+```
+
+Ele usa as credenciais e a região da AWS do seu shell, que devem ser as do stage, e ignora categorias que já existem. Sem `DISCAVA_DYNAMODB_CORE_TABLE`, ele grava na tabela de desenvolvimento local.
+
+## 5. Teste de ponta a ponta
+
+<Steps>
+
+1. No **portal do instrutor**, crie um curso, adicione uma aula com um vídeo e publique. O vídeo é transcodificado pelo MediaConvert e fica disponível alguns minutos depois do envio.
+
+2. No **portal do aluno**, encontre o curso, matricule-se e reproduza a aula.
+
+3. No **portal de admin**, confira a lista de categorias.
+
+</Steps>
+
+Duas coisas que um administrador define no portal de admin, sem deploy:
+
+- O nome, o logo e a cor da plataforma: <Link path="guides/branding">Branding</Link>
+- A conta do Stripe, para vender cursos: <Link path="guides/payments">Cursos pagos e pagamentos</Link>
+
+## Deploys posteriores
+
+- **Automaticamente:** se você definiu `AUTO_DEPLOY_STAGE`, todo push em `main` que passa no CI faz o deploy desse stage. Um deploy é ignorado quando um commit mais novo chegou a `main` nesse meio tempo.
+- **Manualmente:** execute o workflow Deploy de novo. Ele faz o deploy do commit a partir do qual você o executa, que também é como você faz rollback: execute-o a partir de um commit mais antigo.
+
+Deploys para um mesmo stage nunca se sobrepõem. Uma segunda execução espera a primeira.
+
+Depois de baixar uma versão mais nova do Discava, <Link path="deploy/setup">execute o script de setup de novo</Link> antes de fazer o deploy, para que os roles do stage permitam o que a nova versão cria.
+
+Próximo: <Link path="deploy/configuration">configure seu stage</Link> com domínios personalizados e e-mail.

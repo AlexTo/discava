@@ -1,0 +1,75 @@
+---
+title: Discussions de leçon
+description: Poser des questions, répondre, voter et accepter des réponses dans une leçon, l'espace Questions de l'instructeur, ce que font masquer et supprimer, les limites, et ce qui arrive aux leçons archivées.
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Chaque leçon a une section **Questions** où les étudiants inscrits au cours posent des questions et se répondent entre eux, et où les instructeurs du cours interviennent.
+
+## Pour les étudiants
+
+Dans une leçon, sous le contenu, la section **Questions** liste les questions de la leçon, les plus récentes d'abord.
+
+- **Ask** : remplissez **Question title** (jusqu'à 120 caractères) et **Details**, puis choisissez **Post question**.
+- **Reply** : choisissez **Open question**, rédigez votre réponse et choisissez **Post reply**. Un fil contient jusqu'à 500 réponses.
+- **Upvote** une question ou une réponse écrite par quelqu'un d'autre. **Remove upvote** l'annule.
+- **Accept** une réponse : la personne qui a posé la question peut choisir **Mark as answer** sur n'importe quelle réponse. Elle s'affiche épinglée au-dessus des autres réponses sous le nom **Accepted answer**, et la question s'affiche comme **Answered**. **Remove answer** l'annule.
+- **Report** un message d'une autre personne qui enfreint les règles. Les instructeurs le voient dans leur liste Reported.
+- **Delete** votre propre question ou réponse, après confirmation. Supprimer votre question supprime aussi sa réponse acceptée. Cela ne peut pas être annulé.
+
+Dans un cours archivé, les questions peuvent être lues mais rien de nouveau ne peut être publié.
+
+### L'invite de la première leçon
+
+Quand vous vous inscrivez, vous arrivez dans la première leçon du cours, et sa section **Questions** affiche une invite au-dessus de la liste, par exemple « What do you want to be able to do with what this course teaches? ». Elle comporte une zone de texte, **Post** et **Not now**.
+
+- Vous pouvez répondre une seule fois. **Post** ajoute votre réponse à la liste de la leçon, marquée **Answer to the course prompt**. Vos camarades peuvent y répondre et la voter comme une question.
+- **Not now** ferme l'invite sans rien publier.
+- Dans les deux cas, l'invite ne revient pas, sur aucun appareil, même si vous supprimez votre réponse.
+- Tous les participants du cours peuvent lire votre réponse, ainsi que ses instructeurs.
+
+Elle n'apparaît que dans la première leçon montrée aux étudiants, et ne prend pas le focus du clavier à l'ouverture de la leçon.
+
+La cloche vous prévient quand quelqu'un répond à votre message, quand une réponse à votre question est marquée, et quand votre réponse est marquée comme la réponse. Les deux premiers envoient aussi un e-mail sauf si vous le désactivez. Voir <Link path="guides/notifications">Notifications</Link>.
+
+## Pour les instructeurs
+
+Ouvrez le cours depuis **My Courses** et choisissez **Questions** en haut de sa page. La page a trois onglets :
+
+- **Unanswered** : les questions sans réponse d'instructeur ni réponse acceptée, les plus anciennes d'abord. **Open** une question pour répondre. Votre réponse affiche un badge **Instructor** et retire la question de la liste. Vous n'avez pas besoin d'être inscrit.
+- **Reported** : les messages signalés par des étudiants, avec le nombre de signalements. **Hide** un message, **Delete** le message ou **Dismiss reports**.
+- **By lesson** : choisissez une leçon pour voir chaque fil qu'elle contient, et **Open thread** pour en lire un.
+
+Dans un fil ouvert, vous pouvez aussi **Mark as answer** sur n'importe quelle réponse, et **Hide** ou **Delete** n'importe quel message.
+
+Vous ne pouvez pas répondre dans un cours archivé, ni sur une leçon que les étudiants ne peuvent pas ouvrir parce qu'elle est masquée ou archivée.
+
+### L'invite de la première leçon
+
+Sur la page du cours, la section **First-lesson prompt** vous permet de remplacer le texte de l'invite (texte brut, jusqu'à 200 caractères). Le vider rétablit le texte par défaut. Le modifier ne réaffiche pas l'invite aux apprenants qui y ont déjà répondu ou l'ont fermée.
+
+Les réponses à l'invite ne sont pas dans **Unanswered**, car ce ne sont pas des questions en attente d'un instructeur. Lisez-les sous **By lesson**, dans la première leçon du cours. Vous pouvez y répondre, les masquer ou les supprimer comme n'importe quel message, et une réponse signalée apparaît dans **Reported**.
+
+### Masquer et supprimer
+
+- **Hide** est réversible. Les étudiants voient « This post was hidden by an instructor. » à la place du message, sans auteur ni texte. **Unhide** le rétablit tel qu'il était.
+- **Delete** est définitif. Tout le monde, instructeurs compris, voit « This post was deleted. » et le texte a disparu.
+
+Masquer ou supprimer une question masque aussi ses réponses. Une question masquée ou supprimée quitte la liste Unanswered.
+
+## Limites
+
+- Les messages sont en texte brut. Le balisage comme le HTML s'affiche tel que saisi, jamais interprété.
+- Le titre d'une question fait jusqu'à 120 caractères, et une question ou une réponse jusqu'à 4 000 caractères.
+- Une question contient jusqu'à 500 réponses visibles.
+
+## Qui peut les lire
+
+Les étudiants avec une inscription en cours, sur les leçons qu'ils peuvent ouvrir, et les instructeurs du cours sur n'importe quelle leçon. Un étudiant qui a abandonné le cours, un étudiant non inscrit et les visiteurs sont refusés. Un étudiant ne peut pas appeler les files ou la modération de l'instructeur.
+
+## Leçons archivées
+
+Archiver une leçon (la retirer d'un cours publié) la masque aux étudiants, qui ne peuvent plus ouvrir ni la leçon ni ses questions. Les instructeurs lisent toujours ses fils sous **By lesson**, et restaurer la leçon fait revenir la discussion intacte. Une leçon qui a des questions peut rester archivée mais ne peut pas être supprimée définitivement.

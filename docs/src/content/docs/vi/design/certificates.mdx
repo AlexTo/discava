@@ -1,0 +1,131 @@
+---
+title: Chứng chỉ
+description: Cách chứng chỉ hoàn thành được cấp theo tiêu chí của khóa học, bị thu hồi và khôi phục, chia sẻ, thêm vào LinkedIn và xác minh.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/_archive/20261115-204447-certificates/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204447-certificates/) (cấp chứng chỉ) và [`specs/20261120-154550-certificate-criteria-revocation/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154550-certificate-criteria-revocation/) (tiêu chí, những gì đã được đánh giá, thu hồi)
+
+**Spec:** [`specs/20261120-003448-linkedin-certificate-sharing/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-003448-linkedin-certificate-sharing/) (thêm chứng chỉ vào LinkedIn)
+
+## Quy tắc
+
+**Chứng chỉ chỉ bao giờ được ghi ở phía máy chủ, bởi việc tính lại tiến độ, và một học viên có tối đa một chứng chỉ cho mỗi khóa học.** Nó được cấp khi học viên đã hoàn thành khóa học (xem <Link path="design/progress-and-completion">Tiến độ và hoàn thành</Link>) **và** đáp ứng các tiêu chí đang có hiệu lực của khóa học vào thời điểm đó. Không có gì mà học viên hay giảng viên làm trong trình duyệt có thể tạo ra một chứng chỉ.
+
+Bản thân việc hoàn thành không bị các tiêu chí thay đổi: một lượt ghi danh vẫn thành `completed` khi mọi mục hiển thị đều hoàn thành. "Đã hoàn thành, chưa có chứng chỉ" là một trạng thái bình thường và kéo dài, và trang chủ khóa học giải thích những gì còn cần.
+
+## Các tiêu chí
+
+- **Chúng nằm ở đâu**: một map `certificateCriteria` trên khóa học, bên cạnh công tắc theo từng khóa học: `{ version, requireQuizPass }`. Khóa học mới có `{ version: 1, requireQuizPass: false }`. `setCertificateCriteria` là nơi duy nhất ghi nó sau khi tạo và chỉ cộng một vào `version` khi có gì đó thay đổi.
+- **Quy tắc**: `evaluateCertificateCriteria` trong `core-table` là một hàm thuần túy được dùng cả bởi bên cấp và bên đọc (`certificate.requirements`, mà trang chủ khóa học hiển thị), nên trang và bên cấp không thể bất đồng. Khi `requireQuizPass` bật, mọi quiz được đánh giá đều phải đạt: `passedAt` của nó đã được đặt (và `passedAt` là vĩnh viễn) **và** điểm tốt nhất của học viên đạt mức điểm đạt *hiện tại* của quiz. Vì vậy nâng mức điểm đạt có thể giữ lại một chứng chỉ chưa được cấp, và hạ mức đó có thể giải phóng nó. Một quiz được đánh giá là một quiz hiển thị hiệu lực có mức điểm đạt trên 0; quiz có mức điểm đạt 0% là luyện tập và không được đánh giá.
+- **Đổi tiêu chí trên một khóa học đang chạy**: các tiêu chí được đọc khi một học viên được đánh giá sẽ được áp dụng. Chứng chỉ đã cấp không bao giờ bị xem xét lại. Nới lỏng sẽ cấp chứng chỉ cho tất cả những ai nhờ đó đủ điều kiện; siết chặt chỉ ảnh hưởng các học viên chưa đủ điều kiện. Nút điều khiển của giảng viên nói điều này trước khi lưu.
+
+## Bài tập tải lên được chấm điểm
+
+Tiêu chí thứ hai, `minUploadScorePercent` (một số nguyên từ 1 đến 100, vắng mặt khi không bắt buộc), nằm trong cùng map và được đặt qua cùng `setCertificateCriteria`, hàm này xóa nó khi nhận `null`.
+
+- **Quy tắc**: khi nó được đặt, mọi bài tập hiển thị hiệu lực đều được đánh giá. Một bài tập đạt khi bài nộp của học viên là `returned` và `floor(points / pointsOutOf * 100)` ít nhất bằng mức tối thiểu, trong đó `pointsOutOf` là thang điểm mà bài được chấm (là `maxPoints` của bài tập khi không có điểm nào để đọc nó). Bài nộp bị thiếu là "not submitted", bài chưa được trả là "waiting to be graded", và bài được trả với ít điểm hơn là "below the score". Khóa học không có bài tập hiển thị nào thì không có gì phải đạt.
+- **Chấm lại**: `status`, `points` hoặc `returnedAt` của một bài nộp thay đổi sẽ tính lại cho học viên đó, nên một điểm được sửa tăng lên sẽ cấp chứng chỉ, còn một lần nộp lại (không đổi cái nào trong số đó) thì không làm gì.
+- **Những gì được ghi lại**: `assessment` của chứng chỉ giữ `minUploadScorePercent`, `assessedUploadCount` và một mục `upload` cho mỗi bài tập trong danh sách nội bộ; dải điểm tính trên quiz và bài tải lên cùng nhau. Câu mô tả có thêm "Graded assignments returned with at least 60%: 2."
+- Các bài nộp chỉ được đọc khi tiêu chí này được đặt.
+
+## Chứng chỉ ghi lại những gì
+
+Chứng chỉ sao chép các tiêu chí mà nó được cấp theo, cùng `version` của chúng, vào một `assessment` chỉ đọc, nên những gì nó mô tả không bao giờ lệch khi khóa học thay đổi:
+
+- hai thiết lập, số mục hiển thị, số mục được đánh giá, mức điểm đạt thấp nhất và cao nhất, thời lượng khóa học tính bằng giờ và một **dải điểm** (dải mười điểm của trung bình các điểm tốt nhất, từ 0–9% đến 90–100%). Mỗi thứ được hiển thị trên trang công khai và trong PDF dưới dạng cùng những dòng văn bản (`assessmentStatement`).
+- **danh sách các mục được đánh giá** cùng điểm của từng mục. Nó tồn tại để một invariant có thể kiểm tra quy tắc, và không bao giờ được API nào trả về hay hiển thị.
+- Khi không có gì bắt buộc, sẽ không có dải điểm và câu mô tả ghi "No graded assessment was required for this certificate." Điểm chính xác không bao giờ được hiển thị.
+
+## Điều gì khiến một chứng chỉ đang chờ được cấp
+
+Việc tính lại (xem <Link path="design/progress-and-completion">Tiến độ và hoàn thành</Link>) chạy vì nhiều thứ hơn là một mục được hoàn thành. Một học viên đủ điều kiện được cấp chứng chỉ trong vài giây sau khi:
+
+- đạt một quiz sau khi mục của nó đã hoàn thành (hết lượt làm, nâng giới hạn, một lượt sau đó đạt), hoặc có điểm tốt nhất cao hơn trên một quiz đã đạt: học viên đó;
+- các tiêu chí thay đổi, hoặc chứng chỉ được bật: mọi học viên đang ghi danh chưa bỏ học;
+- mức điểm đạt của một quiz thay đổi (kể cả sang hoặc từ 0, điều làm đổi việc nó có được đánh giá hay không): mọi học viên đang ghi danh chưa bỏ học;
+- các lần hoàn thành mục và thay đổi hiển thị vốn đã kích hoạt nó.
+
+Vì vậy bật chứng chỉ, hoặc nới lỏng tiêu chí, sẽ cấp cho tất cả những ai đã đủ điều kiện.
+
+## Cách chứng chỉ được cấp
+
+- Lambda tính lại tiến độ gọi `issueCertificate` sau khi nó ghi tiến độ và lượt ghi danh của một học viên, khi học viên không bỏ học và lượt ghi danh là `completed`.
+- Nó đọc `certificate` của học viên cho khóa học trước. Chỉ khi chưa có mới đọc khóa học và người dùng, nên học viên còn đang học dở, và học viên đã có chứng chỉ, không tốn thêm lượt đọc nào.
+- `issueCertificate` là nơi duy nhất ghi `certificate`. Nó tạo bản ghi với điều kiện khóa chưa tồn tại, nên hai lần tính lại chạy cùng lúc vẫn chỉ để lại một chứng chỉ với một ID, và cả hai đều trả về nó. Lỗi không bao giờ bị nuốt: lô được thử lại.
+- Chứng chỉ sao chép những gì nó in (tên của người học, tên khóa học và ngày hoàn thành) tại thời điểm cấp. Đổi tên khóa học sau này không làm nó thay đổi.
+- ID gồm 16 ký tự Crockford base32, hiển thị dạng `XXXX-XXXX-XXXX-XXXX`. Việc tra cứu bỏ qua dấu gạch ngang, khoảng trắng và hoa thường, và coi `O` là `0`, `I` hoặc `L` là `1`.
+
+## Công tắc theo từng khóa học
+
+Giảng viên bật hoặc tắt **Issue a certificate on completion** trong phần cài đặt của khóa học, ở bất kỳ trạng thái khóa học nào. Nó được bật cho mọi khóa học mới.
+
+- Nó áp dụng từ lúc đó trở đi. Tắt nó không bao giờ gỡ bỏ hay làm mất hiệu lực chứng chỉ đã cấp, và bật nó sẽ cấp chứng chỉ cho mọi học viên đã đủ điều kiện, trong vài giây.
+- Các chứng chỉ hiện có vẫn xác minh được khi công tắc tắt.
+
+## Trang công khai hiển thị gì
+
+`/certificates/<ID>` trong cổng học viên không cần đăng nhập. Nó hiển thị tên người học, tên khóa học, ngày hoàn thành, ID chứng chỉ và câu mô tả đánh giá, và không gì khác: không email, không ID người dùng, không điểm theo từng mục và không liên kết đến tài khoản của người học. Một ID sai định dạng hoặc không biết sẽ nhận cùng một thông báo "Certificate not found".
+
+Một chứng chỉ **bị thu hồi** hiển thị "This certificate has been revoked and is no longer valid", kèm ID và ngày, và không có gì về người học, khóa học, lý do hay ai đã thao tác. Nó khác với "not found" để một ID từng xác minh được không trông như một lỗi của nền tảng. Thay đổi hiện ra ở lần tải trang kế tiếp, và bản xem trước liên kết cùng kiểm tra PDF cũng theo đó. `certificate.pdf` từ chối một chứng chỉ bị thu hồi ("This certificate has been revoked"); một PDF đã tải xuống không thể thu hồi lại và trang mới là sự thật.
+
+## Thu hồi và khôi phục
+
+- **Ai**: giảng viên của khóa học liệt kê các chứng chỉ của nó (mục Certificates của khóa học) và thu hồi một chứng chỉ với lý do `academic-integrity`, `issued-in-error` hoặc `other` (kèm ghi chú). Quản trị viên tra cứu bất kỳ chứng chỉ nào theo ID và cũng có thể dùng `refunded`.
+- **Các procedure**: `certificate.list`, `history`, `revoke` và `restore` của instructor-api, và `certificate.get`, `revoke` và `restore` của admin-api.
+- **Khôi phục**: quản trị viên luôn được; giảng viên chỉ với việc thu hồi do một giảng viên thực hiện. Giảng viên thấy "Revoked by an administrator" và không có Restore ở loại còn lại.
+- **Bản ghi**: chứng chỉ mang trạng thái hiện tại của nó (`revokedAt`, `revocationReason`, `revokedByRole`), và mỗi thay đổi cũng thêm một `certificateEvent` (`revoked` hoặc `restored`, người thực hiện, vai trò, lý do, ghi chú, thời gian) trong cùng transaction. `revokeCertificate` và `restoreCertificate` trong `core-table` là nơi duy nhất ghi cả hai. Lịch sử được giữ để kiểm toán; một lần thu hồi, khôi phục rồi thu hồi lần hai để lại ba sự kiện.
+- **Tranh chấp đồng thời**: việc ghi có điều kiện theo trạng thái nó mong đợi, nên hai lần thu hồi đồng thời để lại một lần thu hồi và một sự kiện, và cả hai yêu cầu đều được trả lời.
+- **Không bao giờ bị thay thế**: chứng chỉ bị thu hồi giữ ID của nó và không bao giờ được cấp lại; việc tính lại dừng ở một chứng chỉ hiện có bất kể trạng thái. Khôi phục làm cùng ID đó hợp lệ trở lại.
+- **Báo cho người học**: các thông báo `certificate.revoked` và `certificate.restored` được gửi sau thay đổi, với nhóm lý do và một khóa loại trùng gồm ID chứng chỉ và thời gian sự kiện.
+- **Không có gì thu hồi tự động.** Đặc biệt hoàn tiền thì không: chứng chỉ vẫn còn sau hoàn tiền, và quản trị viên thu hồi với lý do `refunded` khi điều đó là chính đáng. Đây là quyết định mặc định (mục nghiên cứu R-8 trong spec liệt kê những gì sẽ đổi nếu thu hồi ở mỗi lần hoàn tiền), chờ người bảo trì xác nhận.
+- **Chứng chỉ bị thu hồi ẩn các hành động của nó**: hành động LinkedIn bị ẩn, `recordLinkedInClick` từ chối nó, và lời nhắc chia sẻ không bao giờ được gửi cho nó.
+
+## Invariant
+
+Các kiểm tra invariant (xem mục nghiên cứu R-10 của spec) bảo đảm rằng: `assessment` của chứng chỉ đúng định dạng và các số đếm, mức điểm đạt và dải điểm của nó suy ra được từ các mục đã liệt kê; mọi quiz được liệt kê đã được học viên đạt không muộn hơn thời điểm cấp, ở mức bằng hoặc trên điểm đạt của nó, và mọi bài tải lên được liệt kê đạt ít nhất mức tối thiểu đã ghi và vẫn còn bài nộp (`certificate-met-criteria`); một chứng chỉ bị thu hồi chính xác khi sự kiện mới nhất của nó là `revoked` (`certificate-status-matches-history`); mọi khóa học có tiêu chí đúng định dạng; và một chứng chỉ vẫn cần một lượt ghi danh đã hoàn thành (hoặc bỏ học sau khi hoàn thành), dù bị thu hồi hay không. Các kiểm tra khác bao gồm hình dạng của lượt nhấp LinkedIn, việc không có lời nhắc nào được gửi sau một lượt nhấp, và việc chứng chỉ khớp với các thông báo của chúng. Không phải vi phạm: một lượt ghi danh đã hoàn thành không có chứng chỉ, một chứng chỉ khác với tiêu chí hiện tại của khóa học, và một quiz được liệt kê mà sau đó bị ẩn hoặc được nâng điểm đạt.
+
+## Chia sẻ và xác minh
+
+Học viên tìm các chứng chỉ của mình trong **My Learning**, ở mỗi khóa học đã hoàn thành, với bốn hành động:
+
+- **View** mở trang công khai.
+- **Download PDF** lưu một chứng chỉ A4 một trang mang cùng ID và địa chỉ của trang.
+- **Copy link** sao chép địa chỉ của trang công khai.
+- **Add to LinkedIn profile** mở biểu mẫu của LinkedIn cho một chứng nhận mới (xem bên dưới).
+
+Bất kỳ ai có liên kết, hoặc ID, đều có thể kiểm tra một chứng chỉ trên trang đó.
+
+## Thêm vào LinkedIn
+
+Cổng học viên dựng liên kết trong trình duyệt của người học (`lib/linkedin-add-to-profile.ts`, `buildLinkedInAddToProfileUrl`) và mở nó. Không máy chủ nào dựng hay nhìn thấy nó, và không có gì được gửi đến LinkedIn cho đến khi người học nhấp.
+
+- **Những gì được gửi**: địa chỉ `profile/add` của LinkedIn với `startTask=CERTIFICATION_NAME`, `name` (tên khóa học in trên chứng chỉ), đơn vị cấp (`organizationName` từ tên nền tảng đặt trên trang Branding của cổng quản trị, hoặc `organizationId` thay thế khi stage đặt `linkedInOrganizationId`, không bao giờ cả hai), `issueYear` và `issueMonth` (từ ngày hoàn thành theo UTC), `certUrl` (địa chỉ của trang công khai) và `certId` (như được hiển thị). Không có ngày hết hạn. Mọi giá trị đều được mã hóa phần trăm.
+- **Những gì không bao giờ**: tên, email, ID người dùng của người học hay bất kỳ giá trị phiên nào. LinkedIn biết thành viên là ai; chúng tôi không nói cho nó. Liên kết mang `rel="noopener noreferrer"` để trình duyệt không nêu tên trang giới thiệu, và không script hay API nào của LinkedIn được nạp hoặc gọi.
+- **Lượt nhấp ghi lại gì**: lượt nhấp đầu tiên gọi `certificate.recordLinkedInClick({ certificateId, source })` công khai, đặt `linkedInClickedAt` và `linkedInClickSource` trên chứng chỉ một lần và không bao giờ đổi chúng. Việc ghi thất bại không bao giờ ngăn biểu mẫu mở ra. Bản ghi mang nghĩa "người học đã mở biểu mẫu", không phải "chứng chỉ đã ở trên LinkedIn": LinkedIn không gửi lại gì.
+- **Lượt nhấp có thể đến từ đâu**: `linkedInClickSource` là một trong `my-learning`, `certificate-page`, `issued-email` và `reminder-email`. Hai email liên kết đến `/certificates/<ID>/linkedin?source=…`. Route cổng đó hoạt động khi chưa đăng nhập, ghi lại việc sử dụng và thay thế trang bằng địa chỉ của LinkedIn.
+- **Đọc mức sử dụng**: tỷ lệ chứng chỉ có `linkedInClickedAt`, chia theo `linkedInClickSource`. Con số này được suy ra từ các bản ghi đã lưu.
+- **Nếu LinkedIn bỏ qua các giá trị**: liên kết vẫn mở đúng biểu mẫu, và trang công khai khi chủ sở hữu xem liệt kê mọi giá trị để sao chép thủ công. Trợ giúp của chính LinkedIn nói các liên kết tùy chỉnh có thể không tự điền; một người bảo trì đã kiểm tra vào 2026-11-20 rằng biểu mẫu mở ra cùng các giá trị (mục nghiên cứu R-1 đến R-3 trong spec).
+
+## Báo cho người học
+
+- **Thông báo** `certificate.issued` được `issueCertificate` ghi trong cùng transaction với chứng chỉ, với ID chứng chỉ làm khóa loại trùng, nên không bao giờ có chứng chỉ mà không có thông báo, và một lần thử lại không tạo ra thông báo thứ hai.
+- **Email** có hai liên kết: trang của chứng chỉ, và **Add to LinkedIn profile** (`action` tùy chọn của thông báo, mà chuông bỏ qua).
+- **Thiết lập**: một công tắc, **Certificates**, trong Notification settings điều khiển cả email cấp chứng chỉ lẫn lời nhắc. `certificate.reminder` không có thiết lập riêng (`emailPreferenceType` trỏ đến `certificate.issued`), và hủy đăng ký email đầu tiên cũng dừng lời nhắc.
+- **Lời nhắc**: ba ngày sau khi cấp, một lịch EventBridge Scheduler dùng một lần (`cert-reminder-<ID>`) gọi Lambda `certificate-reminder`. Nó dừng nếu loại email bị tắt. Nếu không, nó giành lời nhắc bằng một lần ghi có điều kiện `reminderSentAt` chỉ thành công khi chưa có lượt nhấp nào được ghi và chưa có lời nhắc nào được gửi, rồi xuất bản `certificate.reminder` với thời gian đã lưu. Một lượt nhấp và một lần gửi an toàn với nhau: lần ghi nào đến trước sẽ quyết định. Một lần tính lại sau đó sửa một chứng chỉ đã cấp nhưng chưa bao giờ được lên lịch, trừ khi lời nhắc đã quá hạn: một lời nhắc không bao giờ được gửi muộn (mục nghiên cứu R-4 đến R-7).
+
+## Bản xem trước liên kết
+
+Các trình thu thập xem trước liên kết không chạy script, nên trình render trang (xem <Link path="design/public-pages">Trang công khai</Link>) trả lời `/certificates/<ID>` bằng một phần head dựng từ `certificate.verify`: tiêu đề "người học đã hoàn thành khóa học", ngày hoàn thành, tên nền tảng và ID. Nó không bao giờ hiển thị nhiều hơn trang. Trang luôn là `noindex`, ở mọi stage, vì nó nêu tên một người. Các đường dẫn sâu hơn như `/certificates/<ID>/linkedin` nhận mẫu thuần (mục nghiên cứu R-8).
+
+## Hạn chế
+
+- Tiêu chí không có lịch sử: chỉ phiên bản và các thiết lập mà một chứng chỉ được cấp theo được giữ, trên chính chứng chỉ.
+- Một quiz được đánh giá theo mức điểm đạt riêng của nó; không có mức điểm đạt toàn khóa học và không có lựa chọn theo từng quiz về cái gì được tính.
+- Một PDF đã tải xuống của chứng chỉ bị thu hồi vẫn còn tồn tại; chỉ trang cho biết nó không còn hiệu lực.
+- LinkedIn không gửi lại gì, nên Discava không thể biết chứng chỉ có được lưu vào hồ sơ hay không, chỉ biết biểu mẫu đã được mở.
+- Bất kỳ ai giữ ID chứng chỉ đều có thể ghi lần sử dụng đầu tiên. Tác dụng duy nhất là bớt một lời nhắc.
+- PDF dùng các phông chuẩn, nên các ký tự ngoài Latin-1 (ví dụ tiếng Trung, tiếng Nhật hay emoji) được in thành `?`. Trang công khai hiển thị chúng đúng.

@@ -1,0 +1,145 @@
+---
+title: Cursos pagos e pagamentos
+description: Como conectar o Stripe como administrador, definir o preço de um curso como instrutor, comprar um como aluno e reembolsos.
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+Um curso é gratuito, a menos que o instrutor dê a ele um preço. Os pagamentos são recebidos pelo Stripe, em uma conta Stripe que o administrador da plataforma conecta.
+
+## Para administradores: conectar o Stripe
+
+Nada sobre o Stripe é definido quando o Discava é implantado. Até um administrador conectar uma conta, todo curso é gratuito e nenhum preço pode ser definido.
+
+1. No painel do Stripe, abra Developers, depois API keys, e copie uma destas:
+   - Uma **secret key** (começa com `sk_`).
+   - Uma **restricted key** (começa com `rk_`) com acesso de escrita a Checkout Sessions, Refunds e Webhook Endpoints, e acesso de leitura a Accounts, Events e PaymentIntents. Sem Refunds e PaymentIntents, os pagamentos que não podem ser entregues não são reembolsados e os reembolsos feitos no painel não são registrados.
+2. Abra **Payments** no portal admin.
+3. Cole a chave em **Stripe secret key** e escolha **Connect Stripe**.
+
+O Discava verifica a chave, registra o próprio endereço de confirmação (um webhook endpoint) na sua conta Stripe e guarda a chave. Você nunca cria um webhook nem copia um segredo de assinatura à mão.
+
+A página então mostra **Connected**, o nome da conta, os quatro últimos caracteres da chave e **Test mode** ou **Live mode**. O modo vem da chave. No modo de teste, os alunos pagam com os cartões de teste do Stripe e são matriculados sem dinheiro real se mover, então use uma chave live antes que alunos de verdade cheguem.
+
+Para pagar os instrutores, a conta Stripe também precisa ter o **Connect** ativado. Veja <Link path="guides/earnings-and-payouts">Ganhos e repasses</Link>.
+
+### Trocar a chave
+
+Escolha **Replace key**, cole a nova chave e escolha **Save key**. Confirme com **Replace the key**.
+
+- **Uma nova chave para a mesma conta** é uma rotação. Os pagamentos continuam, e os checkouts já abertos ainda são concluídos.
+- **Uma chave de outra conta, ou do outro modo,** é uma troca: os pagamentos vão para essa conta daqui em diante. Uma troca espera até não haver checkout aberto. Um checkout dura até uma hora, e a página informa quando o último termina. Antes de trocar, confira as entregas de webhook da conta antiga no painel do Stripe: uma confirmação que o Stripe ainda não entregou não pode ser aceita depois.
+
+Uma troca também afeta os ganhos não pagos dos instrutores. Leia primeiro <Link path="guides/earnings-and-payouts">Ganhos e repasses</Link>.
+
+### Desconectar
+
+Escolha **Disconnect** e confirme com **Disconnect Stripe**. Isso interrompe novas compras: os alunos veem "Payments are unavailable right now" e os instrutores não podem definir um preço. Os preços já definidos permanecem, e os alunos que pagaram mantêm o acesso. Como uma troca, espera os checkouts abertos.
+
+### O histórico de mudanças
+
+**Recent changes** lista as últimas mudanças: quando, quem, o que aconteceu (connected, key replaced, switched account, disconnected, ou failed com o motivo) e o modo. De uma chave, mostra apenas os quatro últimos caracteres.
+
+"Confirmation address changed" significa que o endereço de webhook do stage não é mais o registrado no Stripe, por exemplo depois de adicionar um domínio personalizado. Salve a chave de novo para registrar o novo.
+
+### Reembolsar um aluno
+
+Reembolse o pagamento no painel do Stripe.
+
+- **Um reembolso total** encerra a matrícula do aluno em segundos e o avisa, no sino e por e-mail. O progresso dele é mantido.
+- **Um reembolso parcial** deixa o acesso dele como está.
+
+Um aluno cujo pagamento não pode ser entregue é reembolsado automaticamente: o curso foi despublicado enquanto ele pagava, ou ele já estava matriculado. Ele não recebe notificação de reembolso.
+
+## Para instrutores: definir o preço de um curso
+
+1. Abra o curso em **My Courses** e vá até a seção **Price**.
+2. Informe um **Price**: `0` para gratuito, ou um valor de 1,00 a 10.000,00.
+3. Escolha uma **Currency**: USD, EUR, GBP, AUD ou CAD.
+4. Escolha **Save price**.
+
+- Você pode mudar o preço quando quiser. O novo preço vale para novas compras.
+- Os alunos já matriculados mantêm o acesso, tenham pago um preço diferente ou se matriculado quando o curso era gratuito.
+- Se você vê "Payments aren't set up yet; ask an administrator", o Stripe não está conectado. Você ainda pode voltar um curso para gratuito.
+
+O preço aparece na página pública do curso e no cartão dele no catálogo, ou "Free".
+
+## Para alunos: comprar um curso
+
+Um curso com preço mostra o preço e **Buy now** no lugar de **Enrol now**. Se você não entrou na conta, o botão diz **Sign in to buy** e leva você a entrar primeiro.
+
+1. **Buy now** leva você à página de pagamento do Stripe, que mostra o curso e o valor.
+2. Depois de pagar, você volta ao curso. Ele diz "Confirming your payment", e então você está matriculado, em geral em segundos, e a primeira aula que você ainda não concluiu abre com a linha "You're enrolled in" seguida do nome do curso. Se o curso ainda não tem aulas visíveis para alunos, a página do curso abre no lugar.
+3. Se você cancela, volta ao curso com "Payment cancelled" e nada é cobrado. Escolher Buy now de novo dentro de uma hora reabre o mesmo pagamento.
+
+Matricular-se em um curso gratuito abre a mesma aula, sem etapa de pagamento. Veja <Link path="guides/finding-and-taking-courses">Encontrar e fazer cursos</Link>.
+
+Você é cobrado uma vez, não importa quantas vezes clique.
+
+Se seu pagamento é reembolsado por completo, sua matrícula termina e a página do curso oferece Buy now de novo. Seu progresso é mantido: compre o curso de novo e você continua de onde parou. Se o curso se tornou gratuito nesse meio tempo, matricular-se também traz seu progresso de volta.
+
+### Pedir um reembolso
+
+A página do curso informa as condições de reembolso ao lado do preço. Você pode ter um reembolso:
+
+- dentro de 14 dias após pagar,
+- enquanto você concluiu menos da metade do curso,
+- uma vez por curso.
+
+Enquanto você se qualifica, a página do curso mostra **Request a refund** e a data até a qual você pode pedir.
+
+1. Escolha **Request a refund**.
+2. Confirme com **Request refund**. A página diz "Refund requested" com a data, e que seu acesso termina quando for confirmado.
+3. O Stripe reembolsa o valor total. Sua matrícula termina e a página do curso oferece **Buy now** de novo.
+4. Você recebe uma notificação no sino e um e-mail. Este e-mail não pode ser desligado.
+
+Quando você deixa de se qualificar, o botão é substituído pelo motivo: o período de reembolso terminou, você concluiu metade do curso, ou você já foi reembolsado por este curso antes.
+
+Se você foi reembolsado por um curso a seu próprio pedido, a página avisa ao lado de **Buy now**, e uma segunda compra desse curso não pode ser reembolsada. Um reembolso feito por um operador no Stripe, ou automaticamente por um pagamento que não pôde ser entregue, não conta contra você.
+
+Seu progresso e qualquer certificado são mantidos.
+
+### Sair de um curso
+
+Para um curso em que você se matriculou sem pagar, a página do curso mostra **Leave course**. Confirme e a matrícula termina: o curso sai de My Learning, e seu progresso é mantido. Matricule-se de novo para continuar. Um curso que você pagou não tem **Leave course**: peça um reembolso.
+
+## Códigos de desconto
+
+### Para instrutores: criar códigos
+
+Abra um curso pago em **My Courses** e escolha **Coupons** no topo da página. Um curso gratuito não tem o que descontar, então a página pede que você defina um preço primeiro. Escolha **Create code** e informe:
+
+- **Um código**, de 4 a 24 letras, dígitos ou hifens, sem distinção entre maiúsculas e minúsculas. Deixe vazio, ou escolha **Generate**, e o Discava cria um como `K7QD-2MXP`.
+- **Um tipo e um valor**: **Percent off**, um número inteiro de 1 a 100, ou **Fixed amount** na moeda do curso, de 1,00 até o preço.
+- **Uma data de validade** (opcional). O código funciona até o fim desse dia, em UTC.
+- **Um número máximo de resgates** (opcional).
+
+Depois escolha **Create**. Cada código aparece como **Active**, **Disabled**, **Expired** ou **Used up**.
+
+Cada código pertence a um curso. Não há códigos que cubram vários cursos ou o site inteiro, nem importação em massa.
+
+**Disable** desliga um código na hora e **Enable** o liga de novo. **Edit limits** altera a validade e o máximo, mas nunca abaixo dos resgates que o código já tem. **Delete** só é oferecido enquanto ninguém usou o código; desative um já usado. O tipo e o valor de um código não podem ser alterados: desative-o e crie um novo.
+
+Um reembolso não devolve um resgate.
+
+### Para alunos: usar um código
+
+1. Em um curso pago, escolha **Have a code?**.
+2. Informe o código e escolha **Apply**. A página mostra o preço de tabela, o desconto e o total, e o botão de compra diz **Pay** com o total.
+3. Pague como de costume.
+
+**Remove code** volta ao preço de tabela. Nada é consumido até você pagar.
+
+- Cada aluno pode usar um código uma vez.
+- Um código que não pode ser usado diz por quê: desligado, vencido, usado o número máximo de vezes, já usado por você, ou deixando um preço baixo demais para cobrar. Um código que não existe e um código de outro curso dão a mesma mensagem.
+- Se um código cobre o preço inteiro, o botão diz **Enrol for free**: você é matriculado na hora, sem página de pagamento.
+
+## Limitações
+
+- Somente cartões.
+- Os códigos de desconto pertencem a um curso cada: sem códigos para o site inteiro nem em massa.
+- Nenhum imposto é calculado ou cobrado.
+
+<Link path="design/payments">Pagamentos</Link> descreve como funciona.

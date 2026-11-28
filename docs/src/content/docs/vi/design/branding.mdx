@@ -1,0 +1,52 @@
+---
+title: Thương hiệu
+description: "Cách thương hiệu nền tảng do quản trị viên đặt được lưu, xuất bản và áp dụng: bản ghi và revision của nó, khóa ảnh bất biến, tài liệu đã xuất bản và ngân sách cache, trình render trang, bảng màu và các kiểm tra SVG."
+sidebar:
+  order: 13
+---
+
+**Spec:** [`specs/20261122-090054-admin-branding/`](https://github.com/AlexTo/discava/tree/main/specs/20261122-090054-admin-branding/)
+
+Quản trị viên đặt logo, tên, biểu tượng, ảnh chia sẻ và màu từ cổng quản trị, và mọi cổng cùng trang công khai hiển thị chúng trong vòng 5 phút, không cần deploy. Trang này mô tả cách việc đó hoạt động.
+
+## Bản ghi và revision của nó
+
+Thương hiệu là một bản ghi `platformBrand` trong core table, với khóa cố định. Bản ghi không tồn tại cho đến lần lưu đầu tiên, và không tồn tại nghĩa là dùng thương hiệu mặc định. `saveBrand` trong `helpers/platform-brand.ts` là nơi duy nhất ghi nó.
+
+Mỗi lần lưu mang toàn bộ thương hiệu và `revision` mà quản trị viên đã tải.
+
+- Lần lưu đầu tiên có điều kiện là bản ghi chưa tồn tại, các lần sau có điều kiện là `revision` vẫn là giá trị đã tải.
+- Điều kiện không thỏa sẽ thành `CONFLICT` ("Someone else changed the branding. Reload to see their changes."), nên một lần lưu cũ không bao giờ được áp dụng một nửa.
+- Các trường `changedBy`, `changedByName` và `changedAt` cho biết ai đã lưu gần nhất.
+
+## Ảnh và khóa bất biến
+
+Ảnh nằm trong bucket media công khai tại `brand/<kind>/<nonce>.<ext>`, trong đó `kind` là `logo`, `icon` hoặc `share-image`. `branding.createUploadUrl` presign một `PUT` với đúng content type, độ dài, một `Cache-Control` bất biến một năm và thẻ `lifecycle=unattached`. Mỗi lần tải lên là một khóa mới, nên một ảnh đã được thay thế không bao giờ có thể được phục vụ từ cache khi thương hiệu đã trỏ sang chỗ khác.
+
+`branding.save` đọc từng object mới được tham chiếu và kiểm tra loại, kích thước và hình dạng theo các quy tắc trong `@discava/common-branding/image-rules` (cổng quản trị chạy cùng các quy tắc đó trước khi tải lên). Nó gỡ thẻ khỏi object được giữ lại, và đặt lại thẻ lên object bị thay thế, thứ mà quy tắc lifecycle của bucket sẽ xóa sau một ngày. Không có gì được ghi khi bất kỳ ảnh nào không đạt.
+
+### Kiểm tra SVG
+
+Logo SVG được phân tích (`helpers/brand-image.ts` của admin-api) và bị từ chối trừ khi mọi phần tử và thuộc tính đều nằm trong danh sách cho phép: không có `script`, `foreignObject`, `iframe`, thuộc tính xử lý sự kiện, hay tham chiếu nào khác ngoài `#fragment` trong cùng tài liệu. Từ chối thay vì viết lại giúp tệp được lưu đúng như bản đã tải lên. Logo được hiển thị qua `<img>`, nơi trình duyệt không bao giờ chạy script SVG, và distribution thêm một `Content-Security-Policy` có `sandbox` cho tệp được mở trực tiếp. Biểu tượng chỉ là PNG, vì biểu tượng màn hình chính của iOS phải là ảnh raster.
+
+## Tài liệu đã xuất bản
+
+Trình duyệt không đọc table. Tính năng stream `brand-publishing` (xem [bộ định tuyến](./stream-event-router/)) đọc bản ghi hiện tại, không bao giờ đọc ảnh chụp của stream, nên một lần giao muộn không thể xuất bản một revision cũ hơn. Nó đặt `brand/brand.json` vào bucket media công khai với `Cache-Control: public, max-age=60, s-maxage=240`. Tài liệu không chứa thông tin ai lưu và khi nào. Các cổng tải nó từ một origin khác, nên distribution thêm header CORS cho `GET` và `HEAD` với mọi thứ dưới `brand/`.
+
+Đó là **ngân sách cache**: trình duyệt giữ tài liệu tối đa 60 giây và CloudFront tối đa 240 giây, nên một thay đổi đến mọi lần tải trang mới trong vòng 5 phút. Tài liệu bị thiếu, không đọc được hoặc không hợp lệ nghĩa là dùng thương hiệu mặc định, nên một lỗi không bao giờ làm hỏng trang.
+
+## Trong các cổng
+
+`BrandProvider` trong `@discava/common-web-utils/brand` nằm bên trong `RuntimeConfigProvider` ở mỗi cổng, và `useBrand()` trả về thương hiệu đã được xác định. Nó bắt đầu từ thương hiệu mà trình render trang đã nhúng, nếu không có thì từ thương hiệu gần nhất nó thấy (lưu trong `localStorage`), nếu không có nữa thì không có gì. Có thương hiệu thì render ngay và làm mới ở nền; không có thì giữ lần render đầu cho đến khi `brand.json` đến hoặc một giây trôi qua. Nó đặt các biến CSS, các liên kết biểu tượng, màu chủ đề và tiêu đề. Cổng quản trị cũng cấp dữ liệu cho nó từ `branding.get` và mỗi lần lưu, nên quản trị viên thấy thay đổi ngay.
+
+## Trình render trang
+
+[Trình render trang](./public-pages/) đọc bản ghi ở mỗi lần render (trang sau đó được cache 300 giây) và áp dụng nó vào hậu tố tiêu đề, `og:site_name`, nhà cung cấp JSON-LD, `og:image` và `twitter:image` (ảnh chia sẻ khi trang không có ảnh riêng), các liên kết biểu tượng và một style `:root` nội tuyến, và nhúng tài liệu thương hiệu vào dữ liệu trang để cổng bắt đầu từ đó. Nếu việc đọc thất bại, nó ghi log cảnh báo và render thương hiệu mặc định.
+
+## Bảng màu
+
+`brandPalette(hex)` trong `@discava/common-branding/colour` trả về các biến CSS cần ghi đè: `--primary`, `--primary-foreground`, `--ring`, các biến tương đương của sidebar và `--brand-link`. Nó chọn màu chữ có tỉ lệ tương phản WCAG cao hơn so với màu thương hiệu và từ chối màu đó khi cả hai đều không đạt 4.5:1. `--brand-link` chỉ là màu thương hiệu khi nó đạt 4.5:1 trên nền trang. Cùng một hàm chạy trong admin-api, bản xem trước của cổng quản trị, các cổng và trình render, nên chúng không thể bất đồng. Các màu mang ý nghĩa (destructive, biểu đồ và trạng thái) không bị đụng đến.
+
+## Những gì không được áp thương hiệu
+
+Các trang đăng nhập được host của Cognito và trang docs giữ giao diện riêng của chúng.

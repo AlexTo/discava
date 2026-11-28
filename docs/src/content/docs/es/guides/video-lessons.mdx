@@ -1,0 +1,77 @@
+---
+title: Lecciones en video
+description: Las velocidades y atajos de teclado del reproductor, los subtítulos y los subtítulos traducidos automáticamente, la transcripción, la búsqueda de lo que se dijo en un curso y las preguntas dentro de un video.
+---
+
+import Link from '@components/link.astro';
+
+## El reproductor
+
+Los controles del reproductor definen la velocidad de reproducción, los subtítulos, el volumen y la pantalla completa, y abren la transcripción. Las velocidades van de 0.5 a 2 en pasos de 0.25. El reproductor recuerda tus elecciones de velocidad, volumen y subtítulos para el siguiente video.
+
+Los atajos de teclado funcionan mientras el reproductor tiene el foco y no estás escribiendo en un campo:
+
+| Tecla | Qué hace |
+| --- | --- |
+| Espacio o K | Reproducir o pausar |
+| J | Retroceder 10 segundos |
+| L | Avanzar 10 segundos |
+| Flecha izquierda | Retroceder 5 segundos |
+| Flecha derecha | Avanzar 5 segundos |
+| Flecha arriba, flecha abajo | Subir el volumen, bajar el volumen |
+| M | Silenciar o activar el sonido |
+| C | Activar o desactivar los subtítulos |
+| F | Pantalla completa |
+| `<` y `>` | Más lento, más rápido |
+| 0 a 9 | Saltar a esa décima parte del video: 5 es la mitad |
+
+## Subtítulos y transcripción
+
+Los subtítulos se añaden a cada video automáticamente. El menú de subtítulos lista los idiomas que tiene el video, y **Off**.
+
+- Un idioma marcado como "(auto-translated)" es una traducción automática. Puede tener errores.
+- **Transcript** abre el texto del video. **Jump to current line** te devuelve al punto donde va el video.
+
+Los instructores eligen a qué idiomas se traducen los subtítulos y pueden subir los suyos. Consulta la <Link path="guides/instructor-guide">Guía del instructor</Link>.
+
+## Buscar lo que se dijo
+
+Puedes buscar en los subtítulos de todos los videos de un curso en el que estás inscrito.
+
+1. En el reproductor del curso, busca **Search transcripts**.
+2. Escribe al menos 2 caracteres en "Search what was said".
+3. Elige **Search**.
+4. Elige un resultado para abrir esa lección en ese momento.
+
+La página lista los momentos que coinciden, hasta los 20 mejores. Si hay más, añade una palabra para acotar la búsqueda. Si nada coincide, revisa la ortografía o prueba con las palabras en el idioma de los subtítulos.
+
+## Preguntas en un video
+
+Un instructor puede hacer que un video se detenga y haga una pregunta, en un momento del video o al final.
+
+### Para estudiantes
+
+1. Cuando el video se detiene, lee la pregunta. Una pregunta de opción múltiple dice "Select all that apply".
+2. Elige tu respuesta y elige **Submit answer**, o elige **Skip**.
+3. Lee si acertaste ("Correct" o "Not quite"), la respuesta correcta y la **Explanation**, si la hay.
+4. Elige **Continue** para seguir viendo.
+
+- Se registra una respuesta por pregunta. Una pregunta de opción múltiple solo es correcta cuando todas las opciones son correctas.
+- **Try again** es práctica: "Practice: this answer isn't recorded".
+- Las respuestas nunca cuentan para tu progreso, los quizzes del curso ni un certificado.
+- Un curso archivado no hace preguntas.
+- Si el instructor cambió una pregunta desde la última vez que la viste, dice "This question was updated. Check it before answering."
+
+### Para instructores
+
+1. En **Course content**, abre el diálogo **Questions** de un video.
+2. Reproduce o arrastra el video hasta el momento que quieras, y elige **Add a question here**. Para una pregunta después del video, elige **Add an end question**.
+3. Escribe la pregunta, sus opciones y cuáles son correctas.
+4. Ajusta **Ask at** si hace falta: un tiempo como 1:30, o **At the end**.
+5. Guarda.
+
+- Un video admite hasta 20 preguntas.
+- **Preview as student** reproduce el video con sus preguntas. Las respuestas se comprueban y no se registran. **Stop previewing** vuelve a la edición.
+- Puedes cambiar las preguntas después de que los estudiantes hayan respondido. Las respuestas ya registradas se conservan y no se recalifican.
+
+Los resultados aparecen en la página de analíticas del curso, bajo **Video questions**. Consulta <Link path="guides/course-analytics">Analíticas del curso</Link>.

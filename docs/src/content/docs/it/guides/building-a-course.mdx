@@ -1,0 +1,77 @@
+---
+title: Creare un corso
+description: Creare un corso nel portale istruttori, aggiungere moduli, lezioni e contenuti, pubblicare e nascondere, modificare un corso pubblicato e i suoi dettagli di catalogo.
+---
+
+import Link from '@components/link.astro';
+
+Un corso è fatto di moduli. Un modulo contiene lezioni, e una lezione contiene i suoi contenuti: video, testo, quiz e file. Costruisci tutto nella pagina del corso nel portale istruttori.
+
+## Creare il corso
+
+1. Apri **My Courses** nel portale istruttori.
+2. Scegli **Create a course**.
+3. Inserisci un **Course title** (fino a 200 caratteri) e un **Course summary**.
+4. Crea il corso. Parte come **Draft**, che gli studenti non possono vedere.
+
+**Open course** sulla scheda di un corso apre la sua pagina.
+
+## Aggiungere i contenuti
+
+Lavora nella sezione **Course content** della pagina del corso.
+
+1. Scegli **New module** e dagli un nome.
+2. Nel modulo, scegli **New lesson**. Per i lavori da valutare, scegli invece **New assignment**.
+3. Nella lezione, aggiungi i contenuti: **Video**, **Text**, **Quiz** o **File**.
+4. Trascina un modulo, una lezione o un contenuto dalla sua maniglia per spostarlo.
+
+I sottotitoli vengono aggiunti automaticamente a ogni video.
+
+- <Link path="guides/quizzes-and-assignments">Quiz e compiti</Link> copre le impostazioni dei quiz, i compiti e la valutazione.
+- <Link path="guides/video-lessons">Lezioni video</Link> copre i sottotitoli e le domande dentro un video.
+
+## Descriverlo per il catalogo
+
+Nella sezione **Catalogue details**, imposta:
+
+| Campo | Scelte |
+| --- | --- |
+| Categoria | Una delle categorie della piattaforma, oppure "No category" |
+| Livello | Beginner, Intermediate o Advanced |
+| Lingua | La lingua in cui si tiene il corso |
+| Durata | Ore, fino a 500 |
+| Tag | Fino a 8, fino a 30 caratteri ciascuno |
+
+Gli studenti filtrano il catalogo e cercano usando questi campi. Aggiungi anche un'immagine del corso: appare sulla scheda e sulla pagina del corso.
+
+La sezione **Landing page**, il tuo profilo pubblico e le lezioni di anteprima gratuite sono trattati nella <Link path="guides/instructor-guide">Guida per istruttori</Link>.
+
+## Pubblicare
+
+Scegli **Publish** in alto nella pagina del corso e conferma. Gli studenti ora possono vedere il corso e tutto ciò che contiene.
+
+Due cose cambiano una volta pubblicato il corso:
+
+- **I nuovi contenuti partono nascosti.** Un modulo, una lezione o un contenuto che aggiungi mostra un badge **Hidden** finché non scegli **Publish** su di esso. **Hide** lo toglie di nuovo dalla vista degli studenti.
+- **Rimuovere archivia.** Rimuovere un modulo, una lezione o un contenuto lo archivia invece di eliminarlo.
+
+Vedi <Link path="design/live-course-editing">Modifica live dei corsi</Link> per cosa vedono gli studenti quando modifichi un corso pubblicato.
+
+## Contenuti archiviati
+
+La sezione **Archived**, in fondo alla pagina del corso, elenca ciò che hai rimosso da un corso pubblicato.
+
+- **Restore** rimette una voce alla fine del punto in cui si trovava.
+- **Delete permanently** la rimuove per sempre. Viene rifiutato per tutto ciò che gli studenti hanno usato: "Students have used it, so it stays archived."
+
+## Un corso archiviato
+
+Un corso archiviato non si può modificare. La sua pagina dice "This course is archived, so it can't be edited. Restore it to make changes." Scegli **Restore** in alto nella pagina per tornare a lavorarci.
+
+Il portale istruttori non ha un pulsante per archiviare un intero corso.
+
+## Prossimi passi
+
+- Imposta un prezzo: <Link path="guides/payments">Corsi a pagamento e pagamenti</Link>.
+- Offri un certificato: <Link path="guides/certificates">Certificati</Link>.
+- Guarda come sta andando il corso: <Link path="guides/course-analytics">Analisi dei corsi</Link>.

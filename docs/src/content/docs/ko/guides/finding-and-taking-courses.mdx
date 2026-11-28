@@ -1,0 +1,85 @@
+---
+title: 강좌 찾기와 수강하기
+description: 수강생으로서 카탈로그를 검색하고 둘러보는 방법, 공개 강좌 페이지, 무료 미리보기와 강사 프로필, 무료 강좌 등록과 탈퇴, My Learning을 설명합니다.
+---
+
+import Link from '@components/link.astro';
+
+계정 없이도 강좌 페이지를 검색하고 둘러보고 읽을 수 있습니다. 등록하려면 로그인해야 합니다.
+
+## 검색
+
+헤더의 검색창에는 "What do you want to learn?"이 표시됩니다.
+
+1. 3자 이상 입력합니다. 입력하는 동안 일치하는 강좌가 제안됩니다.
+2. 방향키와 Enter로 제안을 고르거나 직접 선택하면 해당 강좌가 열립니다.
+3. 아무것도 고르지 않고 Enter를 누르면 모든 결과를 볼 수 있습니다.
+
+결과 페이지에서는 다음을 할 수 있습니다.
+
+- **Sort by** Relevance, Highest rated, Newest.
+- 카테고리, 레벨, 언어, 기간, 태그로 필터링.
+- **Minimum rating** 설정: 4.5, 4.0, 3.5, 3.0 이상.
+- **Clear filters**를 선택해 처음부터 다시 시작.
+
+평점이 순서에 미치는 영향은 <Link path="guides/reviews">평점과 리뷰</Link>에서 설명합니다.
+
+## 둘러보기
+
+- `/courses`의 **Browse courses**에는 카탈로그가 나열됩니다. 카테고리를 선택해 범위를 좁히거나 **All**을 선택합니다.
+- 카테고리마다 해당 카테고리 전용 검색창이 있는 자체 페이지가 있습니다.
+- 플랫폼이 보관한 카테고리에는 더 이상 사용할 수 없다는 안내와 함께 **Browse all courses** 링크가 표시됩니다.
+
+## 강좌 페이지
+
+게시된 강좌의 페이지는 공개되어 있습니다. 강좌가 다루는 내용, 콘텐츠, 가격 또는 "Free", 평점과 리뷰, 강사가 표시됩니다.
+
+- **Play preview**는 강좌에 미리보기 동영상이 있으면 재생합니다.
+- **Free preview**로 표시된 레슨은 로그인이나 등록 없이 열 수 있습니다. 동영상을 보고, 텍스트를 읽고, 파일을 다운로드할 수 있습니다. 퀴즈는 잠겨 있으며 "Enrol to take this quiz"가 표시됩니다. 등록하기 전에는 아무것도 저장되지 않습니다.
+- 강사 카드의 **View profile**을 선택하면 강사가 가르치는 강좌가 있는 프로필이 열립니다.
+
+강사가 미리보기 제공을 중단하면 해당 주소에 "This preview is no longer available."와 **View the course**가 표시됩니다.
+
+## 무료 강좌 등록
+
+1. 강좌 페이지에서 **Enrol now**를 선택합니다.
+2. 로그인하지 않았다면 **Continue to sign in**을 선택하고 로그인합니다. 강좌로 돌아옵니다.
+3. 아직 완료하지 않은 첫 레슨이 "You're enrolled in"과 강좌 이름과 함께 열립니다.
+
+무료 미리보기 레슨에서 등록하면 그 레슨에 그대로 머물며 **Start this lesson**을 선택할 수 있습니다.
+
+가격이 있는 강좌에는 대신 **Buy now**가 표시됩니다. <Link path="guides/payments">유료 강좌와 결제</Link>를 참고하세요.
+
+## 강좌 탈퇴
+
+결제하지 않은 강좌는 강좌 페이지에 **Leave course**가 표시됩니다.
+
+1. **Leave course**를 선택합니다.
+2. **Leave course**로 확인합니다.
+
+등록이 종료되고 진도는 유지됩니다. 언제든 다시 등록해서 이어서 학습할 수 있습니다. 단, 그 사이에 강좌에 가격이 정해졌다면 구매해야 합니다.
+
+결제한 강좌에는 **Leave course**가 없습니다. 대신 환불을 요청하세요.
+
+## My Learning
+
+헤더의 **My Learning**에는 **In progress**와 **Completed** 두 탭에 내 강좌가 나열됩니다. 각 카드에는 진도와 버튼 하나가 표시됩니다.
+
+| 버튼 | 시점 |
+| --- | --- |
+| **Start** | 아직 아무것도 완료하지 않음 |
+| **Continue** | 일부를 진행함 |
+| **Review** | 강좌를 완료함 |
+| **See what's new** | 강좌를 완료했고 그 뒤 강사가 콘텐츠를 추가함 |
+
+로그인하면 홈 페이지에서 환영 메시지와 함께, 학습하던 강좌의 **Continue learning**, 다른 내 강좌, 시작할 강좌가 표시됩니다.
+
+등록한 강좌의 강좌 페이지에는 진도가 퍼센트로 표시되며 **Start learning** 또는 **Continue learning**이 있습니다. 완료한 강좌에는 **Completed**, 날짜, **Review course**가 표시됩니다.
+
+## 더 보기
+
+- <Link path="guides/video-lessons">동영상 레슨</Link>: 플레이어, 자막, 말한 내용 검색.
+- <Link path="guides/quizzes-and-assignments">퀴즈와 과제</Link>.
+- <Link path="guides/lesson-discussions">레슨 토론</Link>: 레슨에서 질문하기.
+- <Link path="guides/certificates">수료증</Link>.
+- <Link path="guides/notifications">알림</Link>: 벨 아이콘과 이메일 설정.

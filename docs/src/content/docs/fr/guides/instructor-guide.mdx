@@ -1,0 +1,124 @@
+---
+title: Guide de l'instructeur
+description: Ce qu'un instructeur peut faire dans le portail instructeur, de la création et la publication d'un cours à sa page publique, ses sous-titres, ses aperçus gratuits, son prix et ses gains, avec des liens vers les guides détaillés.
+sidebar:
+  order: 0
+---
+
+import Link from '@components/link.astro';
+
+Cette page est la vue d'ensemble du portail instructeur. Pour utiliser le portail, votre compte doit être celui d'un instructeur : si on vous dit que vous n'en êtes pas un, demandez à un administrateur.
+
+## S'orienter
+
+La barre latérale a quatre pages :
+
+| Page | À quoi elle sert |
+| --- | --- |
+| **Home** | Le nombre de vos cours, **Waiting for grading** (travaux à noter) et vos derniers cours |
+| **Dashboard** | Inscriptions, activité et achèvement pour chaque cours |
+| **My Courses** | Chaque cours que vous enseignez. **Open course** ouvre sa page, où vous le créez et le gérez |
+| **Earnings** | Ce que vos cours ont rapporté et ce qui a été versé |
+
+Le menu du compte contient **Public profile**, **Notification settings** et **Sign out**.
+
+La page d'un cours est une longue page. Les liens en haut mènent à ses sections : **Content**, **Landing page**, **Catalogue**, **Captions**, **Certificates**, **First-lesson prompt**, **Price** et **Announcements**. À côté du titre du cours, **Reviews**, **Questions** et **Coupons** ouvrent leurs propres pages.
+
+## Créer un cours
+
+1. Choisissez **Create a course**, sur Home ou My Courses. Donnez-lui un **Course title** et un **Course summary**. Le cours commence en brouillon.
+2. Dans **Course content**, ajoutez un module avec **New module**.
+3. Dans le module, ajoutez des leçons avec **New lesson**, ou un devoir avec **New assignment**.
+4. Dans une leçon, ajoutez son contenu : **Video**, **Text**, **Quiz** ou **File**.
+5. Faites glisser les modules, leçons et contenus par la poignée pour les réordonner.
+6. Dans **Catalogue details**, définissez la catégorie, le niveau, la langue, la durée et jusqu'à 8 étiquettes. Les étudiants filtrent le catalogue et recherchent selon ces critères.
+7. Ajoutez une image de cours.
+
+Des sous-titres sont ajoutés automatiquement à chaque vidéo. <Link path="guides/building-a-course">Créer un cours</Link> détaille chaque étape.
+
+Ce que vous pouvez ajouter d'autre :
+
+- **Quiz** : des questions à choix unique et à choix multiples, une note de réussite, un nombre de tentatives ou illimité, et le moment où les bonnes réponses sont affichées. **Preview as student** essaie le quiz sans rien enregistrer. Voir <Link path="guides/quizzes-and-assignments">Quiz et devoirs</Link>.
+- **Devoirs** : les étudiants téléversent un fichier et vous le notez, ou un quiz noté automatiquement. Un devoir de type téléversement a des instructions, des points maximum et une date limite facultative. Son lien **Submissions** liste les travaux, et Home liste ce qui est **Waiting for grading**. Vous **Return** les travaux avec des points et des commentaires, ou choisissez **Request resubmission**. Voir <Link path="guides/quizzes-and-assignments">Quiz et devoirs</Link>.
+- **Questions dans une vidéo** : la boîte de dialogue **Questions** d'une vidéo ajoute jusqu'à 20 questions, chacune à un moment de la vidéo ou à la fin. Les réponses ne comptent jamais pour la progression ni les certificats. Voir <Link path="guides/video-lessons">Leçons vidéo</Link>.
+- **Certificats** : dans la section **Certificates**, activez **Issue a certificate on completion**, et exigez éventuellement de réussir chaque quiz ou une note minimale aux devoirs. La même section liste les certificats délivrés, avec **Revoke** et **Restore**. Voir <Link path="guides/certificates">Certificats</Link>.
+
+## Publier et modifier un cours
+
+**Publish** sur la page du cours rend un cours en brouillon visible par les étudiants. Ensuite :
+
+- Les nouveaux modules, leçons et contenus restent masqués jusqu'à ce que vous choisissiez **Publish** pour chacun. **Hide** en retire un de la vue des étudiants.
+- Retirer un module, une leçon ou un contenu l'archive au lieu de le supprimer. La section **Archived** les liste, avec **Restore** et **Delete permanently**. Ce que des étudiants ont utilisé ne peut pas être supprimé définitivement.
+- Un cours archivé ne peut pas être modifié tant que vous n'avez pas choisi **Restore**.
+
+<Link path="guides/building-a-course">Créer un cours</Link> donne les détails, et <Link path="design/live-course-editing">Modification de cours en direct</Link> décrit ce que les étudiants voient quand vous modifiez un cours publié.
+
+## Votre page de présentation et votre profil
+
+La page d'un cours publié, `/learn/<courseId>`, est publique : les visiteurs non connectés la voient, et les moteurs de recherche et les aperçus de liens peuvent la lire.
+
+**Sur la page du cours**, la section **Landing page** contient :
+
+- **What students will learn** et **Requirements** : jusqu'à 10 de chaque, jusqu'à 160 caractères chacun. Vous pouvez les réordonner avec les boutons « Move up » et « Move down ». Choisissez **Save landing page** quand vous avez terminé.
+- Une **vidéo d'aperçu** : une courte vidéo, de 5 minutes au maximum (1 à 2 minutes fonctionne le mieux), téléversée comme son propre fichier, pas comme l'une de vos leçons. Les sous-titres sont ajoutés automatiquement. **Replace** garde l'ancienne en lecture jusqu'à ce que la nouvelle soit prête, et **Remove video** revient à l'image du cours. Tout le monde peut la regarder, mais aucune vidéo de leçon ne devient publique.
+
+La **Landing page checklist** au-dessus montre ce qui manque : les objectifs d'apprentissage, les prérequis, une vidéo d'aperçu, une image de cours, et le titre et la photo de votre profil. Elle ne vous empêche jamais de publier. **View public page** ouvre la page une fois le cours publié.
+
+**Votre profil public** (**Public profile** dans le menu du compte) contient :
+
+| Champ | Limite |
+| --- | --- |
+| Display name | Jusqu'à 60 caractères |
+| Handle | 3 à 30 caractères. Votre adresse est `/instructors/<handle>` |
+| Headline | Jusqu'à 100 caractères |
+| Bio | Jusqu'à 2 000 caractères |
+| Photo | Ajoutée après le premier enregistrement du profil |
+
+Le profil est créé avec votre premier cours, et il est public tant que vous enseignez au moins un cours publié. Chaque instructeur d'un cours publié est affiché sur sa page, et vous ne pouvez pas vous y soustraire.
+
+Les changements atteignent les moteurs de recherche et les aperçus de liens en 5 minutes. Un cours archivé, ou un profil sans cours publié restant, cesse d'être trouvé au même rythme. Voir <Link path="design/public-pages">Pages publiques</Link> pour son fonctionnement.
+
+## Langues des sous-titres
+
+Des sous-titres sont ajoutés automatiquement à chaque vidéo. Sur la page du cours, la section **Caption languages** vous permet de choisir d'autres langues dans lesquelles les faire traduire. Les vidéos que vous avez déjà et celles que vous ajoutez plus tard suivent votre choix, aperçus compris. Traduire une vidéo prend quelques minutes après que ses sous-titres sont prêts.
+
+La section est absente quand les sous-titres sont désactivés pour le site, et elle l'indique quand la traduction des sous-titres n'est pas disponible.
+
+- **Vos propres sous-titres priment toujours.** Si vous téléversez des sous-titres pour une langue, ce téléversement est conservé et jamais remplacé par une traduction. Pour corriger une traduction, téléversez vos propres sous-titres pour cette langue dans la boîte de dialogue Captions de la vidéo.
+- **Remplacer les sous-titres principaux de la vidéo** supprime ses pistes traduites, qui sont traduites de nouveau à partir des nouveaux sous-titres.
+- **Retirer une langue** supprime ses pistes traduites de chaque vidéo. Les sous-titres que vous avez téléversés restent.
+- **La boîte de dialogue Captions** montre l'état de chaque langue : translating, translated, uploaded, failed, too long, no room (une vidéo a au plus 10 pistes) ou not translated, avec la raison. Les sous-titres automatiques qui ne sont pas dans la langue de votre cours ne sont pas traduits : téléversez plutôt des sous-titres dans la langue de la vidéo.
+- **Translate again** dans la boîte de dialogue redemande une fois les traductions manquantes d'une vidéo. **Translate missing captions again** dans la section le fait pour tout le cours.
+- **La traduction automatique peut être fausse.** Les étudiants voient les pistes traduites marquées « (auto-translated) ». Chaque ligne de sous-titre est traduite isolément, donc vérifiez les langues que vous savez lire avant de vous y fier.
+
+## Leçons en aperçu gratuit
+
+Un aperçu gratuit permet à n'importe qui de regarder une leçon avant de s'inscrire, ce qui est le moyen le plus rapide de montrer ce à quoi ressemble votre cours.
+
+1. Dans **Course content**, choisissez **Make free preview** sur une leçon.
+2. Confirmez avec **Make free preview**.
+
+La leçon affiche un badge « Free preview », et son titre renvoie à l'aperçu depuis votre page de présentation. Le badge indique « not public yet » tant que la leçon, son module et le cours ne sont pas publiés.
+
+- Les visiteurs voient les vidéos, le texte et les fichiers de la leçon sans se connecter ni payer. Rien n'est enregistré pour eux : ni progression, ni position de vidéo, ni discussion.
+- **Les quiz restent verrouillés.** Un visiteur voit le titre du quiz et son nombre de questions, mais pas les questions, et doit s'inscrire pour le passer.
+- **Les leçons de devoir ne peuvent pas être marquées.** Seules les leçons ordinaires le peuvent.
+- Pour l'arrêter, choisissez **Remove free preview**. Les nouveaux accès s'arrêtent immédiatement, et l'adresse de l'aperçu indique alors que l'aperçu n'est plus disponible. Une vidéo que quelqu'un est déjà en train de lire peut continuer jusqu'à une heure, et un lien de fichier quelques minutes. Masquer ou archiver la leçon, son module ou le cours a le même effet.
+
+## Rendre un cours payant
+
+Un cours est gratuit tant que vous ne lui donnez pas de prix dans sa section **Price**. Un administrateur doit d'abord connecter Stripe.
+
+- <Link path="guides/payments">Cours payants et paiements</Link> couvre les prix, les codes de réduction (**Coupons**) et ce que voient les étudiants.
+- <Link path="guides/earnings-and-payouts">Gains et versements</Link> couvre votre part de chaque vente et la manière dont vous êtes payé.
+
+## Échanger avec les étudiants
+
+- <Link path="guides/announcements">Annonces</Link> : publiez un message à tous les inscrits, depuis la section **Announcements** du cours.
+- <Link path="guides/lesson-discussions">Discussions de leçon</Link> : répondez aux questions des étudiants et modérez les messages, depuis la page **Questions** du cours. La section **First-lesson prompt** définit la question posée aux nouveaux étudiants dans la première leçon.
+- <Link path="guides/reviews">Notes et avis</Link> : lisez les avis et répondez-y, depuis la page **Reviews** du cours.
+- <Link path="guides/notifications">Notifications</Link> : ce dont vous et vos étudiants êtes avertis, dans la cloche et par e-mail.
+
+## Voir comment se porte un cours
+
+**Dashboard** montre pour chaque cours les inscriptions, les apprenants actifs cette semaine et le taux d'achèvement. Ouvrez un cours pour voir les 30 ou 90 derniers jours : nouvelles inscriptions et apprenants actifs par jour, où les apprenants s'arrêtent (abandon par leçon), combien ont commencé après l'inscription, et les résultats de chaque quiz et des questions dans les vidéos. Voir <Link path="guides/course-analytics">Analyse du cours</Link>.

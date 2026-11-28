@@ -1,0 +1,104 @@
+---
+title: 通知
+description: 人们会在铃铛和电子邮件中收到哪些通知，如何关闭邮件，以及面向开发者的生产者辅助函数、去重键、本地收件箱和邮件的环境配置。
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+通知是发给某一个人的一条简短消息。它显示在每个门户页头的铃铛中，并按他们的偏好以电子邮件发送。
+
+## 你会收到哪些通知
+
+| 通知 | 何时发送 | 邮件 |
+| --- | --- | --- |
+| **Course announcements** | 讲师向你所在的课程发布公告 | 开 |
+| **Discussion replies** | 有人回复你在课时讨论中的帖子 | 开 |
+| **Answered questions** | 有人标记了你的问题的答案 | 开 |
+| **Accepted answers** | 你的回复被标记为答案 | 关 |
+| **Assignment returned** | 讲师退回了你的提交 | 开 |
+| **Resubmission requested** | 讲师要求你重新提交作业 | 开 |
+| **Assignment grade updated** | 讲师修改了已退回作业的成绩 | 开 |
+| **Certificates** | 你获得了证书，并有一次提醒你把它添加到 LinkedIn 个人资料 | 开 |
+| **Certificate revoked** | 你获得的证书被撤销 | 开 |
+| **Certificate restored** | 被撤销的证书重新生效 | 开 |
+| **Refunds** | 你购买的课程已完成全额退款 | 始终 |
+| **New assignment submissions**（讲师） | 学生向你的某个作业提交了作品，每个作业每天最多一次 | 关 |
+| **Course reviews**（讲师） | 有学生评价了你的某门课程 | 关 |
+
+"开" 和 "关" 是你起初的设置。"始终" 无法关闭。
+
+## 铃铛
+
+无论你的邮件设置如何，铃铛都会列出每一条通知。选择其中一条会打开它所涉及的页面。**Mark all as read** 会清除未读数。
+
+## 开启或关闭邮件
+
+1. 在任意门户中打开账户菜单并选择 **Notification settings**。
+2. 使用通知旁边的开关，选择它是否也通过电子邮件发给你。
+
+每封邮件还带有一个退订链接。它会在学生门户中打开一个页面，其中的 **Stop these emails** 会关闭该类邮件，在你按下之前不会有任何变化。**Turn them back on** 可以撤销。
+
+本页其余部分面向为功能添加通知的开发者。功能通过 `@discava/core-table` 中的辅助函数发布通知。其他任何代码都不得写入通知记录。
+
+## 添加事件类型
+
+每种通知都是 `NOTIFICATION_TYPES`（`packages/databases/core-table/src/helpers/notification-types.ts`）中的一个条目：
+
+- `id`：稳定的，格式为 `<area>.<event>`，例如 `announcement.posted`。
+- `name` 和 `description`：设置页面显示的内容。
+- `params`：构建通知所用的扁平字符串参数。
+- `emailPolicy`：`default-on`、`default-off`、`required`（始终发送）或 `never`（仅铃铛）。
+- `build(params)`：纯函数；返回 `title`（截断为 120 个字符）、`body`（截断为 500 个字符）和 `link`（`portal` 以及以 `/` 开头的 `path`，其中不含任何机密）。它还可以返回一个可选的 `action`（`label` 和 `path`，与链接在同一个门户中）：邮件会把它显示为第二个按钮和一行文字，铃铛则忽略它。
+- `emailPreferenceType`（可选）：另一个类型的 id，由该类型的邮件设置、退订令牌和设置标签来管理当前类型。该类型没有自己的设置，`setNotificationPreference` 会拒绝它，设置页面也不会列出它。`isEmailEnabled` 会解析它。
+
+有四个类型用于证书：`certificate.issued`（它的 `link` 是证书页面，`action` 是 "Add to LinkedIn profile"）、`certificate.reminder`（相同的链接和 action，带有 `emailPreferenceType: 'certificate.issued'`），以及 `certificate.revoked` 和 `certificate.restored`（都链接到 My Learning）。参见<Link path="design/certificates">证书</Link>。
+
+`order.refunded` 告知学生其购买已完成全额退款（它的 `link` 是课程页面，邮件为 `required`）。凡是从 Stripe 记录到的全额退款，无论是学生申请的还是运维人员在控制台中操作的，都会发送它，其去重键是订单 ID，所以重复投递只会发送一次。参见<Link path="design/payments">支付</Link>。
+
+在 `notification-types.test.ts` 中为该条目添加测试。其他地方无需改动：设置、铃铛和邮件都会自动采用它。
+
+## 发布
+
+每个辅助函数接受相同的输入：`type`、`params`、`dedupeKey`、`occurredAt`，以及 `userId`（针对课程受众则是 `courseId`）。
+
+- `notificationWrites(service, input)` 校验输入并返回事务条目（通知和用户的未读数）。把它们加到你自己的 `service.transaction.write` 中，与该通知所涉及的写入放在一起，这样两者要么都提交，要么都不提交。被取消的事务与其他条件失败一样处理。
+- `publishNotification(service, input)` 在它自己的事务中完成同样的事，并返回 `'created'` 或 `'duplicate'`。当通知不属于其他写入的一部分时使用它。
+- `notifyCourseStudents(service, input)` 返回一个条目，请求通知课程中每位已报名（未退出）的学生。把它加到你的事务中。随后管线会用你的 `dedupeKey` 创建每位学生的通知，所以重试是安全的。它只覆盖学生；对讲师请为每人调用 `notificationWrites`。
+
+无效的输入（未注册的类型、缺少参数、空键、错误的时间点）会在读取或写入任何内容之前抛出 `NotificationInputError`。这些辅助函数不会检查用户是否存在或是否有电子邮件地址。
+
+不要调用 `markNotificationRead`、`markNotificationsRead` 或 `notificationEmailTransitions`：它们属于 API 和投递环节。
+
+## 去重键和 `occurredAt`
+
+去重键为事件命名，例如 `${contentItemId}:${version}`。通知的 id 由它的类型和键得出，所以同一事件发布两次，无论是来自重试还是十个同时到达的请求，都只是一条通知。请使用在事件每次重试时相同、对每个新事件不同的值；绝不要使用随机值或当前时间。
+
+`occurredAt` 是 UTC 的 ISO 时间点，精确到毫秒（`2026-11-18T21:55:47.000Z`），取自你自己的记录（帖子创建的时间，而不是代码运行的时间），所以重试会得到相同的值。它决定铃铛列表的顺序。
+
+## 偏好和退订
+
+每个人都可以在 **Notification settings** 中关闭每种类型的邮件，入口在每个门户的用户菜单中。`required` 类型的开关保持开启且无法更改。`never` 类型不发送邮件，也不会被列出。铃铛不受偏好影响。
+
+每封邮件都带有一个退订链接，它经过签名以防被篡改，还带有供邮件客户端一键按钮使用的 `List-Unsubscribe` 头。该链接会在学生门户中打开一个页面，在按下其按钮之前不会更改任何内容，该页面也可以重新开启邮件。签名密钥由 Data 栈按环境生成。
+
+## 在本地试用
+
+在 `pnpm dev` 运行时，用 `notify-local` 目标发布：
+
+```sh
+pnpm nx run @discava/tooling-local-dev:notify-local -- --user <sub> --type announcement.posted
+pnpm nx run @discava/tooling-local-dev:notify-local -- --course <courseId> --type announcement.posted
+```
+
+用相同的 `--key` 重复该命令，可以看到重复的通知不会产生任何效果。邮件不会离开你的机器：它们保存在本地收件箱 `http://localhost:2024/inbox` 中（`GET /emails` 以 JSON 列出它们），`reset-local-data` 会清空它。
+
+## 环境中的邮件
+
+邮件通过 Amazon SES 发送，在环境配置好之前是关闭的。在环境配置的 `infra.notifications` 下（或 `<STAGE>_INFRA_NOTIFICATIONS_*` 环境变量覆盖）：
+
+- `fromAddress`：发送邮件所用的地址。
+- `sesIdentity`：投递函数可用于发送的、已验证的 SES 域名或地址，且仅限于此。`fromAddress` 必须属于它。
+
+没有 `fromAddress` 时，通知仍会进入铃铛，每封邮件会被记录为已跳过。在 SES 沙盒中，收件人也必须经过验证。投递失败的邮件会进入 `notification-delivery` 失败队列，该队列带有告警。

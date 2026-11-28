@@ -1,0 +1,125 @@
+---
+title: CI/CD 参考
+description: 每个 GitHub Actions 工作流的作用、运行时机，以及它读取的所有变量和密钥。
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+工作流位于 `.github/workflows/`。与部署相关的有两个：**CI** 和 **Deploy**。
+
+## 流水线
+
+```d2 title="What runs when"
+direction: right
+pr: "Pull request"
+main: "Push to main"
+checks: "PR Checks"
+ci: "CI" {
+  build: "Build\n(lint, test, build)"
+  trivy: "Trivy scan"
+  docs: "Deploy Docs"
+  build -> docs
+}
+deploy: "Deploy"
+manual: "Run workflow\n(manual)"
+pages: "GitHub Pages"
+aws: "AWS stage"
+
+pr -> checks
+main -> ci
+ci -> deploy: "passed and\nAUTO_DEPLOY_STAGE set"
+manual -> deploy
+ci.docs -> pages
+deploy -> aws
+```
+
+## 工作流
+
+### CI (`ci.yml`)
+
+每次推送到 `main` 时运行，也可以手动运行。
+
+| 作业 | 作用 |
+| --- | --- |
+| **Build** | 对每个项目执行 lint、测试和构建。构建会合成 CDK 应用，并用 Checkov 扫描模板。如果构建修改了任何已提交的文件，则失败 |
+| **Trivy** | 扫描依赖中的已知漏洞，并扫描仓库中的密钥 |
+| **Playwright cache** | 保存端到端测试使用的浏览器，让拉取请求启动更快 |
+| **Deploy Docs** | 把本站发布到 GitHub Pages。仅在推送到 `main` 时运行，如果已有更新的提交则跳过 |
+
+CI 不需要 AWS 访问权限，只有可选的 Docker 登录角色例外，Trivy 作业会用到它。
+
+### Deploy (`deploy.yml`)
+
+有两种运行方式：
+
+- **手动**运行，需指定阶段名称。部署运行它的那个提交。
+- **CI 在 `main` 上通过后**，前提是设置了仓库变量 `AUTO_DEPLOY_STAGE`。部署 CI 验证过的提交，如果 `main` 之后已有新提交则跳过。
+
+一次运行会等待另一个正在部署同一阶段的运行结束。它们不会重叠。
+
+该作业运行在以阶段命名的 GitHub 环境中。这使阶段的变量可用，也是 AWS 部署角色所信任的对象。<Link path="deploy/first-deploy">首次部署</Link>列出了相关步骤。
+
+### PR Checks (`pr-checks.yml`)
+
+在向 `main` 提交的拉取请求上运行：对受变更影响的项目执行 lint、测试和构建，针对本地堆栈运行端到端测试，并做一些仓库专用的检查。它不需要 AWS 访问权限，只有可选的 Docker 登录角色例外。
+
+### 维护者自动化
+
+这些工作流服务于项目自身的开发流程。Fork 可以不管它们，也可以在 **Actions** 标签页中禁用。
+
+| 工作流 | 作用 |
+| --- | --- |
+| `agent-*.yml` | 驱动规格驱动流程：作用于规格拉取请求，以及名为 `openhands/…` 的分支 |
+| `archive-specs.yml` | 当 `main` 上的 `specs/*/tasks.md` 变化时，准备一个归档已完成规格的拉取请求 |
+| `post-merge-verify.yml` | 在 Deploy 运行部署到 `discava-development` 之后，为它部署的每个拉取请求打开一个测试 issue。如果你在 fork 中合并拉取请求且不想要这些 issue，请禁用它 |
+| `cache-cleanup.yml` | 拉取请求关闭时删除它的 Actions 缓存，以保持在 GitHub 配额之内 |
+
+## 变量和密钥
+
+工作流读取的全部内容。安装脚本会为你设置所需的变量。
+
+### 仓库变量
+
+| 变量 | 设置者 | 用途 |
+| --- | --- | --- |
+| `AUTO_DEPLOY_STAGE` | 安装脚本，如果你选择了它 | CI 在 `main` 上通过时要部署的那个阶段。未设置表示只能手动部署 |
+| `AWS_DOCKER_LOGIN_ROLE_ARN` | 安装脚本 | 让 Docker 登录 Amazon ECR Public，这样拉取镜像不会被限流。未设置表示匿名拉取 |
+| `AGENT_APP_LOGIN` | 仅维护者 | 维护者自动化所信任其评审的 GitHub App。在 fork 中请保持未设置 |
+| `DOCS_SITE`, `DOCS_BASE_PATH` | 你，可选 | 文档站点的发布位置，例如 `https://docs.example.com` 和 `/`。未设置表示使用仓库的 GitHub Pages 地址 |
+
+### 环境变量，每个阶段一组
+
+| 变量 | 设置者 | 用途 |
+| --- | --- | --- |
+| `AWS_REGION` | 安装脚本 | 部署登录的区域 |
+| `AWS_DEPLOY_ROLE_ARN` | 安装脚本 | 工作流假设的角色 |
+| `AWS_EXECUTION_ROLE_ARN` | 安装脚本 | CloudFormation 用来创建资源的角色 |
+| `<STAGE>_…` | 安装脚本或你 | <Link path="deploy/configuration">配置覆盖</Link>，例如自定义域名。每个以该阶段前缀开头的变量都会被转发，例如 `DISCAVA_DEVELOPMENT_INFRA_…` |
+
+### 密钥
+
+| 密钥 | 是否必需 | 用途 |
+| --- | --- | --- |
+| `CODECOV_TOKEN` | 否 | 把测试覆盖率上传到 Codecov |
+
+**没有任何 AWS 密钥**。工作流使用 GitHub 为该次运行签发的令牌向 AWS 证明身份。
+
+## GitHub 如何登录 AWS
+
+1. Deploy 作业向 GitHub 请求一个 OIDC 令牌。令牌的主体指明仓库和环境：默认为 `repo:<owner>/<repo>:environment:<stage>`。
+2. AWS 的 GitHub OIDC 提供方验证该令牌。
+3. 部署角色的信任策略只接受这个确切的主体，因此只有你仓库中、在该环境里运行的作业才能假设它。
+4. 作业获得在本次运行期间有效的凭证。
+
+这就是环境的保护规则成为部署关卡的原因：谁能在该环境中运行作业，谁就能部署该阶段。
+
+## 有意设置两个角色
+
+| 角色 | 使用者 | 能做什么 |
+| --- | --- | --- |
+| **Deploy role** | 工作流 | 上传阶段的资产，创建或更新名为 `<stage>-*` 的 CloudFormation 堆栈。它自己不能创建资源 |
+| **Execution role** | CloudFormation | 创建阶段的资源。它创建的任何 IAM 角色都必须带有该阶段的权限边界 |
+
+把二者分开意味着，被攻破的工作流只能做该阶段的 CloudFormation 部署能做的事，而它部署的任何内容都无法授予自己超出边界的权限。

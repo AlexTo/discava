@@ -1,0 +1,76 @@
+---
+title: Mô hình bảo mật
+description: Ai truy cập được gì trong Discava, các biện pháp bảo vệ mà một stage có thể bật, và cách giữ các lần triển khai trong giới hạn.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+## Ai được làm gì
+
+Quyền truy cập được quyết định theo từng lớp, và mỗi lớp giả định lớp trước nó có thể thất bại.
+
+| Lớp | Thực thi |
+| --- | --- |
+| **Nhóm Cognito** | Vai trò của người dùng: `student`, `instructor` hoặc `admin` |
+| **Các API tách biệt** | Các procedure của giảng viên và quản trị viên là các bản triển khai riêng. Token của học viên bị instructor-api từ chối trước khi bất kỳ procedure nào chạy |
+| **Quy tắc của procedure** | Quy tắc cụ thể: giảng viên này sở hữu khóa học này, học viên này đã ghi danh vào nó |
+| **Media có chữ ký** | Một video hoặc tệp chỉ được phục vụ cho request đã được ký cho nó. Chữ ký được cấp sau một lần kiểm tra quyền truy cập, như việc ghi danh |
+
+Một khóa học nháp hoặc đã lưu trữ trả lời "không tìm thấy" cho bất kỳ ai không nên thấy nó, nên sự tồn tại của nó không bị lộ.
+
+## Biện pháp bảo vệ theo từng stage
+
+Mọi biện pháp bảo vệ đều **bật theo mặc định**. Cấu hình của một stage chỉ có thể tắt chúng, như `discava-development` làm để giữ chi phí thấp.
+
+| Biện pháp bảo vệ | Tác dụng | Production | Development |
+| --- | --- | --- | --- |
+| **WAF** | Tường lửa ứng dụng web cho các cổng, API, media và user pool | Bật | Tắt |
+| **Mã hóa KMS** | Khóa do khách hàng quản lý, có xoay vòng, cho bảng, bucket, hàng đợi, log và tìm kiếm | Bật | Tắt (mã hóa do AWS quản lý) |
+| **MFA** | Yếu tố thứ hai khi đăng nhập | Bật | Tắt |
+| **Bảo vệ chống xóa** | Từ chối xóa user pool và bảng | Bật | Tắt |
+| **Giữ lại khi xóa** | Giữ dữ liệu nếu một stack bị gỡ | Bật | Tắt |
+| **Tự đăng ký** | Cho phép bất kỳ ai tạo tài khoản | Bật | Tắt |
+| **Tracing** | Theo dõi request bằng X-Ray | Bật | Tắt |
+
+Dữ liệu luôn được mã hóa khi lưu trữ và khi truyền. Thiết lập KMS quyết định các khóa có do bạn kiểm soát và kiểm toán hay không.
+
+Trên một stage development đã tắt WAF, các giới hạn request, mức đồng thời của hàm và trần thông lượng của bảng trong cấu hình của stage giới hạn chi phí mà một đợt dồn request có thể gây ra. Khi tắt tự đăng ký, người ngoài không thể có tài khoản để truy cập các procedure dành cho người đã đăng nhập.
+
+## Đặc quyền tối thiểu bên trong hệ thống
+
+- Mỗi hàm Lambda có role riêng với chỉ những quyền mà công việc của nó cần.
+- Các khả năng nhạy cảm được cô lập trong các hàm riêng. Khóa ký request media bài học chỉ một hàm trong core-api và một hàm trong instructor-api đọc được, không phải hàm phục vụ mọi procedure khác.
+- Khóa Stripe và secret ký webhook nằm trong Secrets Manager. Một hàm của admin-api được ghi chúng. Các hàm thanh toán, webhook, tài khoản nhận tiền và lượt chi trả chỉ đọc những gì chúng cần, và không có phản hồi, dòng log hay bản ghi kiểm toán nào mang theo chúng.
+- Webhook của Stripe chỉ chấp nhận một thông điệp nếu chữ ký của nó được xác minh khớp với secret ký đã lưu. Một khoản thanh toán không bao giờ được tin từ trình duyệt.
+- Không có S3 bucket nào công khai. Các cổng và media chỉ truy cập được qua các CloudFront distribution của chúng.
+- Hàm render trang phục vụ các trang công khai với quyền chỉ đọc đối với bảng, và chỉ CloudFront distribution của cổng học viên mới gọi được nó.
+- Mỗi API chỉ trả lời các request cross-origin từ những cổng gọi nó: cả ba với core-api, cổng giảng viên với instructor-api, cổng quản trị với admin-api. Các địa chỉ phát triển cục bộ cũng được cho phép.
+- Các search index chỉ do các hàm lập chỉ mục ghi. Các API chỉ đọc được chúng.
+- Các hàm lấy tên tài nguyên từ biến môi trường đặt lúc triển khai, và thông tin xác thực không bao giờ xuất hiện trong mã hay tệp môi trường.
+
+## Kiểm tra trước khi mã được triển khai
+
+| Kiểm tra | Ở đâu | Bắt được |
+| --- | --- | --- |
+| **Checkov** | Mỗi lần build | Các thiết lập hạ tầng không an toàn trong các template được sinh ra |
+| **Trivy** | CI và trước mỗi lần triển khai | Các lỗ hổng đã biết trong dependency, và secret bị commit |
+| **git-secrets** | Trước mỗi commit | Thông tin xác thực sắp bị commit |
+| **Bất biến của bảng** | Kiểm thử end-to-end | Dữ liệu bị để ở trạng thái phá vỡ một quy tắc trải dài nhiều bản ghi |
+
+## Giữ các lần triển khai trong giới hạn
+
+Pipeline triển khai tự nó là một bề mặt tấn công, nên nó bị ràng buộc:
+
+- **Không lưu thông tin xác thực AWS.** GitHub Actions đăng nhập bằng một token cấp cho một lần chạy.
+- **Deploy role chỉ tin một environment** của một repository. Bảo vệ environment đó bằng người duyệt bắt buộc sẽ kiểm soát việc triển khai.
+- **Deploy role không thể tạo tài nguyên.** Nó chỉ có thể yêu cầu CloudFormation triển khai các stack mang tên stage của nó.
+- **Execution role được giới hạn** theo tên vào các tài nguyên của stage.
+- **Một permissions boundary** giới hạn mọi role mà stage tạo ra, nên một thay đổi đã triển khai không thể tự cấp cho mình nhiều hơn mức boundary cho phép.
+
+<Link path="deploy/ci-cd">Tham chiếu CI/CD</Link> giải thích việc đăng nhập và hai role.
+
+## Báo cáo lỗ hổng
+
+Vui lòng không mở issue công khai. Hãy làm theo quy trình thông báo bảo mật trong [CONTRIBUTING.md](https://github.com/AlexTo/discava/blob/main/CONTRIBUTING.md#security-issue-notifications).

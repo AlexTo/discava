@@ -1,0 +1,39 @@
+---
+title: Tổng quan thiết kế
+description: Cách các thiết kế tính năng của Discava được ghi lại, và những khái niệm dùng chung mà chúng dựa vào.
+sidebar:
+  order: 0
+---
+
+import Link from '@components/link.astro';
+
+Phần này mô tả **cách các tính năng của Discava hoạt động**. Mỗi trang bao quát một mảng tính năng.
+
+## Các trang
+
+| Trang | Nội dung |
+|---|---|
+| <Link path="design/assignments">Chấm điểm và phản hồi bài tập</Link> | Trả bài tập tải lên kèm điểm và phản hồi, yêu cầu nộp lại, các vòng phản hồi, chỉ mục chờ và hàng chờ chấm điểm, thông báo hằng ngày cho giảng viên, và xem trước tệp đã nộp |
+| <Link path="design/branding">Thương hiệu</Link> | Tên, logo, biểu tượng, ảnh chia sẻ và màu của nền tảng do quản trị viên đặt: bản ghi thương hiệu, tài liệu đã xuất bản mà các cổng và trang công khai đọc, bảng màu và các kiểm tra ảnh |
+| <Link path="design/catalogue-categories">Danh mục của catalogue</Link> | Hệ phân loại danh mục do quản trị viên quản lý, các trường catalogue của một khóa học, và cách chúng cung cấp cho facet tìm kiếm |
+| <Link path="design/certificates">Chứng chỉ</Link> | Cách chứng chỉ hoàn thành được cấp, bật hoặc tắt theo từng khóa học, chia sẻ và xác minh |
+| <Link path="design/course-analytics">Phân tích khóa học</Link> | Bảng điều khiển giảng viên và trang phân tích khóa học: ý nghĩa của từng con số, và vì sao các con số chậm hơn bản ghi vài giây |
+| <Link path="design/instructor-payouts">Thanh toán cho giảng viên</Link> | Cách thu nhập được ghi nhận từ các đơn hàng, sổ cái và các bản tóm tắt theo ngày, lần chạy thanh toán hằng ngày và cách khôi phục, và quy tắc tài khoản thanh toán |
+| <Link path="design/live-course-editing">Chỉnh sửa khóa học đang chạy</Link> | Thêm, gỡ, ẩn, khôi phục và chỉnh sửa module, bài học và mục nội dung sau khi khóa học đã được xuất bản |
+| <Link path="design/payments">Thanh toán</Link> | Mua một khóa học trả phí bằng Stripe Checkout: giá, đơn hàng, webhook giao khóa học đúng một lần, hoàn tiền, và kết nối Stripe của quản trị viên |
+| <Link path="design/progress-and-completion">Tiến độ và hoàn thành</Link> | Cách việc hoàn thành mục, bài học và khóa học được ghi lại, và việc tính lại phía máy chủ chịu trách nhiệm về chúng |
+| <Link path="design/public-pages">Trang công khai</Link> | Trang giới thiệu khóa học và hồ sơ giảng viên cho trình thu thập dữ liệu và bản xem trước liên kết: trình render trang, cache và độ mới, việc viết lại cho SPA, thiết lập lập chỉ mục và các quy tắc hiển thị của video xem trước |
+| <Link path="design/quizzes">Quiz</Link> | Mục nội dung quiz: mô hình dữ liệu, chấm điểm, các lượt làm, và trải nghiệm của học viên và giảng viên |
+| <Link path="design/search">Tìm kiếm</Link> | Tìm kiếm xuyên các loại nội dung: collection OpenSearch Serverless, pipeline lập chỉ mục, và cách quyền hiển thị được bảo đảm |
+| <Link path="design/stream-event-router">Stream event router</Link> | Cách một tính năng phản ứng với thay đổi của core table: đăng ký, hàng đợi, hàng đợi lỗi, cảnh báo và các nghĩa vụ của handler, cùng router cục bộ |
+| <Link path="design/video-player">Trình phát video và phụ đề</Link> | Cách trình phát video bài học tiếp tục, đổi tốc độ, phản hồi bàn phím và hiển thị phụ đề, và cách phụ đề được tạo hoặc tải lên |
+
+## Các khái niệm dùng chung
+
+**Phân cấp chương trình học.** Một khóa học chứa các module, một module chứa các bài học, và một bài học chứa một danh sách có thứ tự các mục nội dung (video, văn bản, tệp, quiz, bài tập). Cả bốn nằm trong một partition DynamoDB (`COURSE#<courseId>`) thông qua collection `curriculum` của ElectroDB, nên cả một khóa học là một truy vấn. Truy vấn đó đọc mọi trang, vì chương trình học của một khóa có thể vượt quá 1 MB mỗi trang của DynamoDB.
+
+**Hiển thị hiệu lực.** Một module, bài học hoặc mục nội dung chỉ được hiển thị cho học viên nếu **nó và mọi mục cha** đều `visible` và không bị lưu trữ. Việc đọc của học viên, việc ghi của học viên và các phép tính tiến độ đều dùng hiển thị hiệu lực, không bao giờ chỉ dùng `visibility` riêng của một bản ghi. Quy tắc này được cài đặt một lần, là `filterEffectivelyVisible` trong `@discava/core-table`.
+
+**Ghi danh.** Học viên chỉ đọc nội dung của một khóa học, và ghi bất kỳ thứ gì trong đó, khi đang ghi danh: họ có một bản ghi `enrolment` (pk `courseId`, sk `userId`) mà `status` không phải `dropped`. Học viên tự ghi danh bằng `course.enrol` của core-api, và chỉ vào khóa học đã **published** và **miễn phí**: trạng thái và giá của khóa học được kiểm tra trong cùng transaction với việc ghi lượt ghi danh, nên một khóa học bị lưu trữ hoặc được định giá giữa chừng không thể nhận thêm lượt ghi danh mới. Khóa học có giá chỉ vào được bằng một đơn hàng đã thanh toán (xem <Link path="design/payments">Thanh toán</Link>). Ghi danh lại sẽ trả về lượt ghi danh hiện có. Khóa học nháp hoặc đã lưu trữ trả về `NOT_FOUND`, như `course.publicView` ẩn danh, để không làm lộ sự tồn tại của bản nháp. Học viên đã ghi danh vẫn đọc được khóa học sau khi nó bị lưu trữ, nhưng với họ nó cũng chỉ đọc. `course.myEnrolment` trả về lượt ghi danh của người gọi, hoặc không có.
+
+**Dữ liệu học viên được khóa theo người dùng.** `progress`, `itemCompletion`, `quizAttempt` và `quizSummary` dùng `userId` làm partition key, nên "tiến độ của một học viên trong một khóa học" là một truy vấn. Mặt trái là câu hỏi "những học viên nào đã động vào mục này?" không thể trả lời nếu không quét, đó là lý do các mục nội dung mang một `studentActivityCount`.

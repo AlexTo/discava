@@ -1,0 +1,74 @@
+---
+title: Phân tích khóa học
+description: Dashboard của giảng viên và trang phân tích của từng khóa học, ý nghĩa của mỗi con số, chế độ xem 30 và 90 ngày, tỷ lệ bỏ giữa chừng theo bài học, kích hoạt, và kết quả bài kiểm tra cùng câu hỏi trong video.
+---
+
+import Link from '@components/link.astro';
+
+**Dashboard** trong cổng giảng viên cho thấy các khóa học của bạn đang diễn ra thế nào. Chỉ giảng viên của một khóa học mới xem được số liệu của nó.
+
+## Dashboard
+
+Mỗi khóa học bạn dạy có một thẻ, bất kể trạng thái.
+
+| Số liệu | Ý nghĩa |
+| --- | --- |
+| **Enrolments** | Tất cả những người đã đăng ký |
+| **Active this week** | Số người học đã làm gì đó trong khóa học trong tuần dương lịch này, từ thứ Hai đến Chủ nhật theo UTC |
+| **Completion rate** | Trong số người học còn đăng ký, tỷ lệ đã hoàn thành khóa học, là phần trăm nguyên làm tròn xuống. Hiện "No data" cho đến khi có người đăng ký |
+
+Mỗi thẻ cũng cho biết số liệu thay đổi lần cuối khi nào, hoặc "No activity yet". Chọn tiêu đề của một khóa học để mở trang phân tích của nó.
+
+## Trang phân tích của một khóa học
+
+### Tổng quan
+
+| Số liệu | Ý nghĩa |
+| --- | --- |
+| **Enrolments** | Tất cả những người đã đăng ký |
+| **Active** | Đã đăng ký, và chưa hoàn thành cũng chưa rời đi |
+| **Completed** | Đã hoàn thành khóa học |
+| **Dropped** | Đã rời khóa học, hoặc bị kết thúc đăng ký |
+| **Completion rate** | Như trên Dashboard |
+| **Active this week** | Như trên Dashboard |
+
+### 30 hoặc 90 ngày
+
+Hai biểu đồ bao phủ 90 ngày gần nhất. Chọn **30 days** hoặc **90 days** ở đầu trang để chuyển đổi.
+
+- **New enrolments per day**
+- **Active learners per day**
+
+Ngày là ngày theo UTC. Cho đến khi có người đăng ký, trang hiện "No learners have enrolled yet".
+
+### Tỷ lệ bỏ giữa chừng theo bài học
+
+Với mỗi bài học hiển thị cho người học: trong số người đã bắt đầu bài học, tỷ lệ đã hoàn thành. Bài học có tỷ lệ thấp nhất được đánh dấu **Lowest completion**. Bài học chưa ai bắt đầu sẽ ghi rõ điều đó.
+
+Người học đã rời khóa học không được tính.
+
+### Kích hoạt
+
+Có bao nhiêu người học đã đăng ký đã bắt đầu, dưới dạng con số và phần trăm. Bắt đầu nghĩa là họ đã hoàn thành một mục hoặc nộp một lần làm bài kiểm tra. Người học mới vẫn có thể bắt đầu, nên đây là số liệu tính đến hiện tại.
+
+Thẻ này cũng cho biết có bao nhiêu người học đã trả lời gợi ý ở bài học đầu tiên và bao nhiêu người đã đóng nó. Xem <Link path="guides/lesson-discussions">Thảo luận bài học</Link>.
+
+### Bài kiểm tra
+
+Mỗi bài kiểm tra có một bảng riêng. **Show analysis** mở ra:
+
+- **Most-missed questions**: số lượt làm, số lần sai và tỷ lệ sai của từng câu hỏi, câu sai nhiều nhất xếp trước. Câu hỏi có ít hơn 5 lượt làm không được xếp hạng và hiện "Not enough attempts".
+- **Best score per student**: biểu đồ cho thấy điểm cao nhất của học viên phân bố ra sao.
+
+### Câu hỏi trong video
+
+Bảng **Video questions** liệt kê các video có đặt câu hỏi. **Show results** trên một video mở ra thời điểm của từng câu hỏi trong video, các câu trả lời, số lần sai và tỷ lệ sai. Câu hỏi có quá ít câu trả lời hiện "Not enough answers yet".
+
+Xem <Link path="guides/video-lessons">Bài học video</Link> để biết cách thêm câu hỏi vào video.
+
+## Đọc các số liệu
+
+- Một người học chỉ được tính một lần trong một ngày hoặc một tuần, dù họ làm bao nhiêu việc.
+- Nếu trang của một khóa học hiện "Course not found", khóa học đó không tồn tại hoặc bạn không dạy nó.
+
+<Link path="design/course-analytics">Phân tích khóa học</Link> mô tả cách lưu giữ các số liệu.

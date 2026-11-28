@@ -1,0 +1,46 @@
+---
+title: Phân tích khóa học
+description: Những gì bảng điều khiển của cổng giảng viên và trang phân tích khóa học hiển thị, cách định nghĩa từng con số, và vì sao các con số chậm hơn bản ghi vài giây.
+sidebar:
+  order: 8
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261120-154551-first-lesson-start/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154551-first-lesson-start/) (kích hoạt, cùng các câu trả lời và lượt bỏ qua của lời nhắc bài học đầu tiên)
+
+Bảng điều khiển của cổng giảng viên hiển thị một thẻ tóm tắt cho mỗi khóa học, và mỗi thẻ mở trang phân tích của khóa học đó. Cả hai đọc các con số đã lưu, được cập nhật liên tục từ stream của core table. Không có gì được đếm từ các bản ghi khi có yêu cầu, nên các trang tải nhanh dù có bao nhiêu học viên ghi danh.
+
+Cổng đọc chúng qua `analytics.courseSummaries` (các thẻ), `analytics.course`, `analytics.quiz` và `analytics.videoQuestions` của instructor-api.
+
+## Định nghĩa
+
+| Con số | Định nghĩa |
+|---|---|
+| **Enrolments** [Lượt ghi danh] | Mọi lượt ghi danh mà khóa học từng có, kể cả học viên đã bỏ học. Biểu đồ lịch sử tính mỗi lượt vào ngày UTC mà học viên ghi danh |
+| **Dropped** [Đã bỏ học] | Các lượt ghi danh có trạng thái là dropped. Chúng vẫn nằm trong lịch sử ghi danh nhưng không có mặt ở mọi con số khác bên dưới |
+| **Active learner** [Học viên hoạt động] | Một học viên đang ghi danh đã hoàn thành một mục (bao gồm nộp bài tập), nộp một lượt làm quiz hoặc trả lời một câu hỏi trong video. Đăng nhập hay mở một trang không tính, vì cả hai đều không được ghi lại |
+| **Active this week** [Hoạt động tuần này] | Số học viên hoạt động khác nhau trong tuần dương lịch hiện tại, từ thứ Hai đến Chủ nhật, UTC. Trang phân tích cũng hiển thị số học viên hoạt động khác nhau theo từng ngày UTC, trong 30 hoặc 90 ngày gần nhất |
+| **Completion rate** [Tỷ lệ hoàn thành] | Số lượt ghi danh đã hoàn thành chia cho tất cả lượt ghi danh chưa bỏ học. Khóa học không có lượt ghi danh nào như vậy hiển thị "No data", không phải 0% |
+| **Activated** [Đã kích hoạt] | Các lượt ghi danh đã làm một việc đầu tiên trong khóa học: lượt ghi danh có thời gian hoạt động gần nhất, được đặt bởi mục hoàn thành đầu tiên, lượt làm quiz, bài tập đã nộp hoặc câu trả lời câu hỏi video đầu tiên. Mọi lượt ghi danh đều được tính, kể cả đã kết thúc. Nó được tính từ thời gian hoạt động gần nhất của lượt ghi danh, nên không có dấu đánh dấu mới nào được giữ, và nó mang nghĩa "cho đến nay": một học viên chưa bắt đầu vẫn có thể được kích hoạt sau này. Biểu đồ lịch sử quy nó về ngày UTC mà học viên ghi danh |
+| **Activation rate** [Tỷ lệ kích hoạt] | Số lượt ghi danh đã kích hoạt chia cho tất cả lượt ghi danh, cả hai đều gồm các lượt đã kết thúc. Nó được hiển thị cho toàn thời gian và cho các học viên ghi danh trong 30 hoặc 90 ngày gần nhất. Khóa học không có lượt ghi danh nào hiển thị "No data", không phải 0% |
+| **Prompt answers and dismissals** [Câu trả lời và lượt bỏ qua lời nhắc] | Bao nhiêu học viên đã trả lời lời nhắc bài học đầu tiên, và bao nhiêu người đã bấm **Not now**. Mỗi học viên được tính một lần cho mỗi khóa học. Số lần lời nhắc được hiển thị không được ghi lại, nên không có tỷ lệ |
+| **Drop-off** [Điểm rơi rụng] | Với mỗi bài học đang hiển thị cho học viên, theo thứ tự khóa học: bao nhiêu học viên đã bắt đầu, bao nhiêu đã hoàn thành, và tỷ lệ hoàn thành trên số đã bắt đầu. Các bài học bị ẩn hoặc lưu trữ, và bài học của module bị ẩn hoặc lưu trữ, bị loại ra |
+| **Score bands** [Dải điểm] | Điểm tốt nhất của mỗi học viên cho mỗi quiz, theo các dải mười điểm (0-9, 10-19, ... 90-100), nên một học viên chỉ được tính một lần dù làm bao nhiêu lượt |
+| **Most-missed questions** [Câu hỏi sai nhiều nhất] | Xếp hạng theo tỷ lệ sai trên mọi lượt làm. Một câu hỏi cần ít nhất 5 lượt làm mới được xếp hạng, để một lượt làm tệ không thể đưa nó lên đầu |
+| **Video question results** [Kết quả câu hỏi trong video] | Với mỗi video hiển thị cho học viên có câu hỏi, và với từng câu hỏi hiện tại: thời điểm của nó (hoặc "End of video"), phần đầu của lời nhắc, bao nhiêu học viên đã trả lời, bao nhiêu người sai, và tỷ lệ sai, xếp hạng giống câu hỏi quiz với cùng mức tối thiểu 5 câu trả lời. Chỉ câu trả lời đầu tiên được ghi của mỗi học viên được tính: **Try again** và việc bỏ qua không được ghi lại. Các câu hỏi đã bị gỡ không được liệt kê. Kết quả không chứa mã định danh học viên |
+| **Modules without questions** [Module chưa có câu hỏi] | Chế độ xem điểm rơi rụng theo bài học cũng nêu tên mỗi module hiển thị cho học viên có một video đang hiển thị mà không có quiz hiển thị và không có video hiển thị nào có câu hỏi, gợi ý giảng viên thêm vào. Nó được đọc từ chương trình học hiện tại, nên không phải một bộ đếm và không thể lệch |
+
+## Độ mới của dữ liệu
+
+Các con số chậm hơn bản ghi vài giây, giống tiến độ khóa học. Một thay đổi (một lượt ghi danh, một lần hoàn thành, một lượt làm quiz) thường hiện ra ở lần tải kế tiếp trong vòng 30 giây. Cả các thẻ lẫn trang phân tích đều hiển thị thời điểm các con số được cập nhật lần cuối.
+
+## Cách các con số được duy trì
+
+Handler `analytics-update` là một tính năng của <Link path="design/stream-event-router">stream event router</Link>. Nó giữ các bộ đếm trong năm bản ghi của core table: `courseStats`, `periodStats`, `lessonStats`, `quizScoreStats` và `quizQuestionStats`.
+
+- **Mỗi thay đổi được tính một lần.** Các bộ đếm của một thay đổi được ghi trong một transaction cùng một `analyticsMarker` đặt tên theo bản ghi stream. Một bản ghi được giao lại sẽ thấy dấu đánh dấu của nó và không đếm gì.
+- **Mỗi học viên được tính một lần mỗi ngày và mỗi tuần.** Một dấu đánh dấu thứ hai cho mỗi học viên và mỗi kỳ làm cho "hoạt động" thành số đếm các học viên khác nhau.
+- **Thứ tự không quan trọng.** Các bộ đếm chỉ được cộng thêm, và các con số điểm rơi rụng của một bài học được chốt từ các bản ghi hiện tại của học viên, không phải từ thay đổi vừa đến.
+
+Nếu các con số từng lệch khỏi các bản ghi, invariant `analytics-matches-records` sẽ phát hiện, và `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId>` tính lại các con số của một khóa học từ các bản ghi của nó.

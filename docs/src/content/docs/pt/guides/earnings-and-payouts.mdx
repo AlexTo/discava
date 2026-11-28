@@ -1,0 +1,101 @@
+---
+title: Ganhos e repasses
+description: Como os ganhos de um instrutor são calculados, a página Earnings, como configurar uma conta de repasse, quando os repasses são enviados e o que uma troca de conta de pagamento faz.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+Quando um aluno compra seu curso, sua parte é registrada em segundos e paga a você pelo Stripe.
+
+## Como os ganhos são calculados
+
+Para cada venda:
+
+> líquido = valor pago − taxa da plataforma
+
+- O **valor pago** é o que o aluno pagou, depois de qualquer cupom. Um **desconto** o reduz e, com isso, reduz a sua parte: você ganha sobre o valor pago, nunca sobre o preço de tabela.
+- A **taxa da plataforma** é uma porcentagem do valor pago, definida pela plataforma (20%, a menos que tenha sido alterada). Uma venda mantém a taxa com que foi registrada.
+- Se um curso tem **vários instrutores**, eles dividem cada venda igualmente.
+- Um **reembolso** retira sua parte do valor reembolsado e devolve a taxa sobre ele. Um reembolso total leva a venda a zero.
+
+Cada moeda é mantida separada. Nada é convertido.
+
+Uma venda conta no dia em que foi paga, e um reembolso no dia em que foi feito, então o reembolso de uma venda do mês passado reduz os números deste mês. Os dias são dias UTC.
+
+## A página Earnings
+
+**Earnings** na barra lateral do portal do instrutor tem quatro partes.
+
+**Payout account**: seu status e a única coisa a fazer a respeito. Veja [Configurar os repasses](#configurar-os-repasses).
+
+**Balance**, por moeda:
+
+| Número | Significado |
+| --- | --- |
+| **On hold** | Ganho, mas ainda dentro do período de retenção. A página mostra a próxima data de liberação |
+| **Waiting for account setup** | Passou do período de retenção, mas você não tem uma conta de repasse ativa |
+| **Ready** | Sairá no próximo repasse |
+
+**Report**: começa com o mês atual. Escolha outro mês, ou escolha **Custom range** e defina uma data From e uma To com no máximo 366 dias de distância.
+
+- Para cada curso, mostra o número de pedidos, o bruto, os descontos, os reembolsos, a taxa da plataforma e o líquido, com um total por moeda.
+- **Show orders** em um curso lista cada venda e reembolso com uma referência de pedido. Nunca mostra quem comprou.
+- Os dias são contados em UTC.
+
+**Payouts**: a data, o valor e o status de cada repasse.
+
+## Configurar os repasses
+
+1. Abra **Earnings**.
+2. No cartão **Payout account**, escolha **Set up payouts**.
+3. Informe ao Stripe sua identidade e seus dados bancários nas páginas dele. O Stripe leva você de volta a Earnings quando você termina.
+
+O cartão mostra em que ponto você está:
+
+| Status | O que fazer |
+| --- | --- |
+| **Not set up** | **Set up payouts** |
+| **In progress** | **Continue setup**: o formulário do Stripe não foi concluído |
+| **Active** | Nada. **Open Stripe dashboard** leva você à sua conta Stripe |
+| **Restricted** | **Fix account**: o Stripe precisa de mais alguma coisa de você |
+
+Se o cartão diz "Payouts aren't available yet", a plataforma não conectou o Stripe. Fale com um administrador.
+
+Os ganhos são registrados tendo você configurado os repasses ou não. Eles esperam até você configurar.
+
+## Quando você é pago
+
+- Cada venda fica **retida** por um número de dias definido pela plataforma (14 no stage de produção, a menos que tenha sido alterado), então um reembolso nesse período nunca precisa ser cobrado de você.
+- Uma rodada de repasse acontece **uma vez por dia**. Ela envia tudo que está pronto, um repasse por moeda.
+- Um saldo abaixo do **repasse mínimo** (10,00, a menos que tenha sido alterado) espera por uma rodada posterior.
+
+O status de um repasse é um destes:
+
+- **Pending**: está sendo enviado.
+- **Sent**: o Stripe o aceitou.
+- **Failed**: o Stripe o recusou, com o motivo. Os ganhos dele voltam ao seu saldo e são tentados de novo.
+
+## Reembolsos depois que você foi pago
+
+Um reembolso feito depois que a venda foi paga deixa um **saldo negativo**. Ele é descontado do seu próximo repasse. Nada é retirado da sua conta bancária.
+
+## Ganhos retidos
+
+Se a plataforma troca a conta Stripe com que recebe pagamentos, os ganhos de antes da troca que ainda não foram pagos aparecem como **Held**: "Earned before the platform changed its payment account. Contact the platform to be paid." Sua conta de repasse aparece como não configurada, porque pertencia à conta antiga. Configure-a de novo para as vendas daqui em diante.
+
+## Para administradores
+
+- Os repasses exigem o **Connect** ativado na conta Stripe da plataforma. Sem ele, um instrutor que escolhe **Set up payouts** recebe "This platform can't set up payout accounts yet".
+- Uma chave restrita também precisa gerenciar contas conectadas, links de conta, links de login e transferências, além do que <Link path="guides/payments">receber pagamentos</Link> exige.
+- A taxa, o período de retenção e o repasse mínimo são definidos por stage. O stage de desenvolvimento retém as vendas por 1 dia, não 14. Veja <Link path="deploy/configuration">Configuração de stage</Link>.
+- Trocar a conta ou o modo do Stripe retém os ganhos não pagos de todos os instrutores. Deixe a rodada diária pagar primeiro o que está pronto e pague os ganhos retidos à mão.
+
+## Limitações
+
+- Sem formulários fiscais, notas fiscais nem cálculo de impostos.
+- Sem conversão de moeda.
+- Disputas e estornos não aparecem no relatório.
+
+<Link path="design/instructor-payouts">Repasses a instrutores</Link> descreve como funciona.

@@ -1,0 +1,183 @@
+---
+title: Configuration d'un stage
+description: Comment un stage est configuré, comment surcharger des réglages sans les commiter, et comment ajouter des domaines personnalisés, l'e-mail et de nouveaux stages.
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+## Où vit la configuration
+
+Chaque stage est défini dans un seul fichier : `packages/common/infra-config/src/stages.config.ts`. Un stage liste des réglages par **composant**, sous `infra` :
+
+| Composant | Ce que c'est |
+| --- | --- |
+| `identity` | Le pool d'utilisateurs Cognito |
+| `coreApi`, `instructorApi`, `adminApi` | Les trois API |
+| `payments` | La Stripe webhook API |
+| `coreTable` | La table DynamoDB |
+| `streamRouter` | Les files qui acheminent les changements de la table vers leurs gestionnaires |
+| `studentPortal`, `instructorPortal`, `adminPortal` | Les trois sites web |
+| `lessonMedia`, `publicMedia` | Les buckets de vidéos et d'images et leurs distributions CloudFront |
+| `search` | La collection OpenSearch Serverless |
+| `notifications` | L'expéditeur des e-mails |
+
+**Chaque réglage de sécurité est activé par défaut.** Un stage ne liste que ce qu'il assouplit ou dimensionne. `discava-development` désactive la plupart des protections pour rester économique, et `discava-production` énonce explicitement les valeurs renforcées.
+
+Réglages courants :
+
+| Réglage | Signification |
+| --- | --- |
+| `enableWaf` | Placer une web ACL WAF devant le composant |
+| `enableKmsEncryption`, `enableKeyRotation` | Chiffrer avec une clé KMS gérée par le client, et la faire tourner |
+| `retainOnDelete`, `enableDeletionProtection` | Garder les données si la stack est supprimée, et refuser une suppression accidentelle |
+| `throttleRateLimit`, `throttleBurstLimit` | Les limites de requêtes par méthode d'API Gateway |
+| `reservedConcurrency` | Le nombre maximal de requêtes que la fonction d'une API exécute en même temps |
+| `maxReadRequestUnits`, `maxWriteRequestUnits` | Le plafond de débit de la table |
+| `min…CapacityInOcu`, `max…CapacityInOcu` | Capacité de recherche. Un minimum de 0 descend à zéro en inactivité |
+| `timeoutSeconds`, `logLevel`, `enableTracing` | Le délai d'expiration des requêtes d'une API, le niveau de journal le plus bas (`DEBUG`, `INFO`, `WARN`, `ERROR`) et le traçage X-Ray |
+| `publicThrottle…`, `publicSuggestThrottle…` | Les limites distinctes de core API pour les appels sans connexion et pour les suggestions de recherche |
+| `enableSelfSignUp`, `enableMfa` | Si n'importe qui peut créer un compte, et si la MFA est obligatoire |
+| `studentPortal.allowSearchEngineIndexing` | Laisser les moteurs de recherche indexer les pages publiques. Désactivé sauf réglage ; `discava-production` l'active |
+| `studentPortal.linkedInOrganizationId` | L'identifiant de votre page d'organisation LinkedIn, nommée sur les certificats que les étudiants ajoutent à LinkedIn |
+
+`packages/common/infra-config/src/stages.types.ts` documente chaque réglage et sa valeur par défaut.
+
+Avec le WAF désactivé, les limites de requêtes, de concurrence et de débit sont ce qui borne le coût d'un afflux de requêtes. Relevez-les à mesure que l'usage réel grandit.
+
+## Surcharger sans commiter
+
+Les valeurs propres à votre compte, comme les domaines et les ARN de certificats, ne doivent pas être commitées dans un fork public. N'importe quel réglage de composant peut à la place être fourni par une variable nommée :
+
+```
+<STAGE>_INFRA_<COMPONENT>_<FIELD>
+```
+
+en majuscules avec underscores. Par exemple, `coreApi.throttleRateLimit` sur `discava-development` devient `DISCAVA_DEVELOPMENT_INFRA_CORE_API_THROTTLE_RATE_LIMIT`.
+
+Définissez-la comme **variable de l'environnement GitHub du stage**. Le workflow Deploy transmet chaque variable commençant par le préfixe du stage :
+
+```sh
+gh variable set DISCAVA_DEVELOPMENT_INFRA_CORE_API_THROTTLE_RATE_LIMIT \
+  --env discava-development --body 5
+```
+
+Les valeurs sont du texte brut sur une ligne : `true` ou `false`, un nombre entier, ou une liste séparée par des virgules pour les réglages `…_DOMAIN_NAMES`. Une valeur du mauvais type fait échouer le déploiement.
+
+En dehors des composants :
+
+- `<STAGE>_REGION` et `<STAGE>_ACCOUNT` surchargent le `region` et le `account` du stage
+- `<STAGE>_CAPTION_TRANSLATION_ENABLED` et `<STAGE>_CAPTION_TRANSLATION_MAX_LANGUAGES_PER_COURSE` surchargent la [traduction des sous-titres](#traduction-des-sous-titres)
+- `credentials` et `payouts` ne peuvent pas être surchargés. Modifiez-les dans `stages.config.ts`
+
+## Domaines personnalisés
+
+Chaque API, portail et distribution de médias peut avoir son propre domaine. Il vous faut, pour chacun :
+
+- Un **nom de domaine** que vous contrôlez
+- Un **certificat ACM émis** qui le couvre, dans la bonne région
+- Un **enregistrement DNS** qui y pointe, que vous créez après le déploiement
+
+| Composant | Variable du domaine | Région du certificat |
+| --- | --- | --- |
+| Core API | `…_INFRA_CORE_API_DOMAIN_NAME` | La région du stage |
+| Instructor API | `…_INFRA_INSTRUCTOR_API_DOMAIN_NAME` | La région du stage |
+| Admin API | `…_INFRA_ADMIN_API_DOMAIN_NAME` | La région du stage |
+| Payments (Stripe webhook API) | `…_INFRA_PAYMENTS_DOMAIN_NAME` | La région du stage |
+| Portail étudiant | `…_INFRA_STUDENT_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| Portail instructeur | `…_INFRA_INSTRUCTOR_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| Portail admin | `…_INFRA_ADMIN_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| Médias de leçon | `…_INFRA_LESSON_MEDIA_DOMAIN_NAMES` | `us-east-1` |
+| Médias publics | `…_INFRA_PUBLIC_MEDIA_DOMAIN_NAMES` | `us-east-1` |
+
+Chacun accepte aussi un `…_CERTIFICATE_ARN` correspondant. Un domaine n'est appliqué que si son certificat est aussi défini. Les portails et les médias acceptent plusieurs domaines séparés par des virgules ; une API en prend un seul.
+
+**Le plus simple pour les définir est de relancer le script de configuration.** Donnez-lui un domaine racine et il sert chaque composant depuis un sous-domaine fixe de celui-ci, trouve le certificat émis de chacun dans ACM et écrit les variables. Si un composant n'a pas de certificat, il liste ceux qui manquent et s'arrête avant de rien changer. Il ne couvre pas encore l'API admin ni l'API de paiements : définissez leurs variables vous-même. Lors d'une exécution ultérieure, appuyez sur Entrée pour garder le domaine racine proposé. L'effacer supprime les variables de domaine que le script a définies.
+
+```sh
+./scripts/setup-stage.sh discava-development
+```
+
+| Composant | Domaine pour la racine `example.com` |
+| --- | --- |
+| Core API | `core-api.example.com` |
+| Instructor API | `instructor-api.example.com` |
+| Portail étudiant | `example.com`, `www.example.com` |
+| Portail instructeur | `instructor.example.com` |
+| Portail admin | `admin.example.com` |
+| Médias de leçon | `lesson-media.example.com` |
+| Médias publics | `media.example.com` |
+
+Pour d'autres domaines, définissez vous-même les variables sur l'environnement GitHub.
+
+Trois règles à connaître :
+
+- **Chaque API a besoin de son propre certificat nommant exactement son domaine.** Pas un joker (wildcard), et pas un certificat partagé avec une autre API. Sinon un navigateur peut réutiliser une connexion pour deux API et recevoir des erreurs de la mauvaise.
+- **La lecture vidéo demande un domaine parent commun.** Quand les médias de leçon ont un domaine personnalisé, la lecture est autorisée par des cookies partagés entre l'API et les médias de leçon, donc les deux doivent se trouver sous un même parent, indiqué par `…_INFRA_LESSON_MEDIA_COOKIE_DOMAIN`. Le script de configuration le définit sur le domaine racine.
+- **Le DNS est à gérer par vous.** Après le déploiement, faites pointer chaque domaine vers sa cible : une distribution CloudFront pour les portails et les médias (les sorties de stack `…DistributionDomainName`), le domaine personnalisé API Gateway pour les API (la sortie `…DomainNameAlias` de la stack de l'API). D'ici là les domaines ne se résolvent pas, bien que les portails les utilisent déjà.
+
+Les domaines des portails sont repris automatiquement comme origines CORS autorisées des API et comme adresses de connexion et de déconnexion de Cognito.
+
+## E-mails de notification
+
+Les e-mails partent via SES. Vérifiez un domaine ou une adresse dans SES, dans la région du stage. Avec un domaine racine, le script de configuration fait le reste : une fois la racine une identité de domaine SES vérifiée, le relancer envoie les e-mails depuis `notifications@<root>`. Pour utiliser un autre expéditeur, définissez vous-même les variables ci-dessous ; le script garde un expéditeur que vous avez défini quand il est relancé :
+
+| Variable | Exemple |
+| --- | --- |
+| `…_INFRA_NOTIFICATIONS_FROM_ADDRESS` | `notifications@example.com` |
+| `…_INFRA_NOTIFICATIONS_SES_IDENTITY` | `example.com` |
+
+Si aucune n'est définie, aucun e-mail n'est envoyé et chacun est enregistré comme ignoré. Les notifications dans l'application fonctionnent dans tous les cas. Un nouveau compte SES est en sandbox et n'envoie qu'à des adresses vérifiées tant qu'AWS n'a pas accordé l'accès à la production.
+
+## Paiements
+
+Stripe ne demande **aucune configuration au déploiement** : aucun secret à créer et aucun webhook à enregistrer. Après le déploiement, un administrateur colle une clé Stripe dans la page Payments du portail admin, et Discava enregistre lui-même l'adresse de webhook du stage. <Link path="guides/payments">Cours payants et paiements</Link> détaille les étapes.
+
+La webhook API peut avoir son propre domaine, `…_INFRA_PAYMENTS_DOMAIN_NAME` dans le tableau ci-dessus. Si vous l'ajoutez ou le modifiez après avoir connecté Stripe, enregistrez de nouveau la clé sur la page Payments pour que la nouvelle adresse soit enregistrée.
+
+Pour payer les instructeurs, le compte Stripe doit avoir Connect activé. On s'attend à ce qu'une clé restreinte ait besoin d'un accès en écriture à Accounts, Account Links, Login Links et Transfers (les appels que font les versements) ; cette liste n'a pas encore été confirmée avec une vraie clé restreinte, donc utilisez une clé secrète si l'intégration ou les versements sont refusés. Changer le compte ou le mode Stripe connecté retient les revenus impayés de chaque instructeur : ils apparaissent comme Held, et l'exécution des versements n'envoie rien pour eux. <Link path="guides/earnings-and-payouts">Revenus et versements</Link> présente la vue de l'instructeur.
+
+### Réglages des versements
+
+L'entrée `payouts` d'un stage dans `stages.config.ts` définit ce que la plateforme garde et quand les instructeurs sont payés :
+
+| Réglage | Signification | Par défaut |
+| --- | --- | --- |
+| `platformFeeBasisPoints` | La commission de la plateforme sur le montant payé, en points de base (2000 correspond à 20 %). S'applique aux ventes enregistrées après un changement | `2000` |
+| `holdDays` | Nombre de jours pendant lesquels les revenus d'une vente sont retenus avant de pouvoir être versés, pour couvrir les remboursements | `14` |
+| `minimumPayoutMinor` | Le plus petit versement envoyé, dans la plus petite unité de la devise (1000 correspond à 10,00). Les soldes plus petits attendent | `1000` |
+
+`discava-development` retient les revenus pendant un jour, pour qu'un testeur les voie devenir payables rapidement. Une valeur qui pourrait produire un montant faux, comme une commission supérieure à 10000, fait échouer le build. L'exécution des versements est quotidienne.
+
+## Traduction des sous-titres
+
+Les sous-titres des vidéos sont traduits automatiquement avec Amazon Translate, facturé au caractère. L'entrée `captionTranslation` d'un stage borne ce coût :
+
+| Réglage | Signification | Par défaut |
+| --- | --- | --- |
+| `enabled` | Si le stage traduit les sous-titres du tout | `true` |
+| `maxLanguagesPerCourse` | Le nombre maximal de langues de sous-titres qu'un cours peut choisir, de 0 à 9 | `9` |
+
+`discava-development` autorise trois langues par cours.
+
+## Ajouter un stage
+
+1. Ajoutez une entrée à `stages.config.ts` à côté des deux existantes, avec les réglages qu'elle assouplit. Ajoutez `payouts` si les valeurs par défaut ne conviennent pas.
+2. Commitez et poussez.
+3. Lancez `./scripts/setup-stage.sh <new-stage>` pour créer ses rôles et son environnement GitHub.
+4. Lancez le workflow Deploy avec le nom du nouveau stage.
+
+Rien d'autre ne change : l'application CDK crée un stage pour chaque entrée du fichier.
+
+Si vous prévoyez de déployer le nouveau stage depuis votre machine avec des surcharges d'environnement, ajoutez aussi son préfixe aux `inputs` de la cible `synth` dans `packages/infra/project.json`, pour que le cache de Nx remarque quand une surcharge change.
+
+## Passer en production
+
+`discava-production` est prêt à être déployé tel quel. Avant l'arrivée de vrais utilisateurs :
+
+- Lancez le script de configuration pour lui, et initialisez CDK dans `us-east-1` quand il le demande (ses règles WAF y vivent)
+- <Link path="deploy/setup">Protégez son environnement GitHub</Link> avec des relecteurs obligatoires
+- Donnez-lui des domaines personnalisés et une identité SES vérifiée
+- Relisez les limites de requêtes dans `stages.config.ts` par rapport au trafic attendu
+- Si vous vendez des cours, relisez les réglages `payouts` et connectez une clé Stripe **live** dans la page Payments du portail admin

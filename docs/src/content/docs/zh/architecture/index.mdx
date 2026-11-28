@@ -1,0 +1,150 @@
+---
+title: 架构概览
+description: 构成 Discava 的各个组件，各自的职责，以及它们如何连接。
+sidebar:
+  order: 0
+  label: Overview
+---
+
+import Link from '@components/link.astro';
+
+Discava 是 AWS 上的一组无服务器组件。没人使用时什么都不运行：没有需要一直维持的服务器、容器或集群。
+
+## 系统一览
+
+```d2 title="Components and how they connect"
+direction: down
+
+users: "Students, instructors, admins"
+
+edge: "Websites" {
+  student: "Student portal"
+  instructor: "Instructor portal"
+  admin: "Admin portal"
+}
+
+identity: "Cognito\n(sign-in, groups)"
+
+apis: "APIs" {
+  core: "core-api"
+  instr: "instructor-api"
+  adm: "admin-api"
+}
+
+data: "Data" {
+  table: "Core table\n(DynamoDB)"
+  search: "Search\n(OpenSearch Serverless)"
+  lesson: "Lesson media\n(S3 + CloudFront)"
+  public: "Public media\n(S3 + CloudFront)"
+}
+
+async: "Background work" {
+  router: "Stream router"
+  handlers: "Feature handlers"
+  media: "Media pipeline\n(MediaConvert, Transcribe)"
+  router -> handlers: "one queue each"
+}
+
+email: "SES"
+stripe: "Stripe"
+pay: "Stripe webhook API"
+renderer: "Page renderer"
+
+users -> edge
+users -> identity: "sign in"
+edge -> apis: "tRPC over HTTPS"
+apis -> data.table
+apis.core -> data.search: "query"
+apis.instr -> async.media: "submit video"
+data.table -> async.router: "change stream"
+async.handlers -> data.table
+async.handlers -> data.search: "index"
+async.handlers -> email
+async.media -> data.lesson: "renditions"
+users -> data.lesson: "watch"
+apis.core -> stripe: "start checkout"
+stripe -> pay: "signed confirmation"
+pay -> data.table
+edge.student -> renderer: "public pages"
+renderer -> data.table: "read"
+```
+
+## 组件
+
+### 三个门户
+
+| 门户 | 用途 | 访问的 API |
+| --- | --- | --- |
+| **学生门户** | 浏览目录、购买和学习课程、测验、作业、讨论、证书 | core-api |
+| **讲师门户** | 构建课程并定价、优惠券、批改、分析、收入、回答学生 | core-api、instructor-api |
+| **管理员门户** | 分类、评价审核、证书、品牌和 Stripe 连接 | core-api、admin-api |
+
+每个门户都是一个 React 单页应用：静态文件放在私有 S3 存储桶中，由 CloudFront 提供服务。门户通过部署在它旁边的 `runtime-config.json` 文件得知 API 和登录页面的位置，所以同一个构建可以用于每个 stage。
+
+### 公开页面
+
+对爬虫或链接预览来说，单页应用只是一个空壳。所以学生门户的 CloudFront 分发把少数公开地址发送给一个 Lambda 函数，即**页面渲染函数**，它返回真正的 HTML：课程介绍页（`/learn/*`）、讲师主页（`/instructors/*`）、证书链接预览（`/certificates/*`）、`sitemap.xml` 和 `robots.txt`。设计见 <Link path="design/public-pages">公开页面</Link>。
+
+### 一个身份提供方
+
+一个 Cognito 用户池保存所有用户。三个用户组 `student`、`instructor` 和 `admin` 决定用户可以做什么。登录在 Cognito 的托管页面完成，门户拿到令牌后在每次 API 调用中带上。
+
+### 三个 API
+
+每个 API 都是 Lambda 函数前面的一个 API Gateway REST API，使用 [tRPC](https://trpc.io/) 通信。
+
+| API | 谁可以调用 | 示例 |
+| --- | --- | --- |
+| **core-api** | 任何已登录用户，外加少数公开过程 | 目录、报名、结账、课时内容、测验、作业、讨论、证书、搜索 |
+| **instructor-api** | `instructor` 成员 | 创建、编辑课程并定价、优惠券、上传媒体、批改、分析、收入和结算 |
+| **admin-api** | `admin` 成员 | 分类体系、评价审核、证书、品牌、Stripe 连接 |
+
+按受众拆分意味着每个 API 都有自己的函数、权限、请求限制和防火墙。学生的令牌无法触及仅限讲师的缺陷，学生流量激增也不会挤占讲师 API。
+
+### 一张表
+
+所有应用数据都放在一张 DynamoDB 表里，即**核心表**：课程、章节、课时、报名、进度、测验尝试、讨论、评价、证书、通知、优惠券、订单，以及讲师收入和结算。相关记录共用一个分区，所以一门课程的整个课程大纲只需一次查询。
+
+### 搜索
+
+一个 OpenSearch Serverless 集合包含两个索引：
+
+- **课程**：每一门已发布的课程。它负责目录的搜索、建议和过滤。
+- **转录**：课时视频的字幕文本。它让已报名的学生能找到课程中某句话出现的时刻。
+
+表是事实来源。索引由它的变更流填充，可以从中重建，API 从不向索引写入。
+
+### 媒体
+
+| 存储 | 存放内容 | 访问方式 |
+| --- | --- | --- |
+| **课程媒体** | 课时视频、字幕、文件和作业提交 | 私有。CloudFront 只向带有签名的请求提供，该签名由 API 在检查访问权限（例如报名情况）后签发 |
+| **上传存储桶** | 正在传入的文件 | 只能通过预签名 URL 写入，由处理任务读取，短期保存 |
+| **公开媒体** | 课程图片、讲师头像和平台品牌（徽标、图标、名称和颜色） | 任何人都可以通过 CloudFront 读取 |
+
+### 支付
+
+付费课程在 Stripe 托管的结账页面上购买，使用管理员在管理员门户中连接的 Stripe 账号。Stripe 向它自己的一个小型 API，即 **Stripe webhook API**，确认每笔付款，该 API 验证消息的签名并让学生报名。它与三个 tRPC API 分开，因为调用它的是 Stripe，而不是已登录用户。设计见 <Link path="design/payments">支付</Link>。
+
+### 后台任务
+
+有三件事发生在请求之外：
+
+- **响应数据变更。** 表的变更流只有一个读取方，即**流路由**，它把每个变更交给每个需要它的功能的队列。共有八个功能：进度重新计算（同时签发证书）、课程搜索索引、转录索引、分析、通知投递、记录讲师收入、字幕翻译和发布品牌。
+- **处理视频。** 上传的视频由 MediaConvert 转码为自适应流版本，然后由 Transcribe 生成字幕。Amazon Translate 把字幕翻译成课程的其他字幕语言。
+- **向讲师付款。** 每日运行以 Stripe 转账的方式，把到期的收入发给每位讲师。见 <Link path="design/instructor-payouts">讲师结算</Link>。
+
+## 设计原则
+
+- **只用无服务器。** 每个组件按使用量计费，并可缩容到零。
+- **只有一种做法。** 一个云、一个部署工具、一张表。需要配置、记录和测试的选项更少。
+- **默认安全。** 除非某个 stage 关闭，所有保护都是开启的。
+- **本地可运行。** Discava 用到的每个 AWS 服务都有本地替身，所以开发不需要 AWS 账号。
+
+## 继续阅读
+
+- <Link path="architecture/aws">在 AWS 上部署</Link>：各个堆栈、每个堆栈的内容和部署顺序
+- <Link path="architecture/flows">请求与数据流</Link>：登录、API 调用、视频的旅程，以及变更如何传播
+- <Link path="architecture/security">安全模型</Link>：谁能访问什么，以及每个 stage 可以开启的保护
+- <Link path="architecture/codebase">代码库地图</Link>：每个组件的代码在哪里
+- <Link path="design">设计</Link>：各个功能如何工作

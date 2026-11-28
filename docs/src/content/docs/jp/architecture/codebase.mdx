@@ -1,0 +1,120 @@
+---
+title: コードベースマップ
+description: 各コンポーネントのコードがモノレポのどこにあるか、そしてローカル開発が AWS をどう再現しているか。
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Discava は、[Nx](https://nx.dev/) と pnpm で管理する TypeScript のモノレポで、[Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws) でスキャフォールドされています。
+
+## パッケージ
+
+```
+packages/
+├── websites/
+│   ├── student-portal/      React + Vite + TanStack Router
+│   ├── instructor-portal/
+│   └── admin-portal/
+├── apis/
+│   ├── core-api/            tRPC, any signed-in user; also the public page renderer
+│   ├── instructor-api/      tRPC, instructors only
+│   └── admin-api/           tRPC, admins only
+├── databases/
+│   ├── core-table/          DynamoDB entities and write helpers (ElectroDB)
+│   └── search/              OpenSearch client, index definitions and index sync
+├── events/                  Lambda handlers for AWS-triggered events
+├── infra/                   The CDK app: stages and stacks
+├── common/
+│   ├── constructs/          CDK constructs, one per component
+│   ├── infra-config/        Per-stage deployment settings, local ports and origins
+│   ├── branding/            Brand rules shared by portals and backend
+│   ├── server-utils/        Code shared by backend functions
+│   ├── web-utils/           Non-UI code shared by portals
+│   ├── shadcn/              UI components and the shell shared by portals
+│   └── tiptap/              Rich-text document helpers
+├── tooling/
+│   ├── local-dev/           The Docker services local development runs instead of AWS
+│   ├── deploy/              Deploy and operations scripts
+│   └── agent/               CI and pull request tooling
+└── e2e/                     Playwright end-to-end tests against the local stack
+docs/                        This site
+scripts/setup-stage.sh       One-time AWS and GitHub setup per stage
+```
+
+各パッケージは `@discava/<name>` という名前の Nx プロジェクトです。`common/` と `tooling/` の下のパッケージは、フォルダー名が接頭辞になります。`@discava/common-web-utils`、`@discava/tooling-deploy` などです。
+
+## コンポーネントからコードへ
+
+| コンポーネント | ランタイムコード | インフラ |
+| --- | --- | --- |
+| ポータル | `packages/websites/<portal>` | `constructs/src/app/static-websites`, `WebsitesStack` |
+| API | `packages/apis/<api>` | `constructs/src/app/apis`, `<Api>Stack` |
+| コアテーブル | `packages/databases/core-table` | `constructs/src/app/dynamodb`, `DataStack` |
+| ページレンダラー | `packages/apis/core-api/src/page-renderer` | `constructs/src/app/static-websites/student-portal.ts`, `WebsitesStack` |
+| 検索 | `packages/databases/search` | `constructs/src/app/opensearch`, `DataStack` |
+| ストリームルーターと機能ハンドラー | `packages/events/src/router`、およびトピックごとのフォルダー（`progress`、`search`、`analytics`、`notifications`、`earnings`、`media`、`branding`） | `constructs/src/core/stream-router.ts`, `StreamRouterStack` |
+| メディアパイプライン | `packages/events/src/media` | `constructs/src/app/media-convert`, `MediaPipelineStack` |
+| Stripe webhook | `packages/events/src/payments` | `constructs/src/app/apis/stripe-webhook-api.ts`, `PaymentsStack` |
+| 支払い処理 | `packages/events/src/earnings` | `PayoutsStack` |
+| 証明書リマインダー | `packages/events/src/certificates` | `StreamRouterStack` |
+| Cognito トリガー | `packages/events/src/identity` | `DataStack` |
+
+ストリーム機能自体は、1つのリスト `packages/databases/core-table/src/helpers/stream-features.ts` の `STREAM_FEATURES` に登録されています。デプロイされたストリームルーターも、ローカルのイベントランナーも、これを読み取ります。
+
+## API の構成
+
+各 API は同じ形をしています。
+
+| ファイル | 役割 |
+| --- | --- |
+| `src/init.ts` | プロシージャの型を作ります: `publicProcedure`、`protectedProcedure`、およびテーブルアクセスを加えたもの |
+| `src/router.ts` | tRPC ルーター。API が公開するすべてのプロシージャ |
+| `src/procedures/` | プロシージャ。それぞれのテストと並べて置きます |
+| `src/handler.ts` | Lambda のエントリーポイント |
+| `src/local-server.ts` | 同じルーターをローカルで提供するもの |
+
+core-api にはもう1つエントリーポイント `src/page-renderer/` があり、ローカルで提供するための `src/local-page-renderer.ts` があります。
+
+認証ミドルウェアや Lambda アダプターなどの共通部分は、`packages/common/server-utils` に1か所だけあります。
+
+ポータルは各 API のルーターの**型**をインポートするため、プロシージャの入力と出力はコンパイル時にエンドツーエンドで検査されます。
+
+## レコードをまたぐルール
+
+すべての API とハンドラーが同じテーブルに書き込みます。複数の書き込み手が守るべきルール（たとえば「受講生が使用したアイテムは削除できない」）は、`core-table` のヘルパーとして1か所で実装し、すべての書き込み手がそれを呼び出します。そうしたルールにはそれぞれ**不変条件のチェック**があり、エンドツーエンドテストは、すべてのシナリオの後でそれらをテーブルに対してすべて実行します。
+
+## ローカル開発は AWS を再現する
+
+`pnpm dev` は、同じコードをローカルの代替サービスに対して実行します。
+
+| AWS 上 | ローカル |
+| --- | --- |
+| CloudFront + S3 ウェブサイト | Vite 開発サーバー |
+| API Gateway + Lambda | API ごとのローカル HTTP サーバー |
+| ページレンダラー | ポート 2026 のローカル HTTP サーバー |
+| Cognito | プリセットユーザー付きのローカル OIDC サーバー |
+| DynamoDB | Docker 上の DynamoDB local |
+| S3 | Docker 上の S3Mock |
+| SQS | Docker 上の ElasticMQ |
+| OpenSearch Serverless | Docker 上の OpenSearch |
+| DynamoDB Streams、EventBridge、Scheduler | イベントランナー（`packages/events/src/local`） |
+| MediaConvert | Docker 上の ffmpeg |
+| Transcribe | プレースホルダーの字幕トラックを書き出す代替 |
+| Translate | 各字幕の先頭に翻訳先の言語を付ける代替 |
+| SES | ローカルの受信トレイに保存されるメール |
+| Stripe | その API、チェックアウトページ、webhook 配信、Connect の代替 |
+| Secrets Manager（Stripe のシークレット） | `tmp/local-dev/secrets/` 下の Git 管理外のファイル |
+
+イベントランナーは、ストリーム機能の同じレジストリを通じて、AWS が呼び出すのと同じハンドラーを動かします。そのため、バックグラウンドの動作はどちらでも同じです。コマンドは <Link path="guides/getting-started">Discava をローカルで実行する</Link> にあります。
+
+## リポジトリでの作業
+
+```sh
+pnpm build    # compile, bundle, synthesize and scan every project
+pnpm lint     # format and lint with Biome
+pnpm test     # run every project's tests
+```
+
+規約、テスト、変更の進め方の詳細は [DEVELOPMENT.md](https://github.com/AlexTo/discava/blob/main/DEVELOPMENT.md) にあります。

@@ -1,0 +1,136 @@
+---
+title: Pagamenti agli istruttori
+description: Come i guadagni degli istruttori vengono registrati dagli ordini, il registro e i suoi riepiloghi giornalieri, l'esecuzione giornaliera dei pagamenti e il suo recupero, e la regola dell'account di pagamento.
+sidebar:
+  order: 11
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261116-013137-instructor-payouts/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013137-instructor-payouts/)
+
+## La regola
+
+**Ogni vendita e ogni rimborso viene registrato una volta sola, e nessun guadagno viene pagato due volte.** I guadagni sono un registro append-only costruito dagli <Link path="design/payments">ordini</Link>, e un pagamento prende voci del registro, mai un importo calcolato a parte.
+
+## Le regole sui ricavi
+
+`helpers/revenue.ts` in core-table è aritmetica pura sugli interi, nella più piccola unità di una valuta.
+
+- **Commissione.** La piattaforma trattiene una commissione sull'importo pagato, impostata per stage in punti base (2000 è il 20%) e arrotondata per eccesso a metà. Una vendita mantiene la commissione con cui è stata registrata: cambiare l'impostazione riguarda solo le vendite successive.
+- **Ripartizione.** Gli istruttori di un corso si dividono una vendita in parti uguali. La ripartizione è applicata separatamente al prezzo di listino, all'importo pagato e alla commissione, e le unità di resto vanno una ciascuna ai primi istruttori per ID, quindi le quote sommano sempre all'intero.
+- **Netto.** Il netto di un istruttore è la sua quota dell'importo pagato meno la sua quota della commissione.
+- **Rimborso.** Un rimborso restituisce la quota dell'istruttore sull'importo rimborsato, meno la commissione restituita su di esso. Ogni passo è calcolato come la quota del nuovo totale rimborsato meno la quota di quello registrato, quindi comunque un rimborso sia suddiviso in passi, le voci sommano esattamente una volta che l'ordine è interamente rimborsato. Un rimborso è limitato all'importo pagato.
+
+## Il registro
+
+| Record | Contiene |
+| --- | --- |
+| `earningOrder` | L'istantanea del registro di una vendita, e il totale rimborsato registrato finora |
+| `earningEntry` | Una riga per istruttore per vendita o passo di rimborso: lordo, sconto, rimborso, commissione e netto, quando viene rilasciata, e il pagamento che l'ha presa |
+| `earningDay` | La somma delle voci di un istruttore per un corso, una valuta e un giorno UTC |
+
+`helpers/earning.ts` in core-table è l'unico scrittore di tutti e tre, con una eccezione: `helpers/payout.ts` è l'unico codice che imposta o azzera il `payoutId` di una voce. Una vendita, e ogni passo di rimborso, è **una transazione** che contiene le voci, le somme sulle righe dei giorni e il contatore dell'ordine, così il report e il registro non possono essere in disaccordo.
+
+Una voce non nomina mai l'acquirente. Porta anche l'account Stripe e la modalità con cui il suo ordine è stato pagato: vedi [la regola dell'account di pagamento](#la-regola-dellaccount-di-pagamento).
+
+## Registrazione
+
+La registrazione è una <Link path="design/stream-event-router">funzione di stream</Link>, `earnings-recording`. Riceve ogni modifica a un `order` e agisce su quelle che sono vendite. Un ordine è una vendita quando valgono entrambe:
+
+- è `paid`, oppure `refunded` con il motivo `requested`;
+- il suo importo è sopra zero.
+
+Un ordine rimborsato automaticamente perché non consegnabile non è mai stato una vendita, e nemmeno l'ordine a importo zero di un coupon che copre l'intero prezzo. Per un ordine scontato, il lordo della voce è il prezzo di listino e il suo sconto è la differenza rispetto all'importo pagato.
+
+Il router consegna almeno una volta e in qualsiasi ordine, e il gestore è costruito per questo:
+
+- **Ogni immagine dell'ordine porta tutto ciò che serve**, quindi una qualsiasi basta a registrare la vendita e ad aggiornare il suo totale rimborsato. Nessun record aspetta un altro.
+- **I duplicati non cambiano nulla.** Le voci di una vendita sono create con la condizione che non esistano, e un totale rimborsato che il registro ha già raggiunto non registra nulla.
+- **L'ordine non conta.** Un'immagine più vecchia che arriva in ritardo trova un totale registrato più alto e non fa nulla.
+- **Un errore ritenta il batch.** Tutto ciò che può essere applicato lo è, poi il batch lancia un errore, e ciò che è stato applicato non fa nulla la seconda volta.
+
+La voce di una vendita viene rilasciata `holdDays` dopo che l'ordine è stato pagato. La voce di un rimborso viene rilasciata subito, quindi riduce il pagamento successivo.
+
+## Le letture della pagina Earnings
+
+instructor-api serve le cifre di chi chiama e non accetta alcun ID istruttore come input.
+
+- `earnings.report` somma le righe dei giorni su un periodo di al massimo 366 giorni: una query a intervallo, raggruppata per valuta e corso.
+- `earnings.lines` pagina le voci di un corso, costruite campo per campo così nient'altro del record raggiunge chi chiama.
+- `payout.overview` ordina le voci che nessun pagamento ha preso in **on hold** [in attesa], **waiting for account setup** [in attesa della configurazione dell'account], **ready** [pronte] e **held** [trattenute], per valuta, ed elenca i pagamenti dell'istruttore.
+
+## Account di pagamento
+
+Un istruttore viene pagato su un account Stripe Connect Express.
+
+- `payout.startOnboarding` crea l'account, in modo idempotente, e restituisce il link di onboarding di Stripe.
+- `payout.account` legge lo stato dell'account da Stripe e lo salva in `payoutAccount` quando è cambiato. Se Stripe non è raggiungibile, restituisce lo stato salvato contrassegnato `stale`.
+- `payout.dashboardLink` restituisce un link di accesso alla dashboard Stripe Express dell'istruttore, una volta terminato l'onboarding.
+
+| Stato | Significato |
+| --- | --- |
+| `not_started` | Ancora nessun account. Non viene salvato nulla |
+| `in_progress` | Il modulo di Stripe non è finito |
+| `active` | Stripe può inviargli trasferimenti e pagamenti |
+| `restricted` | Stripe ha bisogno di qualcosa in più |
+
+Qui nulla chiama Stripe a meno che la connessione della piattaforma sia attiva. Senza di essa, `payout.account` risponde `unavailable`.
+
+## L'esecuzione dei pagamenti
+
+Una funzione Lambda, nello stack `Payouts`, viene eseguita una volta al giorno con una schedulazione EventBridge. Può leggere la chiave Stripe e nient'altro dei segreti.
+
+1. **Legarsi all'account di pagamento.** L'esecuzione lavora per l'account e la modalità correnti della connessione, e solo con una chiave che risulta appartenergli.
+2. **Recuperare.** I pagamenti che un'esecuzione precedente ha lasciato non conclusi vengono finiti per primi: uno ancora `collecting` o `releasing` restituisce le sue voci, e uno `pending` viene concluso come descritto sotto.
+3. **Per ogni istruttore con un account attivo,** rileggere l'account da Stripe. Uno che non è più attivo ha il suo nuovo stato salvato e viene saltato.
+4. **Per valuta,** sommare le voci rilasciate che nessun pagamento ha preso. Una somma sotto il minimo dello stage, o non sopra zero, aspetta.
+5. **Raccogliere, sigillare e inviare.** Un pagamento viene creato `collecting`, le sue voci vengono collegate in batch da 99 (una transazione contiene 100 item), e viene sigillato `pending`. Poi il trasferimento viene creato in Stripe, con l'ID del pagamento come chiave di idempotenza e gruppo di trasferimento, e il pagamento viene contrassegnato `sent`.
+
+| Stato | Significato |
+| --- | --- |
+| `collecting` | Le voci vengono collegate |
+| `pending` | Sigillato. Il suo trasferimento potrebbe esistere o no |
+| `sent` | Stripe ha accettato il trasferimento |
+| `releasing` | Restituisce le sue voci |
+| `failed` | Stripe ha rifiutato il trasferimento. Le sue voci sono di nuovo aperte |
+
+### Perché nulla viene pagato due volte
+
+- Una voce viene collegata con la condizione che non abbia un pagamento, quindi due esecuzioni sovrapposte non possono prenderla entrambe.
+- Un pagamento viene contrassegnato `failed`, e le sue voci riaperte, **solo quando Stripe ha rifiutato con certezza** il trasferimento: una richiesta non valida o un errore di permessi. Un timeout, un 5xx, un limite di frequenza o qualsiasi cosa non riconosciuta lascia il pagamento `pending`.
+- Il recupero cerca il trasferimento di un pagamento `pending` tramite il suo gruppo di trasferimento prima di riprovare. Se esiste, il pagamento viene contrassegnato inviato. Se no, viene usata di nuovo la stessa chiave di idempotenza.
+- Un'esecuzione reclama un pagamento non concluso prima di toccarlo, e lascia stare uno su cui un'altra esecuzione ha lavorato negli ultimi 15 minuti.
+
+L'errore di un istruttore non ferma gli altri, ma l'esecuzione termina comunque come fallita così che un operatore la veda. Se Stripe rifiuta la chiave salvata, l'esecuzione si ferma subito, dato che nessuna chiamata successiva può riuscire.
+
+## La regola dell'account di pagamento
+
+Un guadagno appartiene all'account Stripe e alla modalità con cui il suo ordine è stato pagato, e il denaro si muove solo dentro quell'account. Dopo che un amministratore cambia account o modalità:
+
+- I guadagni non pagati del vecchio account sono **trattenuti**. L'esecuzione non invia nulla per essi, e la pagina Earnings dice all'istruttore di contattare la piattaforma.
+- L'account di pagamento di ogni istruttore è per account di pagamento, quindi configurano di nuovo i pagamenti.
+- Tornare indietro rende di nuovo pagabili i vecchi guadagni come prima.
+
+## Impostazioni
+
+Per stage, sotto `payouts` in `stages.config.ts`. Vedi <Link path="deploy/configuration">Configurazione dello stage</Link>.
+
+## Invarianti
+
+`helpers/invariants/earnings.ts` in core-table controlla, dopo ogni scenario end-to-end, che le voci corrispondano al loro ordine, che i rimborsi non superino mai quanto pagato, che le righe dei giorni uguaglino la somma delle loro voci, che l'importo di un pagamento uguagli le sue voci, e che ogni account di pagamento sia ben formato.
+
+## Sviluppo locale
+
+Lo stand-in di Stripe copre la parte Connect: account Express, link di onboarding, link di dashboard e trasferimenti.
+
+- `POST http://localhost:2024/payout-run` esegue una volta l'esecuzione dei pagamenti. Un corpo facoltativo `{ "graceSeconds": n }` sostituisce la tolleranza di recupero di 15 minuti.
+- `LOCAL_PAYOUT_RUN_INTERVAL_SECONDS` la esegue con un timer.
+- `GET /stripe/test/transfers` elenca i trasferimenti effettuati, e `POST /stripe/test/transfers/fail-next` fa fallire il prossimo trasferimento in un modo scelto (per esempio `rejected` o `timeout`).
+
+## Limiti
+
+- Nessuna gestione di tasse, fatture o moduli fiscali.
+- Nessuna conversione di valuta: ogni valuta ha il proprio saldo e i propri pagamenti.
+- Contestazioni e chargeback non vengono registrati.
+- I guadagni trattenuti vengono pagati a mano dalla piattaforma. Nulla li sposta sul nuovo account.

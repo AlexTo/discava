@@ -1,0 +1,83 @@
+---
+title: Triển khai từ máy của bạn
+description: Triển khai, cập nhật và hủy một stage bằng thông tin xác thực AWS của chính bạn, không dùng GitHub Actions.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+GitHub Actions là cách triển khai được khuyến nghị. Triển khai từ máy của bạn hữu ích cho một stage thử nghiệm cá nhân hoặc khi gỡ lỗi một lần triển khai.
+
+## Trước khi bắt đầu
+
+- Một bản clone đã cài dependency (`pnpm i`), và AWS CLI
+- Thông tin xác thực AWS trong shell của bạn cho tài khoản đích (`aws sts get-caller-identity` chạy được)
+- Một region, trong `AWS_REGION` hoặc profile AWS của bạn
+- CDK đã được bootstrap ở region đó, một lần cho mỗi tài khoản và region:
+
+  ```sh
+  pnpm exec cdk bootstrap aws://<account-id>/<region>
+  ```
+
+  Một stage có WAF trên các cổng hoặc media của nó cũng cần bootstrap `us-east-1`.
+
+## Triển khai
+
+```sh
+pnpm nx deploy @discava/infra "discava-development/*"
+```
+
+Mẫu `<stage>/*` chọn mọi stack trong stage. Lệnh này build các cổng và hàm Lambda, synthesize các template và triển khai chúng mà không hỏi duyệt.
+
+Để luôn dùng một profile AWS có tên cho một stage, hãy đặt `credentials` của nó trong `packages/common/infra-config/src/stages.config.ts`. Các lệnh deploy, destroy và reindex trên trang này khi đó sẽ dùng nó:
+
+```ts
+'discava-development': {
+  credentials: { type: 'profile', profile: 'my-profile' },
+  region: 'eu-west-1',
+  infra: { /* … */ },
+},
+```
+
+## Khác biệt so với triển khai bằng GitHub
+
+| | GitHub Actions | Máy của bạn |
+| --- | --- | --- |
+| Thông tin xác thực | Các deploy role và execution role có phạm vi giới hạn của stage | Của bạn, qua các bootstrap role của CDK |
+| Permissions boundary | Áp dụng cho mọi role | Không áp dụng |
+| Ghi đè cấu hình | Đọc từ các biến của GitHub environment | Đọc từ shell của bạn: `export DISCAVA_DEVELOPMENT_INFRA_…` trước khi triển khai |
+| Quét lỗ hổng | Chạy trước | Tự chạy `pnpm trivy` (cần Docker) |
+
+Vì các ghi đè đến từ shell của bạn, một lần triển khai cục bộ của stage đang dùng tên miền riêng trên GitHub sẽ **gỡ chúng** trừ khi bạn export cùng các biến đó. Hãy chọn một cách triển khai cho mỗi stage và giữ nguyên.
+
+## Các script bảo trì
+
+Những script này chạy từ máy của bạn trên một stage đã triển khai, dù nó được triển khai bằng cách nào. Không cái nào cần thiết trong sử dụng bình thường: các search index và phân tích tự giữ cho cập nhật.
+
+| Khi nào | Lệnh |
+| --- | --- |
+| Dựng lại index tìm kiếm khóa học, ví dụ sau một lần triển khai thêm một trường tìm kiếm | `pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development` |
+| Dựng lại index tìm kiếm bản chép lời, cho mọi khóa học hoặc một khóa | `pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development [--course=<courseId>]` |
+| Tính lại các số liệu phân tích của một khóa học từ các bản ghi của nó | `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` |
+| Ghi các danh mục khởi đầu | `pnpm nx run @discava/tooling-deploy:seed-categories` |
+
+Hai lệnh reindex tra cứu hàm reindex của stage trong các stack CloudFormation của nó và gọi nó, nên chúng chỉ cần thông tin xác thực AWS và tên stage. Không có `--stage`, `reindex-transcripts` chạy trên stack cục bộ.
+
+Hai lệnh cuối ghi thẳng vào bảng. Hãy trỏ chúng tới bảng của stage trước, nếu không chúng ghi vào bảng phát triển cục bộ:
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+export DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}"
+```
+
+## Hủy
+
+```sh
+pnpm nx destroy @discava/infra "discava-development/*"
+```
+
+CDK yêu cầu bạn xác nhận. `discava-development` xóa mọi thứ, kể cả dữ liệu. `discava-production` giữ lại các tài nguyên có trạng thái của nó (trong đó có user pool, bảng, các media bucket và search collection) khi các stack của nó bị xóa, và bật bảo vệ chống xóa: gỡ chúng là một bước thủ công, có chủ đích.
+
+Các role và policy mà <Link path="deploy/setup">script setup</Link> đã tạo không thuộc stack nào. Hãy xóa chúng trong console IAM nếu bạn không còn cần.

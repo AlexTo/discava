@@ -1,0 +1,131 @@
+---
+title: ストリームイベントルーター
+description: "機能がコアテーブルの変更に反応する仕組み。登録、キューと失敗キュー、ハンドラーの責務、ローカルでの動作、再ドライブについて説明します。"
+sidebar:
+  order: 7
+---
+
+**仕様:** [`specs/20261116-183449-stream-event-router/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-183449-stream-event-router/)
+
+コアテーブルの DynamoDB ストリームの**読み取り役は 1 つだけ**です。ストリームルーターです。ルーターは各変更を、それを必要とするすべての機能のキューに送ります。各機能のハンドラーは自分のキューを読みます。
+
+テーブルの変更に反応する機能は、登録、ハンドラー、ハンドラーの配線(後述)を追加します。独自のキュー、アラーム、ストリームマッピングは追加しません。現在、8 つの機能が登録されています。[下の表](#監視するメトリクス)に一覧があります。
+
+```d2 title="One stream reader, one queue and failure queue per feature"
+table: "Core table"
+stream: "DynamoDB Stream"
+router: "Stream router"
+pq: "progress-recalculation queue"
+sq: "search-indexing queue"
+pf: "progress failure queue"
+sf: "search failure queue"
+ph: "progress handler"
+sh: "search handler"
+
+table -> stream
+stream -> router
+router -> pq: "filters match"
+router -> sq: "filters match"
+pq -> ph
+sq -> sh
+pq -> pf: "after maxReceiveCount"
+sq -> sf: "after maxReceiveCount"
+```
+
+## 登録
+
+`packages/databases/core-table/src/helpers/stream-features.ts` の `STREAM_FEATURES` は、デプロイされるスタックとローカルのイベントランナーの両方が読む唯一の定義です。
+
+| フィールド | 意味 |
+|---|---|
+| `name` | 一意の kebab-case。キュー、失敗キュー、アラーム、ハンドラーの名前になります |
+| `filters` | 機能が必要とするレコード。`eventName`(`INSERT`、`MODIFY`、`REMOVE`)、見る対象の `image`(`NewImage` または `OldImage`)、`entities`(ElectroDB のエンティティ名)で指定します。いずれかのフィルターを通ったレコードが機能に渡されます |
+| `handler` | 機能のキューを読む `events-*` 関数 |
+| `batch` | `maxRecords` と `windowSeconds`。ハンドラー 1 回の実行あたり、何件の変更を、どれだけ待って集めるか |
+| `maxReceiveCount` | メッセージが失敗キューに移るまでに受信される回数 |
+| `maxConcurrency` | ハンドラーの同時実行数の上限(任意。2 以上。イベントソースマッピングの最小値です) |
+
+`featuresFor(record)` が唯一のマッチングロジックです。ルーターとローカルランナーの両方がこれを呼ぶので、結果が食い違うことはありません。レコードは、一致するフィルターを持つすべての機能に、それぞれ別のコピーとして渡されます。それ以外の機能には渡されません。どれにも一致しないレコードは何も生成しません。
+
+各機能のフィルターとマッチャーは、レジストリの隣にある専用モジュールにあります(`PROGRESS_STREAM_FILTERS` と `matchesProgressStreamFilters` を持つ `progress-stream.ts`、`search-stream.ts` など)。`featuresFor` はそれらのマッチャーを呼びます。
+
+次の場合はテストが失敗します。名前が重複している。フィルターがコアテーブルに定義されていないエンティティを指している。フィルターがサンプルレコードのどれにも一致しない(`stream-features.test.ts`)。`handler` がどの関数にも対応しない(`packages/events` の `handlers.test.ts`)。
+
+## 機能を追加する
+
+1. `STREAM_FEATURES` にエントリーを追加します。
+2. `packages/events` にハンドラーを書き、`ts#lambda-function` で `events-*` ラッパーを作ります。レコードは `sqsToStreamRecords`(`src/router/sqs-stream-records.ts`)経由で読みます。これはキューのメッセージをストリームレコードに展開します。
+3. `packages/events/src/router/handlers.ts` の `HANDLERS` にハンドラーを追加します。ローカルランナーはここを通じてディスパッチします。登録の `handler` がここにない場合、またはどの機能も使わないハンドラーがある場合、`handlers.test.ts` が失敗します。
+4. `StreamRouterStack`(`packages/infra/src/stacks/stream-router-stack.ts`)でハンドラーの Lambda を作ります。`createProgressRecalculationLambda` や `createSearchIndexingLambda` と同じ方法です。`events-*` 関数を作り、読み書きするもの(コアテーブル、デプロイ時の設定など)を与え、`StreamRouter` に渡す `handlers` オブジェクトに機能の名前をキーとして追加します。これがないと、`StreamRouter` は synth 時に `No handler given for stream feature '<name>'` を投げます。
+5. ハンドラーを渡すと、`StreamRouter` コンストラクトがエントリーからキュー、失敗キュー、アラーム、イベントソースマッピングを作り、ローカルランナーも同等のものを作ります。
+6. ハンドラーの重複配信テストと順序入れ替えテスト(後述)を書きます。
+7. 機能のキューメトリクスを[下の一覧](#監視するメトリクス)に追加します。
+
+## コンストラクトが機能ごとに作るもの
+
+- **キュー**。可視性タイムアウトはハンドラーのタイムアウトの 6 倍です。
+- **失敗キュー**。`maxReceiveCount` 回受信されたメッセージを保持し、14 日間保管します。
+- **アラーム**。失敗キューにメッセージが 1 件でもあればアラーム状態になります。通知先はなく、CloudWatch コンソールに表示されます。
+- キューからハンドラーへの**イベントソースマッピング**。登録の `batch` と `maxConcurrency` を使います。
+
+すべてのキューは、ローテーション付きの 1 つのカスタマー管理 KMS キーを共有します。ステージは、コアテーブルと同様に `enableKmsEncryption: false` で SQS 管理の暗号化に切り替えられます。メッセージにはテーブルレコード全体が入るので、テーブルのデータとして扱ってください。
+
+ルーターには、送信できないレコード(メッセージには大きすぎる、またはキューに拒否された)用の独自の失敗キューとアラーム(`StreamRouterFailures`)があります。ここにはレコードの説明(イベント ID、キー、エンティティ、機能、サイズ、理由。内容は含みません)が保持され、テーブルから探せるようになっています。ストリームマッピング自体の失敗したバッチ(シャードとシーケンス番号)もここに入ります。一時的な理由で送信に失敗した場合、ストリームマッピングがそのレコードだけを再試行します。
+
+## ハンドラーの責務
+
+ルーターは、レコード単位の順序も、ちょうど 1 回の配信も約束しません。すべてのハンドラーは、同じレコードを 2 回処理しても、任意の順序で処理しても安全でなければなりません。また、その方法をファイル先頭のコメントに書かなければなりません。
+
+- 順序が重要な場合は、レコードだけから結果を出さず、**現在のデータから結果を導きます**。検索インデックスは、変更からコースの識別情報だけを読み取り、コアテーブルからコースを読み直します。公開されていればインデックスし、公開されていない、または存在しなければ削除します。進捗の再計算は、実行のたびにカリキュラムと完了記録から各受講者の進捗を計算し直します。
+- 処理できない変更(たとえばコースを指していないもの)は、スキップせずに**失敗させます**。そうすれば失敗キューに入り、誰かが確認できます。
+- レコード自体から積み上がるカウンターなどの値(変更を 2 回適用したり順序を入れ替えたりするとずれます)には、重複配信と順序入れ替えで同じ結果になることを確かめる独自のチェックが必要です。そうでなければ、テーブルから再計算してください。
+
+新しい機能のテストには、重複配信と順序入れ替えのテストを含めます。
+
+## 失敗と再ドライブ
+
+ハンドラーが例外を投げると、可視性タイムアウトの後にメッセージはキューに戻ります。`maxReceiveCount` 回受信されると、メッセージはその機能の失敗キューに移り、後続の変更を妨げなくなります。他の機能には影響しません。
+
+原因を修正したら、キューサービス自身の再ドライブでメッセージを再生します。ハンドラーは再実行しても安全なので、再生用のツールは作られていません。
+
+デプロイ済みのステージでは、SQS コンソールで失敗キューを開き、**Start DLQ redrive** を選んで機能のキューへ戻します(または `aws sqs start-message-move-task --source-arn <failure queue ARN> --destination-arn <feature queue ARN>` を使います)。失敗キューのアラームが OK に戻ることを確認してください。
+
+## 監視するメトリクス
+
+すべての SQS キューは、`AWS/SQS` 名前空間に `QueueName` ディメンション付きで、深さと経過時間のメトリクスを公開します。
+
+- 機能のキューの **`ApproximateNumberOfMessagesVisible`**: 待機中の変更。バーストの合間にほぼゼロへ戻るはずです。
+- 機能のキューの **`ApproximateAgeOfOldestMessage`**: ハンドラーがどれだけ遅れているか。深さが変わらず経過時間だけが増えている場合は、ハンドラーが詰まっているか、スロットリングされています。
+- 機能の失敗キューの **`ApproximateNumberOfMessagesVisible`**: ゼロを超えていれば、脇に置かれた作業があり、その機能のアラームが作動します。
+
+| 機能 | キュー | 失敗キュー |
+|---|---|---|
+| `progress-recalculation` | `ProgressRecalculationQueue` | `ProgressRecalculationFailures` |
+| `search-indexing` | `SearchIndexingQueue` | `SearchIndexingFailures` |
+| `transcript-indexing` | `TranscriptIndexingQueue` | `TranscriptIndexingFailures` |
+| `analytics-update` | `AnalyticsUpdateQueue` | `AnalyticsUpdateFailures` |
+| `earnings-recording` | `EarningsRecordingQueue` | `EarningsRecordingFailures` |
+| `notification-delivery` | `NotificationDeliveryQueue` | `NotificationDeliveryFailures` |
+| `caption-translation` | `CaptionTranslationQueue` | `CaptionTranslationFailures` |
+| `brand-publishing` | `BrandPublishingQueue` | `BrandPublishingFailures` |
+
+名前はコンストラクトの論理 ID です(デプロイされたキュー名にはスタックのプレフィックスとサフィックスが付きます)。新しい機能は、ここに行を追加します。
+
+## ローカルでの動作
+
+`pnpm dev` は、同じルーターをイベントランナー(`packages/events/src/local`)で実行します。キューには ElasticMQ(SQS API 互換、Docker 上、インメモリ)を使い、登録ごとに 1 つの機能ランナーが動きます。デプロイされたルーターと同じ `STREAM_FEATURES` と `featuresFor` を使い、各機能のバッチサイズとウィンドウも保ちます。`maxReceiveCount` 回受信されたメッセージは機能の失敗キューに移り、ログに記録されます。AWS アカウントは不要です。
+
+ランナー(ポート 2024)には、ローカルキューの確認と再生用のルートがあります。
+
+```sh
+# queue and failure queue counts per feature
+curl http://localhost:2024/router/queues
+
+# move a feature's failed messages back to its queue
+curl -X POST http://localhost:2024/router/redrive/search-indexing
+
+# make a feature's next 5 batches fail, to reproduce a failure end to end
+curl -X POST http://localhost:2024/router/fail/search-indexing -d '{"batches": 5}'
+```
+
+この再ドライブはランナーの小さなヘルパーで、キューサービスの再ドライブではありません(ElasticMQ では文書化されていません)。キューはインメモリなので、`pnpm dev` を止めると空になります。

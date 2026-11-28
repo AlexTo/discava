@@ -1,0 +1,77 @@
+---
+title: Bài học video
+description: Tốc độ và phím tắt của trình phát video, phụ đề và phụ đề tự động dịch, bản ghi lời thoại, tìm kiếm những gì đã nói trong một khóa học, và câu hỏi bên trong video.
+---
+
+import Link from '@components/link.astro';
+
+## Trình phát
+
+Các nút điều khiển của trình phát đặt tốc độ phát, phụ đề, âm lượng và toàn màn hình, và mở bản ghi lời thoại. Tốc độ chạy từ 0.5 đến 2 theo bước 0.25. Trình phát nhớ lựa chọn tốc độ, âm lượng và phụ đề của bạn cho video tiếp theo.
+
+Phím tắt hoạt động khi trình phát đang có focus và bạn không gõ trong một ô nhập:
+
+| Phím | Tác dụng |
+| --- | --- |
+| Space hoặc K | Phát hoặc tạm dừng |
+| J | Lùi 10 giây |
+| L | Tiến 10 giây |
+| Mũi tên trái | Lùi 5 giây |
+| Mũi tên phải | Tiến 5 giây |
+| Mũi tên lên, mũi tên xuống | Tăng âm lượng, giảm âm lượng |
+| M | Tắt hoặc bật tiếng |
+| C | Bật hoặc tắt phụ đề |
+| F | Toàn màn hình |
+| `<` và `>` | Chậm hơn, nhanh hơn |
+| 0 đến 9 | Nhảy đến một phần mười tương ứng của video: 5 là giữa video |
+
+## Phụ đề và bản ghi lời thoại
+
+Phụ đề được thêm vào mọi video tự động. Menu phụ đề liệt kê các ngôn ngữ mà video có, và **Off**.
+
+- Ngôn ngữ được đánh dấu "(auto-translated)" là bản dịch máy. Nó có thể sai.
+- **Transcript** mở văn bản của video. **Jump to current line** đưa nó về chỗ video đang phát.
+
+Giảng viên chọn các ngôn ngữ mà phụ đề được dịch sang, và có thể tải lên phụ đề của riêng họ. Xem <Link path="guides/instructor-guide">Hướng dẫn cho giảng viên</Link>.
+
+## Tìm kiếm những gì đã nói
+
+Bạn có thể tìm kiếm phụ đề của mọi video trong một khóa học bạn đã ghi danh.
+
+1. Trong trình phát của khóa học, tìm **Search transcripts**.
+2. Nhập ít nhất 2 ký tự vào "Search what was said".
+3. Chọn **Search**.
+4. Chọn một kết quả để mở bài học đó tại thời điểm đó.
+
+Trang liệt kê các thời điểm khớp, tối đa 20 kết quả tốt nhất. Nếu còn nhiều hơn, hãy thêm một từ để thu hẹp tìm kiếm. Nếu không có gì khớp, hãy kiểm tra chính tả, hoặc thử các từ bằng ngôn ngữ của phụ đề.
+
+## Câu hỏi trong video
+
+Giảng viên có thể làm cho video dừng lại và đặt một câu hỏi, tại một thời điểm trong video hoặc ở cuối.
+
+### Dành cho học viên
+
+1. Khi video dừng, hãy đọc câu hỏi. Câu hỏi nhiều lựa chọn ghi "Select all that apply".
+2. Chọn câu trả lời của bạn và chọn **Submit answer**, hoặc chọn **Skip**.
+3. Xem bạn đúng hay không ("Correct" hoặc "Not quite"), đáp án đúng và **Explanation**, nếu có.
+4. Chọn **Continue** để xem tiếp.
+
+- Mỗi câu hỏi ghi nhận một câu trả lời. Câu hỏi nhiều lựa chọn chỉ đúng khi mọi lựa chọn đều đúng.
+- **Try again** là luyện tập: "Practice: this answer isn't recorded".
+- Câu trả lời không bao giờ được tính vào tiến độ của bạn, các bài kiểm tra của khóa học hay chứng chỉ.
+- Khóa học đã lưu trữ không đặt câu hỏi.
+- Nếu giảng viên đã đổi một câu hỏi kể từ lần bạn thấy gần nhất, nó ghi "This question was updated. Check it before answering."
+
+### Dành cho giảng viên
+
+1. Trong **Course content**, mở hộp thoại **Questions** trên một video.
+2. Phát hoặc kéo video đến thời điểm bạn muốn, và chọn **Add a question here**. Cho câu hỏi sau video, chọn **Add an end question**.
+3. Viết câu hỏi, các lựa chọn và lựa chọn nào đúng.
+4. Điều chỉnh **Ask at** nếu cần: một thời điểm như 1:30, hoặc **At the end**.
+5. Lưu.
+
+- Một video nhận tối đa 20 câu hỏi.
+- **Preview as student** phát video cùng các câu hỏi của nó. Câu trả lời được kiểm tra và không được ghi nhận. **Stop previewing** quay lại chỉnh sửa.
+- Bạn có thể đổi các câu hỏi sau khi học viên đã trả lời. Các câu trả lời đã ghi nhận được giữ và không bị chấm lại.
+
+Kết quả hiển thị trên trang phân tích của khóa học, dưới **Video questions**. Xem <Link path="guides/course-analytics">Phân tích khóa học</Link>.

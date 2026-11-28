@@ -1,0 +1,82 @@
+---
+title: 수료증
+description: 강좌에서 수료증을 켜고 발급 조건을 설정하는 방법, 수강생의 요건 카드, 수료증 보기·다운로드·공유, 공개 페이지, 취소와 복원을 설명합니다.
+---
+
+import Link from '@components/link.astro';
+
+강좌는 요건을 충족한 각 수강생에게 수료증을 줄 수 있습니다. 모든 수료증에는 ID와, 누구나 진위를 확인할 수 있는 공개 페이지가 있습니다.
+
+## 강사용: 수료증 제공하기
+
+1. **My Courses**에서 강좌를 열고 **Certificates** 섹션으로 이동합니다.
+2. **Issue a certificate on completion**을 켭니다.
+3. 필요하면 **Require passing every quiz**를 선택합니다. 합격 점수가 0%인 퀴즈는 포함되지 않습니다.
+4. 필요하면 **Require graded assignments to be returned with at least**를 선택하고 1에서 100 사이의 정수를 입력합니다.
+
+강좌의 모든 항목을 완료하는 것은 항상 필수입니다.
+
+요건을 변경하면 아직 수료증이 없는 수강생에게만 영향을 줍니다. 새로 자격을 갖춘 수강생은 자동으로 수료증을 받고, 이미 받은 수료증을 잃는 사람은 없습니다.
+
+같은 섹션의 **Issued certificates**에는 각 학습자, 수료증 ID, 수료일, 상태가 나열됩니다.
+
+## 수강생용: 수료증 받기
+
+강좌의 **Certificate** 카드에는 아직 필요한 항목이 나열됩니다.
+
+| 요건 | 표시 내용 |
+| --- | --- |
+| Complete every item | 모든 항목을 마쳤는지 여부 |
+| Pass every quiz | 각 퀴즈의 상태: Passed, Not attempted, Not passed yet |
+| Graded assignments returned with at least a percentage | 각 과제의 상태: Done, Not submitted, Waiting to be graded 또는 받은 점수 |
+
+남은 시도 횟수가 없는 퀴즈에는 "Not passed, no attempts left. Ask your instructor for another attempt."가 표시됩니다.
+
+모든 요건을 충족하면 카드에 "Your certificate is being prepared."가 표시된 뒤 다음 항목이 나타납니다.
+
+- **View**: 수료증 페이지를 엽니다.
+- **Download PDF**.
+- **Copy link**: 수료증 페이지의 주소를 복사합니다.
+- **Add to LinkedIn**.
+
+벨 아이콘과 이메일로도 알림을 받으며, LinkedIn에 추가하라는 알림이 나중에 한 번 더 옵니다. <Link path="guides/notifications">알림</Link>을 참고하세요.
+
+## 수료증 페이지
+
+`/certificates/<certificate ID>` 페이지는 공개되어 있습니다. "Certificate of completion", 학습자 이름, 강좌, 날짜, 수료증이 확인해 주는 내용, 수료증 ID가 표시됩니다. 링크가 있는 사람은 누구나 로그인하지 않고 읽을 수 있습니다.
+
+존재하지 않는 ID에는 "Certificate not found"가 표시됩니다.
+
+## LinkedIn에 추가하기
+
+1. 강좌의 **Certificate** 카드나, 로그인한 상태의 수료증 페이지에서 **Add to LinkedIn**을 선택합니다.
+2. **Continue to LinkedIn**을 선택합니다.
+3. LinkedIn에서 항목을 저장합니다.
+
+양식을 직접 채우는 경우를 위해 수료증 페이지에는 LinkedIn이 요구하는 항목도 나열됩니다. 발급 기관, 발급일, 자격 증명 ID, 자격 증명 URL입니다.
+
+## 취소와 복원
+
+취소된 수료증은 더 이상 유효하지 않습니다. 공개 페이지에 "This certificate has been revoked and is no longer valid."가 표시됩니다. 수강생에게 알림이 가고, 수강생의 강좌 카드에 날짜와 사유가 표시됩니다. 복원하면 같은 ID로 다시 유효해지고 수강생에게 다시 알림이 갑니다.
+
+| 누가 | 어디서 | 선택할 수 있는 사유 |
+| --- | --- | --- |
+| 강좌의 강사 | 강좌 **Certificates** 섹션의 **Issued certificates** | Academic integrity, Issued in error, Other |
+| 관리자 | 관리자 포털의 **Certificates** | 위와 같고, Order refunded 추가 |
+
+**강사용:** 수료증에서 **Revoke**를 선택하고 **Reason**을 고른 뒤 원하면 **Note**를 추가하고 확인합니다. **Restore**로 되돌립니다. **History**에는 누가 언제 취소하고 복원했는지 표시됩니다.
+
+**관리자용:**
+
+1. 관리자 포털에서 **Certificates**를 엽니다.
+2. **Certificate ID**를 입력하고 **Look up**을 선택합니다. 수료증이 **Valid** 또는 **Revoked**로 표시됩니다.
+3. **Revoke**를 선택하고 **Reason**을 고른 뒤 **Revoke certificate**로 확인합니다. Other 사유에는 **Note**가 필요합니다.
+
+**Restore**를 **Restore certificate**로 확인하면 되돌려집니다.
+
+누가 누구의 조치를 되돌릴 수 있는지는 다음과 같습니다.
+
+- 관리자는 모든 수료증을 복원할 수 있습니다.
+- 강사는 강사가 취소한 수료증은 복원할 수 있지만 관리자가 취소한 수료증은 복원할 수 없습니다. 이 경우 "Revoked by an administrator"로 표시됩니다.
+
+유료 강좌를 전액 환불해도 수료증이 자동으로 회수되지는 않습니다. <Link path="guides/payments">유료 강좌와 결제</Link>를 참고하세요.

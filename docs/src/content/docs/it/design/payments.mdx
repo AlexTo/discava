@@ -1,0 +1,218 @@
+---
+title: Pagamenti
+description: Come un corso a pagamento viene acquistato con Stripe Checkout, il record dell'ordine, il webhook che consegna il corso esattamente una volta, i coupon, i rimborsi e la connessione Stripe dell'amministratore.
+sidebar:
+  order: 10
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261116-013315-stripe-checkout/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013315-stripe-checkout/) (checkout) e [`specs/20261116-013138-coupons-discount-codes/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013138-coupons-discount-codes/) (coupon)
+
+## La regola
+
+**In un corso con prezzo si entra solo con un ordine pagato, e solo la conferma firmata di Stripe rende pagato un ordine.** Nulla di ciò che invia un browser, incluso il ritorno dalla pagina di Stripe, iscrive qualcuno. `course.enrol` di core-api rifiuta un corso con prezzo ("This course must be purchased"), e il webhook è l'unico chiamante di `settleOrderPaid`.
+
+C'è un caso senza pagamento: un [coupon](#coupon) che copre l'intero prezzo. Il server calcola che il totale è zero e scrive l'ordine già `paid`, quindi Stripe non viene mai chiamato.
+
+## Prezzi
+
+Un corso ha `priceAmount` e `priceCurrency`. L'importo è un intero nella più piccola unità della valuta (1999 è 19,99), quindi nessun prezzo è mai un numero in virgola mobile. `0` è gratuito, e ogni nuovo corso parte gratuito.
+
+- Le valute supportate sono USD, EUR, GBP, AUD e CAD. Tutte hanno due decimali. Una valuta con nessuno o tre non è supportata.
+- Un prezzo sopra zero è tra 1,00 e 10.000,00.
+- Un istruttore imposta il prezzo con `course.setPrice` di instructor-api, in qualsiasi stato del corso. Impostare un prezzo sopra zero richiede una connessione Stripe attiva. Tornare a gratuito non la richiede mai.
+- Una modifica del prezzo si applica ai nuovi acquisti. Non tocca mai un ordine o un'iscrizione: gli studenti già iscritti mantengono il loro accesso.
+
+Le regole e la formattazione vivono in `@discava/common-web-utils/price`, condiviso da portali e API.
+
+## L'ordine
+
+Un `order` è un tentativo di uno studente di acquistare un corso. Quando viene creato copia il titolo del corso, il prezzo di listino (`listAmount`), l'importo da addebitare (`amount`) e la valuta, insieme all'account Stripe e alla modalità con cui è stato avviato. Un ordine avviato con un coupon copia anche `discountAmount`, `couponCode`, `couponType` e `couponValue`, e `amount` è il prezzo di listino meno lo sconto.
+
+| Stato | Significato |
+| --- | --- |
+| `pending` | Un checkout è aperto |
+| `paid` | Stripe ha confermato il pagamento e lo studente è iscritto |
+| `expired` | Il checkout è stato abbandonato, o la sua creazione è fallita |
+| `refunded` | L'intero importo è tornato allo studente |
+
+`helpers/order.ts` in core-table è l'unico scrittore di `order` e dell'`orderId` di un'iscrizione. Ogni passaggio è una scrittura condizionale sullo stato da cui parte, quindi una chiamata ripetuta o in corsa non cambia nulla. Nulla di ciò chiama Stripe: lo fa il chiamante prima o dopo.
+
+## Avviare un checkout
+
+`payment.checkout` di core-api prende un ID corso e un `couponCode` facoltativo. L'importo e la valuta sono calcolati sul server dal corso (e dal coupon), mai presi dall'input. Senza un codice:
+
+1. Rifiuta un corso non pubblicato, un corso gratuito e uno studente già iscritto.
+2. Se lo studente ha un ordine `pending` per il corso senza coupon e con più di cinque minuti rimasti, restituisce la pagina di quell'ordine, quindi scegliere **Buy now** due volte crea un solo ordine.
+3. Altrimenti `startOrder` crea un ordine `pending` in una transazione che controlla anche che la connessione Stripe sia `active` e alza il `latestCheckoutExpiresAt` della connessione per coprire il nuovo checkout.
+4. Crea una sessione Stripe Checkout con l'ID dell'ordine come chiave di idempotenza, solo pagamenti con carta, e gli ID di ordine, studente e corso nei metadati. L'indirizzo della sessione viene salvato sull'ordine e restituito.
+
+Un checkout vive un'ora. Se Stripe non è raggiungibile, l'ordine scade e lo studente vede "Couldn't start the payment".
+
+Un checkout con un codice segue gli stessi passi con in più il claim del codice: vedi [Coupon](#coupon).
+
+`payment.available` dice al portale studente se un acquisto può partire: solo che la connessione è attiva, nulla sull'account o sulla chiave.
+
+## Il webhook
+
+Stripe invia con POST a `POST /stripe/webhook`, una API Gateway a sé nello stack `Payments`, con il proprio WAF, throttling e dominio. Il gestore è in `packages/events/src/payments/`.
+
+- **La firma è l'unico cancello.** Il messaggio viene verificato sui suoi byte esatti con il segreto di firma salvato, e rifiutato con 400 se è più vecchio di cinque minuti o non si verifica. Senza nulla connesso non c'è alcun segreto, quindi ogni messaggio fallisce.
+- **400** significa che nulla è cambiato. **500** significa che la gestione è fallita e Stripe deve ritentare. **200** copre eventi gestiti, duplicati, senza corrispondenza e ignorati.
+
+| Evento | Cosa succede |
+| --- | --- |
+| `checkout.session.completed` | L'ordine viene concluso, o rimborsato se non può essere consegnato. Una sessione non ancora pagata viene ignorata |
+| `checkout.session.expired` | Un ordine `pending` diventa `expired`, e il suo claim del coupon viene rilasciato |
+| `charge.refunded` | Il rimborso viene registrato sull'ordine |
+
+Questi tre sono gli unici eventi registrati con Stripe.
+
+### Consegnare esattamente una volta
+
+`settleOrderPaid` sposta l'ordine da `pending` a `paid` e dà allo studente la sua iscrizione in **una transazione**, che controlla anche che il corso sia ancora pubblicato. L'iscrizione viene creata, o ripristinata se lo studente ne aveva una `dropped`. Se l'ordine ha un coupon, la stessa transazione conferma il suo riscatto. Stripe consegna almeno una volta e in qualsiasi ordine, quindi la stessa conferma che arriva cinque volte insieme lascia comunque un ordine pagato e un'iscrizione: ogni chiamata dopo la prima trova che l'ordine non è più `pending`.
+
+### Un pagamento che non può essere consegnato
+
+Il denaro è stato preso, quindi non viene mai trattenuto. Il webhook chiede a Stripe un rimborso completo, con una chiave di idempotenza costruita dall'ID dell'ordine, e `refundUndeliverable` contrassegna l'ordine `refunded` con un motivo. Non viene data alcuna iscrizione, e il claim del coupon dell'ordine viene rilasciato.
+
+| Motivo | Quando |
+| --- | --- |
+| `duplicate` | Lo studente è già iscritto |
+| `unavailable` | Il corso non è più pubblicato |
+| `mismatch` | L'importo, la valuta o l'ID di ordine, studente o corso della sessione differisce da quello dell'ordine. Viene anche registrato come errore ("Paid session differs from its order; refunding"), e lo studente è già stato rimborsato quando la riga appare |
+
+Una sessione pagata, una sessione scaduta o un rimborso il cui ordine non è nella tabella viene registrato come errore ("Paid session for an unknown order", "Expired session for an unknown order", "Refund for an unknown order") e risposto con 200. Un operatore dovrebbe tenere d'occhio queste righe: significano che Stripe detiene un pagamento di cui Discava non ha traccia.
+
+## Coupon
+
+Un istruttore crea codici sconto per un corso a pagamento con `coupon.create`, `coupon.list`, `coupon.update` e `coupon.delete` di instructor-api. Uno studente ne digita uno nella pagina del corso: `coupon.preview` di core-api mostra cosa pagherebbe e non scrive nulla, e `payment.checkout` prende il codice come `couponCode`. La <Link path="guides/payments">guida ai pagamenti</Link> copre le schermate.
+
+| Record | Chiave | Contiene |
+| --- | --- | --- |
+| `coupon` | Corso, poi codice | `type` (`percent` o `fixed`), `value`, `expiresAt` e `maxRedemptions` facoltativi, `enabled` e `redeemedCount` |
+| `couponRedemption` | Corso e codice, poi studente | L'ordine a cui appartiene, `status` (`reserved` o `redeemed`) e `reservedUntil` mentre è riservato |
+
+La chiave di `couponRedemption` è la regola per cui uno studente usa un codice una sola volta.
+
+### Codici e prezzi
+
+- Un codice è di 4-24 caratteri tra A-Z, 0-9 e `-`, salvato in maiuscolo. Un codice generato è di 8 caratteri scritti `XXXX-XXXX`.
+- Una percentuale è un numero intero da 1 a 100. Un importo fisso è nella valuta del corso, sopra zero e non sopra il prezzo del corso quando il codice viene creato.
+- Il tipo, il valore e la valuta di un codice non cambiano mai. `coupon.update` cambia solo `enabled`, la scadenza e il limite, e non può abbassare il limite sotto `redeemedCount`. `coupon.delete` funziona solo finché `redeemedCount` è 0; un codice usato viene invece disabilitato.
+- `priceWithCoupon` in `helpers/coupon-price.ts` di core-table è l'unica funzione di prezzo. Una percentuale è arrotondata per difetto, e un importo fisso non toglie mai più del prezzo di listino.
+- Un totale sopra zero ma sotto l'addebito minimo di Stripe (0,50, o 0,30 per GBP) non può essere pagato, quindi il codice viene rifiutato.
+
+`coupon.preview` e `payment.checkout` eseguono lo stesso controllo (`checkCoupon`), quindi rifiutano gli stessi codici con gli stessi messaggi. Un codice sconosciuto, il codice di un altro corso e un codice fisso in un'altra valuta ricevono tutti "This code is not valid for this course", così uno studente non può distinguerli.
+
+### Claim, conferma, rilascio
+
+`helpers/coupon-redemption.ts` in core-table è l'unico scrittore di `redeemedCount` e di `couponRedemption`. Costruisce tre insiemi di scritture, ciascuno eseguito dentro la transazione della modifica all'ordine che lo causa:
+
+| Passo | Quando | Cosa scrive |
+| --- | --- | --- |
+| **Claim** | `payment.checkout` crea l'ordine | Aggiunge uno a `redeemedCount`, a condizione che il coupon sia abilitato, non scaduto e sotto il suo limite. Crea il riscatto dello studente come `reserved`, che fallisce se ne ha già uno per il codice |
+| **Conferma** | `settleOrderPaid` contrassegna l'ordine pagato | `reserved` diventa `redeemed` |
+| **Rilascio** | L'ordine scade, viene sostituito da un nuovo checkout, o viene rimborsato come non consegnabile | Elimina il riscatto `reserved` e toglie uno da `redeemedCount` |
+
+`redeemedCount` quindi conta insieme i riscatti riservati e riscattati. Poiché il claim è una condizione nella transazione dell'ordine stesso, il limite regge quando molti studenti avviano un checkout nello stesso momento. Una transazione annullata non scrive nulla; il checkout rilegge per dare il rifiuto esatto, e rinuncia con "Too many people are checking out; try again" dopo tre conflitti.
+
+Una prenotazione dura fino a cinque minuti dopo la scadenza del suo checkout (`reservedUntil`). Quando un codice sembra esaurito, il checkout prima rilascia le sue prenotazioni oltre quel tempo e la cui sessione Stripe è finita, poi controlla di nuovo. Una sessione che Stripe segnala come completata mantiene la sua prenotazione: il suo evento di pagamento potrebbe essere ancora in arrivo.
+
+### Un solo checkout attivo
+
+Uno studente ha un solo checkout attivo per corso. Avviare un checkout con un codice diverso, o senza dopo uno con un codice, sostituisce l'ordine `pending` precedente:
+
+1. La sessione Stripe dell'ordine precedente viene fatta scadere per prima, così non può mai essere pagata.
+2. La transazione del nuovo ordine sposta l'ordine precedente a `expired` e rilascia il suo claim.
+
+Se Stripe dice che la sessione precedente era già pagata, la risposta è "You are already enrolled in this course". Ricominciare con lo stesso codice e più di cinque minuti rimasti restituisce la pagina del checkout aperto.
+
+### Un codice che copre l'intero prezzo
+
+Quando il totale è zero, `startFreeOrder` scrive l'ordine già `paid` con importo 0, l'iscrizione e il riscatto come `redeemed`, in una transazione. Stripe non viene mai chiamato e `payment.checkout` restituisce `enrolled: true` al posto dell'indirizzo di una pagina. Richiede comunque una connessione Stripe attiva. Un tale ordine non è una vendita, quindi non registra <Link path="design/instructor-payouts">guadagni</Link>.
+
+### Coupon e rimborsi
+
+Un rimborso completo dopo la consegna lascia il riscatto `redeemed`, quindi lo studente non può usare di nuovo lo stesso codice.
+
+## Rimborsi
+
+Un rimborso parte in Stripe: dalla dashboard di Stripe, o da `payment.requestRefund` di core-api per conto dello studente. `charge.refunded` porta il totale rimborsato finora, e `refundOrder` lo applica:
+
+- **Sotto l'importo dell'ordine**, sale solo `refundedAmount`. Lo studente mantiene l'accesso.
+- **All'importo dell'ordine**, una transazione sposta l'ordine a `refunded` e imposta l'iscrizione a `dropped`, ma solo se l'iscrizione nomina ancora questo ordine. Un avviso di rimborso ritardato oltre un secondo acquisto non può terminare la nuova iscrizione.
+
+Dopo un rimborso completo, il webhook pubblica una notifica `order.refunded` ("Your refund for … is complete"), inviata anche per email oltre che mostrata nel portale. Viene inviata solo quando l'ordine è `refunded` con motivo `requested` (ogni rimborso completo registrato da `charge.refunded`, dalla dashboard o da una richiesta dello studente) e l'iscrizione nomina ancora l'ordine. La sua chiave di deduplicazione è l'ID dell'ordine, quindi un avviso riconsegnato non la ripete, e una pubblicazione fallita viene ritentata dalla riconsegna di Stripe. Non c'è alcuna notifica per un rimborso parziale, o per il rimborso automatico di un pagamento che non poteva essere consegnato.
+
+### Richieste di rimborso
+
+`payment.requestRefund` di core-api permette a uno studente di rimborsare il proprio acquisto, e `payment.myOrder` dice alla pagina del corso se può. `refundEligibility` in core-table lo consente solo finché:
+
+- l'ordine è `paid` e l'iscrizione dello studente lo nomina e non è `dropped`;
+- l'ordine è stato pagato tramite l'account Stripe connesso ora, e i pagamenti sono connessi;
+- non è ancora stato richiesto alcun rimborso per esso;
+- lo studente non ha completato il corso;
+- lo studente ne ha completato meno di `REFUND_PROGRESS_LIMIT_PERCENT` (50), calcolato quando la richiesta viene fatta dai suoi completamenti e dal curriculum attuale (`readRefundLimits`), non letto dal `progressPercent` salvato;
+- nessuno degli ordini precedenti dello studente per il corso è stato rimborsato su sua richiesta (`refundRequestedAt` impostato; il rimborso di un operatore o un rimborso automatico non conta);
+- è entro `REFUND_WINDOW_DAYS` (14) dal pagamento.
+
+`requestRefund` chiede a Stripe di rimborsare ciò che resta dell'importo, con una chiave di idempotenza costruita dall'ID dell'ordine, poi imposta `refundRequestedAt` sull'ordine. Non sposta mai l'ordine o l'iscrizione da sé: lo fa il `charge.refunded` che segue. Stripe viene chiamato prima del segno, quindi un crash tra i due lascia un rimborso che l'avviso registra comunque, mai un segno senza rimborso.
+
+Un'iscrizione abbandonata mantiene i suoi progressi e completamenti. Lo studente può tornare:
+
+- **Acquistando di nuovo.** Concludere il nuovo ordine ripristina l'iscrizione, come `completed` se aveva finito il corso, con i suoi progressi.
+- **Iscrivendosi, se il corso è ora gratuito.** `course.enrol` chiama `restoreFreeEnrolment`, che ripristina l'iscrizione e ne rimuove l'`orderId`. Non viene scritto alcun ordine.
+
+### Lasciare un corso
+
+`course.unenrol` termina un'iscrizione che non è stata pagata: `unenrolFromCourse` la imposta a `dropped` solo finché non ha un `orderId`, e rifiuta con `EnrolmentPaidForError` altrimenti. Un'iscrizione acquistata termina solo con un rimborso, quindi un corso a pagamento non può essere lasciato senza uno. Progressi e completamenti sono conservati, e `course.enrol` ripristina l'iscrizione finché il corso è gratuito. Lo stato e il prezzo del corso non vengono controllati, quindi uno studente può lasciare un corso archiviato o nel frattempo con prezzo.
+
+### Termini
+
+- I due limiti sono costanti in `helpers/order.ts` di core-table: `REFUND_WINDOW_DAYS` (14) e `REFUND_PROGRESS_LIMIT_PERCENT` (50).
+- `payment.myOrder` e `course.publicView` li restituiscono come `refundWindowDays` e `refundProgressLimitPercent`, così la riga dei termini nella pagina del corso dichiara ciò che l'API applica.
+- `course.myEnrolment` restituisce `refundedBefore`, così la pagina avvisa uno studente che è stato rimborsato su sua richiesta prima che acquisti di nuovo.
+- Il rimborso di un operatore in Stripe non è soggetto a nessuno di questi termini.
+- Le richieste vengono rimborsate automaticamente, senza revisione.
+- I certificati sopravvivono ai rimborsi.
+
+## La connessione Stripe
+
+Stripe non viene configurato al momento del deploy. Un amministratore incolla una chiave segreta nella pagina **Payments** del portale admin.
+
+- **`paymentConnection`** è un record che contiene i fatti non segreti: stato, modalità test o live, ID e nome dell'account, gli ultimi quattro caratteri della chiave e l'indirizzo del webhook registrato.
+- **La chiave e il segreto di firma del webhook** vivono in Secrets Manager. La funzione dedicata `PaymentsConnect` di admin-api è l'unico codice che può scriverli. La funzione di checkout legge la chiave, il webhook legge entrambi, e nessuno dei due può scrivere.
+- **`paymentChange`** è una riga di audit append-only per ogni tentativo: chi, quando, quale account e gli ultimi quattro caratteri della chiave. Non contiene mai una chiave né il testo di errore di Stripe.
+
+Salvare una chiave ne controlla la forma, chiede a Stripe di chi è, registra l'indirizzo del webhook dello stage per i tre eventi, e salva la chiave e il segreto di firma che Stripe restituisce.
+
+| Salvataggio | Cosa fa |
+| --- | --- |
+| **Rotazione** (stesso account, stesso indirizzo) | Sostituisce solo la chiave. La registrazione e il segreto di firma restano, quindi i checkout aperti si completano comunque |
+| **Cambio** (un altro account o modalità, o un nuovo indirizzo) | Prende un lease, registra con la nuova chiave, salva entrambi i segreti, poi rimuove la vecchia registrazione |
+| **Disconnessione** | Prende un lease, contrassegna il record `disconnected` e cancella i segreti |
+
+Un cambio o una disconnessione prende un **lease** di due minuti: lo stato del record diventa `changing`, che checkout e prezzi trattano come non connesso. Il lease è rifiutato mentre un checkout può ancora essere aperto ("Checkouts are open until …"), così nessun pagamento è in corso mentre i segreti vengono sostituiti. Una rotazione non prende alcun lease, ma è condizionata alla `revision` del record, quindi perde in modo pulito contro un cambio concorrente. Una modifica che fallisce rimette a posto il record e i segreti.
+
+## Invarianti
+
+Due file in `helpers/invariants/` di core-table controllano le regole che attraversano i record, dopo ogni scenario end-to-end:
+
+- `payments.ts`: i campi di un ordine corrispondono al suo stato, il prezzo di listino meno lo sconto è l'importo addebitato, un ordine pagato ha la sua iscrizione, l'`orderId` di un'iscrizione nomina un ordine dello stesso studente e corso, e un'iscrizione senza ordine in un corso con prezzo risale a quando il corso era gratuito.
+- `coupons.ts`: `redeemedCount` è uguale al numero di riscatti del coupon ed è entro il limite, ogni riscatto ha il suo ordine (pending mentre riservato, paid una volta riscattato), e un ordine gratuito fatto da un codice ha la sua iscrizione.
+
+## Sviluppo locale
+
+L'event runner include uno stand-in di Stripe (`packages/events/src/local/stripe-stand-in.ts`): l'API di Stripe, una pagina di checkout ospitata con **Pay**, **Decline card** e **Cancel**, e consegne di webhook firmate a `/stripe/webhook` sulla porta 2024. Connettilo come Carol con la chiave `sk_test_local`. La chiave è conservata nella cartella `tmp/local-dev/secrets/`, ignorata da git, al posto di Secrets Manager.
+
+I controlli sotto `/stripe/test/` guidano ciò che farebbe un vero account Stripe: `refund`, `refunds` (elenca i rimborsi di un pagamento), `replay` (consegna di nuovo una conferma), `expire`, `forge` (un messaggio firmato in modo errato) e `endpoints`.
+
+`LOCAL_CHECKOUT_TTL_SECONDS` accorcia la vita di un'ora di un checkout, solo nello sviluppo locale.
+
+## Limiti
+
+- Solo pagamenti con carta, senza gestione delle tasse né conversione di valuta.
+
+<Link path="design/instructor-payouts">Pagamenti agli istruttori</Link> copre cosa succede al denaro dopo che un ordine è pagato.

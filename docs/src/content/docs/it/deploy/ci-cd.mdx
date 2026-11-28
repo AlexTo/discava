@@ -1,0 +1,125 @@
+---
+title: Riferimento CI/CD
+description: Cosa fa ogni workflow di GitHub Actions, quando gira e ogni variabile e segreto che legge.
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+I workflow si trovano in `.github/workflows/`. Due contano per il deploy: **CI** e **Deploy**.
+
+## La pipeline
+
+```d2 title="What runs when"
+direction: right
+pr: "Pull request"
+main: "Push to main"
+checks: "PR Checks"
+ci: "CI" {
+  build: "Build\n(lint, test, build)"
+  trivy: "Trivy scan"
+  docs: "Deploy Docs"
+  build -> docs
+}
+deploy: "Deploy"
+manual: "Run workflow\n(manual)"
+pages: "GitHub Pages"
+aws: "AWS stage"
+
+pr -> checks
+main -> ci
+ci -> deploy: "passed and\nAUTO_DEPLOY_STAGE set"
+manual -> deploy
+ci.docs -> pages
+deploy -> aws
+```
+
+## Workflow
+
+### CI (`ci.yml`)
+
+Gira a ogni push su `main`, e quando lo esegui a mano.
+
+| Job | Cosa fa |
+| --- | --- |
+| **Build** | Esegue lint, test e build di ogni progetto. La build sintetizza l'app CDK e analizza i template con Checkov. Fallisce se la build ha modificato un file di cui è stato fatto il commit |
+| **Trivy** | Analizza le dipendenze alla ricerca di vulnerabilità note e il repository alla ricerca di segreti |
+| **Playwright cache** | Salva il browser usato dai test end-to-end, così le pull request partono più in fretta |
+| **Deploy Docs** | Pubblica questo sito su GitHub Pages. Solo su un push su `main`, e viene saltato se è arrivato un commit più recente |
+
+La CI non richiede accesso ad AWS, a parte il ruolo opzionale per il login a Docker, che usa il job Trivy.
+
+### Deploy (`deploy.yml`)
+
+Gira in due modi:
+
+- **Manualmente**, con il nome di uno stage. Distribuisce il commit da cui viene eseguito.
+- **Dopo che la CI passa su `main`**, se la variabile del repository `AUTO_DEPLOY_STAGE` è impostata. Distribuisce il commit verificato dalla CI, e viene saltato se `main` è andato avanti nel frattempo.
+
+Un'esecuzione attende quella che sta già distribuendo lo stesso stage. Non si sovrappongono mai.
+
+Il job gira nell'environment GitHub che prende il nome dallo stage. È questo che rende disponibili le variabili dello stage ed è ciò di cui si fida il ruolo di deploy AWS. <Link path="deploy/first-deploy">Primo deploy</Link> ne elenca i passaggi.
+
+### PR Checks (`pr-checks.yml`)
+
+Gira sulle pull request verso `main`: lint, test e build dei progetti interessati dalla modifica, i test end-to-end sullo stack locale e alcuni controlli specifici del repository. Non richiede accesso ad AWS, a parte il ruolo opzionale per il login a Docker.
+
+### Automazione dei maintainer
+
+Questi workflow supportano il processo di sviluppo del progetto stesso. Un fork può ignorarli o disattivarli nella scheda **Actions**.
+
+| Workflow | Cosa fa |
+| --- | --- |
+| `agent-*.yml` | Guidano il processo basato sulle specifiche: agiscono sulle pull request delle specifiche e sui branch chiamati `openhands/…` |
+| `archive-specs.yml` | Prepara una pull request che archivia una specifica conclusa, quando un `specs/*/tasks.md` cambia su `main` |
+| `post-merge-verify.yml` | Dopo un'esecuzione di Deploy su `discava-development`, apre una issue di test per ogni pull request distribuita. Disattivalo se fai il merge di pull request nel tuo fork e non vuoi queste issue |
+| `cache-cleanup.yml` | Elimina le cache di Actions di una pull request quando si chiude, per restare sotto la quota di GitHub |
+
+## Variabili e segreti
+
+Tutto ciò che i workflow leggono. Lo script di setup imposta per te le variabili di cui hai bisogno.
+
+### Variabili del repository
+
+| Variabile | Impostata da | Usata per |
+| --- | --- | --- |
+| `AUTO_DEPLOY_STAGE` | Script di setup, se l'hai scelta | L'unico stage da distribuire ogni volta che la CI passa su `main`. Se non impostata, solo deploy manuali |
+| `AWS_DOCKER_LOGIN_ROLE_ARN` | Script di setup | Accedere a Docker su Amazon ECR Public così i pull delle immagini non sono limitati. Se non impostata, pull anonimi |
+| `AGENT_APP_LOGIN` | Solo i maintainer | La GitHub App di cui l'automazione dei maintainer si fida per le revisioni. Lasciala non impostata in un fork |
+| `DOCS_SITE`, `DOCS_BASE_PATH` | Tu, opzionalmente | Dove viene pubblicato il sito della documentazione, come `https://docs.example.com` e `/`. Se non impostate, l'indirizzo GitHub Pages del repository |
+
+### Variabili dell'environment, un insieme per stage
+
+| Variabile | Impostata da | Usata per |
+| --- | --- | --- |
+| `AWS_REGION` | Script di setup | La regione in cui il deploy accede |
+| `AWS_DEPLOY_ROLE_ARN` | Script di setup | Il ruolo che il workflow assume |
+| `AWS_EXECUTION_ROLE_ARN` | Script di setup | Il ruolo con cui CloudFormation crea le risorse |
+| `<STAGE>_…` | Script di setup o tu | <Link path="deploy/configuration">Override di configurazione</Link>, come i domini personalizzati. Ogni variabile che inizia con il prefisso dello stage viene inoltrata, ad esempio `DISCAVA_DEVELOPMENT_INFRA_…` |
+
+### Segreti
+
+| Segreto | Obbligatorio | Usato per |
+| --- | --- | --- |
+| `CODECOV_TOKEN` | No | Caricare la copertura dei test su Codecov |
+
+Non ci sono **segreti AWS**. Il workflow dimostra la propria identità ad AWS con un token che GitHub emette per quella singola esecuzione.
+
+## Come GitHub accede ad AWS
+
+1. Il job Deploy chiede a GitHub un token OIDC. Il subject del token nomina il repository e l'environment: per impostazione predefinita `repo:<owner>/<repo>:environment:<stage>`.
+2. Il provider OIDC di AWS per GitHub verifica il token.
+3. La trust policy del ruolo di deploy accetta solo quell'esatto subject, quindi solo un job nel tuo repository, in esecuzione in quell'environment, può assumerlo.
+4. Il job riceve credenziali che durano per l'esecuzione.
+
+Per questo le regole di protezione dell'environment sono il tuo controllo sul deploy: chiunque possa eseguire un job nell'environment può distribuire lo stage.
+
+## Due ruoli, di proposito
+
+| Ruolo | Chi lo usa | Cosa può fare |
+| --- | --- | --- |
+| **Ruolo di deploy** | Il workflow | Caricare gli asset dello stage e creare o aggiornare gli stack CloudFormation chiamati `<stage>-*`. Non può creare risorse direttamente |
+| **Ruolo di esecuzione** | CloudFormation | Creare le risorse dello stage. Ogni ruolo IAM che crea deve portare la permissions boundary dello stage |
+
+Separarli significa che un workflow compromesso può fare solo ciò che può fare un deploy CloudFormation di quello stage, e nulla di ciò che distribuisce può concedersi più di quanto la boundary consenta.

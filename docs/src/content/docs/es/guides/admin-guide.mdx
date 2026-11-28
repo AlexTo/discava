@@ -1,0 +1,77 @@
+---
+title: Guía de administración
+description: Qué hace un administrador en el portal de administración, gestionar categorías del catálogo, buscar, revocar y restaurar certificados, y dónde leer sobre moderación de reseñas, marca y pagos.
+---
+
+import Link from '@components/link.astro';
+
+Esta página es la visión general del portal de administración. Solo pueden usarlo las cuentas del grupo `admin` de la plataforma.
+
+## Cómo orientarse
+
+La barra lateral tiene cinco páginas:
+
+| Página | Para qué sirve |
+| --- | --- |
+| **Home** | Una tarjeta por cada área de abajo |
+| **Categories** | Las categorías bajo las que los instructores clasifican sus cursos |
+| **Reviews** | Eliminar reseñas de cursos que incumplen las reglas |
+| **Certificates** | Buscar un certificado para revocarlo o restaurarlo |
+| **Payments** | Conectar la cuenta de Stripe en la que pagan los estudiantes |
+
+El menú de la cuenta tiene **Branding**, **Notification settings** y **Sign out**.
+
+## Categorías
+
+Las categorías son la lista entre la que los instructores eligen en los **Catalogue details** de un curso. Los estudiantes exploran y filtran el catálogo con ellas.
+
+**Agregar una categoría**
+
+1. Abre **Categories**.
+2. Escribe el nombre en **New category name**.
+3. Elige **Add category**.
+
+Un nombre que ya está en uso se rechaza.
+
+**Renombrar una categoría**
+
+1. Elige **Rename** en la categoría.
+2. Cambia el nombre.
+3. Elige **Save**. Escape o **Cancel** lo deja como estaba.
+
+**Archivar una categoría**
+
+1. Elige **Archive** en la categoría.
+2. Lee el diálogo: indica cuántos cursos tienen la categoría.
+3. Confirma con **Archive**.
+
+Una categoría archivada ya no se ofrece a los instructores. Los cursos que la tienen la conservan. Su página en el portal del estudiante dice que la categoría ya no está disponible. La lista muestra cada categoría como **Active** o **Archived**, y el portal de administración no tiene forma de recuperar una categoría archivada.
+
+## Certificados
+
+1. Abre **Certificates**.
+2. Escribe el **Certificate ID** y elige **Look up**. El ID está en la página del certificado y en su PDF.
+3. El certificado aparece como **Valid** o **Revoked**, con su historial de quién lo revocó o restauró y cuándo.
+
+- **Revoke** pide un **Reason**: Academic integrity, Issued in error, Order refunded u Other. Other requiere una **Note**. Confirma con **Revoke certificate**. La página pública del certificado indica entonces que fue revocado, y se avisa al estudiante.
+- **Restore**, confirmado con **Restore certificate**, lo vuelve a dejar válido con el mismo ID, y se avisa al estudiante.
+
+Un administrador puede restaurar cualquier certificado. Un instructor no puede restaurar uno que revocó un administrador.
+
+<Link path="guides/certificates">Certificates</Link> cubre el resto: qué da derecho a uno y qué ven estudiantes e instructores.
+
+## Reseñas
+
+**Reviews** lista las reseñas de un curso y te permite eliminar una que incumple las reglas, indicando un motivo. Una reseña eliminada ya no cuenta para la calificación del curso, y su autor no puede publicar otra. Consulta la sección de eliminación por administrador en <Link path="guides/reviews">Ratings and reviews</Link>.
+
+## Marca
+
+**Branding**, en el menú de la cuenta, define el nombre, el logo, el icono, la imagen para compartir y el color de la plataforma para los tres portales y las páginas públicas. Consulta <Link path="guides/branding">Branding</Link>.
+
+## Pagos
+
+**Payments** conecta la cuenta de Stripe en la que pagan los estudiantes. Mientras no esté conectada, todos los cursos son gratuitos y los instructores no pueden fijar un precio. Consulta <Link path="guides/payments">Paid courses and payments</Link> para conectar, reemplazar la clave, desconectar y reembolsar, y <Link path="guides/earnings-and-payouts">Earnings and payouts</Link> para saber qué hace falta para pagar a los instructores.
+
+## Notificaciones
+
+**Notification settings**, en el menú de la cuenta, elige qué notificaciones te llegan también por correo electrónico. Consulta <Link path="guides/notifications">Notifications</Link>.

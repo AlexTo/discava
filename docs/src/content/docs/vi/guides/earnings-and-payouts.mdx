@@ -1,0 +1,101 @@
+---
+title: Thu nhập và chi trả
+description: Cách tính thu nhập của giảng viên, trang Earnings, thiết lập tài khoản nhận tiền, khi nào tiền được chuyển, và việc đổi tài khoản thanh toán gây ra điều gì.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+Khi một học viên mua khóa học của bạn, phần của bạn được ghi nhận trong vài giây và trả cho bạn qua Stripe.
+
+## Cách tính thu nhập
+
+Với mỗi lượt bán:
+
+> net = amount paid − platform fee
+
+- **Số tiền đã trả** (amount paid) là số học viên đã trả, sau khi áp mã giảm giá nếu có. **Giảm giá** làm nó thấp đi, và do đó làm phần của bạn thấp đi: bạn kiếm tiền trên số tiền đã trả, không bao giờ trên giá niêm yết.
+- **Phí nền tảng** (platform fee) là một tỷ lệ phần trăm của số tiền đã trả, do nền tảng đặt (20% trừ khi được đổi). Mỗi lượt bán giữ mức phí đã được ghi nhận cùng nó.
+- Nếu một khóa học có **nhiều giảng viên**, họ chia đều mỗi lượt bán.
+- **Hoàn tiền** lấy lại phần của bạn trong số tiền được hoàn, và trả lại phí trên đó. Hoàn tiền toàn bộ đưa lượt bán về không.
+
+Mỗi loại tiền tệ được giữ riêng. Không có gì được quy đổi.
+
+Một lượt bán được tính vào ngày nó được thanh toán, và một lần hoàn tiền vào ngày nó được thực hiện, nên hoàn tiền cho lượt bán của tháng trước sẽ làm giảm số liệu tháng này. Ngày là ngày theo UTC.
+
+## Trang Earnings
+
+**Earnings** trên thanh bên của cổng giảng viên có bốn phần.
+
+**Payout account**: trạng thái của nó và một việc duy nhất cần làm. Xem [Thiết lập chi trả](#thiết-lập-chi-trả).
+
+**Balance**, theo từng loại tiền tệ:
+
+| Số liệu | Ý nghĩa |
+| --- | --- |
+| **On hold** | Đã kiếm được, nhưng vẫn trong thời gian giữ lại. Trang hiển thị ngày giải phóng tiếp theo |
+| **Waiting for account setup** | Đã qua thời gian giữ lại, nhưng bạn chưa có tài khoản nhận tiền đang hoạt động |
+| **Ready** | Sẽ được chuyển trong lần chi trả tiếp theo |
+
+**Report**: bắt đầu với tháng hiện tại. Chọn tháng khác, hoặc chọn **Custom range** và đặt ngày From và To cách nhau tối đa 366 ngày.
+
+- Với mỗi khóa học, nó hiển thị số đơn hàng, tổng thu, giảm giá, hoàn tiền, phí nền tảng và net, kèm tổng theo từng loại tiền tệ.
+- **Show orders** trên một khóa học liệt kê từng lượt bán và hoàn tiền kèm mã tham chiếu đơn hàng. Nó không bao giờ cho thấy ai đã mua.
+- Ngày được tính theo UTC.
+
+**Payouts**: ngày, số tiền và trạng thái của mỗi lần chi trả.
+
+## Thiết lập chi trả
+
+1. Mở **Earnings**.
+2. Trên thẻ **Payout account**, chọn **Set up payouts**.
+3. Cung cấp cho Stripe thông tin danh tính và ngân hàng của bạn trên các trang của chính họ. Stripe đưa bạn trở lại Earnings khi bạn hoàn tất.
+
+Thẻ cho biết bạn đang ở bước nào:
+
+| Trạng thái | Cần làm gì |
+| --- | --- |
+| **Not set up** | **Set up payouts** |
+| **In progress** | **Continue setup**: biểu mẫu của Stripe chưa hoàn tất |
+| **Active** | Không cần làm gì. **Open Stripe dashboard** đưa bạn đến tài khoản Stripe của mình |
+| **Restricted** | **Fix account**: Stripe cần thêm điều gì đó từ bạn |
+
+Nếu thẻ ghi "Payouts aren't available yet", nền tảng chưa kết nối Stripe. Hãy hỏi một quản trị viên.
+
+Thu nhập được ghi nhận dù bạn đã thiết lập chi trả hay chưa. Chúng chờ cho đến khi bạn thiết lập.
+
+## Khi nào bạn được trả
+
+- Mỗi lượt bán được **giữ lại** trong một số ngày do nền tảng đặt (14 trên môi trường production trừ khi được đổi), để hoàn tiền trong thời gian đó không bao giờ phải thu lại từ bạn.
+- Một lần chạy chi trả diễn ra **mỗi ngày một lần**. Nó gửi mọi thứ đã sẵn sàng, một lần chi trả cho mỗi loại tiền tệ.
+- Số dư thấp hơn **mức chi trả tối thiểu** (10.00 trừ khi được đổi) sẽ chờ đến lần chạy sau.
+
+Trạng thái của một lần chi trả là một trong các giá trị:
+
+- **Pending**: đang được gửi.
+- **Sent**: Stripe đã chấp nhận.
+- **Failed**: Stripe từ chối, kèm lý do. Thu nhập của nó quay lại số dư của bạn và được thử lại.
+
+## Hoàn tiền sau khi bạn đã được trả
+
+Một lần hoàn tiền được thực hiện sau khi lượt bán của nó đã được chi trả sẽ để lại **số dư âm**. Nó bị trừ vào lần chi trả tiếp theo của bạn. Không có gì bị lấy từ tài khoản ngân hàng của bạn.
+
+## Thu nhập bị giữ
+
+Nếu nền tảng đổi tài khoản Stripe mà nó dùng để nhận thanh toán, thu nhập từ trước thay đổi mà chưa được chi trả sẽ hiện là **Held**: "Earned before the platform changed its payment account. Contact the platform to be paid." Tài khoản nhận tiền của bạn hiện là chưa thiết lập, vì nó thuộc về tài khoản cũ. Hãy thiết lập lại cho các lượt bán từ nay về sau.
+
+## Dành cho quản trị viên
+
+- Chi trả cần bật **Connect** trên tài khoản Stripe của nền tảng. Nếu không, giảng viên chọn **Set up payouts** sẽ được báo "This platform can't set up payout accounts yet".
+- Khóa bị hạn chế cũng cần quyền quản lý các tài khoản được kết nối, account link, login link và transfer, ngoài những gì <Link path="guides/payments">việc nhận thanh toán</Link> cần.
+- Phí, thời gian giữ lại và mức chi trả tối thiểu được đặt theo từng stage. Stage development giữ các lượt bán 1 ngày, không phải 14. Xem <Link path="deploy/configuration">Cấu hình stage</Link>.
+- Đổi tài khoản hoặc chế độ Stripe sẽ giữ lại thu nhập chưa trả của mọi giảng viên. Hãy để lần chạy hằng ngày trả những gì đã sẵn sàng trước, và trả thu nhập bị giữ bằng tay.
+
+## Hạn chế
+
+- Không có biểu mẫu thuế, hóa đơn hay tính thuế.
+- Không quy đổi tiền tệ.
+- Tranh chấp và chargeback không xuất hiện trong báo cáo.
+
+<Link path="design/instructor-payouts">Chi trả cho giảng viên</Link> mô tả cách nó hoạt động.

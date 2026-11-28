@@ -1,0 +1,78 @@
+---
+title: 퀴즈와 과제
+description: 퀴즈를 만들고 설정하는 방법, 수강생으로서 퀴즈를 푸는 방법, 과제 설정, 작업물 제출, 늦은 제출, 채점, 반환, 재제출 요청을 설명합니다.
+---
+
+import Link from '@components/link.astro';
+
+퀴즈는 자동으로 채점됩니다. 과제는 수강생이 업로드하고 강사가 채점하는 작업물입니다.
+
+## 퀴즈: 강사용
+
+**Course content**에서 레슨에 **Quiz**를 추가합니다. 퀴즈 빌더에는 다음이 있습니다.
+
+- **Questions**: 최대 50개. 각각 **Single choice** 또는 **Multiple choice**이며, 2~10개의 선택지와 선택 사항인 **Explanation**이 있습니다.
+- **Pass mark (%)**: 0에서 100.
+- **Attempts allowed**: **Unlimited** 또는 1 이상의 숫자.
+- **Show the correct answers**: After each attempt, After the last attempt, Never.
+- **Shuffle the options for each student**.
+
+시간 제한은 없습니다.
+
+**Preview as student**를 사용하면 수강생처럼 퀴즈를 풀어볼 수 있습니다. 답은 채점되지만 아무것도 저장되지 않습니다.
+
+수강생이 시도한 뒤에도 퀴즈를 편집할 수 있습니다. 그들의 시도와 최고 점수는 유지되며 다시 채점되지 않습니다. 시도 중인 수강생은 제출하기 전에 변경된 질문을 확인하라는 안내를 받습니다.
+
+## 퀴즈: 수강생용
+
+퀴즈에는 문항 수, 합격 점수, 남은 시도 횟수가 표시됩니다.
+
+1. **Start quiz**를 선택합니다.
+2. 각 질문에 답합니다. **Next**와 **Back**으로 이동합니다.
+3. **Review answers**를 선택하면 내가 답한 것과 아직 답하지 않은 것이 표시됩니다. **Change**를 누르면 해당 질문으로 돌아갑니다.
+4. **Submit answers**를 선택합니다.
+
+결과에는 이번 시도의 점수와 합격 여부가 표시됩니다. 최고 점수가 반영됩니다.
+
+- **Resume quiz**는 중단한 시도를 이어서 합니다.
+- **Retake quiz**는 시도가 남아 있는 동안 다시 시도합니다.
+- 퀴즈에 합격하거나 마지막 시도를 사용하면 완료로 표시됩니다.
+- 보관된 강좌에서는 퀴즈가 닫혀 있습니다.
+
+## 과제: 강사용
+
+모듈에서 **New assignment**를 선택하고 종류를 고릅니다.
+
+- **Upload**: 수강생이 파일을 제출하면 내가 채점합니다.
+- **Quiz**: 자동으로 채점되는 퀴즈.
+
+업로드 과제에는 **Assignment title**, **Instructions**, **Max points**(1에서 1000 사이의 정수), 선택 사항인 마감일이 있습니다.
+
+### 채점
+
+**Home**에는 **Waiting for grading** 제출물이 나열됩니다. **Course content**에서 과제의 **Submissions** 링크를 누르면 모든 수강생이 Not submitted, Waiting, Resubmission requested, Returned 상태로 나열됩니다.
+
+1. 제출물을 엽니다.
+2. 파일을 읽습니다.
+3. 0에서 최대 점수 사이의 **Points**와 **Feedback**을 입력합니다.
+4. **Return**을 선택해 수강생에게 점수를 주거나, **Request resubmission**을 선택해 다른 버전을 요청합니다.
+
+작업물을 반환한 뒤에도 **Save grade**로 점수를 바꿀 수 있습니다. 바꿀 때마다 수강생에게 알림이 갑니다. 강좌를 나간 수강생의 작업물은 읽을 수 있지만 채점할 수는 없습니다.
+
+## 과제: 수강생용
+
+과제에는 안내, **Maximum points**, 있는 경우 마감일이 표시됩니다.
+
+1. **Choose file**을 선택하고 작업물을 고릅니다.
+2. **Submit**을 선택합니다.
+
+- 최대 100 MB의 파일 하나를 제출합니다. pdf, docx, xlsx, pptx, odt, ods, odp, txt, csv, md, png, jpg, jpeg, gif, webp, zip.
+- **늦은 제출도 받습니다.** 마감일이 지나면 제출물에 **Late**가 표시됩니다.
+- **Resubmit**은 강사가 반환하기 전까지 파일을 교체합니다. 반환된 작업물은 바꿀 수 없습니다.
+- 강사가 재제출을 요청하면 피드백을 보고 새 버전을 제출할 수 있습니다.
+- 반환된 작업물에는 점수와 피드백이 표시됩니다.
+- 보관된 강좌에서는 더 이상 작업물을 제출할 수 없습니다.
+
+작업물이 반환되었을 때, 재제출이 요청되었을 때, 점수가 바뀌었을 때 벨 아이콘으로 알림을 받으며, 끄지 않았다면 이메일도 받습니다. <Link path="guides/notifications">알림</Link>을 참고하세요.
+
+점수는 수료증에 반영될 수 있습니다. <Link path="guides/certificates">수료증</Link>을 참고하세요.

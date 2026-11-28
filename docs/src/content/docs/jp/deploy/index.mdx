@@ -1,0 +1,65 @@
+---
+title: デプロイの概要
+description: Discava のフォークから、GitHub Actions によって AWS アカウントにデプロイされた稼働中の環境までの手順です。
+sidebar:
+  order: 0
+  label: Overview
+---
+
+import Link from '@components/link.astro';
+
+このセクションでは、何もない状態から、GitHub Actions がデプロイしてくれる稼働中の Discava 環境までを案内します。ターミナル、GitHub、AWS の基本に慣れていることを前提としています。
+
+## 最終的に得られるもの
+
+- あなたが管理する、GitHub 上の Discava の**フォーク**
+- AWS アカウント内の Discava の**ステージ**: 3 つのポータル、3 つの API、データベース、動画処理、検索、決済
+- フォーク内の **Deploy ワークフロー**。手動で実行したときや、`main` で CI が成功するたびにステージをデプロイします
+- どこにも**長期間有効な AWS キーはありません**。GitHub は短期間有効なトークン（OIDC）で AWS にサインインします
+
+## 構成要素のつながり
+
+```d2 title="From a push to a deployed stage"
+direction: right
+you: "You"
+fork: "Your fork on GitHub" {
+  ci: "CI workflow"
+  deploy: "Deploy workflow"
+  env: "GitHub environment\n(one per stage)"
+}
+aws: "Your AWS account" {
+  oidc: "GitHub OIDC provider"
+  deployrole: "Deploy role"
+  execrole: "Execution role"
+  cfn: "CloudFormation"
+  stage: "Discava stage"
+}
+
+you -> fork.ci: "push to main"
+fork.ci -> fork.deploy: "passes"
+fork.env -> fork.deploy: "role ARNs, region"
+fork.deploy -> aws.oidc: "short-lived token"
+aws.oidc -> aws.deployrole: "assume"
+aws.deployrole -> aws.cfn: "cdk deploy"
+aws.execrole -> aws.cfn: "used by"
+aws.cfn -> aws.stage: "creates"
+```
+
+**ステージ**は、完結した 1 つの環境です。標準で 2 つが定義されています。
+
+| ステージ | 用途 | セキュリティ設定 |
+| --- | --- | --- |
+| `discava-development` | 低コストで試す | 緩め: WAF なし、顧客管理の KMS キーなし、セルフサインアップはオフ、リクエスト上限は低め、スタックと一緒にすべて削除 |
+| `discava-production` | 実際のユーザー | 強化: WAF、キーローテーション付きの KMS 暗号化、MFA、削除保護、削除時もステートフルなリソースを保持 |
+
+まず `discava-development` から始めてください。本番の手順も同じです。
+
+## 手順
+
+1. <Link path="deploy/prerequisites">前提条件</Link>: 必要な AWS アカウント、ツール、アクセス権
+2. <Link path="deploy/setup">フォークとセットアップ</Link>: リポジトリをフォークし、AWS ロールと GitHub 環境を作成するセットアップスクリプトを実行します
+3. <Link path="deploy/first-deploy">最初のデプロイ</Link>: Deploy ワークフローを実行し、最初のユーザーを作成します
+4. <Link path="deploy/configuration">ステージ設定</Link>: カスタムドメイン、メール、支払い、上限、新しいステージ
+5. <Link path="deploy/ci-cd">CI/CD リファレンス</Link>: 各ワークフローの動作と、読み取るすべての変数
+
+必要になったときのために、あと 2 つのページがあります。メンテナンススクリプトも載っている<Link path="deploy/from-your-machine">自分のマシンからのデプロイ</Link>と、<Link path="deploy/troubleshooting">トラブルシューティング</Link>です。

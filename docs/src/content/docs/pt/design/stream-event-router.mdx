@@ -1,0 +1,131 @@
+---
+title: Stream event router
+description: "Como um recurso reage a mudanças na core table: o registro, sua fila e fila de falhas, as obrigações do handler, o comportamento local e o redrive."
+sidebar:
+  order: 7
+---
+
+**Spec:** [`specs/20261116-183449-stream-event-router/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-183449-stream-event-router/)
+
+O stream do DynamoDB da core table tem **um único leitor**: o stream router. Ele envia cada mudança para a fila de todo recurso que a quer, e o handler de cada recurso lê a própria fila.
+
+Um recurso que reage a mudanças na tabela adiciona um registro, um handler e a ligação do handler (abaixo). Não adiciona fila, alarme ou mapeamento de stream próprios. Oito recursos estão registrados hoje; a [tabela abaixo](#métricas-para-acompanhar) os lista.
+
+```d2 title="One stream reader, one queue and failure queue per feature"
+table: "Core table"
+stream: "DynamoDB Stream"
+router: "Stream router"
+pq: "progress-recalculation queue"
+sq: "search-indexing queue"
+pf: "progress failure queue"
+sf: "search failure queue"
+ph: "progress handler"
+sh: "search handler"
+
+table -> stream
+stream -> router
+router -> pq: "filters match"
+router -> sq: "filters match"
+pq -> ph
+sq -> sh
+pq -> pf: "after maxReceiveCount"
+sq -> sf: "after maxReceiveCount"
+```
+
+## O registro
+
+`STREAM_FEATURES` em `packages/databases/core-table/src/helpers/stream-features.ts` é a única definição que o stack deployado e o event runner local leem.
+
+| Campo | Significado |
+|---|---|
+| `name` | Único, em kebab-case. Dá nome à fila, à fila de falhas, ao alarme e ao handler |
+| `filters` | Quais registros o recurso quer: um `eventName` (`INSERT`, `MODIFY` ou `REMOVE`), a `image` a examinar (`NewImage` ou `OldImage`) e as `entities` (nomes de entidades do ElectroDB). Um registro que passa em qualquer filtro vai para o recurso |
+| `handler` | A função `events-*` que lê a fila do recurso |
+| `batch` | `maxRecords` e `windowSeconds`: quantas mudanças, e quanto tempo esperar para juntá-las, por execução do handler |
+| `maxReceiveCount` | Quantas vezes uma mensagem é recebida antes de ir para a fila de falhas |
+| `maxConcurrency` | Limite opcional de execuções simultâneas do handler (pelo menos 2, um mínimo do event source mapping) |
+
+`featuresFor(record)` é a única lógica de correspondência. O router e o runner local a chamam, então não podem discordar. Um registro vai para todo recurso com um filtro que case, como cópia própria, e para nenhum outro. Um registro que não casa com nenhum não produz nada.
+
+Os filtros e o matcher de cada recurso ficam em seu próprio módulo ao lado do registro (`progress-stream.ts` com `PROGRESS_STREAM_FILTERS` e `matchesProgressStreamFilters`, `search-stream.ts`, e assim por diante), e `featuresFor` chama esses matchers.
+
+Os testes falham quando um nome se repete, um filtro nomeia uma entidade que a core table não define, um filtro não casa com nada nos registros de amostra (`stream-features.test.ts`), ou um `handler` não nomeia nenhuma função (`handlers.test.ts` em `packages/events`).
+
+## Adicionando um recurso
+
+1. Adicione uma entrada em `STREAM_FEATURES`.
+2. Escreva o handler em `packages/events` e seu wrapper `events-*` com `ts#lambda-function`. Leia seus registros por `sqsToStreamRecords` (`src/router/sqs-stream-records.ts`), que desembrulha as mensagens da fila em registros do stream.
+3. Adicione o handler em `HANDLERS` em `packages/events/src/router/handlers.ts`, por onde o runner local despacha. `handlers.test.ts` falha quando o `handler` de um registro não está nele, ou quando ele contém um handler que nenhum recurso usa.
+4. Construa a Lambda do handler em `StreamRouterStack` (`packages/infra/src/stacks/stream-router-stack.ts`), como `createProgressRecalculationLambda` e `createSearchIndexingLambda` fazem: crie a função `events-*`, dê a ela o que lê e grava (a core table, suas configurações de deploy e assim por diante), e adicione-a ao objeto `handlers` passado ao `StreamRouter`, com o nome do recurso como chave. Sem isso, o `StreamRouter` lança `No handler given for stream feature '<name>'` no synth.
+5. Com o handler passado, o construct `StreamRouter` constrói a fila, a fila de falhas, o alarme e o event source mapping a partir da entrada, e o runner local constrói seu equivalente.
+6. Escreva os testes de entrega duplicada e reordenada do handler (abaixo).
+7. Adicione as métricas de fila do recurso à [lista abaixo](#métricas-para-acompanhar).
+
+## O que o construct constrói por recurso
+
+- Uma **fila**, com um visibility timeout de seis vezes o timeout do handler.
+- Uma **fila de falhas**, que guarda uma mensagem após `maxReceiveCount` recebimentos e a mantém por 14 dias.
+- Um **alarme** que fica em estado de alarme sempre que a fila de falhas contém qualquer mensagem. Ele não tem destino de notificação: aparece no console do CloudWatch.
+- Um **event source mapping** da fila para o handler, usando o `batch` e o `maxConcurrency` do registro.
+
+Todas as filas compartilham uma chave KMS gerenciada pelo cliente, com rotação. Um stage pode mudar para a criptografia gerenciada pelo SQS com `enableKmsEncryption: false`, como a core table. As mensagens contêm registros inteiros da tabela, então trate-as como dados da tabela.
+
+O router tem uma fila de falhas e um alarme próprios (`StreamRouterFailures`) para um registro que ele nunca consegue enviar: grande demais para uma mensagem, ou recusado pela fila. Ela guarda uma descrição do registro (seu id de evento, chaves, entidade, recursos, tamanho e o motivo; não seu conteúdo) para que possa ser encontrado na tabela. Os lotes com falha do próprio mapeamento do stream (números de shard e de sequência) também vão para lá. Um envio que falha por um motivo transitório é repetido pelo mapeamento do stream, só para aquele registro.
+
+## Obrigações do handler
+
+O router não promete ordem por registro nem entrega exatamente uma vez. Todo handler DEVE ser seguro para rodar duas vezes com os mesmos registros, e com registros em qualquer ordem, e DEVE dizer como no comentário de cabeçalho do seu arquivo:
+
+- **Derive o resultado dos dados atuais** onde a ordem importa, nunca só do registro. A indexação de busca lê da mudança apenas a identidade do curso e relê o curso da core table, depois o indexa se estiver publicado e o remove se não estiver publicado ou tiver sumido. O recálculo de progresso recalcula o progresso de cada aluno a partir do currículo e das conclusões a cada execução.
+- Uma mudança que não pode ser tratada (não nomeia nenhum curso, por exemplo) **falha** em vez de ser pulada, para que acabe na fila de falhas onde alguém possa vê-la.
+- Contadores e outros valores que se acumulam a partir dos próprios registros (aplicar uma mudança duas vezes ou fora de ordem os faz divergir) precisam de uma verificação própria de que a entrega duplicada e a reordenada dão o mesmo resultado, ou devem ser recalculados a partir da tabela.
+
+Os testes de um novo recurso incluem uma entrega duplicada e uma reordenada.
+
+## Falhas e redrive
+
+Um handler que lança um erro devolve suas mensagens à fila após o visibility timeout. Após `maxReceiveCount` recebimentos, uma mensagem vai para a fila de falhas daquele recurso e deixa de bloquear mudanças posteriores. Os outros recursos não são afetados.
+
+Depois que a causa for corrigida, reproduza as mensagens com o redrive do próprio serviço de filas. Nenhuma ferramenta de replay foi construída, porque os handlers são seguros para rodar de novo.
+
+Para um stage deployado, no console do SQS abra a fila de falhas e escolha **Start DLQ redrive** para a fila do recurso (ou use `aws sqs start-message-move-task --source-arn <failure queue ARN> --destination-arn <feature queue ARN>`). Verifique que o alarme da fila de falhas volta para OK.
+
+## Métricas para acompanhar
+
+Toda fila SQS publica métricas de profundidade e idade no namespace `AWS/SQS`, com uma dimensão `QueueName`:
+
+- **`ApproximateNumberOfMessagesVisible`** na fila de um recurso: mudanças esperando. Deve voltar para perto de zero entre rajadas.
+- **`ApproximateAgeOfOldestMessage`** na fila de um recurso: quão atrás o handler está. Uma idade crescente com profundidade estável significa um handler travado ou com throttling.
+- **`ApproximateNumberOfMessagesVisible`** na fila de falhas de um recurso: qualquer valor acima de zero é trabalho deixado de lado e dispara o alarme do recurso.
+
+| Recurso | Fila | Fila de falhas |
+|---|---|---|
+| `progress-recalculation` | `ProgressRecalculationQueue` | `ProgressRecalculationFailures` |
+| `search-indexing` | `SearchIndexingQueue` | `SearchIndexingFailures` |
+| `transcript-indexing` | `TranscriptIndexingQueue` | `TranscriptIndexingFailures` |
+| `analytics-update` | `AnalyticsUpdateQueue` | `AnalyticsUpdateFailures` |
+| `earnings-recording` | `EarningsRecordingQueue` | `EarningsRecordingFailures` |
+| `notification-delivery` | `NotificationDeliveryQueue` | `NotificationDeliveryFailures` |
+| `caption-translation` | `CaptionTranslationQueue` | `CaptionTranslationFailures` |
+| `brand-publishing` | `BrandPublishingQueue` | `BrandPublishingFailures` |
+
+Os nomes são os ids lógicos do construct (os nomes das filas deployadas levam o prefixo do stack e um sufixo). Um novo recurso adiciona uma linha aqui.
+
+## Comportamento local
+
+`pnpm dev` roda o mesmo router no event runner (`packages/events/src/local`), com o ElasticMQ como fila (compatível com a API do SQS, em Docker, em memória) e um runner por registro de recurso. Ele usa os mesmos `STREAM_FEATURES` e `featuresFor` do router deployado e mantém o tamanho de lote e a janela de cada recurso. Uma mensagem recebida `maxReceiveCount` vezes vai para a fila de falhas do recurso e é registrada no log. Nada precisa de uma conta AWS.
+
+O runner (porta 2024) tem rotas para ver e reproduzir as filas locais:
+
+```sh
+# queue and failure queue counts per feature
+curl http://localhost:2024/router/queues
+
+# move a feature's failed messages back to its queue
+curl -X POST http://localhost:2024/router/redrive/search-indexing
+
+# make a feature's next 5 batches fail, to reproduce a failure end to end
+curl -X POST http://localhost:2024/router/fail/search-indexing -d '{"batches": 5}'
+```
+
+O redrive é um pequeno helper do runner, não o redrive do serviço de filas, que o ElasticMQ não documenta. As filas ficam em memória, então parar o `pnpm dev` as esvazia.

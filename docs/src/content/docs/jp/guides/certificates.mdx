@@ -1,0 +1,82 @@
+---
+title: 修了証
+description: コースの修了証をオンにして発行条件を設定する方法、受講者の要件カード、修了証の表示、ダウンロード、共有、公開ページ、取り消しと復元。
+---
+
+import Link from '@components/link.astro';
+
+コースは、要件を満たした各受講者に修了証を発行できます。すべての修了証には ID と公開ページがあり、誰でもそれで確認できます。
+
+## 講師向け: 修了証を提供する
+
+1. **My Courses** からコースを開き、**Certificates** セクションに移動します。
+2. **Issue a certificate on completion** をオンにします。
+3. 必要に応じて **Require passing every quiz** にチェックを入れます。合格点が 0% のクイズは対象になりません。
+4. 必要に応じて **Require graded assignments to be returned with at least** にチェックを入れ、パーセンテージとして 1 から 100 の整数を入力します。
+
+コースのすべての項目を完了することは、常に必須です。
+
+要件を変更しても、まだ修了証を持っていない受講者にだけ影響します。その後に条件を満たした受講者には自動で発行され、すでに持っている人が失うことはありません。
+
+同じセクションの **Issued certificates** には、学習者、修了証 ID、修了日、状態が一覧表示されます。
+
+## 受講者向け: 修了証を取得する
+
+コースの **Certificate** カードに、まだ必要なことが表示されます。
+
+| 要件 | 表示内容 |
+| --- | --- |
+| Complete every item | すべてを終えたかどうか |
+| Pass every quiz | 各クイズが Passed、Not attempted、Not passed yet のいずれか |
+| Graded assignments returned with at least a percentage | 各課題が Done、Not submitted、Waiting to be graded のいずれか、または返却時のスコア |
+
+残りの受験回数がないクイズには、「Not passed, no attempts left. Ask your instructor for another attempt.」と表示されます。
+
+すべての条件を満たすと、カードに「Your certificate is being prepared.」と表示され、その後、次の操作が表示されます。
+
+- **View**: 修了証のページを開きます。
+- **Download PDF**。
+- **Copy link**: 修了証のページのアドレスをコピーします。
+- **Add to LinkedIn**。
+
+ベルとメールでも通知され、後で LinkedIn への追加を促すリマインダーが 1 回届きます。<Link path="guides/notifications">通知</Link> を参照してください。
+
+## 修了証のページ
+
+`/certificates/<certificate ID>` のページは公開されています。「Certificate of completion」、学習者の名前、コース、日付、修了証が証明する内容、修了証 ID が表示されます。リンクを知っていれば、サインインなしで誰でも読めます。
+
+存在しない ID では「Certificate not found」と表示されます。
+
+## LinkedIn に追加する
+
+1. コースの **Certificate** カード、またはサインイン中の自分の修了証のページで **Add to LinkedIn** を選びます。
+2. **Continue to LinkedIn** を選びます。
+3. LinkedIn で項目を保存します。
+
+自分の修了証のページには、フォームを手入力する場合に LinkedIn が求める項目（発行組織、発行日、資格 ID、資格 URL）も表示されます。
+
+## 取り消しと復元
+
+取り消された修了証は有効ではなくなります。公開ページには「This certificate has been revoked and is no longer valid.」と表示されます。受講者に通知され、コースのカードに日付と理由が表示されます。復元すると同じ ID で再び有効になり、受講者に再度通知されます。
+
+| 誰が | どこで | 指定できる理由 |
+| --- | --- | --- |
+| コースの講師 | コースの **Certificates** セクションの **Issued certificates** | Academic integrity、Issued in error、Other |
+| 管理者 | 管理者ポータルの **Certificates** | 同じ理由と Order refunded |
+
+**講師の場合:** 修了証の **Revoke** を選び、**Reason** を選び、必要なら **Note** を追加して確定します。**Restore** で元に戻せます。**History** には、誰がいつ取り消し、復元したかが表示されます。
+
+**管理者の場合:**
+
+1. 管理者ポータルで **Certificates** を開きます。
+2. **Certificate ID** を入力して **Look up** を選びます。修了証は **Valid** または **Revoked** と表示されます。
+3. **Revoke** を選び、**Reason** を選び、**Revoke certificate** で確定します。理由が Other の場合は **Note** が必要です。
+
+**Restore** を **Restore certificate** で確定すると、元に戻ります。
+
+誰が誰の操作を元に戻せるか:
+
+- 管理者は、どの修了証でも復元できます。
+- 講師は、講師が取り消した修了証は復元できますが、管理者が取り消したものは復元できません。その場合は「Revoked by an administrator」と表示されます。
+
+有料コースの全額返金だけでは、修了証は取り消されません。<Link path="guides/payments">有料コースと支払い</Link> を参照してください。

@@ -1,0 +1,220 @@
+---
+title: Luồng request và dữ liệu
+description: Cách đăng nhập, một lệnh gọi API, một trang công khai, một lượt tải video, một thay đổi dữ liệu, một lần mua và một lượt tìm kiếm đi qua các thành phần của Discava.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+Bảy luồng giải thích phần lớn hệ thống.
+
+## Đăng nhập
+
+```d2 title="Sign-in"
+shape: sequence_diagram
+browser: "Browser"
+portal: "Portal (CloudFront)"
+cognito: "Cognito"
+trigger: "Pre token generation"
+table: "Core table"
+
+browser -> portal: "load app and runtime-config.json"
+browser -> cognito: "redirect to sign-in page"
+cognito -> trigger: "before issuing tokens"
+trigger -> table: "write the user record"
+cognito -> browser: "tokens, with the user's groups"
+```
+
+1. Cổng tải lên và đọc `runtime-config.json` để tìm Cognito.
+2. Người dùng đăng nhập trên trang được lưu trữ (hosted page) của Cognito.
+3. Trước khi cấp token, Cognito gọi một hàm ghi bản ghi của người dùng vào bảng core, để ứng dụng có một dòng cho bất kỳ ai đang giữ token. Việc ghi này theo kiểu cố gắng hết sức: nếu nó lỗi hoặc chậm, người dùng vẫn đăng nhập được, và lần đăng nhập hoặc làm mới token kế tiếp sẽ thử lại.
+4. Trình duyệt nhận các token có chứa các nhóm của người dùng.
+
+Khi ai đó tự đăng ký, một trigger thứ hai thêm họ vào các nhóm `student` và `instructor`.
+
+## Gọi một API
+
+```d2 title="An API call"
+shape: sequence_diagram
+browser: "Browser"
+waf: "WAF"
+gw: "API Gateway"
+fn: "API function"
+table: "Core table"
+
+browser -> waf: "tRPC call with token"
+waf -> gw: "allowed"
+gw -> gw: "verify token with Cognito, throttle"
+gw -> fn: "invoke"
+fn -> fn: "check group, validate input"
+fn -> table: "read or write"
+fn -> browser: "result"
+```
+
+Một request được kiểm tra ba lần trước khi chạm vào dữ liệu:
+
+1. **WAF**, khi stage bật nó, lọc các kiểu tấn công phổ biến.
+2. **API Gateway** xác minh token với user pool và áp dụng các giới hạn request. Một vài procedure công khai, như xem trang giới thiệu của một khóa học đã xuất bản, bỏ qua bước kiểm tra token.
+3. **Hàm** kiểm tra nhóm của người gọi (instructor-api yêu cầu `instructor`, admin-api yêu cầu `admin`), xác thực đầu vào, và áp dụng quy tắc của procedure đó, chẳng hạn "người gọi đã ghi danh vào khóa học này".
+
+## Phục vụ một trang công khai
+
+Trang giới thiệu khóa học, hồ sơ giảng viên và trang chứng chỉ phải đọc được bởi trình thu thập (crawler) và bản xem trước liên kết, vốn không chạy JavaScript của cổng.
+
+```d2 title="A public page"
+shape: sequence_diagram
+visitor: "Crawler or browser"
+cf: "Student portal (CloudFront)"
+fn: "Page renderer"
+table: "Core table"
+
+visitor -> cf: "GET /learn/<courseId>"
+cf -> fn: "on a cache miss"
+fn -> table: "read the course"
+fn -> cf: "HTML"
+cf -> visitor: "HTML, cached for up to five minutes"
+```
+
+1. CloudFront distribution của cổng học viên chuyển `/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml` và `/robots.txt` tới hàm render trang. Mọi đường dẫn khác là site tĩnh.
+2. Hàm render đọc bảng và điền nội dung cùng metadata của trang vào `index.html` của chính cổng. Nó chỉ có quyền đọc, và chỉ CloudFront mới gọi được nó.
+3. CloudFront cache câu trả lời chỉ theo đường dẫn, nên nó không bao giờ phụ thuộc vào người hỏi.
+
+<Link path="design/public-pages">Trang công khai</Link> có thiết kế đầy đủ.
+
+## Hành trình của một video
+
+```d2 title="From upload to playback"
+direction: right
+instructor: "Instructor"
+api: "instructor-api"
+upload: "Upload bucket"
+mc: "MediaConvert"
+lesson: "Lesson media bucket"
+done: "transcode-complete"
+tr: "Transcribe"
+cap: "transcribe-complete"
+table: "Core table"
+cf: "CloudFront"
+student: "Student"
+
+instructor -> api: "1. ask to upload"
+instructor -> upload: "2. PUT file (presigned URL)"
+api -> mc: "3. submit job"
+mc -> lesson: "4. HLS renditions"
+mc -> done: "5. job finished (EventBridge)"
+done -> table: "mark ready"
+done -> tr: "6. start captions"
+tr -> cap: "7. finished (EventBridge)"
+cap -> lesson: "caption track"
+student -> cf: "8. play (signed)"
+cf -> lesson
+```
+
+**Tải lên.** Trình duyệt tải thẳng lên S3 bằng presigned URL do instructor-api cấp, nên các tệp lớn không bao giờ đi qua một hàm Lambda.
+
+**Transcode.** MediaConvert biến tệp tải lên thành các bản HLS ở nhiều mức chất lượng, để trình phát thích ứng với kết nối của người xem. Khi job kết thúc, một rule EventBridge gọi một hàm đánh dấu video là sẵn sàng và bắt đầu một job Transcribe để tạo phụ đề.
+
+**Phụ đề.** Khi Transcribe xong, một hàm thứ hai lưu track phụ đề. Nếu khóa học có các ngôn ngữ phụ đề khác, tính năng dịch phụ đề (xem [Phản ứng với thay đổi](#phản-ứng-với-thay-đổi)) dịch track đó bằng Amazon Translate. Tính năng lập chỉ mục bản chép lời thêm văn bản phụ đề vào tìm kiếm.
+
+**Khôi phục.** Một hàm chạy mỗi 30 phút để tìm các video bị kẹt trong lúc xử lý. Mỗi handler hoàn tất có một hàng đợi lỗi, và các tệp đã gỡ được xóa bằng các lịch dọn dẹp.
+
+**Phát.** Media bài học là riêng tư. Khi một học viên đã ghi danh mở bài học, core-api kiểm tra việc ghi danh và cấp một chữ ký CloudFront ngắn hạn. CloudFront chỉ phục vụ video cho các request mang chữ ký đó. Hai thứ mở cho bất kỳ ai, dù đã đăng nhập hay chưa: video xem trước của khóa học, và các bài học mà giảng viên đánh dấu là xem trước miễn phí. Khóa ký do một hàm riêng trong mỗi API có ký nắm giữ, không phải hàm dùng chung của API.
+
+## Phản ứng với thay đổi
+
+Một số kết quả phụ thuộc vào nhiều bản ghi: tiến độ khóa học của học viên, mục tìm kiếm của khóa học, số liệu phân tích và thu nhập của giảng viên. Chúng không được tính trong request làm thay đổi dữ liệu. Chúng được tính lại sau đó từ change stream của bảng.
+
+```d2 title="One stream reader, one queue per feature"
+direction: right
+api: "Any API write"
+table: "Core table"
+stream: "Change stream"
+router: "Stream router"
+q1: "progress queue"
+q2: "search queue"
+q3: "analytics queue"
+q4: "notification queue"
+h1: "Progress recalculation"
+h2: "Search indexing"
+h3: "Analytics update"
+h4: "Notification delivery"
+os: "OpenSearch"
+ses: "SES"
+
+api -> table
+table -> stream
+stream -> router
+router -> q1
+router -> q2
+router -> q3
+router -> q4
+q1 -> h1
+q2 -> h2
+q3 -> h3
+q4 -> h4
+h1 -> table
+h3 -> table
+h2 -> os
+h4 -> ses
+```
+
+Sơ đồ cho thấy bốn trong tám tính năng:
+
+| Tính năng | Phản ứng với một thay đổi bằng cách |
+| --- | --- |
+| Tính lại tiến độ | Cập nhật tiến độ khóa học của học viên, và cấp chứng chỉ khi khóa học hoàn thành |
+| Lập chỉ mục tìm kiếm | Cập nhật mục của khóa học trong index khóa học |
+| Lập chỉ mục bản chép lời | Cập nhật văn bản phụ đề của một video trong index bản chép lời |
+| Cập nhật phân tích | Cập nhật các số liệu phân tích của khóa học |
+| Gửi thông báo | Phát một thông báo tới các học viên của nó và gửi email qua SES |
+| Ghi nhận thu nhập | Ghi lại phần của mỗi giảng viên trong một đơn hàng đã thanh toán |
+| Dịch phụ đề | Dịch phụ đề của một video sang các ngôn ngữ khác của khóa học |
+| Xuất bản thương hiệu | Ghi tệp thương hiệu của nền tảng vào media công khai, nơi các cổng tải về |
+
+- **Stream router** là bên đọc duy nhất của stream. Nó sao chép mỗi thay đổi vào hàng đợi của mọi tính năng có bộ lọc khớp.
+- Mỗi **tính năng** có hàng đợi riêng, nên một tính năng chậm hoặc lỗi không bao giờ làm chậm tính năng khác.
+- Một thông điệp cứ lỗi mãi sẽ chuyển sang **hàng đợi lỗi** của tính năng đó, nơi phát ra một cảnh báo. Người vận hành sửa nguyên nhân rồi redrive hàng đợi.
+- Các handler có thể nhận một thay đổi hai lần hoặc sai thứ tự, nên mỗi handler được viết để cho cùng một kết quả trong cả hai trường hợp.
+
+Hệ quả với người dùng: các số liệu như tiến độ và phân tích cập nhật sau hành động gây ra chúng vài giây.
+
+<Link path="design/stream-event-router">Stream event router</Link> có thiết kế đầy đủ, còn <Link path="design/search">Tìm kiếm</Link> và <Link path="design/progress-and-completion">Tiến độ và hoàn thành</Link> bàn về hai trong số các tính năng của nó.
+
+## Mua một khóa học
+
+Một khóa học trả phí được mua trên trang của Stripe, và học viên được ghi danh nhờ xác nhận của Stripe, không bao giờ nhờ việc trình duyệt quay lại.
+
+```d2 title="A purchase"
+direction: right
+student: "Student portal"
+core: "core-api"
+table: "Core table"
+stripe: "Stripe"
+hook: "Stripe webhook API"
+
+student -> core: "1. Buy now"
+core -> table: "2. pending order"
+core -> stripe: "3. create checkout"
+student -> stripe: "4. pay"
+stripe -> hook: "5. signed confirmation"
+hook -> table: "6. order paid + enrolment"
+```
+
+1. core-api ghi một đơn hàng `pending`, rồi yêu cầu Stripe tạo một trang thanh toán và đưa học viên tới đó. Số tiền là giá của chính khóa học, trừ đi mã giảm giá nếu học viên có nhập, và không bao giờ là con số do trình duyệt gửi. Mã giảm giá được giữ chỗ trước khi đơn hàng được ghi, nên giới hạn sử dụng của nó vẫn đúng khi nhiều học viên thanh toán cùng lúc.
+2. Học viên thanh toán trên Stripe. Discava không bao giờ thấy số thẻ.
+3. Stripe gửi một xác nhận có chữ ký tới API webhook. Handler xác minh chữ ký, rồi đánh dấu đơn hàng đã thanh toán và tạo bản ghi ghi danh trong một transaction.
+4. Quay lại trang khóa học, cổng chờ bản ghi ghi danh xuất hiện, thường trong vài giây.
+
+Stripe có thể gửi một xác nhận nhiều hơn một lần, nên handler không thay đổi gì ở lần thứ hai. Một khoản thanh toán không thể được xử lý, chẳng hạn cho một khóa học đã bị gỡ xuất bản trong lúc đó, sẽ được hoàn tiền tự động.
+
+Đơn hàng đã thanh toán sau đó đi qua change stream như mọi lần ghi khác: tính năng thu nhập ghi lại phần của mỗi giảng viên, và một lượt chạy hằng ngày trả những gì đến hạn. <Link path="design/payments">Thanh toán</Link> và <Link path="design/instructor-payouts">Chi trả cho giảng viên</Link> có thiết kế đầy đủ.
+
+## Tìm kiếm
+
+Tìm kiếm đọc từ OpenSearch, được stream giữ cho luôn cập nhật.
+
+- **Danh mục.** Procedure tìm kiếm công khai của core-api gửi truy vấn và bộ lọc, rồi trả về các khóa học đã xuất bản được xếp hạng theo mức liên quan và đánh giá. Một procedure thứ hai gợi ý tiêu đề khi học viên đang gõ. Một khóa học mới xuất bản xuất hiện vài giây sau khi xuất bản.
+- **Bên trong một khóa học.** Một học viên đã ghi danh có thể tìm những gì được nói trong các video của khóa học. core-api quyết định học viên được xem video nào dựa trên bảng, và giới hạn truy vấn trong các video đó, nên index không bao giờ quyết định quyền truy cập.
+
+<Link path="design/search">Tìm kiếm</Link> có phần thiết kế.

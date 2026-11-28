@@ -1,0 +1,46 @@
+---
+title: Analíticas del curso
+description: Qué muestran el panel del portal del instructor y la página de analíticas del curso, cómo se define cada cifra y por qué las cifras van unos segundos por detrás de los registros.
+sidebar:
+  order: 8
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261120-154551-first-lesson-start/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154551-first-lesson-start/) (activación, y las respuestas y descartes del aviso de la primera lección)
+
+El panel del portal del instructor muestra una tarjeta de resumen por curso, y cada tarjeta abre la página de analíticas de ese curso. Ambos leen cifras guardadas que se mantienen al día desde el stream de la tabla core. Nada se cuenta a partir de los registros durante una solicitud, así que las páginas cargan rápido sin importar cuántos estudiantes estén inscritos.
+
+El portal las lee mediante `analytics.courseSummaries` (las tarjetas), `analytics.course`, `analytics.quiz` y `analytics.videoQuestions` de instructor-api.
+
+## Definiciones
+
+| Cifra | Definición |
+|---|---|
+| **Inscripciones** | Todas las inscripciones que ha tenido el curso, incluidos los estudiantes que se dieron de baja. El gráfico de historial cuenta cada una en el día UTC en que el estudiante se inscribió |
+| **Dados de baja** | Inscripciones cuyo estado es dropped. Permanecen en el historial de inscripciones pero salen de todas las demás cifras de abajo |
+| **Estudiante activo** | Un estudiante inscrito que completó un elemento (lo que incluye enviar una tarea), envió un intento de cuestionario o respondió una pregunta de video. Iniciar sesión o abrir una página no cuenta, porque ninguna de las dos se registra |
+| **Activos esta semana** | Estudiantes activos distintos en la semana calendario actual, de lunes a domingo, UTC. La página de analíticas también muestra los estudiantes activos distintos por día UTC, de los últimos 30 o 90 días |
+| **Tasa de finalización** | Inscripciones completadas divididas entre todas las inscripciones que no se dieron de baja. Un curso sin esas inscripciones muestra "No data", no 0% |
+| **Activadas** | Inscripciones que han hecho una primera cosa en el curso: la inscripción tiene una hora de última actividad, que se fija con el primer elemento completado, intento de cuestionario, envío de tarea o respuesta a una pregunta de video. Cuentan todas las inscripciones, incluidas las terminadas. Se cuenta a partir de la hora de última actividad de la inscripción, así que no se guarda ninguna marca nueva, y es "hasta ahora": un estudiante que aún no ha empezado todavía puede activarse. El gráfico de historial lo atribuye al día UTC en que el estudiante se inscribió |
+| **Tasa de activación** | Inscripciones activadas divididas entre todas las inscripciones, con las terminadas incluidas en ambas. Se muestra para todo el tiempo y para los estudiantes que se inscribieron en los últimos 30 o 90 días. Un curso sin inscripciones muestra "No data", no 0% |
+| **Respuestas y descartes del aviso** | Cuántos estudiantes respondieron el aviso de la primera lección y cuántos pulsaron **Not now**. Cada estudiante cuenta una vez por curso. No se registra cuántas veces se mostró el aviso, así que no hay tasa |
+| **Abandono** | Para cada lección que se muestra actualmente a los estudiantes, en el orden del curso: cuántos estudiantes la empezaron, cuántos la completaron y la proporción de completados entre los que empezaron. Se omiten las lecciones ocultas o archivadas, y las lecciones de módulos ocultos o archivados |
+| **Rangos de puntuación** | La mejor puntuación de cada estudiante por cuestionario, en rangos de diez puntos (0-9, 10-19, ... 90-100), así que un estudiante cuenta una vez sin importar cuántos intentos hizo |
+| **Preguntas más falladas** | Ordenadas por tasa de error en todos los intentos. Una pregunta necesita al menos 5 intentos para clasificarse, así que un solo intento malo no puede ponerla primera |
+| **Resultados de preguntas de video** | Para cada video mostrado a los estudiantes que tiene preguntas, y por cada pregunta actual: su momento (o "End of video"), el inicio de su enunciado, cuántos estudiantes respondieron, cuántos fallaron y la tasa de error, ordenadas como las preguntas de cuestionario con el mismo mínimo de 5 respuestas. Solo cuenta la primera respuesta registrada de cada estudiante: **Try again** y las omisiones no se registran. Las preguntas eliminadas no se listan. Los resultados no contienen ningún identificador de estudiante |
+| **Módulos sin preguntas** | La vista de abandono por lección también nombra cada módulo mostrado a los estudiantes que tiene un video mostrado y ningún cuestionario mostrado ni video mostrado con preguntas, y sugiere al instructor agregar algunas. Se lee del currículo actual, así que no es un conteo y no puede desviarse |
+
+## Actualidad
+
+Las cifras van unos segundos por detrás de los registros, igual que el progreso del curso. Un cambio (una inscripción, una finalización, un intento de cuestionario) normalmente aparece en la siguiente carga dentro de 30 segundos. Tanto las tarjetas como la página de analíticas muestran cuándo se actualizaron las cifras por última vez.
+
+## Cómo se mantienen las cifras
+
+El handler `analytics-update` es una función del <Link path="design/stream-event-router">enrutador de eventos de stream</Link>. Mantiene contadores en cinco registros de core-table: `courseStats`, `periodStats`, `lessonStats`, `quizScoreStats` y `quizQuestionStats`.
+
+- **Cada cambio cuenta una vez.** Los conteos de un cambio se escriben en una transacción con un `analyticsMarker` nombrado según el registro del stream. Un registro reentregado encuentra su marca y no cuenta nada.
+- **Cada estudiante cuenta una vez por día y semana.** Una segunda marca por estudiante y período hace que "activo" sea un conteo de estudiantes distintos.
+- **El orden no importa.** Los contadores solo se incrementan, y las cifras de abandono de una lección se determinan a partir de los registros actuales del estudiante, no del cambio que llegó.
+
+Si alguna vez las cifras se desvían de los registros, la invariante `analytics-matches-records` lo detecta, y `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId>` recalcula las cifras de un curso a partir de sus registros.

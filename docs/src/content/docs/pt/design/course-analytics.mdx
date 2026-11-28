@@ -1,0 +1,46 @@
+---
+title: Análises do curso
+description: O que o painel do portal do instrutor e a página de análises do curso mostram, como cada número é definido e por que os números ficam alguns segundos atrás dos registros.
+sidebar:
+  order: 8
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261120-154551-first-lesson-start/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154551-first-lesson-start/) (ativação e as respostas e dispensas do prompt da primeira aula)
+
+O painel do portal do instrutor mostra um cartão de resumo por curso, e cada cartão abre a página de análises daquele curso. Ambos leem números armazenados, mantidos atualizados a partir do stream da core table. Nada é contado a partir dos registros a cada requisição, então as páginas carregam rápido, não importa quantos alunos estejam matriculados.
+
+O portal os lê pelos `analytics.courseSummaries` (os cartões), `analytics.course`, `analytics.quiz` e `analytics.videoQuestions` da instructor-api.
+
+## Definições
+
+| Número | Definição |
+|---|---|
+| **Enrolments** [Matrículas] | Toda matrícula que o curso já teve, incluindo alunos que desistiram. O gráfico de histórico conta cada uma no dia UTC em que o aluno se matriculou |
+| **Dropped** [Desistências] | Matrículas cujo status é dropped. Elas continuam no histórico de matrículas, mas saem de todos os outros números abaixo |
+| **Active learner** [Aluno ativo] | Um aluno matriculado que concluiu um item (o que inclui enviar uma tarefa), enviou uma tentativa de quiz ou respondeu a uma pergunta de vídeo. Entrar na conta ou abrir uma página não conta, porque nenhum dos dois é registrado |
+| **Active this week** [Ativos nesta semana] | Alunos ativos distintos na semana civil atual, de segunda a domingo, UTC. A página de análises também mostra alunos ativos distintos por dia UTC, nos últimos 30 ou 90 dias |
+| **Completion rate** [Taxa de conclusão] | Matrículas concluídas divididas por todas as matrículas que não desistiram. Um curso sem essas matrículas mostra "No data", não 0% |
+| **Activated** [Ativados] | Matrículas que fizeram uma primeira coisa no curso: a matrícula tem um horário de última atividade, definido pelo primeiro item concluído, tentativa de quiz, envio de tarefa ou resposta a pergunta de vídeo. Toda matrícula conta, inclusive as encerradas. É contado a partir do horário de última atividade da matrícula, então nenhum marcador novo é mantido, e é "até agora": um aluno que ainda não começou pode vir a ser ativado. O gráfico de histórico o atribui ao dia UTC em que o aluno se matriculou |
+| **Activation rate** [Taxa de ativação] | Matrículas ativadas divididas por todas as matrículas, com as encerradas incluídas nos dois lados. É mostrada para todo o período e para alunos que se matricularam nos últimos 30 ou 90 dias. Um curso sem matrículas mostra "No data", não 0% |
+| **Prompt answers and dismissals** [Respostas e dispensas do prompt] | Quantos alunos responderam ao prompt da primeira aula e quantos pressionaram **Not now**. Cada aluno conta uma vez por curso. Não se registra quantas vezes o prompt foi exibido, então não há taxa |
+| **Drop-off** [Abandono] | Para cada aula exibida atualmente aos alunos, na ordem do curso: quantos alunos a iniciaram, quantos a concluíram e a parcela concluída entre os que iniciaram. Aulas ocultas ou arquivadas, e aulas de módulos ocultos ou arquivados, ficam de fora |
+| **Score bands** [Faixas de nota] | A melhor nota de cada aluno por quiz, em faixas de dez pontos (0-9, 10-19, ... 90-100), então um aluno conta uma vez, não importa quantas tentativas fez |
+| **Most-missed questions** [Perguntas mais erradas] | Classificadas pela taxa de erro em todas as tentativas. Uma pergunta precisa de pelo menos 5 tentativas para entrar na classificação, para que uma única tentativa ruim não a coloque em primeiro |
+| **Video question results** [Resultados das perguntas de vídeo] | Para cada vídeo exibido aos alunos que tem perguntas, e por pergunta atual: seu momento (ou "End of video"), o início do enunciado, quantos alunos responderam, quantos erraram e a taxa de erro, classificada como as perguntas de quiz, com o mesmo mínimo de 5 respostas. Só conta a primeira resposta registrada de cada aluno: **Try again** e pulos não são registrados. Perguntas removidas não são listadas. Os resultados não guardam nenhum identificador de aluno |
+| **Modules without questions** [Módulos sem perguntas] | A visão de abandono por aula também nomeia cada módulo exibido aos alunos que tem um vídeo exibido, nenhum quiz exibido e nenhum vídeo exibido com perguntas, sugerindo que o instrutor adicione algumas. É lido do currículo atual, então não é uma contagem e não pode divergir |
+
+## Atualização dos dados
+
+Os números ficam alguns segundos atrás dos registros, como o progresso do curso. Uma mudança (uma matrícula, uma conclusão, uma tentativa de quiz) normalmente aparece no próximo carregamento em até 30 segundos. Tanto os cartões quanto a página de análises mostram quando os números foram atualizados pela última vez.
+
+## Como os números são mantidos
+
+O handler `analytics-update` é um recurso do <Link path="design/stream-event-router">stream event router</Link>. Ele mantém contadores em cinco registros da core table: `courseStats`, `periodStats`, `lessonStats`, `quizScoreStats` e `quizQuestionStats`.
+
+- **Cada mudança conta uma vez.** Os contadores de uma mudança são gravados em uma transação junto com um `analyticsMarker` nomeado a partir do registro do stream. Um registro reentregue encontra seu marcador e não conta nada.
+- **Cada aluno conta uma vez por dia e por semana.** Um segundo marcador por aluno e período faz de "ativo" uma contagem de alunos distintos.
+- **A ordem não importa.** Os contadores só recebem somas, e os números de abandono de uma aula são definidos a partir dos registros atuais do aluno, não da mudança que chegou.
+
+Se os números algum dia divergirem dos registros, o invariante `analytics-matches-records` detecta, e `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId>` recalcula os números de um curso a partir de seus registros.

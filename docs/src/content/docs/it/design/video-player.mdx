@@ -1,0 +1,199 @@
+---
+title: Video player e sottotitoli
+description: Come il video player delle lezioni riprende, cambia velocità, risponde alla tastiera e mostra i sottotitoli, e come i sottotitoli vengono generati o caricati.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/_archive/20261115-204517-video-player/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204517-video-player/)
+
+**Spec:** [`specs/20261120-002950-transcript-search/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002950-transcript-search/)
+
+**Spec:** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/)
+
+**Spec:** [`specs/20261120-154712-caption-translation/spec.md`](https://github.com/AlexTo/discava/blob/main/specs/20261120-154712-caption-translation/spec.md) (sottotitoli tradotti)
+
+Entrambi i portali riproducono i video delle lezioni con lo stesso player, `HlsVideo` in `packages/common/shadcn`. La sua barra dei controlli (`VideoControls`) sostituisce quella del browser: riproduzione, ricerca, volume, muto, velocità, sottotitoli, trascrizione, picture-in-picture e schermo intero. Le regole non legate all'interfaccia (velocità, mappatura dei tasti, preferenze salvate, quando riportare una posizione) sono in `@discava/common-web-utils/video-player`.
+
+## Ripresa
+
+Il player salva la posizione dello studente circa ogni 10 secondi durante la riproduzione, e quando mette in pausa, termina una ricerca o lascia la pagina. La volta successiva che apre il video, salta a quel punto, resta in pausa e mostra "Resumed at m:ss" con un pulsante **Start over** finché non parte la riproduzione o passano 8 secondi.
+
+- `contentItem.saveVideoPosition` (core-api) scrive un record `videoPosition` per studente per video, sovrascritto a ogni salvataggio. `contentItem.videoUrl` lo restituisce come punto da cui riprendere.
+- Una posizione appartiene a una versione del video. Dopo che il video viene sostituito, la vecchia posizione viene ignorata.
+- Una posizione non è un completamento, né attività dello studente, né progresso.
+- L'anteprima dell'istruttore non salva una posizione.
+
+## Velocità, volume e preferenze
+
+La velocità va da 0.5x a 2x (0.5, 0.75, 1, 1.25, 1.5, 1.75, 2). Velocità, volume, muto, la scelta dei sottotitoli e se la trascrizione è aperta sono ricordati nel localStorage del browser. Se l'archiviazione non è disponibile, si applicano in silenzio i valori predefiniti.
+
+## Scorciatoie da tastiera
+
+Funzionano quando il focus è in qualsiasi punto del player. Sono ignorate nei campi di testo e con Ctrl, Alt o Meta premuti, e un tasto che il controllo in focus già usa (Spazio su un pulsante, le frecce su un cursore) è lasciato a quel controllo.
+
+| Tasto | Azione |
+|-----|--------|
+| Spazio, K | Riproduci o metti in pausa |
+| J, L | Indietro, avanti di 10 secondi |
+| Sinistra, Destra | Indietro, avanti di 5 secondi |
+| Su, Giù | Volume su, giù del 5% |
+| M | Muto |
+| C | Sottotitoli attivi o disattivati |
+| F | Schermo intero |
+| `<`, `>` | Velocità precedente, successiva |
+| Da 0 a 9 | Salta dallo 0% al 90% del video |
+
+## Sottotitoli
+
+Quando un video ha tracce di sottotitoli, il player mostra un menu dei sottotitoli: **Off**, poi ogni traccia per lingua, con quella predefinita contrassegnata. Una traccia che non si carica viene saltata con un breve avviso e il video continua a riprodursi.
+
+- **Generati automaticamente:** quando un video termina la transcodifica, Amazon Transcribe genera una traccia in background. Questo non ritarda mai il momento in cui il video diventa pronto.
+- **Caricati da un istruttore:** un istruttore può allegare un file WebVTT (`.vtt`) a un video pronto (`contentItem.captionUploadUrl`, poi `attachCaption`; `removeCaption` rimuove una traccia). Caricare per una lingua che ha già una traccia la sostituisce e ne mantiene lo stato di predefinita, quindi un caricamento che sostituisce la traccia generata automaticamente diventa quella predefinita. Un risultato successivo di Transcribe non sovrascrive mai una traccia caricata.
+- **Limiti:** un file può pesare al massimo 1 MB, un video ha al massimo 10 tracce, e c'è una traccia per lingua, da un elenco di dieci lingue (`CAPTION_LANGUAGES`).
+- **Dove stanno le tracce:** sul `contentItem` del video, in `captionTracks`. Ogni scrittore calcola il nuovo elenco con `applyCaptionChange` (`core-table/src/helpers/caption-tracks.ts`) e lo scrive condizionato a `captionTracksRev`, così due scrittori non possono sovrascriversi.
+
+### Stato dei sottotitoli
+
+Il `captionsStatus` di un video è `pending` mentre Transcribe lavora, poi `ready` o `failed`. Un job ancora in attesa dopo 2 ore viene riportato come `failed`. Un fallimento riguarda solo i sottotitoli; il video resta riproducibile. La riga della lezione dell'istruttore mostra lo stato e il numero di tracce.
+
+## Sottotitoli tradotti
+
+Un istruttore sceglie le **lingue dei sottotitoli** per un corso (fino a 9, tra le dieci lingue in cui si può caricare un sottotitolo). Ogni video del corso, e la sua anteprima, riceve una traccia di sottotitoli in ciascuna di quelle lingue, creata da Amazon Translate a partire dalla **traccia sorgente** del video: la sua traccia predefinita, che sia stata creata da Transcribe o caricata. Una traccia tradotta non è mai quella predefinita, e il menu dei sottotitoli la mostra come "*lingua* (auto-translated)".
+
+Il [pannello della trascrizione](#trascrizione) (#590), una funzionalità correlata, mostra la traccia scelta nel menu, quindi una traccia tradotta dà anche una trascrizione tradotta.
+
+### Temporizzazioni
+
+Le temporizzazioni non vengono mai inviate al servizio:
+
+1. Il WebVTT sorgente viene analizzato in cue, e solo le parole di ogni cue vengono tradotte.
+2. Il nuovo file copia ogni identificatore e riga di temporizzazione dalla sorgente senza modifiche, nello stesso ordine.
+3. I tag dei cue vengono rimossi prima della traduzione e il testo viene sottoposto di nuovo a escape dopo, quindi il testo tradotto non può formare un tag né la freccia `-->`.
+4. Prima di scrivere, l'handler verifica che il numero di cue e ogni riga di temporizzazione corrispondano. In caso contrario registra un fallimento per quella lingua.
+
+Ogni cue viene tradotto da solo, quindi una frase distribuita su più cue può risultare meno scorrevole di una traduzione a livello di frase.
+
+### Cosa avvia una traduzione
+
+La funzionalità `caption-translation` dello <Link path="design/stream-event-router">stream router</Link> (`packages/events/src/media/caption-translation.ts`) viene eseguita quando cambia un input della traduzione, e per nient'altro. La modifica di un titolo, l'attività degli studenti e le scritture dell'handler stesso non instradano nulla.
+
+| Causa | Modifica che raggiunge l'handler |
+|---------|---------------------------------|
+| Video nuovo o sostituito | cambiano le tracce non tradotte del video (o dell'anteprima del corso) |
+| Sottotitoli sorgente sostituiti o rimossi, o traccia caricata rimossa | lo stesso |
+| Lingue dei sottotitoli, o lingua di insegnamento del corso, cambiate | il record del corso; l'handler contrassegna ogni video del corso (e la sua anteprima) per la traduzione, un messaggio in coda ciascuno |
+| **Translate again** | `captionTranslationRequestedAt` viene impostato sul video, o su ogni video del corso |
+
+Il completamento di Transcribe e l'API dell'istruttore non chiamano mai Amazon Translate e non possono essere fatti fallire da esso.
+
+### Precedenza
+
+Tutte le regole sono in `applyCaptionChange` e `planCaptionTranslations`, negli helper `caption-tracks` della core table. Una traccia caricata vince sempre: l'handler scrive attraverso lo stesso controllo di revisione di ogni altro scrittore di sottotitoli, quindi in qualunque ordine arrivino un caricamento e una traduzione, resta il caricamento.
+
+| Situazione | Risultato |
+|-----------|--------|
+| Arriva una traccia tradotta per una lingua che contiene una traccia automatica o caricata | Scartata |
+| Arriva una traccia tradotta e la sua sorgente non è la traccia predefinita corrente della versione | Scartata |
+| Arriva una traccia automatica o caricata per una lingua che contiene una traccia tradotta | La sostituisce |
+| Un caricamento al limite di 10 tracce | Espelle una traccia tradotta: quella la cui lingua è ultima nell'elenco del corso |
+| La traccia predefinita viene sostituita o rimossa | Ogni traccia tradotta di quella versione viene scartata nella stessa scrittura, e rifatta dalla nuova sorgente |
+| La traccia predefinita viene rimossa | La traccia più vecchia non tradotta diventa quella predefinita |
+| La traccia sorgente automatica non è nella lingua di insegnamento del corso | Non tradotta (`language-mismatch`); una sorgente caricata viene sempre tradotta |
+
+### Fallimento e "Translate again"
+
+Un fallimento viene registrato sul video (`captionTranslation`), mai su `status`, `captionsStatus` o su una traccia, e la riproduzione non attende mai la traduzione.
+
+- Il motivo è `failed` o `too-long` (una sorgente oltre 300.000 caratteri).
+- Gli errori che un nuovo tentativo non può risolvere vengono registrati senza far fallire il messaggio in coda, così non riempiono la coda dei fallimenti.
+- I messaggi che falliscono vengono ricevuti fino a cinque volte e poi raggiungono la coda dei fallimenti e l'allarme della funzionalità.
+
+La finestra Captions mostra lo stato di ogni lingua: tradotta, caricata, in traduzione, fallita, troppo lunga, senza spazio, oppure non tradotta con il motivo.
+
+- **Translate again** (`contentItem.retryCaptionTranslation`) cancella l'esito registrato e richiede di nuovo il video.
+- **Translate missing captions again** nelle impostazioni del corso (`course.retryCaptionTranslations`) lo fa per ogni video.
+- Un messaggio perso prima che l'handler giri lascia visibile "Translating", e il rimedio è **Translate again**.
+
+### Sviluppo locale
+
+Con `LOCAL_DEV=true`, il client Translate chiama `translateLocally` (`packages/events/src/local/translator.ts`) invece dell'SDK.
+
+- Ogni testo torna come `[<target tag>] <text>`, per esempio `[es-ES] Hello`, così è chiaro quale traccia viene mostrata.
+- Una sorgente che contiene `[[fail-translation]]`, o `[[fail-translation:es-ES]]` per una sola lingua, fa fallire quella richiesta come coppia di lingue rifiutata, il che viene registrato come fallito senza nuovo tentativo.
+- Tutto il resto (stream router, coda, handler, regole delle tracce, S3Mock) è il codice reale.
+
+L'output reale di Amazon Translate, il suo comportamento con i ritorni a capo, il throttling e le metriche girano solo su uno stage distribuito.
+
+### Costo
+
+Amazon Translate addebita per carattere inviato, spazi inclusi. Il costo di un video è i suoi caratteri sorgente moltiplicati per il numero di lingue tradotte; non viene addebitato nulla per una lingua che ha già una traccia tradotta aggiornata o un caricamento, o quando la funzionalità è disattivata. Questa pagina non cita nessun prezzo: vedi la <a href="https://aws.amazon.com/translate/pricing/">pagina dei prezzi di Amazon Translate</a> e verificalo per la regione dello stage.
+
+- **Metriche:** l'handler emette metriche `CaptionTranslation` con le dimensioni `Stage` e `TargetLanguage`: `TranslatedCharacters`, `TranslatedTracks`, `TranslationFailures` e `ChunkFallbacks` (blocchi il cui numero di righe non corrispondeva e che sono stati rinviati un cue per richiesta). `Stage` separa gli stage che condividono un account. Le metriche di Translate stesso sono per account e regione, quindi la funzionalità non vi si affida.
+- **Riga di log:** una per traccia tradotta, con corso, video, lingua, caratteri e numero di richieste. Logs Insights può rispondere a "quale corso è costato di più".
+- **Impostazioni dello stage:** `captionTranslation.enabled` (quando è `false`, gli istruttori non possono scegliere le lingue, non viene tradotto nulla e le tracce tradotte esistenti restano) e `maxLanguagesPerCourse` (predefinito 9; 3 su `discava-development`).
+- **Limiti:** la stessa sorgente non viene tradotta due volte nella stessa lingua, uno stage può ridurre le lingue per corso o disattivare la funzionalità, e una sorgente oltre 300.000 caratteri non viene tradotta. Non c'è una quota di spesa per corso o per istruttore, e non c'è ancora un dashboard o un allarme sui caratteri al giorno.
+
+## Trascrizione
+
+Un pulsante **Transcript** nella barra dei controlli apre un pannello (`TranscriptPanel`) con ogni riga dei sottotitoli del video, ciascuna con il suo tempo.
+
+- Esiste solo nel player delle lezioni dello studente, e solo quando il video ha almeno una traccia di sottotitoli. L'anteprima e il portale dell'istruttore non lo mostrano.
+- Il pannello sta sotto il player a ogni larghezza, alto al massimo 20rem o metà dello schermo. Accanto al player lascerebbe il video troppo stretto per la sua barra dei controlli.
+- È nascosto mentre il player è a schermo intero.
+- Niente scorre in orizzontale alla larghezza di un telefono.
+
+- **Quale traccia:** quella scelta nel menu dei sottotitoli. Scegliere un'altra lingua cambia le righe e il nome del pannello, "Transcript (lingua)". Con i sottotitoli **Off**, il pannello mostra comunque la traccia ricordata, o quella predefinita. Se il file di nessuna traccia si carica, il pannello dice "This transcript couldn't be loaded." e il video continua a riprodursi.
+- **Scegliere una riga:** cliccare o toccare una riga cerca il suo inizio e avvia la riproduzione.
+- **Seguire:** la riga corrente è contrassegnata (un bordo a sinistra e un peso maggiore, più `aria-current="true"`) e il pannello scorre da solo per tenerla in vista. Non scorre mai la pagina e non sposta mai il focus. Scorrere, usare la rotella, toccare o spostare il focus nel pannello sospende il seguire e mostra **Jump to current line**; quel pulsante, o la scelta di una riga, lo riprende. Con il movimento ridotto attivo, lo scorrimento non è animato.
+- **Screen reader:** non c'è una live region, perché i sottotitoli e l'audio portano già il contenuto in tempo reale. Ogni riga viene letta come il suo tempo a parole ("12 minutes 40 seconds") e poi il suo testo.
+- **Stato aperto ricordato:** aperto o chiuso viene ricordato nel browser con le altre preferenze del player (`transcriptOpen`, chiuso di default).
+
+### Tasti della trascrizione
+
+Il pannello è fuori dal contenitore delle scorciatoie del player, quindi le scorciatoie sopra non valgono al suo interno: Spazio, frecce e lettere non cambiano mai il video da lì.
+
+| Tasto | Azione |
+|-----|--------|
+| Tab | Entra nell'elenco, sulla riga corrente (la prima riga prima di qualsiasi cue); un altro Tab ne esce |
+| Giù, Su | Sposta il focus sulla riga successiva, precedente |
+| Home, Fine | Sposta il focus sulla prima, ultima riga |
+| Invio, Spazio | Cerca la riga in focus e avvia la riproduzione; il focus resta su di essa |
+
+### Costruita nel browser
+
+Non esiste un'API della trascrizione. Il player recupera già il file WebVTT di ogni traccia per la sovrapposizione dei sottotitoli. Il pannello analizza lo stesso testo una sola volta (`parseWebVtt`, in `@discava/common-web-utils/webvtt`) in cue, quindi non fa richieste aggiuntive e ha esattamente l'accesso che hanno i sottotitoli.
+
+- Il testo dei cue è ridotto a testo semplice (impostazioni dei cue, tag `<v>`, `<c>`, `<i>` e di timestamp rimossi, le cinque entità WebVTT decodificate) e reso come nodi di testo.
+- L'intera trascrizione è resa, senza lista virtuale, quindi la ricerca nella pagina e i comandi di lettura di uno screen reader funzionano su di essa.
+- L'indicizzatore della <Link path="design/search">ricerca nelle trascrizioni</Link> usa lo stesso parser, quindi il pannello e l'indice concordano su cosa sia una riga.
+
+### Cercare nelle trascrizioni di un corso
+
+Il player del corso ha una casella di ricerca, "Search what was said". Inviare almeno 2 caratteri apre la pagina dei risultati del corso (`/learn/<courseId>/search`), che chiama `transcript.search` con la lingua dei sottotitoli ricordata dal discente. Ogni risultato indica il modulo, la lezione e il video, mostra le parole corrispondenti in un frammento, e rimanda alla lezione in quel momento (vedi sotto). Come viene costruito l'indice e come viene imposto l'accesso è descritto in <Link path="design/search">Ricerca</Link>.
+
+### Aprire una lezione in un momento preciso
+
+L'indirizzo di una lezione accetta due parametri facoltativi: `?item=<contentItemId>&t=<seconds>`. Un risultato della ricerca nelle trascrizioni rimanda in questo modo.
+
+- Con `item` che indica un video della lezione, la lezione scorre fino a esso, sposta il focus sul suo player, cerca `t`, resta in pausa, e mostra "Starting at m:ss" senza pulsante **Start over**.
+- `t` prende il posto della posizione salvata per quella visita, e la ricerca non salva nulla.
+- Qualsiasi altra cosa nei parametri viene ignorata e la lezione si apre come al solito.
+- I parametri non concedono nulla: la lezione si carica comunque attraverso i consueti controlli di iscrizione e visibilità.
+
+## Domande
+
+Un istruttore può inserire domande in un video (vedi <Link path="design/quizzes">Quiz</Link> per come sono memorizzate e salvate). Il player le legge con `videoQuestion.view` e registra una risposta con `videoQuestion.answer` (core-api); la scheda della domanda è `VideoQuestionCard`, guidata dall'hook `useVideoQuestions`. Un video senza domande si riproduce esattamente come sopra e non fa nessuna richiesta di domande.
+
+- **Quando viene posta una domanda:** quando la riproduzione normale raggiunge il momento di una domanda a cui il discente non ha risposto né che ha saltato in questa visita, il video si mette in pausa e la domanda appare sopra di esso dentro il player, quindi lo schermo intero viene mantenuto. Il focus della tastiera si sposta sulla domanda e il suo titolo viene annunciato. Più domande nello stesso momento vengono poste una dopo l'altra, nell'ordine dell'istruttore. Una domanda a 0:00 viene posta all'avvio della riproduzione.
+- **Rispondere:** il discente sceglie un'opzione e preme **Submit answer**, poi vede se era giusta (un'icona e parole, non solo il colore), le opzioni corrette e la spiegazione quando c'è, annunciate quando arrivano. **Continue** riprende il video da dove si era fermato, riproducendo di nuovo se era in riproduzione. **Skip** (o Esc) chiude la domanda, non registra nulla e non la pone di nuovo in questa visita. Una domanda a risposta multipla dice "Select all that apply" ed è valutata tutto o niente. Se il salvataggio fallisce, la domanda resta aperta con la scelta mantenuta e **Skip** funziona ancora.
+- **Scorciatoie mentre una domanda è aperta:** la barra dei controlli è inerte e le scorciatoie del player (Spazio, frecce, tasti numerici e il resto) non agiscono sul video sottostante. In picture-in-picture il video torna nella pagina così la domanda può essere vista.
+- **Ricerca:** cercare non apre mai una domanda, né trascinando, né con una scorciatoia, né riprendendo da una posizione salvata, anche alla prima visione. Una domanda viene posta solo quando la riproduzione raggiunge il suo momento, o quando il discente sceglie il suo indicatore.
+- **Indicatori:** la barra di ricerca ha un indicatore per ogni domanda temporizzata e uno alla fine quando c'è una verifica finale. Ognuno è un pulsante che indica il suo tempo e stato ("Question at 1:30, not answered"), e risposte e non risposte differiscono per una spunta e un punto oltre che per il colore. Scegliere un indicatore sposta a quel momento, mette in pausa e apre la domanda: una senza risposta per rispondere, una con risposta per rivederla con la risposta registrata, la chiave e la spiegazione. **Try again** lì è esercizio, valutato nel browser e non registrato.
+- **La verifica finale:** quando il video termina e ha domande finali senza risposta, la prima appare da sola ("Question 1 of 2"), poi la successiva, e un riepilogo dice a quante domande finali il discente ha risposto correttamente. Ognuna può essere saltata e la verifica può essere chiusa. Una volta risposte tutte le domande finali non riparte più da sola, e l'indicatore finale apre le risposte. Una domanda temporizzata dopo la fine del video in riproduzione viene posta con la verifica finale.
+- **Riprendere prima di una domanda aperta:** un discente che esce con una domanda aperta torna subito prima di essa, così viene posta di nuovo. A un discente la cui posizione salvata è dopo una domanda senza risposta questa non viene posta alla ripresa; il suo indicatore la mostra senza risposta.
+- **Registrato, e non:** la prima risposta a ogni domanda viene registrata, e nient'altro. I salti e **Try again** no. Una risposta non cambia mai se il video è completo (questo resta **Mark as done**), i progressi o i certificati.
+- **Fallimenti:** se le domande non si caricano, il video si riproduce come se non ne avesse. In un corso archiviato i video si riproducono senza le loro domande.
+- **Schermi piccoli e movimento:** una domanda più alta del video si estende sotto di esso e scorre con la pagina, senza scorrimento orizzontale a 375 px. Con il movimento ridotto attivo, appare senza animazione.

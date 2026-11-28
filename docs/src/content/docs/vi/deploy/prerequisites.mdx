@@ -1,0 +1,68 @@
+---
+title: Điều kiện tiên quyết
+description: Tài khoản AWS, quyền và công cụ bạn cần trước khi triển khai Discava.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+## Một tài khoản AWS
+
+Bạn cần một tài khoản AWS để triển khai vào. Một tài khoản riêng, hoặc ít nhất một tài khoản không chứa thứ quan trọng nào khác, là lựa chọn an toàn nhất khi bạn đang làm quen với hệ thống.
+
+Các stage có thể dùng chung một tài khoản. Mỗi stage có các IAM role riêng, và các lần triển khai của một stage không thể chạm tới tài nguyên của stage khác.
+
+### Quyền cho lần thiết lập một lần
+
+Script setup chạy **một lần cho mỗi stage, từ máy của bạn, với thông tin xác thực AWS của chính bạn**. Thông tin xác thực đó phải có thể:
+
+- Tạo một IAM OIDC provider, các IAM role và các IAM managed policy
+- Bootstrap CDK (`cdk bootstrap`), lệnh này tạo một stack CloudFormation với một S3 bucket, một ECR repository và các IAM role
+- Đọc các chứng chỉ ACM, nếu bạn dùng tên miền riêng
+
+`AdministratorAccess` bao phủ tất cả. Sau khi setup, các lần triển khai dùng các role có phạm vi giới hạn mà script đã tạo, không dùng thông tin xác thực của bạn.
+
+### Một region
+
+Hãy chọn region nơi stage của bạn đặt. Nó phải cung cấp mọi dịch vụ mà Discava dùng, trong đó có **OpenSearch Serverless**, **MediaConvert**, **Transcribe**, **Translate** (dịch phụ đề) và, cho email thông báo, **SES**. Hãy xem [danh sách dịch vụ theo region của AWS](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/) nếu bạn không chắc.
+
+Các rule WAF của CloudFront luôn nằm ở `us-east-1`. Một stage có WAF trên các cổng hoặc media của nó (như `discava-production`) cũng triển khai các stack nhỏ ở đó, bất kể region chính của nó.
+
+### Chi phí
+
+Mọi thứ đều serverless và tính phí theo mức dùng. `discava-development` được cấu hình để co về không: không tốn phí khi nhàn rỗi, và có độ trễ 10 đến 30 giây ở lượt tìm kiếm đầu tiên sau một quãng vắng. `discava-production` giữ một dung lượng tìm kiếm ấm nhỏ và bật WAF cùng các khóa KMS, vốn có phí cố định hằng tháng.
+
+## Công cụ trên máy của bạn
+
+| Công cụ | Vì sao |
+| --- | --- |
+| [Git](https://git-scm.com/) | Để clone fork của bạn |
+| [Node.js 24](https://nodejs.org/) | Script setup đọc các stage từ cấu hình TypeScript |
+| [pnpm](https://pnpm.io/) | Cài workspace. `corepack enable` cho bạn phiên bản mà repository ghim cố định |
+| [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | Script setup dùng nó để tạo các tài nguyên IAM |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | Cho phép script setup tạo GitHub environment và các biến của nó. Tùy chọn: nếu không có, script in các giá trị để bạn nhập thủ công |
+| Bash | Script setup. Bash đi kèm macOS dùng được |
+
+Docker **không** cần để setup hay triển khai. Nó chỉ cần để <Link path="guides/getting-started">chạy Discava cục bộ</Link> và để chạy quét lỗ hổng (`pnpm trivy`) trên máy của bạn.
+
+### Đăng nhập vào cả hai CLI
+
+```sh
+aws sts get-caller-identity   # should print your account and identity
+gh auth status                # should say you are logged in
+```
+
+Nếu lệnh đầu thất bại, hãy đăng nhập bằng `aws sso login --profile <profile>` hoặc `aws configure`. Nếu lệnh thứ hai thất bại, hãy chạy `gh auth login`.
+
+## Một tài khoản GitHub
+
+Bạn cần có thể fork repository và, trên fork, đổi các thiết lập và chạy workflow. Một tài khoản cá nhân gói miễn phí là đủ cho một fork công khai.
+
+## Tùy chọn, quyết định sau
+
+- **Tên miền riêng.** Nếu không có, các cổng được phục vụ từ `*.cloudfront.net` và các API từ `*.execute-api.amazonaws.com`. Để dùng tên miền của riêng bạn, bạn cần một tên miền gốc mà bạn kiểm soát DNS, và các chứng chỉ ACM đã cấp: mỗi cái cho `core-api.<root>` và `instructor-api.<root>` ở region của stage, và một cái cho `<root>` và `*.<root>` ở `us-east-1`. Xem <Link path="deploy/configuration">Cấu hình stage</Link>.
+- **Email.** Email thông báo cần một SES identity đã xác minh. Nếu không có, sẽ không có email nào được gửi và mọi thứ khác vẫn hoạt động.
+- **Thanh toán.** Bán khóa học cần một tài khoản Stripe. Không cần gì lúc triển khai: quản trị viên kết nối nó sau đó trong cổng quản trị.
+
+Tiếp theo: <Link path="deploy/setup">fork và thiết lập</Link>.

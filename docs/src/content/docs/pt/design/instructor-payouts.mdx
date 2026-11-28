@@ -1,0 +1,136 @@
+---
+title: Pagamentos aos instrutores
+description: Como os ganhos dos instrutores são registrados a partir dos pedidos, o ledger e seus resumos por dia, a execução diária de pagamentos e sua recuperação, e a regra da conta de pagamento.
+sidebar:
+  order: 11
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261116-013137-instructor-payouts/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013137-instructor-payouts/)
+
+## A regra
+
+**Toda venda e todo reembolso é registrado uma vez, e nenhum ganho é pago duas vezes.** Os ganhos são um ledger somente de acréscimo, construído a partir dos <Link path="design/payments">pedidos</Link>, e um pagamento leva entradas do ledger, nunca um valor calculado à parte.
+
+## As regras de receita
+
+`helpers/revenue.ts` na core-table é aritmética de inteiros pura, na menor unidade da moeda.
+
+- **Taxa.** A plataforma retém uma taxa sobre o valor pago, definida por stage em pontos-base (2000 é 20%) e arredondada para cima na metade. Uma venda mantém a taxa com a qual foi registrada: mudar a configuração afeta apenas vendas posteriores.
+- **Divisão.** Os instrutores de um curso dividem uma venda igualmente. A divisão é aplicada separadamente ao preço de tabela, ao valor pago e à taxa, e as unidades restantes vão uma para cada um dos primeiros instrutores por ID, de modo que as partes sempre somem o todo.
+- **Líquido.** O líquido de um instrutor é sua parte do valor pago menos sua parte da taxa.
+- **Reembolso.** Um reembolso devolve a parte do instrutor no valor reembolsado, menos a taxa devolvida sobre ele. Cada passo é calculado como a parte do novo total reembolsado menos a parte do total registrado, então, não importa como um reembolso seja dividido em passos, as entradas somam exatamente o valor quando o pedido é totalmente reembolsado. Um reembolso é limitado ao valor pago.
+
+## O ledger
+
+| Registro | Guarda |
+| --- | --- |
+| `earningOrder` | O instantâneo do ledger de uma venda e o total reembolsado registrado até agora |
+| `earningEntry` | Uma linha por instrutor por venda ou passo de reembolso: bruto, desconto, reembolso, taxa e líquido, quando é liberada e o pagamento que a levou |
+| `earningDay` | A soma das entradas de um instrutor para um curso, moeda e dia UTC |
+
+`helpers/earning.ts` na core-table é o único escritor dos três, com uma exceção: `helpers/payout.ts` é o único código que define ou limpa o `payoutId` de uma entrada. Uma venda, e cada passo de reembolso, é **uma transação** que contém as entradas, as somas nas linhas de dia e o contador do pedido, de modo que o relatório e o ledger não podem divergir.
+
+Uma entrada nunca nomeia o comprador. Ela também carrega a conta Stripe e o modo sob os quais seu pedido foi pago: veja [a regra da conta de pagamento](#a-regra-da-conta-de-pagamento).
+
+## Registro
+
+O registro é um <Link path="design/stream-event-router">recurso do stream</Link>, `earnings-recording`. Ele recebe toda mudança em um `order` e age sobre as que são vendas. Um pedido é uma venda quando as duas condições valem:
+
+- ele está `paid`, ou `refunded` com o motivo `requested`;
+- seu valor é maior que zero.
+
+Um pedido reembolsado automaticamente por não poder ser entregue nunca foi uma venda, nem o pedido de valor zero de um cupom que cobre o preço inteiro. Para um pedido com desconto, o bruto da entrada é o preço de tabela e o desconto é a diferença para o valor pago.
+
+O router entrega pelo menos uma vez e em qualquer ordem, e o handler foi construído para isso:
+
+- **Toda imagem de pedido carrega tudo de que precisa**, então qualquer uma basta para registrar a venda e atualizar seu total reembolsado. Nenhum registro espera outro.
+- **Duplicatas não mudam nada.** As entradas de uma venda são criadas com a condição de que não existam, e um total reembolsado que o ledger já atingiu não registra nada.
+- **A ordem não importa.** Uma imagem mais antiga que chega atrasada encontra um total registrado maior e não faz nada.
+- **Uma falha repete o lote.** Tudo o que pode ser aplicado é aplicado, depois o lote lança um erro, e o que foi aplicado não faz nada na segunda vez.
+
+A entrada de uma venda é liberada `holdDays` depois que o pedido foi pago. A entrada de um reembolso é liberada na hora, para reduzir o próximo pagamento.
+
+## As leituras da página Earnings
+
+A instructor-api serve os números do próprio usuário e não recebe ID de instrutor como entrada.
+
+- `earnings.report` soma linhas de dia em um período de no máximo 366 dias: uma consulta de intervalo, agrupada por moeda e curso.
+- `earnings.lines` pagina as entradas de um curso, montadas campo a campo para que nada mais do registro chegue ao usuário.
+- `payout.overview` separa as entradas que nenhum pagamento levou em **on hold**, **waiting for account setup**, **ready** e **held**, por moeda, e lista os pagamentos do instrutor.
+
+## Contas de pagamento
+
+Um instrutor é pago em uma conta Stripe Connect Express.
+
+- `payout.startOnboarding` cria a conta, de forma idempotente, e retorna o link de onboarding da Stripe.
+- `payout.account` lê o estado da conta na Stripe e o guarda em `payoutAccount` quando mudou. Se a Stripe não puder ser alcançada, retorna o status guardado marcado como `stale`.
+- `payout.dashboardLink` retorna um link de acesso ao painel Express da Stripe do instrutor, depois que o onboarding termina.
+
+| Status | Significado |
+| --- | --- |
+| `not_started` | Ainda não há conta. Nada é guardado |
+| `in_progress` | O formulário da Stripe não foi concluído |
+| `active` | A Stripe pode enviar transferências e pagamentos para ela |
+| `restricted` | A Stripe precisa de algo a mais |
+
+Nada aqui chama a Stripe a menos que a conexão da plataforma esteja ativa. Sem uma, `payout.account` responde `unavailable`.
+
+## A execução de pagamentos
+
+Uma função Lambda, no stack `Payouts`, roda uma vez por dia em um agendamento do EventBridge. Ela pode ler a chave da Stripe e nenhum outro dos secrets.
+
+1. **Vincular à conta de pagamento.** A execução trabalha para a conta e o modo atuais da conexão, e só com uma chave que se mostre pertencente a ela.
+2. **Recuperar.** Os pagamentos que uma execução anterior deixou sem resolução são concluídos primeiro: um ainda em `collecting` ou `releasing` devolve suas entradas, e um `pending` é resolvido como descrito abaixo.
+3. **Para cada instrutor com uma conta ativa,** ler a conta da Stripe de novo. Uma que não está mais ativa tem seu novo status guardado e é pulada.
+4. **Por moeda,** somar as entradas liberadas que nenhum pagamento levou. Uma soma abaixo do mínimo do stage, ou que não seja maior que zero, espera.
+5. **Coletar, selar e enviar.** Um pagamento é criado como `collecting`, suas entradas são anexadas em lotes de 99 (uma transação comporta 100 itens) e ele é selado como `pending`. Depois a transferência é criada na Stripe, com o ID do pagamento como chave de idempotência e grupo de transferência, e o pagamento é marcado como `sent`.
+
+| Status | Significado |
+| --- | --- |
+| `collecting` | As entradas estão sendo anexadas |
+| `pending` | Selado. Sua transferência pode ou não existir |
+| `sent` | A Stripe aceitou a transferência |
+| `releasing` | Devolvendo suas entradas |
+| `failed` | A Stripe recusou a transferência. Suas entradas estão abertas de novo |
+
+### Por que nada é pago duas vezes
+
+- Uma entrada é anexada com a condição de que não tenha pagamento, então duas execuções simultâneas não podem levá-la ambas.
+- Um pagamento é marcado como `failed`, e suas entradas reabertas, **somente quando a Stripe recusou definitivamente** a transferência: uma requisição inválida ou um erro de permissão. Um timeout, um 5xx, um rate limit ou qualquer coisa não reconhecida deixa o pagamento como `pending`.
+- A recuperação procura a transferência de um pagamento `pending` pelo grupo de transferência antes de tentar de novo. Se ela existe, o pagamento é marcado como enviado. Se não, a mesma chave de idempotência é usada de novo.
+- Uma execução reivindica um pagamento sem resolução antes de tocar nele, e deixa em paz um em que outra execução trabalhou nos últimos 15 minutos.
+
+A falha de um instrutor não impede os outros, mas a execução ainda termina como falha para que um operador a veja. Se a Stripe recusa a chave salva, a execução para na hora, já que nenhuma chamada posterior pode ter sucesso.
+
+## A regra da conta de pagamento
+
+Um ganho pertence à conta Stripe e ao modo sob os quais seu pedido foi pago, e o dinheiro só se move dentro dessa conta. Depois que um administrador troca de conta ou de modo:
+
+- Os ganhos não pagos da conta antiga ficam **held**. A execução não envia nada por eles, e a página Earnings diz ao instrutor para contatar a plataforma.
+- A conta de pagamento de cada instrutor é por conta de pagamento, então eles configuram os pagamentos de novo.
+- Voltar para a conta antiga torna os ganhos antigos pagáveis como antes.
+
+## Configurações
+
+Por stage, em `payouts` no `stages.config.ts`. Veja <Link path="deploy/configuration">Stage configuration</Link>.
+
+## Invariantes
+
+`helpers/invariants/earnings.ts` na core-table verifica, depois de cada cenário end-to-end, que as entradas correspondem ao seu pedido, que reembolsos nunca excedem o que foi pago, que as linhas de dia são iguais à soma de suas entradas, que o valor de um pagamento é igual ao de suas entradas e que cada conta de pagamento está bem formada.
+
+## Desenvolvimento local
+
+O stand-in da Stripe cobre a fatia do Connect: contas Express, links de onboarding, links de painel e transferências.
+
+- `POST http://localhost:2024/payout-run` executa a execução de pagamentos uma vez. Um corpo opcional `{ "graceSeconds": n }` substitui a tolerância de recuperação de 15 minutos.
+- `LOCAL_PAYOUT_RUN_INTERVAL_SECONDS` a executa em um temporizador.
+- `GET /stripe/test/transfers` lista as transferências feitas, e `POST /stripe/test/transfers/fail-next` faz a próxima transferência falhar de um modo escolhido (por exemplo `rejected` ou `timeout`).
+
+## Limitações
+
+- Sem tratamento de impostos, faturas ou formulários fiscais.
+- Sem conversão de moeda: cada moeda tem seu próprio saldo e seus próprios pagamentos.
+- Disputas e chargebacks não são registrados.
+- Ganhos em held são pagos manualmente pela plataforma. Nada os move para a nova conta.

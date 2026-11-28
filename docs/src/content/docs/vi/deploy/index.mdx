@@ -1,0 +1,65 @@
+---
+title: Tổng quan triển khai
+description: Con đường từ một bản fork của Discava đến một bản cài đặt đang chạy trong tài khoản AWS của bạn, được triển khai bằng GitHub Actions.
+sidebar:
+  order: 0
+  label: Overview
+---
+
+import Link from '@components/link.astro';
+
+Phần này đưa bạn từ con số không đến một bản cài đặt Discava đang chạy do GitHub Actions triển khai. Nó giả định bạn quen với terminal, GitHub và những kiến thức cơ bản về AWS.
+
+## Kết quả bạn nhận được
+
+- Một **fork** của Discava trên GitHub do bạn kiểm soát
+- Một **stage** của Discava trong tài khoản AWS của bạn: ba cổng (portal), ba API, một cơ sở dữ liệu, xử lý video, tìm kiếm và thanh toán
+- Một **Deploy workflow** trong fork của bạn, triển khai stage khi bạn chạy nó hoặc mỗi khi CI chạy thành công trên `main`
+- **Không có khóa AWS dài hạn** ở bất kỳ đâu. GitHub đăng nhập vào AWS bằng token ngắn hạn (OIDC)
+
+## Các thành phần khớp nhau như thế nào
+
+```d2 title="From a push to a deployed stage"
+direction: right
+you: "You"
+fork: "Your fork on GitHub" {
+  ci: "CI workflow"
+  deploy: "Deploy workflow"
+  env: "GitHub environment\n(one per stage)"
+}
+aws: "Your AWS account" {
+  oidc: "GitHub OIDC provider"
+  deployrole: "Deploy role"
+  execrole: "Execution role"
+  cfn: "CloudFormation"
+  stage: "Discava stage"
+}
+
+you -> fork.ci: "push to main"
+fork.ci -> fork.deploy: "passes"
+fork.env -> fork.deploy: "role ARNs, region"
+fork.deploy -> aws.oidc: "short-lived token"
+aws.oidc -> aws.deployrole: "assume"
+aws.deployrole -> aws.cfn: "cdk deploy"
+aws.execrole -> aws.cfn: "used by"
+aws.cfn -> aws.stage: "creates"
+```
+
+Một **stage** là một bản cài đặt hoàn chỉnh. Có sẵn hai stage:
+
+| Stage | Dùng cho | Thiết lập bảo mật |
+| --- | --- | --- |
+| `discava-development` | Thử nghiệm với chi phí thấp | Nới lỏng: không có WAF, không có khóa KMS do khách hàng quản lý, tắt tự đăng ký, giới hạn yêu cầu thấp, mọi thứ bị xóa cùng stack |
+| `discava-production` | Người dùng thật | Tăng cường: WAF, mã hóa KMS có xoay khóa, MFA, bảo vệ chống xóa, giữ lại các tài nguyên có trạng thái khi xóa |
+
+Hãy bắt đầu với `discava-development`. Các bước cho production cũng giống vậy.
+
+## Các bước
+
+1. <Link path="deploy/prerequisites">Điều kiện tiên quyết</Link>: tài khoản AWS, công cụ và quyền truy cập bạn cần
+2. <Link path="deploy/setup">Fork và thiết lập</Link>: fork repository và chạy script thiết lập, script này tạo các role AWS và GitHub environment
+3. <Link path="deploy/first-deploy">Lần triển khai đầu tiên</Link>: chạy Deploy workflow, rồi tạo những người dùng đầu tiên
+4. <Link path="deploy/configuration">Cấu hình stage</Link>: tên miền tùy chỉnh, email, chi trả, giới hạn và các stage mới
+5. <Link path="deploy/ci-cd">Tham chiếu CI/CD</Link>: mỗi workflow làm gì và mọi biến mà nó đọc
+
+Còn hai trang nữa khi bạn cần: <Link path="deploy/from-your-machine">triển khai từ máy của bạn</Link>, trang này cũng liệt kê các script bảo trì, và <Link path="deploy/troubleshooting">xử lý sự cố</Link>.

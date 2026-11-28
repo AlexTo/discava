@@ -1,0 +1,77 @@
+---
+title: Guida per amministratori
+description: Cosa fa un amministratore nel portale admin, gestire le categorie del catalogo, cercare, revocare e ripristinare certificati, e dove leggere di moderazione delle recensioni, brand e pagamenti.
+---
+
+import Link from '@components/link.astro';
+
+Questa pagina è la panoramica del portale admin. Solo gli account del gruppo `admin` della piattaforma possono usarlo.
+
+## Orientarsi
+
+La barra laterale ha cinque pagine:
+
+| Pagina | A cosa serve |
+| --- | --- |
+| **Home** | Una scheda per ogni area qui sotto |
+| **Categories** | Le categorie in cui gli istruttori archiviano i corsi |
+| **Reviews** | Rimuovere le recensioni dei corsi che infrangono le regole |
+| **Certificates** | Cercare un certificato per revocarlo o ripristinarlo |
+| **Payments** | Collegare l'account Stripe su cui pagano gli studenti |
+
+Il menu dell'account ha **Branding**, **Notification settings** e **Sign out**.
+
+## Categorie
+
+Le categorie sono l'elenco da cui gli istruttori scelgono nei **Catalogue details** di un corso. Gli studenti sfogliano e filtrano il catalogo in base a esse.
+
+**Aggiungere una categoria**
+
+1. Apri **Categories**.
+2. Scrivi il nome in **New category name**.
+3. Scegli **Add category**.
+
+Un nome già in uso viene rifiutato.
+
+**Rinominare una categoria**
+
+1. Scegli **Rename** sulla categoria.
+2. Cambia il nome.
+3. Scegli **Save**. Esc o **Cancel** la lascia com'era.
+
+**Archiviare una categoria**
+
+1. Scegli **Archive** sulla categoria.
+2. Leggi la finestra di dialogo: dice quanti corsi hanno la categoria.
+3. Conferma con **Archive**.
+
+Una categoria archiviata non viene più proposta agli istruttori. I corsi che la hanno la mantengono. La sua pagina nel portale studenti dice che la categoria non è più disponibile. L'elenco mostra ogni categoria come **Active** o **Archived**, e il portale admin non ha modo di riportare in vita una categoria archiviata.
+
+## Certificati
+
+1. Apri **Certificates**.
+2. Inserisci il **Certificate ID** e scegli **Look up**. L'ID è sulla pagina del certificato e nel suo PDF.
+3. Il certificato appare come **Valid** o **Revoked**, con la cronologia di chi lo ha revocato o ripristinato e quando.
+
+- **Revoke** richiede un **Reason**: Academic integrity, Issued in error, Order refunded oppure Other. Other richiede una **Note**. Conferma con **Revoke certificate**. La pagina pubblica del certificato dice allora che è stato revocato, e lo studente viene avvisato.
+- **Restore**, confermato con **Restore certificate**, lo rende di nuovo valido con lo stesso ID, e lo studente viene avvisato.
+
+Un amministratore può ripristinare qualsiasi certificato. Un istruttore non può ripristinarne uno revocato da un amministratore.
+
+<Link path="guides/certificates">Certificati</Link> copre il resto: cosa lo fa ottenere e cosa vedono studenti e istruttori.
+
+## Recensioni
+
+**Reviews** elenca le recensioni di un corso e permette di rimuoverne una che infrange le regole, indicando un motivo. Una recensione rimossa non conta più per la valutazione del corso e il suo autore non può pubblicarne un'altra. Vedi la sezione sulla rimozione da parte dell'admin in <Link path="guides/reviews">Valutazioni e recensioni</Link>.
+
+## Brand
+
+**Branding**, nel menu dell'account, imposta nome, logo, icona, immagine di condivisione e colore della piattaforma per tutti e tre i portali e le pagine pubbliche. Vedi <Link path="guides/branding">Personalizzazione del brand</Link>.
+
+## Pagamenti
+
+**Payments** collega l'account Stripe su cui pagano gli studenti. Finché non è collegato, ogni corso è gratuito e gli istruttori non possono impostare un prezzo. Vedi <Link path="guides/payments">Corsi a pagamento e pagamenti</Link> per collegare, sostituire la chiave, scollegare e rimborsare, e <Link path="guides/earnings-and-payouts">Guadagni e pagamenti</Link> per cosa serve per pagare gli istruttori.
+
+## Notifiche
+
+**Notification settings**, nel menu dell'account, sceglie quali notifiche arrivano anche via email. Vedi <Link path="guides/notifications">Notifiche</Link>.

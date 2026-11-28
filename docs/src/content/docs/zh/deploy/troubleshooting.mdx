@@ -1,0 +1,69 @@
+---
+title: 故障排查
+description: 设置或部署失败的常见原因，以及各自的解决方法。
+sidebar:
+  order: 7
+---
+
+## 设置脚本
+
+**"Couldn't authenticate with AWS."** 你的 AWS CLI 没有有效凭证。请登录（`aws sso login --profile <profile>` 或 `aws configure`），然后重新运行脚本。
+
+**"`<stage>` is configured for account … ; switch credentials and re-run."** 该 stage 在 `stages.config.ts` 中指定了一个账户，而你登录的是另一个。
+
+**"Unknown stage."** 该 stage 不在 `stages.config.ts` 中。请先在那里添加。
+
+**"The origin remote isn't a GitHub repository."** 使用 `--yes` 时会显示此消息；不使用时，脚本会询问仓库。请自行设置：`GITHUB_REPOSITORY=<you>/discava ./scripts/setup-stage.sh`。
+
+**"stdin isn't a terminal."** 脚本无法提示输入。请在终端中运行，或传入 `--yes` 接受默认值。
+
+**"uses a custom OIDC subject claim template."** 你的仓库或组织自定义了 OIDC 令牌的 subject。请把 `GITHUB_OIDC_SUBJECT_PREFIX` 设为 subject 中 `:environment:` 之前的部分，然后重新运行脚本。
+
+**"no issued certificate in … covers …" 或 "… is for exactly …"** 配置了根域名时，脚本需要为每个组件准备一张已签发的证书。它会列出找不到的每一张，并在做出任何更改之前停止。请在 ACM 中、在消息指出的区域申请证书：两个 API 用 stage 所在区域，门户和媒体用 `us-east-1`。等到每张证书都变为 **Issued**，再重新运行脚本。每个 API 需要一张恰好包含其自身域名的证书（`core-api.<root>`、`instructor-api.<root>`），不能是通配符证书。门户和媒体可以共用一张包含 `<root>` 和 `*.<root>` 的证书。如果要在没有自定义域名的情况下部署，请把根域名留空。
+
+## Deploy workflow
+
+**推送到 `main` 后 workflow 一直没有启动。** 自动部署需要三个条件：仓库变量 `AUTO_DEPLOY_STAGE`、fork 上已启用 workflow，以及一次**通过**的 CI 运行。请检查 CI 运行：**Deploy Docs** 任务失败（未启用 GitHub Pages）或 **Trivy** 任务失败，都会使整个 CI 失败。
+
+**"Unknown stage"。** 你输入的 stage 不在被部署提交的 `stages.config.ts` 中。
+
+**"Not authorized to perform sts:AssumeRoleWithWebIdentity"。** AWS 拒绝了 workflow 的令牌。常见原因：
+
+- GitHub environment 的名称与 stage 的名称不完全一致
+- 设置脚本是在另一个仓库的克隆中运行的（原始仓库而不是你的 fork），所以角色信任的是那个仓库
+- 设置之后 fork 被重命名或转移了
+
+请在运行该 workflow 的仓库的克隆中重新运行设置脚本。
+
+**"Credentials could not be loaded" 或角色为空。** environment 中没有 `AWS_DEPLOY_ROLE_ARN` 变量。请运行设置脚本，或创建它打印出的那些变量。
+
+**"Invalid value for `<STAGE>_INFRA_…`"。** 某个配置覆盖项的值类型不对。布尔值是 `true` 或 `false`，数字必须是整数，日志级别是 `DEBUG`、`INFO`、`WARN` 或 `ERROR`。请在 GitHub environment 上修正该变量，然后重新部署。
+
+**"SSM parameter /cdk-bootstrap/hnb659fds/version not found"。** CDK 没有在该 stage 部署到的某个区域中完成引导。请重新运行设置脚本并接受引导，对于启用了 WAF 的 stage，别忘了 `us-east-1`。
+
+**CloudFormation 创建资源时出现 Access denied。** CloudFormation 以执行角色 `cfn-execution-<stage>` 运行。该角色只能做 Discava 创建的内容，并且只能作用于名称以 stage 名称开头的资源（`discava-development-…`，某些类型则是 `discavadevelopment…`）。
+
+如果你刚拉取了较新版本的 Discava，请先重新运行设置脚本：它会把角色的权限更新为该版本所需的权限。如果错误仍然存在，或者你自己添加了资源，请看错误指向的是谁：
+
+- **`cfn-execution-<stage>` 被拒绝。** 在 `scripts/setup-stage.sh` 中把该操作加入执行角色的策略。如果资源的名称不是以 stage 名称开头，则改为给它一个以 stage 名称开头的显式名称：CDK 的 `Names.uniqueResourceName` 会根据构造的路径生成这样的名称。然后重新运行脚本。
+- **某个函数的角色在运行时被拒绝。** 在同一个脚本中把该操作加入权限边界，然后重新运行。该 stage 创建的每个角色都带有这个边界。执行角色不带，所以往边界中添加操作永远无法修复部署问题。
+
+从你自己的机器部署使用的是 CDK 的默认角色，它们可以做任何事。因此，在本地能部署的堆栈，仍可能在 Deploy workflow 中失败。
+
+**Trivy 步骤失败。** 某个依赖有已知的严重漏洞且已有修复版本，或者提交了密钥。请更新该依赖。你已审查并接受的发现，放入 `.trivyignore`，每行一个 ID。
+
+**堆栈卡在 `ROLLBACK_COMPLETE`。** 首次创建就失败的堆栈无法更新。请在 CloudFormation 控制台中删除它，然后重新部署。
+
+## 部署之后
+
+**门户显示登录错误。** 请检查该用户是否属于该门户所需的组（`student`、`instructor` 或 `admin`）。
+
+**自定义域名无法解析。** DNS 记录不会为你创建。请把域名指向它的 CloudFront 分发或 API Gateway 自定义域名。
+
+**添加门户域名后 API 调用出现 CORS 错误。** 请重新部署。API 允许的来源是在部署时从门户域名获取的。
+
+**第一次搜索很慢。** 在 `discava-development` 上，搜索会缩容到零。安静一段时间后的第一次查询要等待 10 到 30 秒来获取容量。
+
+**收不到邮件。** 请检查两个 `NOTIFICATIONS` 变量是否已设置，SES 身份是否已在 stage 所在区域验证，以及你的 SES 账户是否仍处于沙盒中。
+
+**视频一直处于 "processing"。** 请在 stage 所在区域的 MediaConvert 控制台任务列表中查找失败的任务及其错误。

@@ -1,0 +1,75 @@
+---
+title: Thảo luận bài học
+description: Đặt câu hỏi, trả lời, bình chọn và chấp nhận câu trả lời trong một bài học, khu vực Questions của giảng viên, ẩn và xóa làm gì, các giới hạn, và điều xảy ra với bài học đã lưu trữ.
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Mỗi bài học có một mục **Questions** nơi các học viên đã ghi danh vào khóa học đặt câu hỏi và trả lời nhau, và nơi các giảng viên của khóa học tham gia.
+
+## Dành cho học viên
+
+Trong một bài học, bên dưới nội dung, mục **Questions** liệt kê các câu hỏi của bài học, mới nhất trước.
+
+- **Ask**: điền **Question title** (tối đa 120 ký tự) và **Details**, rồi chọn **Post question**.
+- **Reply**: chọn **Open question**, viết câu trả lời và chọn **Post reply**. Một chuỗi chứa tối đa 500 câu trả lời.
+- **Upvote** một câu hỏi hoặc câu trả lời do người khác viết. **Remove upvote** rút lại.
+- **Accept** một câu trả lời: người đặt câu hỏi có thể chọn **Mark as answer** trên bất kỳ câu trả lời nào. Nó được ghim phía trên các câu trả lời khác với nhãn **Accepted answer**, và câu hỏi hiển thị là **Answered**. **Remove answer** rút lại.
+- **Report** một bài đăng của người khác vi phạm quy định. Giảng viên thấy nó trong danh sách Reported của họ.
+- **Delete** câu hỏi hoặc câu trả lời của chính bạn, sau khi xác nhận. Xóa câu hỏi của bạn cũng xóa câu trả lời đã được chấp nhận của nó. Việc này không thể hoàn tác.
+
+Trong khóa học đã lưu trữ, các câu hỏi có thể đọc nhưng không thể đăng thêm gì mới.
+
+### Lời nhắc ở bài học đầu tiên
+
+Khi bạn ghi danh, bạn vào bài học đầu tiên của khóa học, và mục **Questions** của nó hiển thị một lời nhắc phía trên danh sách, ví dụ "What do you want to be able to do with what this course teaches?". Nó có một ô văn bản, **Post** và **Not now**.
+
+- Bạn có thể trả lời một lần. **Post** thêm câu trả lời của bạn vào danh sách của bài học, đánh dấu **Answer to the course prompt**. Bạn cùng lớp có thể trả lời và upvote nó như một câu hỏi.
+- **Not now** đóng lời nhắc mà không đăng gì.
+- Dù cách nào, lời nhắc cũng không quay lại, trên mọi thiết bị, kể cả khi bạn xóa câu trả lời của mình.
+- Mọi người trong khóa học đều đọc được câu trả lời của bạn, các giảng viên của khóa học cũng vậy.
+
+Nó chỉ xuất hiện trong bài học đầu tiên được hiển thị cho học viên, và không chiếm focus bàn phím khi bài học mở ra.
+
+Chuông báo cho bạn khi ai đó trả lời bài đăng của bạn, khi một câu trả lời cho câu hỏi của bạn được đánh dấu, và khi câu trả lời của bạn được đánh dấu là đáp án. Hai loại đầu cũng gửi email trừ khi bạn tắt. Xem <Link path="guides/notifications">Thông báo</Link>.
+
+## Dành cho giảng viên
+
+Mở khóa học từ **My Courses** và chọn **Questions** ở đầu trang của nó. Trang có ba tab:
+
+- **Unanswered**: các câu hỏi chưa có câu trả lời của giảng viên và chưa có đáp án được chấp nhận, cũ nhất trước. **Open** một câu hỏi để trả lời. Câu trả lời của bạn hiển thị huy hiệu **Instructor** và đưa câu hỏi ra khỏi danh sách. Bạn không cần phải ghi danh.
+- **Reported**: các bài đăng bị học viên báo cáo, kèm số lượt báo cáo. **Hide** một bài đăng, **Delete** nó hoặc **Dismiss reports**.
+- **By lesson**: chọn một bài học để xem mọi chuỗi trong đó, và **Open thread** để đọc một chuỗi.
+
+Trong một chuỗi đang mở, bạn cũng có thể **Mark as answer** trên bất kỳ câu trả lời nào, và **Hide** hoặc **Delete** bất kỳ bài đăng nào.
+
+Bạn không thể trả lời trong khóa học đã lưu trữ, hoặc trên bài học mà học viên không mở được vì nó bị ẩn hoặc lưu trữ.
+
+### Lời nhắc ở bài học đầu tiên
+
+Trên trang của khóa học, mục **First-lesson prompt** cho phép bạn thay văn bản của lời nhắc (văn bản thuần, tối đa 200 ký tự). Xóa trống sẽ đưa về mặc định. Thay đổi nó không hiển thị lại lời nhắc cho những người học đã trả lời hoặc đã bỏ qua.
+
+Các câu trả lời cho lời nhắc không nằm trong **Unanswered**, vì chúng không phải câu hỏi đang chờ giảng viên. Hãy đọc chúng trong **By lesson**, ở bài học đầu tiên của khóa học. Bạn có thể trả lời, ẩn hoặc xóa chúng như mọi bài đăng, và một câu bị báo cáo sẽ hiện trong **Reported**.
+
+### Ẩn và xóa
+
+- **Hide** có thể hoàn tác. Học viên thấy "This post was hidden by an instructor." thay cho bài đăng, không có tác giả hay văn bản. **Unhide** đưa nó trở lại như cũ.
+- **Delete** là vĩnh viễn. Mọi người, kể cả giảng viên, thấy "This post was deleted." và văn bản biến mất.
+
+Ẩn hoặc xóa một câu hỏi cũng ẩn các câu trả lời của nó. Câu hỏi bị ẩn hoặc xóa rời khỏi danh sách Unanswered.
+
+## Giới hạn
+
+- Bài đăng là văn bản thuần. Markup như HTML được hiển thị đúng như đã gõ, không bao giờ được render.
+- Tiêu đề câu hỏi tối đa 120 ký tự, và một câu hỏi hoặc câu trả lời tối đa 4,000 ký tự.
+- Một câu hỏi chứa tối đa 500 câu trả lời hiển thị.
+
+## Ai đọc được
+
+Học viên có đăng ký hiện hành, trên các bài học họ mở được, và các giảng viên của khóa học trên mọi bài học. Học viên đã rời khóa học, học viên chưa ghi danh và khách bị từ chối. Học viên không thể gọi các hàng đợi hay công cụ kiểm duyệt của giảng viên.
+
+## Bài học đã lưu trữ
+
+Lưu trữ một bài học (gỡ nó khỏi khóa học đã xuất bản) ẩn nó khỏi học viên, nên họ không còn mở được nó hay các câu hỏi của nó. Giảng viên vẫn đọc các chuỗi của nó trong **By lesson**, và khôi phục bài học đưa thảo luận trở lại nguyên vẹn. Bài học có câu hỏi có thể ở trạng thái lưu trữ nhưng không thể xóa vĩnh viễn.

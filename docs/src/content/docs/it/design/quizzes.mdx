@@ -1,0 +1,228 @@
+---
+title: Quiz
+description: "L'elemento di contenuto quiz: modello dei dati, valutazione, tentativi, modifiche durante un tentativo e l'esperienza di studenti e istruttori."
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/) (domande nei video)
+
+Un quiz è un elemento di contenuto (`type: 'quiz'`) collocato nella sequenza di una lezione insieme agli elementi video, testo e file. Ha una o più domande, ciascuna a **risposta singola** o a **risposta multipla**.
+
+Un quiz può anche essere l'unico elemento di una lezione di tipo compito (una lezione con `kind: 'assignment'`). Viene creato con `lesson.createQuizAssignment`, e poi viene modificato e svolto come qualsiasi altro quiz. Le domande brevi poste dentro un video riusano la forma delle domande del quiz; vedi [Domande nei video](#domande-nei-video).
+
+## Modello dei dati
+
+### Elemento di contenuto quiz
+
+Attributi di `contentItem` specifici del quiz. Come per gli altri tipi, quali attributi un tipo richiede è imposto dagli schemi zod di instructor-api (`schema/quiz.ts`), non da ElectroDB.
+
+| Attributo | Forma |
+|---|---|
+| `questions` | `[{ questionId, kind: 'single' \| 'multiple', prompt, options: [{ optionId, text }] }]`. `prompt` è JSON Tiptap. Sicuro da inviare agli studenti |
+| `answerKey` | `{ [questionId]: { correctOptionIds: string[], explanation? } }`. `explanation` è JSON Tiptap. **Mai letto da core-api se non per la valutazione** |
+| `settings` | `{ passMarkPercent, attemptsAllowed /* null = unlimited */, shuffleOptions, revealAnswers: 'after_each_attempt' \| 'after_final_attempt' \| 'never' }` |
+| `quizVersion` | Numero, incrementato a ogni salvataggio. Un salvataggio indica la versione caricata dall'editor, ed è rifiutato se il quiz è andato avanti (vedi [Salvare un quiz](#salvare-un-quiz)) |
+| `questionsHash` | Hash solo di `questions` (non della chiave né di `settings`), ricalcolato a ogni salvataggio (`hashQuizQuestions`) |
+
+`questions` e `answerKey` sono attributi separati in modo che passare un elemento di contenuto agli studenti non possa far trapelare le risposte. Le letture del corso (`course.view`, `course.publicView`) elencano un quiz solo per titolo e posizione. Non includono mai `questions` né `answerKey`.
+
+`questionId` e `optionId` sono forniti dal client e devono restare gli stessi tra un salvataggio e l'altro, perché la chiave delle risposte, le risposte degli studenti e il passaggio di riconciliazione qui sotto fanno riferimento a essi.
+
+### `quizAttempt`
+
+- pk `userId`, sk `courseId / contentItemId / attemptId`. `attemptId` è un UUIDv7, quindi i tentativi di uno studente a un quiz si ordinano per ordine di invio.
+- Contiene `answers` (`{ [questionId]: optionId[] }`), `correctQuestionIds`, `scorePercent`, `passed`, `quizVersion`, `questionsHash`, `submittedAt`, più `moduleId` e `lessonId`. `correctQuestionIds` registra quali domande erano giuste al momento della valutazione, perché la chiave può cambiare in seguito.
+- Mai aggiornato dopo la scrittura.
+
+### Riepilogo del quiz per utente (`quizSummary`)
+
+- pk `userId`, sk `courseId / contentItemId`. Contiene `attemptsUsed`, `bestScore`, `bestAttemptId`, `passedAt`, più `moduleId` e `lessonId`.
+- Scritto nella stessa transazione di ogni tentativo. Il primo tentativo lo crea. Ogni tentativo successivo è condizionato dal valore di `attemptsUsed` che ha letto, quindi il limite di tentativi regge anche quando due invii sono in corsa: il perdente rilegge e viene rifiutato.
+- `bestScore` può solo aumentare. `passedAt` è impostato dal primo tentativo superato e non viene mai cancellato.
+- Creare il riepilogo di uno studente incrementa `studentActivityCount` del quiz (vedi <Link path="design/live-course-editing">Modifica live del corso</Link>).
+- Il tentativo che supera il quiz, o che usa l'ultimo tentativo, registra anche l'`itemCompletion` del quiz nella stessa transazione, a meno che ce ne sia già una (vedi <Link path="design/progress-and-completion">Progressi e completamento</Link>).
+- L'invariante `quiz-summary-matches-attempts` (`core-table/src/helpers/invariants/student-activity.ts`) verifica che ogni riepilogo concordi con i suoi tentativi e che ogni tentativo abbia un riepilogo.
+
+## Valutazione
+
+- Solo lato server, in core-api. Il client non riceve mai `answerKey` prima dell'invio.
+- Ogni domanda è tutto o niente: le opzioni selezionate devono essere esattamente uguali a `correctOptionIds`.
+- Il punteggio è la percentuale di domande corrette, arrotondata per difetto a un numero intero, così a uno studente non viene mai mostrato più di quanto ha ottenuto. `passed` è `score >= passMarkPercent`.
+- Conta il punteggio **migliore** tra tutti i tentativi e tra tutte le versioni del quiz.
+- Un superamento registrato è permanente, anche se la soglia di superamento viene alzata in seguito o il quiz viene modificato.
+- I tentativi passati non vengono mai rivalutati automaticamente.
+
+## API per gli studenti
+
+core-api ha tre procedure (`procedures/quiz.ts`), ciascuna con `courseId`, `moduleId`, `lessonId` e `contentItemId` del quiz. Tutte e tre richiedono:
+
+- un'iscrizione che non sia `dropped` (`FORBIDDEN` senza iscrizione in un corso pubblicato, `NOT_FOUND` altrimenti);
+- un quiz effettivamente visibile: il quiz, la sua lezione e il suo modulo visibili e non archiviati. Altrimenti `NOT_FOUND` "This quiz is no longer available".
+
+**`quiz.view`** restituisce le domande, le impostazioni, `quizVersion` e `questionsHash`, mai la chiave delle risposte. Funziona anche in un corso archiviato, come il resto del corso.
+
+**`quiz.submitAttempt`** riceve `answers` e il `questionsHash` a cui lo studente ha risposto. Valuta sul server e scrive il tentativo e il riepilogo in una sola transazione. La stessa transazione verifica che:
+
+- il corso sia ancora pubblicato;
+- il modulo, la lezione e il quiz siano ancora visibili e non archiviati;
+- il quiz sia ancora alla `quizVersion` con cui è stato valutato;
+- l'iscrizione non sia ancora stata abbandonata.
+
+Se nel frattempo qualcosa è cambiato, non viene scritto nulla e l'invio viene riletto e valutato di nuovo, fino a tre volte, prima di `CONFLICT`.
+
+| Rifiuto | Quando |
+|---|---|
+| `PRECONDITION_FAILED` | Il corso è archiviato, o non restano tentativi |
+| `CONFLICT` | Le domande sono cambiate da quando lo studente le ha caricate (vedi [sotto](#quiz-modificato-durante-un-tentativo)), o tre tentativi hanno perso una corsa |
+| `BAD_REQUEST` | Una risposta indica una domanda o un'opzione sconosciuta, ripete un'opzione, o dà più di un'opzione a una domanda a risposta singola |
+
+**`quiz.myAttempts`** restituisce il riepilogo dello studente (o `null`) e i suoi tentativi, i più recenti per primi, una pagina alla volta (`cursor` e `limit`, 10 di default e al massimo 100). La cronologia è paginata perché con tentativi illimitati non ha un limite.
+
+Il risultato di ogni tentativo mostra quali domande erano giuste. Le opzioni corrette e le spiegazioni (`reveal`) tornano da `submitAttempt` e `myAttempts` solo quando `revealAnswers` lo consente:
+
+| `revealAnswers` | Quando viene restituito `reveal` |
+|---|---|
+| `after_each_attempt` | Dopo che lo studente ha fatto un tentativo |
+| `after_final_attempt` | Quando non restano tentativi. Mai finché i tentativi sono illimitati |
+| `never` | Mai |
+
+## Quiz modificato durante un tentativo
+
+A ogni invio il client manda il `questionsHash` delle domande che ha mostrato.
+
+| Cosa ha cambiato l'istruttore | Risultato dell'invio |
+|---|---|
+| Solo la chiave delle risposte o le spiegazioni (l'hash coincide) | Accettato e valutato con la chiave **corrente**. Lo studente non nota nulla |
+| Qualsiasi testo della domanda, tipo di domanda, oppure formulazione, numero o ordine delle opzioni (l'hash differisce) | `CONFLICT`, e **nessun tentativo viene usato**. Il client ricarica e riconcilia (vedi sotto) |
+| Soglia di superamento | Accettato e valutato con la soglia corrente. Un superamento già registrato resta |
+| `attemptsAllowed` abbassato fino a `attemptsUsed` o sotto | Rifiutato con "No attempts remaining", mostrando il punteggio migliore |
+| Quiz, o la sua lezione o il suo modulo, archiviato o nascosto | Rifiutato con "This quiz is no longer available"; la bozza locale viene scartata |
+
+"Solo chiave delle risposte" significa che lo schermo dello studente sarebbe identico prima e dopo. Esempi:
+
+- Correggere quale opzione è giusta: la chiave diceva EC2 per "Which service runs containers without managing servers?", e viene corretta in Fargate.
+- Aggiungere un'altra opzione corretta a una domanda a risposta multipla. Lo schermo non cambia, perché dice sempre "Select all that apply" e mai quante sono corrette.
+- Aggiungere o riformulare una spiegazione.
+
+Riordinare le opzioni conta come modifica anche se è innocuo, per mantenere semplice la regola: se lo schermo potrebbe apparire diverso, lo studente rivede.
+
+### Riconciliare dopo `CONFLICT`
+
+Il client confronta le vecchie e le nuove `questions` per `questionId`:
+
+- **Invariata:** la risposta viene mantenuta.
+- **Rimossa:** la risposta viene scartata.
+- **Nuova:** parte senza risposta, contrassegnata **New**.
+- **Testo, opzioni o tipo modificati:** le risposte che puntano a opzioni ancora esistenti vengono mantenute (per una domanda passata a risposta singola, solo se ne resta esattamente una), e la domanda viene contrassegnata **Updated**.
+
+Lo fa `reconcile` in `@discava/common-web-utils/quiz`. Lo studente arriva alla schermata di revisione con "This quiz was updated. Check the marked questions before submitting." La query del quiz si aggiorna anche quando si apre la schermata di revisione e quando la finestra torna in primo piano, quindi di solito il banner compare prima che prema Submit. La garanzia è il `CONFLICT`.
+
+## Esperienza dello studente
+
+La lezione è una sola pagina scorrevole con gli elementi in `order`. Una barra dei passi in alto mostra lo stato di ogni elemento (✓ completato, ⚠ un quiz terminato senza superarlo, altrimenti l'icona del tipo di elemento) e scorre fino a esso. **Un quiz non superato non impedisce mai di andare avanti.**
+
+Il quiz è una scheda nel flusso della lezione (`QuizCard` in `common/shadcn`, condivisa con l'anteprima dell'istruttore). Passa per quattro schermate:
+
+| Schermata | Mostra | Pulsanti |
+|---|---|---|
+| Panoramica | "5 questions · Pass 80% · 1 of 3 attempts used", il punteggio migliore e un badge Passed | **Start quiz**, **Resume quiz** (una bozza salvata) o **Retake quiz**. "No attempts remaining" quando non ne restano |
+| Domanda | Una domanda, con "Select all that apply" e caselle di controllo per la risposta multipla, pulsanti di opzione per la singola | **Back**, **Next**, e **Review answers** sull'ultima domanda |
+| Revisione | Ogni risposta, con le domande senza risposta segnalate | **Back**, **Submit answers** |
+| Risultato | "This attempt: 60% · Not passed", ogni domanda giusta o sbagliata, e le opzioni corrette e le spiegazioni quando `revealAnswers` lo consente | **Done**, **Retake quiz** |
+
+- **Navigatore delle domande.** Un quiz con più di una domanda mostra una riga di pulsanti numerati sopra le opzioni. Ognuno salta alla sua domanda, è pieno una volta risposta, e annuncia il suo stato a uno screen reader ("Question 2, answered").
+- Il riscontro arriva solo dopo l'invio, mai per singola domanda, così la chiave non può essere sondata un'opzione alla volta.
+- Le risposte in corso sono salvate in localStorage per quiz (`readQuizDraft`, `writeQuizDraft`). Il tentativo viene creato sul server solo all'invio.
+- Un nuovo tentativo con punteggio più basso mostra "Your best score of 80% still counts."
+- Accessibilità: un `fieldset` per domanda etichettato dal suo numero e dal testo, giusto e sbagliato mostrati con un'icona e del testo (non solo con il colore), pieno supporto da tastiera.
+- I testi delle domande e le spiegazioni usano un renderer Tiptap di sola lettura, condiviso da `common/shadcn`.
+
+## Salvare un quiz
+
+Creare un quiz, e ogni salvataggio successivo, scrive l'intero quiz come un solo documento. `quizVersion` serve a impedire che due editor, o una scheda obsoleta, si sovrascrivano a vicenda.
+
+```d2 title="What happens when an instructor saves a quiz: access and archive checks, the version check, then one conditional write"
+direction: down
+
+start: "contentItem.updateQuiz\n(sends the quizVersion\nthe editor loaded)" {shape: oval}
+access: "Instructor of this\ncourse, and the item\nis a quiz?" {shape: diamond}
+archived: "Quiz, its lesson, module\nor course archived?" {shape: diamond}
+stale: "Stored quizVersion\n= the one sent?" {shape: diamond}
+write: "One transaction: course, module and lesson\nstill exist and aren't archived, quiz isn't\narchived and is still at that quizVersion.\nWrites the new content, quizVersion + 1\nand the recomputed questionsHash"
+landed: "Did a condition fail?" {shape: diamond}
+
+forbidden: "FORBIDDEN or BAD_REQUEST"
+frozen: "PRECONDITION_FAILED:\nrestore it first"
+conflict: "CONFLICT: the quiz changed since it\nwas loaded; reload and retry.\nNothing written"
+done: "Saved as quizVersion + 1" {shape: oval}
+
+start -> access
+access -> forbidden: no
+access -> archived: yes
+archived -> frozen: yes
+archived -> stale: no
+stale -> conflict: no
+stale -> write: yes
+write -> landed
+landed -> conflict: "yes, and nothing is archived"
+landed -> frozen: "yes, and something was archived"
+landed -> done: no
+```
+
+- Di due salvataggi fatti dalla stessa versione, esattamente uno va a buon fine; l'altro riceve `CONFLICT`. Il controllo è ripetuto dentro la transazione di scrittura, quindi regge quando i salvataggi sono simultanei, non solo quando uno segue l'altro.
+- Un salvataggio riuscito restituisce la nuova `quizVersion`, che l'editor usa per il salvataggio successivo.
+- `questionsHash` è ricalcolato solo da `questions`, quindi un salvataggio che cambia solo la chiave delle risposte, le spiegazioni o le impostazioni mantiene lo stesso hash.
+- Creare un quiz lo fa partire da `quizVersion` 1. Come gli altri nuovi contenuti, parte `visible` in un corso in bozza e `hidden` altrimenti, e non può essere creato né modificato sotto un modulo o una lezione archiviati, né in un corso archiviato (vedi <Link path="design/live-course-editing">Modifica live del corso</Link>).
+
+## Esperienza dell'istruttore
+
+- Un pulsante **Quiz** si trova insieme ai pulsanti **Video**, **Text** e **File** nella riga dei contenuti della lezione. Apre il builder per un nuovo quiz, che viene creato al primo salvataggio; i salvataggi successivi lo aggiornano.
+- Il builder si apre in un'ampia finestra di dialogo, sia per un nuovo quiz sia per il pulsante **Edit** di un quiz, come le finestre Text e Video. Chiuderla con modifiche non salvate chiede prima conferma:
+  - Impostazioni: titolo, descrizione, soglia di superamento, tentativi consentiti, mescolare le opzioni, quando rivelare le risposte.
+  - Una scheda per domanda: testo Tiptap (l'editor è montato solo per la scheda espansa), selettore Single/Multiple, righe di opzioni con un indicatore di risposta corretta (pulsante di opzione per la singola, casella di controllo per la multipla), aggiungere/rimuovere/riordinare le opzioni, spiegazione facoltativa.
+  - Trascina per riordinare le domande.
+  - Un pannello dei contenuti accanto alle domande le elenca per numero con l'inizio di ogni testo, segnalando quelle da correggere; cliccandone una la si apre e ci si scorre.
+  - **Preview as student**, che usa il vero componente per lo studente (`QuizCard`) sul quiz così com'è nel builder, salvato o no. Viene valutata nel browser con le stesse regole di core-api, non viene inviato né salvato nulla, e le risposte corrette e le spiegazioni sono sempre mostrate. I suoi tentativi contano solo finché è aperta.
+  - L'intero quiz si salva come un solo documento: `contentItem.updateQuiz` sostituisce insieme domande, chiave e impostazioni, rispetto alla `quizVersion` caricata dal builder. In caso di `CONFLICT` il builder offre di ricaricare l'ultima versione.
+  - Sola lettura, con il motivo, mentre il quiz o qualsiasi cosa sopra di esso è archiviato.
+- Validazione, nel form e in zod (l'API impone tutto, qualunque cosa faccia il form):
+  - Da 1 a 50 domande, ciascuna con da 2 a 10 opzioni. Il testo di un'opzione è da 1 a 500 caratteri.
+  - Risposta singola: esattamente 1 corretta. Risposta multipla: almeno 1 corretta. Ogni id corretto è una delle opzioni della domanda.
+  - Ogni domanda ha una voce nella chiave delle risposte, e la chiave non ha voci per altre domande. Gli id delle domande sono univoci, e gli id delle opzioni sono univoci all'interno di una domanda.
+  - I testi e le spiegazioni sono documenti Tiptap conformi allo schema dell'editor (gli stessi nodi e marchi di `StarterKit`), memorizzati come stringhe JSON.
+  - La soglia di superamento è un numero intero da 0 a 100. I tentativi consentiti sono un numero intero da 1, o illimitati.
+  - Domande e chiave delle risposte insieme sono al massimo 300 KB, ben sotto il limite di 400 KB per elemento di DynamoDB.
+  - Passare da Multiple a Single con più di una corretta chiede quale mantenere.
+- Modificare un quiz che ha tentativi avvisa "N students have attempted this quiz".
+
+Le statistiche del quiz per gli istruttori (distribuzione dei punteggi, risultati per domanda) sono costruite dai tentativi dalla funzionalità di stream `analytics-update`; vedi <Link path="design/course-analytics">Analisi del corso</Link>.
+
+## Domande nei video
+
+Un istruttore può inserire fino a 20 domande in un elemento video, ciascuna in un momento del video o alla fine. Hanno poca posta in gioco: nessuna soglia di superamento, nessun limite di tentativi, nessun punteggio memorizzato, e non bloccano mai i progressi. Come il player le pone è descritto in <Link path="design/video-player">Video player e sottotitoli</Link>.
+
+- **Dove sono memorizzate:** sul `contentItem` del video stesso, negli attributi `questions`, `answerKey` e `quizVersion` che usa un quiz. Ogni domanda è una domanda di quiz più `atSeconds` (secondi interi, o `null` per una domanda finale) e un `contentHash` impostato dal server. Un video non ha `settings` né `questionsHash`.
+- **Il salvataggio versionato:** `contentItem.updateVideoQuestions` sostituisce l'intero insieme rispetto alla `quizVersion` caricata dall'editor, come fa `updateQuiz`. La versione 0 significa mai salvato. Di due salvataggi dalla stessa versione esattamente uno va a buon fine e l'altro riceve `CONFLICT`. È separato da `contentItem.updateVideo`, quindi le domande possono cambiare senza toccare il media. La creazione è limitata agli istruttori del corso, e rifiutata sotto un video, una lezione, un modulo o un corso archiviati.
+- **L'hash per domanda:** il `contentHash` copre id, tipo, testo e opzioni di una domanda, non il suo momento né la chiave. Svolge, per singola domanda, il ruolo che `questionsHash` svolge per un quiz, quindi modificare una domanda non disturba mai chi sta rispondendo a un'altra, e spostare una domanda non cambia nulla.
+- **Il foglio delle risposte:** le risposte di un discente a un video sono un solo record `videoAnswerSheet` (pk `userId`, sk `courseId / contentItemId`) che contiene, per ogni domanda risposta, le opzioni scelte, se erano corrette rispetto alla chiave di allora, e quando. `answerCount` condiziona ogni scrittura, quindi due schede non possono andare a buon fine entrambe. Il foglio guadagna solo voci.
+- **Solo la prima risposta:** la prima risposta a una domanda viene registrata e mai cambiata, sostituita o rivalutata. Inviare di nuovo restituisce la risposta registrata. La chiave e la spiegazione arrivano al discente solo quando la sua risposta è registrata. **Try again** è esercizio, valutato nel browser con la chiave già mostrata, e non registra nulla. Saltare non registra nulla.
+- **Poca posta in gioco:** una risposta non crea nessun `itemCompletion` e non cambia progressi, risultati di quiz o certificati. Conta però il discente come utilizzatore del video (vedi <Link path="design/live-course-editing">Modifica live del corso</Link>) e come attivo in quel giorno.
+
+### Domanda del video modificata durante la risposta
+
+A ogni risposta il client manda il `contentHash` della domanda che ha mostrato.
+
+| Cosa ha cambiato l'istruttore | Risultato dell'invio |
+|---|---|
+| Solo le opzioni corrette o la spiegazione (l'hash coincide) | Accettato e valutato con la chiave **corrente**. Il discente non nota nulla |
+| Il testo, il tipo, o la formulazione, il numero o l'ordine di un'opzione (l'hash differisce) | `CONFLICT` e non viene registrato nulla. Al discente viene detto che la domanda è stata aggiornata e gli viene mostrata la domanda aggiornata |
+| Il momento della domanda | Accettato. Le risposte registrate non sono toccate, e un discente che non ha risposto viene interrogato al nuovo momento |
+| La domanda rimossa | Rifiutato come non trovato e non viene registrato nulla. Il video riprende. Le risposte già registrate vengono mantenute, ma la domanda non viene più posta né elencata nei risultati |
+| Video, lezione, modulo o corso archiviato o nascosto | Rifiutato con "no longer available" |
+
+Le risposte registrate non vengono mai rivalutate: un discente che ha risposto male resta "incorrect" dopo che la chiave è stata corretta. Un discente che riapre una domanda a cui ha risposto vede la chiave e la spiegazione correnti accanto al suo risultato registrato.
+
+L'editor avvisa un istruttore che apre le domande di un video già usato dai discenti: le loro risposte vengono mantenute e non rivalutate. L'anteprima nell'editor valuta nel browser con la chiave dell'istruttore e non registra nulla.

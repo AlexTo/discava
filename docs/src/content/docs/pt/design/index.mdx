@@ -1,0 +1,39 @@
+---
+title: Visão geral do design
+description: Como os designs de funcionalidades do Discava são documentados e os conceitos compartilhados em que eles se apoiam.
+sidebar:
+  order: 0
+---
+
+import Link from '@components/link.astro';
+
+Esta seção descreve **como as funcionalidades do Discava funcionam**. Cada página cobre uma área de funcionalidade.
+
+## Páginas
+
+| Página | Cobre |
+|---|---|
+| <Link path="design/assignments">Correção e feedback de atividades</Link> | Devolução de atividades de envio com pontos e feedback, pedidos de reenvio, rodadas de feedback, o índice de espera e a fila de correção, o aviso diário ao instrutor e a pré-visualização dos arquivos enviados |
+| <Link path="design/branding">Branding</Link> | O nome, logo, ícone, imagem de compartilhamento e cor da plataforma definidos pelo admin: o registro da marca, o documento publicado que os portais e as páginas públicas leem, a paleta de cores e as verificações de imagem |
+| <Link path="design/catalogue-categories">Categorias do catálogo</Link> | A taxonomia de categorias gerenciada pelo admin, os campos de catálogo de um curso e como eles alimentam as facetas de busca |
+| <Link path="design/certificates">Certificados</Link> | Como um certificado de conclusão é emitido, ativado ou desativado por curso, compartilhado e verificado |
+| <Link path="design/course-analytics">Análises do curso</Link> | O painel do instrutor e a página de análises do curso: o que cada número significa e por que os números ficam alguns segundos atrás dos registros |
+| <Link path="design/instructor-payouts">Pagamentos de instrutores</Link> | Como os ganhos são registrados a partir dos pedidos, o ledger e seus resumos diários, a execução diária de pagamentos e sua recuperação, e a regra da conta de pagamento |
+| <Link path="design/live-course-editing">Edição ao vivo de cursos</Link> | Adicionar, remover, ocultar, restaurar e editar módulos, aulas e itens de conteúdo depois que um curso é publicado |
+| <Link path="design/payments">Pagamentos</Link> | Comprar um curso pago com o Stripe Checkout: preços, pedidos, o webhook que entrega um curso exatamente uma vez, reembolsos e a conexão do administrador com o Stripe |
+| <Link path="design/progress-and-completion">Progresso e conclusão</Link> | Como a conclusão de item, aula e curso é registrada e o recálculo no servidor que é dono dela |
+| <Link path="design/public-pages">Páginas públicas</Link> | Páginas de apresentação de cursos e perfis de instrutores para crawlers e prévias de links: o renderizador de páginas, cache e atualização, a reescrita da SPA, a configuração de indexação e as regras de exposição do vídeo de prévia |
+| <Link path="design/quizzes">Quizzes</Link> | O item de conteúdo quiz: modelo de dados, correção, tentativas e a experiência do aluno e do instrutor |
+| <Link path="design/search">Busca</Link> | Busca entre tipos de conteúdo: a collection do OpenSearch Serverless, o pipeline de indexação e como a visibilidade é aplicada |
+| <Link path="design/stream-event-router">Stream event router</Link> | Como uma funcionalidade reage às mudanças da core table: seu registro, fila, fila de falhas, alarme e obrigações do handler, e o router local |
+| <Link path="design/video-player">Player de vídeo e legendas</Link> | Como o player de vídeo das aulas retoma, muda a velocidade, responde ao teclado e mostra legendas, e como as legendas são geradas ou enviadas |
+
+## Conceitos compartilhados
+
+**Hierarquia do currículo.** Um curso contém módulos, um módulo contém aulas e uma aula contém uma lista ordenada de itens de conteúdo (vídeo, texto, arquivo, quiz, atividade). Os quatro ficam em uma única partição do DynamoDB (`COURSE#<courseId>`) por meio da collection `curriculum` do ElectroDB, então um curso inteiro é uma única consulta. Essa consulta lê todas as páginas, já que o currículo de um curso pode passar de 1 MB por página do DynamoDB.
+
+**Visibilidade efetiva.** Um módulo, aula ou item de conteúdo só é mostrado aos alunos se ele **e todos os seus ancestrais** estiverem `visible` e não arquivados. As leituras de alunos, as escritas de alunos e os cálculos de progresso usam todos a visibilidade efetiva, nunca apenas a `visibility` do próprio registro. A regra é implementada uma única vez, como `filterEffectivelyVisible` em `@discava/core-table`.
+
+**Matrícula.** Um aluno lê o conteúdo de um curso, e escreve qualquer coisa nele, apenas enquanto está matriculado: ele tem um registro `enrolment` (pk `courseId`, sk `userId`) cujo `status` não é `dropped`. Os alunos se matriculam sozinhos com `course.enrol` da core-api, e apenas em um curso **publicado** e **gratuito**: o status e o preço do curso são verificados na mesma transação da escrita da matrícula, então um curso arquivado ou com preço definido durante a requisição não pode receber uma nova matrícula. Um curso com preço só é acessado por um pedido pago (veja <Link path="design/payments">Pagamentos</Link>). Matricular-se de novo retorna a matrícula existente. Um curso em rascunho ou arquivado responde `NOT_FOUND`, assim como o `course.publicView` anônimo, para que a existência de um rascunho não vaze. Um aluno matriculado ainda pode ler um curso depois de arquivado, mas ele é somente leitura também para ele. `course.myEnrolment` retorna a matrícula de quem chama, ou nenhuma.
+
+**Os dados do aluno são indexados por usuário.** `progress`, `itemCompletion`, `quizAttempt` e `quizSummary` usam `userId` como chave de partição, então "o progresso de um aluno em um curso" é uma única consulta. O outro lado é que "quais alunos mexeram neste item?" não pode ser respondido sem um scan, e é por isso que os itens de conteúdo carregam um `studentActivityCount`.

@@ -1,0 +1,228 @@
+---
+title: Quizzes
+description: "El ítem de contenido quiz: modelo de datos, calificación, intentos, ediciones a mitad de un intento, y la experiencia del estudiante y del instructor."
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+**Especificación:** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/) (preguntas en videos)
+
+Un quiz es un ítem de contenido (`type: 'quiz'`) colocado en la secuencia de una lección junto a ítems de video, texto y archivo. Tiene una o más preguntas, cada una de **opción única** o **opción múltiple**.
+
+Un quiz también puede ser el único ítem de una lección de tarea (una lección de `kind: 'assignment'`). Se crea con `lesson.createQuizAssignment`, y luego se edita y se intenta como cualquier otro quiz. Las preguntas cortas hechas dentro de un video reutilizan la forma de las preguntas de quiz; consulta [Preguntas en videos](#preguntas-en-videos).
+
+## Modelo de datos
+
+### Ítem de contenido quiz
+
+Atributos de `contentItem` específicos del quiz. Como con los otros tipos, qué atributos requiere un tipo lo imponen los esquemas zod de instructor-api (`schema/quiz.ts`), no ElectroDB.
+
+| Atributo | Forma |
+|---|---|
+| `questions` | `[{ questionId, kind: 'single' \| 'multiple', prompt, options: [{ optionId, text }] }]`. `prompt` es JSON de Tiptap. Seguro de enviar a los estudiantes |
+| `answerKey` | `{ [questionId]: { correctOptionIds: string[], explanation? } }`. `explanation` es JSON de Tiptap. **core-api nunca lo lee, salvo al calificar** |
+| `settings` | `{ passMarkPercent, attemptsAllowed /* null = unlimited */, shuffleOptions, revealAnswers: 'after_each_attempt' \| 'after_final_attempt' \| 'never' }` |
+| `quizVersion` | Número, incrementado en cada guardado. Un guardado nombra la versión que cargó el editor, y se rechaza si el quiz ya avanzó (consulta [Guardar un quiz](#guardar-un-quiz)) |
+| `questionsHash` | Hash solo de `questions` (no de la clave ni de `settings`), recalculado en cada guardado (`hashQuizQuestions`) |
+
+`questions` y `answerKey` son atributos separados para que pasar un ítem de contenido a los estudiantes no pueda filtrar las respuestas. Las lecturas del curso (`course.view`, `course.publicView`) listan un quiz solo por su título y posición. Nunca incluyen `questions` ni `answerKey`.
+
+`questionId` y `optionId` los proporciona el cliente y deben mantenerse iguales entre guardados, porque la clave de respuestas, las respuestas de los estudiantes y el paso de conciliación de abajo se refieren a ellos.
+
+### `quizAttempt`
+
+- pk `userId`, sk `courseId / contentItemId / attemptId`. `attemptId` es un UUIDv7, así que los intentos de un estudiante en un quiz se ordenan por orden de envío.
+- Contiene `answers` (`{ [questionId]: optionId[] }`), `correctQuestionIds`, `scorePercent`, `passed`, `quizVersion`, `questionsHash`, `submittedAt`, además de `moduleId` y `lessonId`. `correctQuestionIds` registra qué preguntas se calificaron como correctas en ese momento, porque la clave puede cambiar después.
+- Nunca se actualiza una vez escrito.
+
+### Resumen de quiz por usuario (`quizSummary`)
+
+- pk `userId`, sk `courseId / contentItemId`. Contiene `attemptsUsed`, `bestScore`, `bestAttemptId`, `passedAt`, además de `moduleId` y `lessonId`.
+- Se escribe en la misma transacción que cada intento. El primer intento lo crea. Cada intento posterior está condicionado al `attemptsUsed` que leyó, así que el límite de intentos se mantiene incluso cuando dos envíos compiten: el perdedor vuelve a leer y es rechazado.
+- `bestScore` solo aumenta. `passedAt` lo establece el primer intento aprobado y nunca se borra.
+- Crear el resumen de un estudiante incrementa el `studentActivityCount` del quiz (consulta <Link path="design/live-course-editing">Edición de cursos en vivo</Link>).
+- El intento que aprueba, o que usa el último intento, también registra el `itemCompletion` del quiz en la misma transacción, salvo que ya exista uno (consulta <Link path="design/progress-and-completion">Progreso y finalización</Link>).
+- La invariante `quiz-summary-matches-attempts` (`core-table/src/helpers/invariants/student-activity.ts`) comprueba que cada resumen coincide con sus intentos y que cada intento tiene un resumen.
+
+## Calificación
+
+- Solo en el servidor, en core-api. El cliente nunca recibe `answerKey` antes de enviar.
+- Cada pregunta es todo o nada: las opciones seleccionadas deben ser exactamente iguales a `correctOptionIds`.
+- La puntuación es el porcentaje de preguntas correctas, redondeado hacia abajo a un número entero, para que nunca se muestre a un estudiante más de lo que obtuvo. `passed` es `score >= passMarkPercent`.
+- Cuenta la **mejor** puntuación entre todos los intentos, y entre versiones del quiz.
+- Una aprobación registrada es permanente, aunque la nota de aprobación se suba después o se edite el quiz.
+- Los intentos pasados nunca se recalifican automáticamente.
+
+## API del estudiante
+
+core-api tiene tres procedimientos (`procedures/quiz.ts`), cada uno con `courseId`, `moduleId`, `lessonId` y `contentItemId` del quiz. Los tres requieren:
+
+- una inscripción que no esté `dropped` (`FORBIDDEN` sin una en un curso publicado, `NOT_FOUND` en otro caso);
+- un quiz efectivamente visible: el quiz, su lección y su módulo visibles y no archivados. Si no, `NOT_FOUND` "This quiz is no longer available".
+
+**`quiz.view`** devuelve las preguntas, los ajustes, `quizVersion` y `questionsHash`, nunca la clave de respuestas. Sigue funcionando en un curso archivado, como el resto del curso.
+
+**`quiz.submitAttempt`** recibe `answers` y el `questionsHash` que el estudiante respondió. Califica en el servidor y escribe el intento y el resumen en una transacción. La misma transacción comprueba que:
+
+- el curso sigue publicado;
+- el módulo, la lección y el quiz siguen visibles y no archivados;
+- el quiz sigue siendo el `quizVersion` contra el que se calificó;
+- la inscripción sigue sin estar dropped.
+
+Si algo cambió entretanto, no se escribe nada y el envío se vuelve a leer y calificar, hasta tres veces, antes de `CONFLICT`.
+
+| Rechazo | Cuándo |
+|---|---|
+| `PRECONDITION_FAILED` | El curso está archivado, o no quedan intentos |
+| `CONFLICT` | Las preguntas cambiaron desde que el estudiante las cargó (consulta [abajo](#quiz-editado-a-mitad-de-un-intento)), o tres intentos perdieron una carrera |
+| `BAD_REQUEST` | Una respuesta nombra una pregunta u opción desconocida, repite una opción, o da más de una opción a una pregunta de opción única |
+
+**`quiz.myAttempts`** devuelve el resumen del estudiante (o `null`) y sus intentos, el más reciente primero, una página a la vez (`cursor` y `limit`, 10 por defecto y como máximo 100). El historial se pagina porque con intentos ilimitados no tiene tope.
+
+El resultado de cada intento muestra qué preguntas fueron correctas. Las opciones correctas y las explicaciones (`reveal`) vuelven de `submitAttempt` y `myAttempts` solo cuando `revealAnswers` lo permite:
+
+| `revealAnswers` | Cuándo se devuelve `reveal` |
+|---|---|
+| `after_each_attempt` | Una vez que el estudiante ha hecho un intento |
+| `after_final_attempt` | Una vez que no quedan intentos. Nunca mientras los intentos sean ilimitados |
+| `never` | Nunca |
+
+## Quiz editado a mitad de un intento
+
+Con cada envío el cliente manda el `questionsHash` de las preguntas que mostró.
+
+| Qué cambió el instructor | Resultado al enviar |
+|---|---|
+| Solo la clave de respuestas o las explicaciones (el hash coincide) | Aceptado y calificado contra la clave **actual**. El estudiante no nota nada |
+| Cualquier enunciado, tipo de pregunta, o redacción, cantidad u orden de una opción (el hash difiere) | `CONFLICT`, y **no se usa ningún intento**. El cliente vuelve a obtener y concilia (abajo) |
+| Nota de aprobación | Aceptado y calificado contra la nota de aprobación actual. Una aprobación ya registrada se mantiene |
+| `attemptsAllowed` reducido a `attemptsUsed` o menos | Rechazado con "No attempts remaining", mostrando la mejor puntuación |
+| Quiz, o su lección o módulo, archivado u oculto | Rechazado con "This quiz is no longer available"; el borrador local se descarta |
+
+"Solo la clave de respuestas" significa que la pantalla del estudiante se vería idéntica antes y después. Ejemplos:
+
+- Corregir qué opción es correcta: la clave decía EC2 para "Which service runs containers without managing servers?", y se corrige a Fargate.
+- Añadir otra opción correcta a una pregunta de opción múltiple. La pantalla no cambia, porque siempre dice "Select all that apply" y nunca cuántas son correctas.
+- Añadir o reescribir una explicación.
+
+Reordenar opciones cuenta como un cambio aunque sea inofensivo, para mantener simple la regla: si la pantalla pudiera verse distinta, el estudiante revisa.
+
+### Conciliar tras `CONFLICT`
+
+El cliente compara los `questions` antiguos y nuevos por `questionId`:
+
+- **Sin cambios:** se conserva la respuesta.
+- **Eliminada:** se descarta la respuesta.
+- **Nueva:** empieza sin responder, marcada **New**.
+- **Enunciado, opciones o tipo cambiados:** se conservan las respuestas que apuntan a opciones que aún existen (para una pregunta cambiada a opción única, solo si queda exactamente una), y la pregunta se marca **Updated**.
+
+`reconcile` en `@discava/common-web-utils/quiz` hace esto. El estudiante llega a la pantalla de revisión con "This quiz was updated. Check the marked questions before submitting." La consulta del quiz también se vuelve a obtener cuando se abre la pantalla de revisión y al enfocar la ventana, así que el aviso suele aparecer antes de que pulsen Submit. El `CONFLICT` es la garantía.
+
+## Experiencia del estudiante
+
+La lección es una página con desplazamiento con los ítems en `order`. Una barra de pasos arriba muestra el estado de cada ítem (✓ hecho, ⚠ un quiz terminado sin aprobar, o si no el icono del tipo de ítem) y se desplaza hasta él. **Un quiz reprobado nunca impide avanzar.**
+
+El quiz es una tarjeta en el flujo de la lección (`QuizCard` en `common/shadcn`, compartida con la vista previa del instructor). Pasa por cuatro pantallas:
+
+| Pantalla | Muestra | Botones |
+|---|---|---|
+| Resumen | "5 questions · Pass 80% · 1 of 3 attempts used", la mejor puntuación y una insignia Passed | **Start quiz**, **Resume quiz** (un borrador guardado) o **Retake quiz**. "No attempts remaining" cuando no queda ninguno |
+| Pregunta | Una pregunta, con "Select all that apply" y casillas para opción múltiple, botones de radio para opción única | **Back**, **Next**, y **Review answers** en la última pregunta |
+| Revisión | Todas las respuestas, con las preguntas sin responder señaladas | **Back**, **Submit answers** |
+| Resultado | "This attempt: 60% · Not passed", cada pregunta correcta o incorrecta, y las opciones correctas y explicaciones cuando `revealAnswers` lo permite | **Done**, **Retake quiz** |
+
+- **Navegador de preguntas.** Un quiz con más de una pregunta muestra una fila de botones numerados sobre las opciones. Cada uno salta a su pregunta, se rellena una vez respondida, y nombra su estado a un lector de pantalla ("Question 2, answered").
+- La retroalimentación llega solo tras enviar, nunca por pregunta, para que la clave no pueda sondearse una opción a la vez.
+- Las respuestas en curso se guardan en localStorage por quiz (`readQuizDraft`, `writeQuizDraft`). El intento se crea en el servidor solo al enviar.
+- Un reintento con menor puntuación muestra "Your best score of 80% still counts."
+- Accesibilidad: un `fieldset` por pregunta etiquetado con su número y enunciado, correcto e incorrecto mostrados con un icono y texto (no solo color), soporte completo de teclado.
+- Los enunciados y las explicaciones usan un renderizador de Tiptap de solo lectura, compartido desde `common/shadcn`.
+
+## Guardar un quiz
+
+Crear un quiz, y cada guardado posterior, escribe todo el quiz como un solo documento. `quizVersion` es lo que evita que dos editores, o una pestaña obsoleta, se sobrescriban entre sí.
+
+```d2 title="What happens when an instructor saves a quiz: access and archive checks, the version check, then one conditional write"
+direction: down
+
+start: "contentItem.updateQuiz\n(sends the quizVersion\nthe editor loaded)" {shape: oval}
+access: "Instructor of this\ncourse, and the item\nis a quiz?" {shape: diamond}
+archived: "Quiz, its lesson, module\nor course archived?" {shape: diamond}
+stale: "Stored quizVersion\n= the one sent?" {shape: diamond}
+write: "One transaction: course, module and lesson\nstill exist and aren't archived, quiz isn't\narchived and is still at that quizVersion.\nWrites the new content, quizVersion + 1\nand the recomputed questionsHash"
+landed: "Did a condition fail?" {shape: diamond}
+
+forbidden: "FORBIDDEN or BAD_REQUEST"
+frozen: "PRECONDITION_FAILED:\nrestore it first"
+conflict: "CONFLICT: the quiz changed since it\nwas loaded; reload and retry.\nNothing written"
+done: "Saved as quizVersion + 1" {shape: oval}
+
+start -> access
+access -> forbidden: no
+access -> archived: yes
+archived -> frozen: yes
+archived -> stale: no
+stale -> conflict: no
+stale -> write: yes
+write -> landed
+landed -> conflict: "yes, and nothing is archived"
+landed -> frozen: "yes, and something was archived"
+landed -> done: no
+```
+
+- De dos guardados hechos desde la misma versión, exactamente uno se acepta; el otro recibe `CONFLICT`. La comprobación se repite dentro de la transacción de la escritura, así que se mantiene cuando los guardados son simultáneos, no solo cuando uno sigue al otro.
+- Un guardado exitoso devuelve el nuevo `quizVersion`, que el editor usa para su siguiente guardado.
+- `questionsHash` se recalcula solo a partir de `questions`, así que un guardado que cambia solo la clave de respuestas, las explicaciones o los ajustes conserva el mismo hash.
+- Crear un quiz lo inicia en `quizVersion` 1. Como otro contenido nuevo, empieza `visible` en un curso en borrador y `hidden` en otro caso, y no puede crearse ni editarse bajo un módulo o lección archivados, ni en un curso archivado (consulta <Link path="design/live-course-editing">Edición de cursos en vivo</Link>).
+
+## Experiencia del instructor
+
+- Un botón **Quiz** está junto a los botones **Video**, **Text** y **File** en la fila de contenido de la lección. Abre el constructor para un quiz nuevo, que se crea en su primer guardado; los guardados posteriores lo actualizan.
+- El constructor se abre en un diálogo grande, tanto para un quiz nuevo como para el botón **Edit** de un quiz, como los diálogos de Text y Video. Cerrarlo con cambios sin guardar pregunta primero:
+  - Ajustes: título, descripción, nota de aprobación, intentos permitidos, mezclar opciones, cuándo revelar las respuestas.
+  - Una tarjeta por pregunta: enunciado de Tiptap (el editor se monta solo para la tarjeta expandida), alternador Single/Multiple, filas de opciones con un marcador de correcta (radio para única, casilla para múltiple), añadir/quitar/reordenar opciones, explicación opcional.
+  - Arrastrar para reordenar preguntas.
+  - Un panel de contenido junto a las preguntas las lista por número con el inicio de cada enunciado, marcando las que necesitan arreglo; al hacer clic en una se abre y se desplaza hasta ella.
+  - **Preview as student**, usando el componente real del estudiante (`QuizCard`) sobre el quiz tal como está en el constructor, guardado o no. Se califica en el navegador con las mismas reglas que core-api, no se envía ni guarda nada, y las respuestas correctas y las explicaciones se muestran siempre. Sus intentos cuentan solo mientras está abierto.
+  - Todo el quiz se guarda como un documento: `contentItem.updateQuiz` reemplaza preguntas, clave y ajustes juntos, contra el `quizVersion` que cargó el constructor. Ante un `CONFLICT` el constructor ofrece recargar la última versión.
+  - Solo lectura, con el motivo, mientras el quiz o algo por encima de él esté archivado.
+- Validación, en el formulario y en zod (la API impone todo, haga lo que haga el formulario):
+  - De 1 a 50 preguntas, cada una con de 2 a 10 opciones. El texto de una opción tiene de 1 a 500 caracteres.
+  - Opción única: exactamente 1 correcta. Opción múltiple: al menos 1 correcta. Todo id correcto es una de las opciones de la pregunta.
+  - Toda pregunta tiene una entrada en la clave de respuestas, y la clave no tiene entradas para otras preguntas. Los ids de pregunta son únicos, y los ids de opción son únicos dentro de una pregunta.
+  - Los enunciados y las explicaciones son documentos de Tiptap que se ajustan al esquema del editor (los mismos nodos y marcas de `StarterKit`), almacenados como cadenas JSON.
+  - La nota de aprobación es un número entero de 0 a 100. Los intentos permitidos son un número entero desde 1, o ilimitados.
+  - Preguntas y clave de respuestas juntas ocupan como máximo 300 KB, muy por debajo del límite de 400 KB por ítem de DynamoDB.
+  - Cambiar Multiple → Single con más de una correcta pregunta cuál conservar.
+- Editar un quiz que tiene intentos advierte "N students have attempted this quiz".
+
+Las estadísticas de quiz para instructores (distribución de puntuaciones, resultados por pregunta) se construyen a partir de los intentos mediante la función de stream `analytics-update`; consulta <Link path="design/course-analytics">Analíticas del curso</Link>.
+
+## Preguntas en videos
+
+Un instructor puede poner hasta 20 preguntas en un ítem de video, cada una en un momento del video o al final. Son de bajo riesgo: sin nota de aprobación, sin límite de intentos, sin puntuación almacenada, y nunca bloquean el progreso. Cómo las hace el reproductor está en <Link path="design/video-player">Reproductor de video y subtítulos</Link>.
+
+- **Dónde se almacenan:** en el propio `contentItem` del video, en los atributos `questions`, `answerKey` y `quizVersion` que usa un quiz. Cada pregunta es una pregunta de quiz más `atSeconds` (segundos enteros, o `null` para una pregunta final) y un `contentHash` establecido por el servidor. Un video no tiene `settings` ni `questionsHash`.
+- **El guardado versionado:** `contentItem.updateVideoQuestions` reemplaza todo el conjunto contra el `quizVersion` que cargó el editor, como hace `updateQuiz`. La versión 0 significa nunca guardado. De dos guardados desde la misma versión exactamente uno se acepta y el otro recibe `CONFLICT`. Es independiente de `contentItem.updateVideo`, así que las preguntas pueden cambiar sin tocar los medios. La edición está limitada a los instructores del curso, y se rechaza bajo un video, lección, módulo o curso archivados.
+- **El hash por pregunta:** el `contentHash` cubre el id, el tipo, el enunciado y las opciones de una pregunta, no su momento ni su clave. Cumple el papel que `questionsHash` cumple para un quiz, por pregunta, así que editar una pregunta nunca perturba a un estudiante que responde otra, y mover una pregunta no cambia nada.
+- **La hoja de respuestas:** las respuestas de un estudiante a un video son un registro `videoAnswerSheet` (pk `userId`, sk `courseId / contentItemId`) que contiene, por cada pregunta respondida, las opciones elegidas, si fue correcta contra la clave en ese momento, y cuándo. `answerCount` condiciona cada escritura, así que dos pestañas no pueden aceptarse ambas. La hoja solo gana entradas.
+- **Solo la primera respuesta:** la primera respuesta a una pregunta se registra y nunca se cambia, reemplaza ni recalifica. Enviar de nuevo devuelve la respuesta registrada. La clave y la explicación llegan al estudiante solo una vez que su respuesta está registrada. **Try again** es práctica, calificada en el navegador contra la clave ya mostrada, y no registra nada. Omitir no registra nada.
+- **Bajo riesgo:** una respuesta no crea ningún `itemCompletion` y no cambia ningún progreso, resultado de quiz ni certificado. Sí cuenta al estudiante como que usó el video (consulta <Link path="design/live-course-editing">Edición de cursos en vivo</Link>) y como activo ese día.
+
+### Pregunta de video editada a mitad de una respuesta
+
+Con cada respuesta el cliente manda el `contentHash` de la pregunta que mostró.
+
+| Qué cambió el instructor | Resultado al enviar |
+|---|---|
+| Solo las opciones correctas o la explicación (el hash coincide) | Aceptado y calificado contra la clave **actual**. El estudiante no nota nada |
+| El enunciado, el tipo, o la redacción, cantidad u orden de una opción (el hash difiere) | `CONFLICT` y no se registra nada. Se avisa al estudiante de que la pregunta se actualizó y se le muestra la pregunta actualizada |
+| El momento de la pregunta | Aceptado. Las respuestas registradas no se ven afectadas, y un estudiante que no la ha respondido recibe la pregunta en el nuevo momento |
+| La pregunta eliminada | Rechazado como no encontrado y no se registra nada. El video se reanuda. Las respuestas ya registradas se conservan, pero la pregunta ya no se hace ni se lista en los resultados |
+| Video, lección, módulo o curso archivado u oculto | Rechazado con "no longer available" |
+
+Las respuestas registradas nunca se recalifican: un estudiante que respondió mal sigue "incorrect" después de corregirse la clave. Un estudiante que reabre una pregunta respondida ve la clave y la explicación actuales junto a su resultado registrado.
+
+El editor advierte a un instructor que abre las preguntas de un video que los estudiantes ya han usado: sus respuestas se conservan y no se recalifican. La vista previa en el editor califica en el navegador con la clave propia del instructor y no registra nada.

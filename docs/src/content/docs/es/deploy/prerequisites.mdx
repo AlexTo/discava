@@ -1,0 +1,68 @@
+---
+title: Requisitos previos
+description: La cuenta de AWS, los permisos y las herramientas que necesitas antes de desplegar Discava.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+## Una cuenta de AWS
+
+Necesitas una cuenta de AWS donde desplegar. Una cuenta dedicada, o al menos una sin nada más importante, es la opción más segura mientras aprendes el sistema.
+
+Las etapas pueden compartir una cuenta. Cada etapa tiene sus propios roles de IAM, y los despliegues de una etapa no pueden alcanzar los recursos de otra.
+
+### Permisos para la configuración inicial
+
+El script de configuración se ejecuta **una vez por etapa, desde tu máquina, con tus propias credenciales de AWS**. Esas credenciales deben poder:
+
+- Crear un proveedor OIDC de IAM, roles de IAM y políticas administradas de IAM
+- Hacer el bootstrap de CDK (`cdk bootstrap`), que crea un stack de CloudFormation con un bucket de S3, un repositorio de ECR y roles de IAM
+- Leer certificados de ACM, si usas dominios personalizados
+
+`AdministratorAccess` lo cubre todo. Después de la configuración, los despliegues usan los roles acotados que creó el script, no tus credenciales.
+
+### Una región
+
+Elige la región donde vivirá tu etapa. Debe ofrecer todos los servicios que usa Discava, entre ellos **OpenSearch Serverless**, **MediaConvert**, **Transcribe**, **Translate** (traducción de subtítulos) y, para los correos de notificación, **SES**. Consulta la [lista de servicios regionales de AWS](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/) si tienes dudas.
+
+Las reglas de WAF de CloudFront siempre viven en `us-east-1`. Una etapa con WAF en sus portales o medios (como `discava-production`) también despliega pequeños stacks allí, sea cual sea su región principal.
+
+### Cuánto cuesta
+
+Todo es serverless y se factura por uso. `discava-development` está configurada para escalar a cero: sin coste cuando está inactiva, y una demora de 10 a 30 segundos en la primera búsqueda tras un periodo de calma. `discava-production` mantiene una pequeña capacidad de búsqueda activa y activa WAF y claves KMS, que tienen cargos mensuales fijos.
+
+## Herramientas en tu máquina
+
+| Herramienta | Para qué |
+| --- | --- |
+| [Git](https://git-scm.com/) | Para clonar tu fork |
+| [Node.js 24](https://nodejs.org/) | El script de configuración lee las etapas de la configuración en TypeScript |
+| [pnpm](https://pnpm.io/) | Instala el workspace. `corepack enable` te da la versión que fija el repositorio |
+| [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | El script de configuración crea con ella los recursos de IAM |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | Permite al script de configuración crear el entorno de GitHub y sus variables. Opcional: sin ella, el script imprime los valores para que los ingreses a mano |
+| Bash | El script de configuración. El bash que viene con macOS sirve |
+
+Docker **no** hace falta para configurar ni desplegar. Solo se necesita para <Link path="guides/getting-started">ejecutar Discava en local</Link> y para ejecutar el análisis de vulnerabilidades (`pnpm trivy`) en tu máquina.
+
+### Inicia sesión en ambas CLI
+
+```sh
+aws sts get-caller-identity   # should print your account and identity
+gh auth status                # should say you are logged in
+```
+
+Si la primera falla, inicia sesión con `aws sso login --profile <profile>` o `aws configure`. Si la segunda falla, ejecuta `gh auth login`.
+
+## Una cuenta de GitHub
+
+Debes poder hacer un fork del repositorio y, en el fork, cambiar ajustes y ejecutar workflows. Una cuenta personal del plan gratuito basta para un fork público.
+
+## Opcional, decídelo más tarde
+
+- **Dominios personalizados.** Sin ellos, los portales se sirven desde `*.cloudfront.net` y las APIs desde `*.execute-api.amazonaws.com`. Para usar los tuyos, necesitas un dominio raíz cuyo DNS controles y certificados de ACM emitidos: uno para `core-api.<root>` y otro para `instructor-api.<root>` en la región de la etapa, y uno para `<root>` y `*.<root>` en `us-east-1`. Consulta <Link path="deploy/configuration">Configuración de etapas</Link>.
+- **Correo.** Los correos de notificación necesitan una identidad de SES verificada. Sin una, no se envía ningún correo y todo lo demás funciona.
+- **Pagos.** Vender cursos requiere una cuenta de Stripe. No se necesita nada al desplegar: un administrador la conecta después en el portal de administración.
+
+Siguiente: <Link path="deploy/setup">fork y configuración</Link>.

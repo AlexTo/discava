@@ -1,0 +1,131 @@
+---
+title: 流事件路由器
+description: "功能如何响应核心表的变化：注册项、它的队列和失败队列、处理器的义务、本地行为和重新投递。"
+sidebar:
+  order: 7
+---
+
+**规格：** [`specs/20261116-183449-stream-event-router/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-183449-stream-event-router/)
+
+核心表的 DynamoDB 流只有**一个读取者**：流路由器。它把每项变化发送到每个需要它的功能的队列，每个功能的处理器读取自己的队列。
+
+响应表变化的功能需要添加一个注册项、一个处理器和处理器的接线（见下文）。它不需要自己的队列、告警或流映射。目前已注册八个功能，[下面的表格](#需要关注的指标)列出了它们。
+
+```d2 title="One stream reader, one queue and failure queue per feature"
+table: "Core table"
+stream: "DynamoDB Stream"
+router: "Stream router"
+pq: "progress-recalculation queue"
+sq: "search-indexing queue"
+pf: "progress failure queue"
+sf: "search failure queue"
+ph: "progress handler"
+sh: "search handler"
+
+table -> stream
+stream -> router
+router -> pq: "filters match"
+router -> sq: "filters match"
+pq -> ph
+sq -> sh
+pq -> pf: "after maxReceiveCount"
+sq -> sf: "after maxReceiveCount"
+```
+
+## 注册项
+
+`packages/databases/core-table/src/helpers/stream-features.ts` 中的 `STREAM_FEATURES` 是部署的堆栈和本地事件运行器都读取的唯一定义。
+
+| 字段 | 含义 |
+|---|---|
+| `name` | 唯一，kebab-case。用于命名队列、失败队列、告警和处理器 |
+| `filters` | 功能需要哪些记录：`eventName`（`INSERT`、`MODIFY` 或 `REMOVE`）、要查看的 `image`（`NewImage` 或 `OldImage`）以及 `entities`（ElectroDB 实体名）。通过任一过滤器的记录都会发给该功能 |
+| `handler` | 读取该功能队列的 `events-*` 函数 |
+| `batch` | `maxRecords` 和 `windowSeconds`：处理器每次运行处理多少项变化，以及等待收集它们多久 |
+| `maxReceiveCount` | 一条消息被接收多少次后进入失败队列 |
+| `maxConcurrency` | 可选，处理器并发运行数的上限（至少为 2，这是事件源映射的最小值） |
+
+`featuresFor(record)` 是唯一的匹配逻辑。路由器和本地运行器都调用它，因此二者不会不一致。一条记录会作为各自独立的副本发给每个有匹配过滤器的功能，不会发给其他功能。不匹配任何功能的记录不产生任何结果。
+
+每个功能的过滤器和匹配器都放在注册表旁边各自的模块中（`progress-stream.ts` 含 `PROGRESS_STREAM_FILTERS` 和 `matchesProgressStreamFilters`，还有 `search-stream.ts` 等），`featuresFor` 调用这些匹配器。
+
+当名称重复、过滤器指定了核心表未定义的实体、过滤器在示例记录中没有匹配任何内容（`stream-features.test.ts`），或 `handler` 没有对应函数（`packages/events` 中的 `handlers.test.ts`）时，测试会失败。
+
+## 添加功能
+
+1. 在 `STREAM_FEATURES` 中添加一项。
+2. 在 `packages/events` 中编写处理器，并用 `ts#lambda-function` 编写它的 `events-*` 包装。通过 `sqsToStreamRecords`（`src/router/sqs-stream-records.ts`）读取记录，它会把队列中的消息解包为流记录。
+3. 把处理器添加到 `packages/events/src/router/handlers.ts` 中的 `HANDLERS`，本地运行器通过它分发。当注册项的 `handler` 不在其中，或其中有任何功能都不使用的处理器时，`handlers.test.ts` 会失败。
+4. 在 `StreamRouterStack`（`packages/infra/src/stacks/stream-router-stack.ts`）中构建处理器的 Lambda，方式与 `createProgressRecalculationLambda` 和 `createSearchIndexingLambda` 相同：创建 `events-*` 函数，授予它读写所需的内容（核心表、它的部署时设置等），并把它加入传给 `StreamRouter` 的 `handlers` 对象，以功能名作为键。没有它，`StreamRouter` 会在 synth 时抛出 `No handler given for stream feature '<name>'`。
+5. 传入处理器后，`StreamRouter` 构造会根据该条目构建队列、失败队列、告警和事件源映射，本地运行器则构建与之等价的内容。
+6. 编写处理器的重复投递和乱序投递测试（见下文）。
+7. 把该功能的队列指标添加到[下面的列表](#需要关注的指标)。
+
+## 构造为每个功能构建什么
+
+- 一个**队列**，可见性超时是处理器超时的六倍。
+- 一个**失败队列**，在消息被接收 `maxReceiveCount` 次后保存它，并保留 14 天。
+- 一个**告警**，只要失败队列中有任何消息就处于告警状态。它没有通知目标：只在 CloudWatch 控制台中显示。
+- 一个从队列到处理器的**事件源映射**，使用注册项的 `batch` 和 `maxConcurrency`。
+
+所有队列共用一个启用轮换的客户托管 KMS 密钥。与核心表一样，阶段可以用 `enableKmsEncryption: false` 切换为 SQS 托管加密。消息包含完整的表记录，因此应将其视为表数据。
+
+路由器有自己的失败队列和告警（`StreamRouterFailures`），用于存放它永远无法发送的记录：太大无法放入消息，或被队列拒绝。它保存的是对记录的描述（事件 ID、键、实体、功能、大小和原因，不含记录内容），以便能在表中找到它。流映射自身失败的批次（分片和序列号）也放在这里。因暂时性原因发送失败时，流映射只会重试该条记录。
+
+## 处理器的义务
+
+路由器不保证每条记录的顺序，也不保证恰好一次投递。每个处理器都必须能够安全地对相同的记录运行两次，也必须能处理任意顺序的记录，并且必须在文件头部注释中说明是如何做到的：
+
+- 在顺序重要的地方，**根据当前数据得出结果**，绝不只根据记录本身。搜索索引只从变化中读取课程的标识，然后从核心表重新读取课程，已发布则建立索引，未发布或已不存在则移除。进度重新计算在每次运行时都根据课程大纲和完成情况重新计算每位学生的进度。
+- 无法处理的变化（例如没有指明课程）要**失败**而不是被跳过，这样它会进入失败队列，让人能够看到。
+- 由记录本身累积的计数器和其他值（把一项变化应用两次或乱序应用会使它们偏差）需要自己的检查，证明重复投递和乱序投递会得到相同结果，否则必须从表中重新计算。
+
+新功能的测试包括一次重复投递和一次乱序投递。
+
+## 失败与重新投递
+
+抛出异常的处理器会在可见性超时后把消息退回队列。被接收 `maxReceiveCount` 次后，消息移入该功能的失败队列，不再阻塞之后的变化。其他功能不受影响。
+
+原因修复后，使用队列服务自带的重新投递（redrive）来重放消息。没有构建重放工具，因为处理器可以安全地重复运行。
+
+对于已部署的阶段，在 SQS 控制台中打开失败队列，选择 **Start DLQ redrive** 并指向该功能的队列（或使用 `aws sqs start-message-move-task --source-arn <failure queue ARN> --destination-arn <feature queue ARN>`）。检查失败队列的告警是否恢复为 OK。
+
+## 需要关注的指标
+
+每个 SQS 队列都会在 `AWS/SQS` 命名空间下发布深度和时长指标，带有 `QueueName` 维度：
+
+- 功能队列上的 **`ApproximateNumberOfMessagesVisible`**：等待处理的变化。在两次突发之间它应回落到接近零。
+- 功能队列上的 **`ApproximateAgeOfOldestMessage`**：处理器落后了多少。时长上升而深度持平，说明处理器卡住或被限流。
+- 功能失败队列上的 **`ApproximateNumberOfMessagesVisible`**：大于零表示有工作被搁置，并会触发该功能的告警。
+
+| 功能 | 队列 | 失败队列 |
+|---|---|---|
+| `progress-recalculation` | `ProgressRecalculationQueue` | `ProgressRecalculationFailures` |
+| `search-indexing` | `SearchIndexingQueue` | `SearchIndexingFailures` |
+| `transcript-indexing` | `TranscriptIndexingQueue` | `TranscriptIndexingFailures` |
+| `analytics-update` | `AnalyticsUpdateQueue` | `AnalyticsUpdateFailures` |
+| `earnings-recording` | `EarningsRecordingQueue` | `EarningsRecordingFailures` |
+| `notification-delivery` | `NotificationDeliveryQueue` | `NotificationDeliveryFailures` |
+| `caption-translation` | `CaptionTranslationQueue` | `CaptionTranslationFailures` |
+| `brand-publishing` | `BrandPublishingQueue` | `BrandPublishingFailures` |
+
+这些名称是构造的逻辑 ID（已部署的队列名带有堆栈的前缀和后缀）。新功能要在这里添加一行。
+
+## 本地行为
+
+`pnpm dev` 在事件运行器（`packages/events/src/local`）中运行同一个路由器，用 ElasticMQ 作为队列（兼容 SQS API，在 Docker 中，存于内存），每个注册项对应一个功能运行器。它使用与已部署路由器相同的 `STREAM_FEATURES` 和 `featuresFor`，并保留每个功能的批大小和窗口。被接收 `maxReceiveCount` 次的消息会移入该功能的失败队列并记录日志。不需要 AWS 账户。
+
+运行器（端口 2024）提供查看和重放本地队列的路由：
+
+```sh
+# queue and failure queue counts per feature
+curl http://localhost:2024/router/queues
+
+# move a feature's failed messages back to its queue
+curl -X POST http://localhost:2024/router/redrive/search-indexing
+
+# make a feature's next 5 batches fail, to reproduce a failure end to end
+curl -X POST http://localhost:2024/router/fail/search-indexing -d '{"batches": 5}'
+```
+
+这里的重新投递是运行器的一个小辅助工具，不是队列服务自己的重新投递，因为 ElasticMQ 没有文档说明后者。队列在内存中，因此停止 `pnpm dev` 会清空它们。

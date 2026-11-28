@@ -1,0 +1,220 @@
+---
+title: 요청과 데이터 흐름
+description: 로그인, API 호출, 공개 페이지, 동영상 업로드, 데이터 변경, 구매, 검색이 Discava의 구성 요소를 어떻게 지나가는지 설명합니다.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+일곱 가지 흐름을 알면 시스템 대부분을 이해할 수 있습니다.
+
+## 로그인
+
+```d2 title="Sign-in"
+shape: sequence_diagram
+browser: "Browser"
+portal: "Portal (CloudFront)"
+cognito: "Cognito"
+trigger: "Pre token generation"
+table: "Core table"
+
+browser -> portal: "load app and runtime-config.json"
+browser -> cognito: "redirect to sign-in page"
+cognito -> trigger: "before issuing tokens"
+trigger -> table: "write the user record"
+cognito -> browser: "tokens, with the user's groups"
+```
+
+1. 포털이 로드되고 `runtime-config.json`을 읽어 Cognito의 위치를 찾습니다.
+2. 사용자가 Cognito의 호스팅 페이지에서 로그인합니다.
+3. 토큰을 발급하기 전에 Cognito가 함수를 호출해 사용자 레코드를 코어 테이블에 씁니다. 그래서 토큰을 가진 모든 사용자에 대해 애플리케이션에 행이 존재합니다. 이 쓰기는 최선 노력 방식입니다. 실패하거나 느려도 사용자는 로그인할 수 있고, 다음 로그인이나 토큰 갱신 때 다시 시도합니다.
+4. 브라우저는 사용자의 그룹이 담긴 토큰을 받습니다.
+
+사용자가 직접 가입하면 두 번째 트리거가 `student`와 `instructor` 그룹에 추가합니다.
+
+## API 호출
+
+```d2 title="An API call"
+shape: sequence_diagram
+browser: "Browser"
+waf: "WAF"
+gw: "API Gateway"
+fn: "API function"
+table: "Core table"
+
+browser -> waf: "tRPC call with token"
+waf -> gw: "allowed"
+gw -> gw: "verify token with Cognito, throttle"
+gw -> fn: "invoke"
+fn -> fn: "check group, validate input"
+fn -> table: "read or write"
+fn -> browser: "result"
+```
+
+요청은 데이터에 닿기 전에 세 번 검사됩니다.
+
+1. **WAF**는 스테이지에서 켜져 있다면 흔한 공격을 걸러냅니다.
+2. **API Gateway**는 사용자 풀을 기준으로 토큰을 검증하고 요청 제한을 적용합니다. 게시된 강좌의 소개 페이지 보기처럼 일부 공개 프로시저는 토큰 검사를 건너뜁니다.
+3. **함수**는 호출자의 그룹을 확인하고(instructor-api는 `instructor`, admin-api는 `admin` 필요), 입력을 검증하고, "호출자가 이 강좌에 수강 등록되어 있다"처럼 해당 프로시저의 규칙을 적용합니다.
+
+## 공개 페이지 제공
+
+강좌 소개 페이지, 강사 프로필, 수료증 페이지는 포털의 JavaScript를 실행하지 않는 크롤러와 링크 미리보기에서 읽을 수 있어야 합니다.
+
+```d2 title="A public page"
+shape: sequence_diagram
+visitor: "Crawler or browser"
+cf: "Student portal (CloudFront)"
+fn: "Page renderer"
+table: "Core table"
+
+visitor -> cf: "GET /learn/<courseId>"
+cf -> fn: "on a cache miss"
+fn -> table: "read the course"
+fn -> cf: "HTML"
+cf -> visitor: "HTML, cached for up to five minutes"
+```
+
+1. 학생 포털의 CloudFront 배포는 `/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml`, `/robots.txt`를 페이지 렌더러로 보냅니다. 나머지 경로는 모두 정적 사이트입니다.
+2. 렌더러는 테이블을 읽어 포털 자체의 `index.html`을 해당 페이지의 내용과 메타데이터로 채웁니다. 읽기 전용 권한만 있고, CloudFront만 호출할 수 있습니다.
+3. CloudFront는 경로만으로 응답을 캐시하므로, 요청한 사람에 따라 달라지지 않습니다.
+
+전체 설계는 <Link path="design/public-pages">공개 페이지</Link>에 있습니다.
+
+## 동영상의 여정
+
+```d2 title="From upload to playback"
+direction: right
+instructor: "Instructor"
+api: "instructor-api"
+upload: "Upload bucket"
+mc: "MediaConvert"
+lesson: "Lesson media bucket"
+done: "transcode-complete"
+tr: "Transcribe"
+cap: "transcribe-complete"
+table: "Core table"
+cf: "CloudFront"
+student: "Student"
+
+instructor -> api: "1. ask to upload"
+instructor -> upload: "2. PUT file (presigned URL)"
+api -> mc: "3. submit job"
+mc -> lesson: "4. HLS renditions"
+mc -> done: "5. job finished (EventBridge)"
+done -> table: "mark ready"
+done -> tr: "6. start captions"
+tr -> cap: "7. finished (EventBridge)"
+cap -> lesson: "caption track"
+student -> cf: "8. play (signed)"
+cf -> lesson
+```
+
+**업로드.** 브라우저는 instructor-api가 발급한 사전 서명 URL로 S3에 직접 업로드하므로, 큰 파일이 Lambda 함수를 거치지 않습니다.
+
+**트랜스코딩.** MediaConvert가 업로드된 파일을 여러 화질의 HLS 렌디션으로 변환하므로, 플레이어가 시청자의 연결 상태에 맞춰 조정됩니다. 작업이 끝나면 EventBridge 규칙이 함수를 호출해 동영상을 준비 완료로 표시하고 자막용 Transcribe 작업을 시작합니다.
+
+**자막.** Transcribe가 끝나면 두 번째 함수가 자막 트랙을 저장합니다. 강좌에 다른 자막 언어가 있으면 자막 번역 기능([변경에 반응하기](#변경에-반응하기) 참고)이 Amazon Translate로 트랙을 번역합니다. 전사 색인 기능은 자막 텍스트를 검색에 추가합니다.
+
+**복구.** 30분마다 함수가 실행되어 처리 중에 멈춘 동영상을 찾습니다. 완료 핸들러마다 실패 큐가 있고, 폐기된 파일은 예약된 정리 작업이 제거합니다.
+
+**재생.** 강의 미디어는 비공개입니다. 수강 등록한 학생이 레슨을 열면 core-api가 수강 등록을 확인하고 유효 기간이 짧은 CloudFront 서명을 발급합니다. CloudFront는 이 서명이 있는 요청에만 동영상을 제공합니다. 로그인 여부와 관계없이 누구나 볼 수 있는 것이 두 가지 있습니다. 강좌의 미리보기 동영상과, 강사가 무료 미리보기로 표시한 레슨입니다. 서명 키는 서명을 수행하는 각 API의 전용 함수 하나가 가지고 있으며, API의 공유 함수에는 없습니다.
+
+## 변경에 반응하기
+
+학생의 강좌 진도, 강좌의 검색 항목, 강사의 분석과 수익처럼 어떤 결과는 많은 레코드에 의존합니다. 이런 값은 데이터를 바꾸는 요청 안에서 계산하지 않고, 나중에 테이블의 변경 스트림으로 다시 계산합니다.
+
+```d2 title="One stream reader, one queue per feature"
+direction: right
+api: "Any API write"
+table: "Core table"
+stream: "Change stream"
+router: "Stream router"
+q1: "progress queue"
+q2: "search queue"
+q3: "analytics queue"
+q4: "notification queue"
+h1: "Progress recalculation"
+h2: "Search indexing"
+h3: "Analytics update"
+h4: "Notification delivery"
+os: "OpenSearch"
+ses: "SES"
+
+api -> table
+table -> stream
+stream -> router
+router -> q1
+router -> q2
+router -> q3
+router -> q4
+q1 -> h1
+q2 -> h2
+q3 -> h3
+q4 -> h4
+h1 -> table
+h3 -> table
+h2 -> os
+h4 -> ses
+```
+
+그림은 여덟 가지 기능 중 네 가지를 보여 줍니다.
+
+| 기능 | 변경에 대한 반응 |
+| --- | --- |
+| 진도 재계산 | 학생의 강좌 진도를 갱신하고, 강좌를 완료하면 수료증을 발급합니다 |
+| 검색 색인 | 강좌 인덱스에서 해당 강좌의 항목을 갱신합니다 |
+| 전사 색인 | 전사 인덱스에서 동영상의 자막 텍스트를 갱신합니다 |
+| 분석 갱신 | 강좌의 분석 수치를 갱신합니다 |
+| 알림 전달 | 공지를 대상 학생들에게 퍼뜨리고 SES로 이메일을 보냅니다 |
+| 수익 기록 | 유료 주문에서 각 강사의 몫을 기록합니다 |
+| 자막 번역 | 동영상의 자막을 강좌의 다른 언어로 번역합니다 |
+| 브랜드 게시 | 포털이 가져가는 공개 미디어에 플랫폼의 브랜드 파일을 씁니다 |
+
+- **스트림 라우터**는 스트림을 읽는 유일한 주체입니다. 각 변경을 필터가 일치하는 모든 기능의 큐로 복사합니다.
+- 각 **기능**은 자기 큐가 있으므로, 느리거나 실패하는 기능이 다른 기능을 지연시키지 않습니다.
+- 계속 실패하는 메시지는 해당 기능의 **실패 큐**로 옮겨지고 알람이 울립니다. 운영자가 원인을 고치고 큐를 다시 처리합니다.
+- 핸들러는 같은 변경을 두 번 받거나 순서가 뒤바뀐 채로 받을 수 있으므로, 어느 쪽이든 같은 결과를 내도록 작성되어 있습니다.
+
+사용자 입장에서는 진도나 분석 같은 수치가 원인이 된 동작 이후 몇 초 뒤에 갱신됩니다.
+
+전체 설계는 <Link path="design/stream-event-router">스트림 이벤트 라우터</Link>에 있고, 그 기능 중 둘은 <Link path="design/search">검색</Link>과 <Link path="design/progress-and-completion">진도와 수료</Link>에서 다룹니다.
+
+## 강좌 구매
+
+유료 강좌는 Stripe의 페이지에서 구매하며, 학생의 수강 등록은 브라우저가 돌아왔을 때가 아니라 Stripe의 확인으로 이루어집니다.
+
+```d2 title="A purchase"
+direction: right
+student: "Student portal"
+core: "core-api"
+table: "Core table"
+stripe: "Stripe"
+hook: "Stripe webhook API"
+
+student -> core: "1. Buy now"
+core -> table: "2. pending order"
+core -> stripe: "3. create checkout"
+student -> stripe: "4. pay"
+stripe -> hook: "5. signed confirmation"
+hook -> table: "6. order paid + enrolment"
+```
+
+1. core-api가 `pending` 주문을 쓰고, Stripe에 결제 페이지를 요청한 뒤 학생을 그곳으로 보냅니다. 금액은 강좌 자체의 가격에서 학생이 입력한 쿠폰이 있으면 할인한 값이며, 브라우저가 보낸 값은 쓰지 않습니다. 쿠폰은 주문을 쓰기 전에 선점하므로, 여러 학생이 동시에 결제해도 사용 한도가 지켜집니다.
+2. 학생이 Stripe에서 결제합니다. Discava는 카드 번호를 보지 않습니다.
+3. Stripe가 서명된 확인을 웹훅 API로 보냅니다. 핸들러는 서명을 검증한 뒤, 한 번의 트랜잭션으로 주문을 결제 완료로 표시하고 수강 등록을 만듭니다.
+4. 강좌 페이지로 돌아오면 포털은 수강 등록이 나타나기를 기다리며, 보통 몇 초 안에 나타납니다.
+
+Stripe는 확인을 두 번 이상 보낼 수 있으므로, 핸들러는 두 번째부터는 아무것도 바꾸지 않습니다. 그 사이에 강좌가 비공개로 바뀐 경우처럼 반영할 수 없는 결제는 자동으로 환불됩니다.
+
+결제된 주문은 이후 다른 쓰기와 마찬가지로 변경 스트림을 따라갑니다. 수익 기능이 각 강사의 몫을 기록하고, 하루에 한 번 실행되는 작업이 지급할 금액을 정산합니다. 전체 설계는 <Link path="design/payments">결제</Link>와 <Link path="design/instructor-payouts">강사 정산</Link>에 있습니다.
+
+## 검색
+
+검색은 스트림이 최신으로 유지하는 OpenSearch에서 읽습니다.
+
+- **카탈로그.** core-api의 공개 검색 프로시저가 질의와 필터를 보내고, 게시된 강좌를 관련도와 평점 순으로 돌려줍니다. 두 번째 프로시저는 학생이 입력하는 동안 제목을 추천합니다. 새로 게시한 강좌는 게시 몇 초 뒤에 나타납니다.
+- **강좌 내부.** 수강 등록한 학생은 강좌 동영상에서 나온 말을 검색할 수 있습니다. core-api가 테이블에서 학생이 시청할 수 있는 동영상을 판단하고 질의를 그 동영상으로 제한하므로, 접근 여부를 인덱스가 결정하지 않습니다.
+
+설계는 <Link path="design/search">검색</Link>에 있습니다.

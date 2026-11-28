@@ -1,0 +1,120 @@
+---
+title: Bản đồ mã nguồn
+description: Mã của từng thành phần nằm ở đâu trong monorepo, và môi trường phát triển cục bộ mô phỏng AWS như thế nào.
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Discava là một monorepo TypeScript được quản lý bằng [Nx](https://nx.dev/) và pnpm, được khởi tạo bằng [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws).
+
+## Các package
+
+```
+packages/
+├── websites/
+│   ├── student-portal/      React + Vite + TanStack Router
+│   ├── instructor-portal/
+│   └── admin-portal/
+├── apis/
+│   ├── core-api/            tRPC, any signed-in user; also the public page renderer
+│   ├── instructor-api/      tRPC, instructors only
+│   └── admin-api/           tRPC, admins only
+├── databases/
+│   ├── core-table/          DynamoDB entities and write helpers (ElectroDB)
+│   └── search/              OpenSearch client, index definitions and index sync
+├── events/                  Lambda handlers for AWS-triggered events
+├── infra/                   The CDK app: stages and stacks
+├── common/
+│   ├── constructs/          CDK constructs, one per component
+│   ├── infra-config/        Per-stage deployment settings, local ports and origins
+│   ├── branding/            Brand rules shared by portals and backend
+│   ├── server-utils/        Code shared by backend functions
+│   ├── web-utils/           Non-UI code shared by portals
+│   ├── shadcn/              UI components and the shell shared by portals
+│   └── tiptap/              Rich-text document helpers
+├── tooling/
+│   ├── local-dev/           The Docker services local development runs instead of AWS
+│   ├── deploy/              Deploy and operations scripts
+│   └── agent/               CI and pull request tooling
+└── e2e/                     Playwright end-to-end tests against the local stack
+docs/                        This site
+scripts/setup-stage.sh       One-time AWS and GitHub setup per stage
+```
+
+Mỗi package là một dự án Nx tên `@discava/<name>`. Các package dưới `common/` và `tooling/` mang tên thư mục làm tiền tố: `@discava/common-web-utils`, `@discava/tooling-deploy`.
+
+## Từ thành phần đến mã
+
+| Thành phần | Mã chạy | Hạ tầng |
+| --- | --- | --- |
+| Một cổng | `packages/websites/<portal>` | `constructs/src/app/static-websites`, `WebsitesStack` |
+| Một API | `packages/apis/<api>` | `constructs/src/app/apis`, `<Api>Stack` |
+| Bảng core | `packages/databases/core-table` | `constructs/src/app/dynamodb`, `DataStack` |
+| Hàm render trang | `packages/apis/core-api/src/page-renderer` | `constructs/src/app/static-websites/student-portal.ts`, `WebsitesStack` |
+| Tìm kiếm | `packages/databases/search` | `constructs/src/app/opensearch`, `DataStack` |
+| Stream router và các handler tính năng | `packages/events/src/router`, và một thư mục cho mỗi chủ đề (`progress`, `search`, `analytics`, `notifications`, `earnings`, `media`, `branding`) | `constructs/src/core/stream-router.ts`, `StreamRouterStack` |
+| Media pipeline | `packages/events/src/media` | `constructs/src/app/media-convert`, `MediaPipelineStack` |
+| Webhook của Stripe | `packages/events/src/payments` | `constructs/src/app/apis/stripe-webhook-api.ts`, `PaymentsStack` |
+| Lượt chi trả | `packages/events/src/earnings` | `PayoutsStack` |
+| Nhắc chứng chỉ | `packages/events/src/certificates` | `StreamRouterStack` |
+| Các trigger của Cognito | `packages/events/src/identity` | `DataStack` |
+
+Bản thân các tính năng stream được đăng ký trong một danh sách duy nhất, `STREAM_FEATURES` trong `packages/databases/core-table/src/helpers/stream-features.ts`. Cả stream router đã triển khai lẫn trình chạy sự kiện cục bộ đều đọc danh sách này.
+
+## Một API được ghép lại như thế nào
+
+Mỗi API đều theo cùng một cấu trúc:
+
+| Tệp | Vai trò |
+| --- | --- |
+| `src/init.ts` | Dựng các kiểu procedure: `publicProcedure`, `protectedProcedure` và những kiểu có thêm quyền truy cập bảng |
+| `src/router.ts` | Router tRPC: mọi procedure mà API cung cấp |
+| `src/procedures/` | Các procedure, mỗi cái nằm cạnh test của nó |
+| `src/handler.ts` | Điểm vào của Lambda |
+| `src/local-server.ts` | Cùng router đó được phục vụ cục bộ |
+
+core-api có thêm một điểm vào nữa, `src/page-renderer/`, với `src/local-page-renderer.ts` để phục vụ nó cục bộ.
+
+Phần hạ tầng dùng chung, như middleware xác thực và bộ điều hợp Lambda, chỉ nằm một nơi trong `packages/common/server-utils`.
+
+Các cổng import **kiểu** router của từng API, nên đầu vào và đầu ra của một procedure được kiểm tra xuyên suốt ngay lúc biên dịch.
+
+## Các quy tắc trải dài nhiều bản ghi
+
+Mọi API và handler đều ghi vào cùng một bảng. Một quy tắc mà nhiều hơn một bên ghi phải tuân thủ, chẳng hạn "một mục mà học viên đã dùng thì không thể bị xóa", được hiện thực một lần dưới dạng helper trong `core-table` mà mọi bên ghi đều gọi. Mỗi quy tắc như vậy có một **kiểm tra bất biến**, và các bài kiểm thử end-to-end chạy tất cả chúng trên bảng sau mỗi kịch bản.
+
+## Phát triển cục bộ mô phỏng AWS
+
+`pnpm dev` chạy cùng một mã đó với các bản thay thế cục bộ:
+
+| Trên AWS | Cục bộ |
+| --- | --- |
+| CloudFront + S3 website | Vite dev server |
+| API Gateway + Lambda | Một HTTP server cục bộ cho mỗi API |
+| Hàm render trang | Một HTTP server cục bộ trên cổng 2026 |
+| Cognito | Một OIDC server cục bộ với người dùng có sẵn |
+| DynamoDB | DynamoDB local trong Docker |
+| S3 | S3Mock trong Docker |
+| SQS | ElasticMQ trong Docker |
+| OpenSearch Serverless | OpenSearch trong Docker |
+| DynamoDB Streams, EventBridge, Scheduler | Trình chạy sự kiện (`packages/events/src/local`) |
+| MediaConvert | ffmpeg trong Docker |
+| Transcribe | Một bản thay thế ghi ra một track phụ đề giữ chỗ |
+| Translate | Một bản thay thế thêm ngôn ngữ đích vào đầu mỗi phụ đề |
+| SES | Email được lưu vào một hộp thư cục bộ |
+| Stripe | Một bản thay thế cho API, trang thanh toán, các lượt gửi webhook và Connect của nó |
+| Secrets Manager (các secret của Stripe) | Các tệp bị Git bỏ qua dưới `tmp/local-dev/secrets/` |
+
+Trình chạy sự kiện kích hoạt cùng các handler mà AWS sẽ gọi, qua cùng một registry các tính năng stream, nên hành vi nền giống nhau ở cả hai nơi. <Link path="guides/getting-started">Chạy Discava cục bộ</Link> có các lệnh.
+
+## Làm việc trong repository
+
+```sh
+pnpm build    # compile, bundle, synthesize and scan every project
+pnpm lint     # format and lint with Biome
+pnpm test     # run every project's tests
+```
+
+[DEVELOPMENT.md](https://github.com/AlexTo/discava/blob/main/DEVELOPMENT.md) trình bày đầy đủ các quy ước, kiểm thử và cách thực hiện thay đổi.

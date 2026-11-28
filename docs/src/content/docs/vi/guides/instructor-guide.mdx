@@ -1,0 +1,124 @@
+---
+title: Hướng dẫn cho giảng viên
+description: Giảng viên có thể làm gì trong cổng giảng viên, từ xây dựng và xuất bản khóa học đến trang công khai, phụ đề, xem trước miễn phí, định giá và thu nhập, kèm liên kết đến các hướng dẫn chi tiết.
+sidebar:
+  order: 0
+---
+
+import Link from '@components/link.astro';
+
+Trang này là phần tổng quan về cổng giảng viên. Để dùng cổng, tài khoản của bạn phải là giảng viên: nếu cổng báo bạn không phải, hãy hỏi một quản trị viên.
+
+## Tìm đường quanh cổng
+
+Thanh bên có bốn trang:
+
+| Trang | Dùng để làm gì |
+| --- | --- |
+| **Home** | Số khóa học của bạn, **Waiting for grading** (các bài nộp cần chấm) và các khóa học mới nhất của bạn |
+| **Dashboard** | Lượt ghi danh, hoạt động và mức hoàn thành của từng khóa học |
+| **My Courses** | Mọi khóa học bạn dạy. **Open course** mở trang của nó, nơi bạn xây dựng và quản lý khóa học |
+| **Earnings** | Các khóa học của bạn kiếm được bao nhiêu và đã chi trả những gì |
+
+Menu tài khoản có **Public profile**, **Notification settings** và **Sign out**.
+
+Trang của một khóa học là một trang dài. Các liên kết ở đầu trang nhảy đến các mục của nó: **Content**, **Landing page**, **Catalogue**, **Captions**, **Certificates**, **First-lesson prompt**, **Price** và **Announcements**. Bên cạnh tiêu đề khóa học, **Reviews**, **Questions** và **Coupons** mở các trang riêng.
+
+## Xây dựng một khóa học
+
+1. Chọn **Create a course**, trên Home hoặc My Courses. Đặt **Course title** và **Course summary**. Khóa học bắt đầu ở trạng thái bản nháp.
+2. Trong **Course content**, thêm một module bằng **New module**.
+3. Trong module, thêm bài học bằng **New lesson**, hoặc một bài tập bằng **New assignment**.
+4. Trong một bài học, thêm nội dung của nó: **Video**, **Text**, **Quiz** hoặc **File**.
+5. Kéo module, bài học và nội dung bằng tay nắm để sắp xếp lại.
+6. Trong **Catalogue details**, đặt danh mục, cấp độ, ngôn ngữ, thời lượng và tối đa 8 thẻ. Học viên lọc catalogue và tìm kiếm theo các mục này.
+7. Thêm ảnh khóa học.
+
+Phụ đề được thêm vào mọi video tự động. <Link path="guides/building-a-course">Xây dựng một khóa học</Link> hướng dẫn từng bước.
+
+Những gì bạn có thể thêm nữa:
+
+- **Quizzes**: câu hỏi một lựa chọn và nhiều lựa chọn, điểm đạt, số lượt làm hoặc không giới hạn, và khi nào hiển thị đáp án đúng. **Preview as student** thử bài kiểm tra mà không lưu gì. Xem <Link path="guides/quizzes-and-assignments">Bài kiểm tra và bài tập</Link>.
+- **Assignments**: học viên tải một file lên và bạn chấm điểm, hoặc một bài kiểm tra được chấm tự động. Bài tập tải file có hướng dẫn, điểm tối đa và hạn nộp tùy chọn. Liên kết **Submissions** của nó liệt kê các bài làm, và Home liệt kê những bài đang **Waiting for grading**. Bạn **Return** bài với điểm và phản hồi, hoặc chọn **Request resubmission**. Xem <Link path="guides/quizzes-and-assignments">Bài kiểm tra và bài tập</Link>.
+- **Questions in a video**: hộp thoại **Questions** trên một video thêm tối đa 20 câu hỏi, mỗi câu tại một thời điểm trong video hoặc ở cuối. Câu trả lời không bao giờ được tính vào tiến độ hay chứng chỉ. Xem <Link path="guides/video-lessons">Bài học video</Link>.
+- **Certificates**: trong mục **Certificates**, bật **Issue a certificate on completion**, và tùy chọn yêu cầu đạt mọi bài kiểm tra hoặc điểm tối thiểu cho bài tập. Cùng mục đó liệt kê các chứng chỉ đã cấp, với **Revoke** và **Restore**. Xem <Link path="guides/certificates">Chứng chỉ</Link>.
+
+## Xuất bản và thay đổi một khóa học
+
+**Publish** trên trang của khóa học làm một khóa học bản nháp hiển thị cho học viên. Sau đó:
+
+- Module, bài học và nội dung mới vẫn bị ẩn cho đến khi bạn chọn **Publish** trên từng cái. **Hide** đưa một mục ra khỏi tầm nhìn của học viên.
+- Xóa một module, bài học hoặc mục nội dung sẽ lưu trữ nó thay vì xóa. Mục **Archived** liệt kê chúng, với **Restore** và **Delete permanently**. Thứ gì học viên đã dùng thì không thể xóa vĩnh viễn.
+- Khóa học đã lưu trữ không thể chỉnh sửa cho đến khi bạn chọn **Restore**.
+
+<Link path="guides/building-a-course">Xây dựng một khóa học</Link> có chi tiết, và <Link path="design/live-course-editing">Chỉnh sửa khóa học đang hoạt động</Link> mô tả những gì học viên thấy khi bạn thay đổi một khóa học đã xuất bản.
+
+## Trang landing và hồ sơ của bạn
+
+Trang của một khóa học đã xuất bản, `/learn/<courseId>`, là công khai: khách chưa đăng nhập xem được, và công cụ tìm kiếm cùng bản xem trước liên kết đọc được.
+
+**Trên trang của khóa học**, mục **Landing page** có:
+
+- **What students will learn** và **Requirements**: mỗi loại tối đa 10 mục, mỗi mục tối đa 160 ký tự. Bạn có thể sắp xếp lại bằng các nút "Move up" và "Move down". Chọn **Save landing page** khi xong.
+- Một **preview video**: một video ngắn, tối đa 5 phút (1 đến 2 phút là tốt nhất), tải lên như một file riêng, không phải một trong các bài học của bạn. Phụ đề được thêm tự động. **Replace** giữ video cũ tiếp tục phát cho đến khi video mới sẵn sàng, và **Remove video** quay về ảnh khóa học. Ai cũng xem được nó, nhưng không có video bài học nào trở thành công khai.
+
+**Landing page checklist** phía trên cho thấy còn thiếu gì: kết quả học tập, yêu cầu, video xem trước, ảnh khóa học, và tiêu đề cùng ảnh hồ sơ của bạn. Nó không bao giờ ngăn bạn xuất bản. **View public page** mở trang khi khóa học đã được xuất bản.
+
+**Hồ sơ công khai của bạn** (**Public profile** trong menu tài khoản) có:
+
+| Trường | Giới hạn |
+| --- | --- |
+| Display name | Tối đa 60 ký tự |
+| Handle | 3 đến 30 ký tự. Địa chỉ của bạn là `/instructors/<handle>` |
+| Headline | Tối đa 100 ký tự |
+| Bio | Tối đa 2,000 ký tự |
+| Photo | Được thêm sau khi hồ sơ được lưu lần đầu |
+
+Hồ sơ được tạo cùng khóa học đầu tiên của bạn, và nó là công khai khi bạn dạy ít nhất một khóa học đã xuất bản. Mọi giảng viên của một khóa học đã xuất bản đều được hiển thị trên trang của nó, và bạn không thể từ chối.
+
+Thay đổi đến công cụ tìm kiếm và bản xem trước liên kết trong vòng 5 phút. Một khóa học đã lưu trữ, hoặc một hồ sơ không còn khóa học nào được xuất bản, ngừng được tìm thấy với cùng tốc độ. Xem <Link path="design/public-pages">Trang công khai</Link> để biết cách nó hoạt động.
+
+## Ngôn ngữ phụ đề
+
+Phụ đề được thêm vào mọi video tự động. Trên trang của khóa học, mục **Caption languages** cho phép bạn chọn các ngôn ngữ khác để dịch phụ đề sang. Cả video bạn đã có lẫn video bạn thêm sau đều theo lựa chọn của bạn, kể cả video xem trước. Dịch một video mất vài phút sau khi phụ đề của nó sẵn sàng.
+
+Mục này không có khi phụ đề bị tắt cho trang, và nó báo như vậy khi tính năng dịch phụ đề không khả dụng.
+
+- **Phụ đề của chính bạn luôn được ưu tiên.** Nếu bạn tải phụ đề lên cho một ngôn ngữ, bản tải lên đó được giữ và không bao giờ bị bản dịch thay thế. Để sửa một bản dịch, hãy tải phụ đề của bạn cho ngôn ngữ đó trong hộp thoại Captions của video.
+- **Thay phụ đề chính của video** xóa các track đã dịch của nó, và chúng được dịch lại từ phụ đề mới.
+- **Xóa một ngôn ngữ** xóa các track đã dịch của ngôn ngữ đó khỏi mọi video. Phụ đề bạn đã tải lên được giữ.
+- **Hộp thoại Captions** hiển thị trạng thái của từng ngôn ngữ: translating, translated, uploaded, failed, too long, no room (một video có tối đa 10 track) hoặc not translated, kèm lý do. Phụ đề tự động không ở ngôn ngữ của khóa học sẽ không được dịch: hãy tải lên phụ đề bằng ngôn ngữ của video.
+- **Translate again** trong hộp thoại yêu cầu lại một lần các bản dịch còn thiếu của một video. **Translate missing captions again** trong mục này làm điều đó cho cả khóa học.
+- **Dịch máy có thể sai.** Học viên thấy các track đã dịch được đánh dấu "(auto-translated)". Mỗi dòng phụ đề được dịch riêng, nên hãy kiểm tra các ngôn ngữ bạn đọc được trước khi tin vào chúng.
+
+## Bài học xem trước miễn phí
+
+Bản xem trước miễn phí cho phép bất kỳ ai xem một bài học trước khi ghi danh, đây là cách nhanh nhất để cho thấy khóa học của bạn như thế nào.
+
+1. Trong **Course content**, chọn **Make free preview** trên một bài học.
+2. Xác nhận bằng **Make free preview**.
+
+Bài học hiện huy hiệu "Free preview", và tiêu đề của nó liên kết đến bản xem trước từ trang landing của bạn. Huy hiệu ghi "not public yet" cho đến khi bài học, module và khóa học được xuất bản.
+
+- Khách xem video, văn bản và file của bài học mà không cần đăng nhập hay trả tiền. Không có gì được lưu cho họ: không tiến độ, không vị trí video, không thảo luận.
+- **Bài kiểm tra vẫn bị khóa.** Khách thấy tiêu đề và số câu hỏi của bài kiểm tra, nhưng không thấy các câu hỏi, và phải ghi danh để làm.
+- **Bài học bài tập không thể được đánh dấu.** Chỉ các bài học thông thường mới làm được.
+- Để dừng, chọn **Remove free preview**. Quyền truy cập mới dừng ngay lập tức, và địa chỉ xem trước khi đó báo rằng bản xem trước không còn khả dụng. Một video đang được ai đó phát có thể chạy tối đa một giờ, và một liên kết file trong vài phút. Ẩn hoặc lưu trữ bài học, module của nó hoặc khóa học có cùng hiệu ứng.
+
+## Thu phí một khóa học
+
+Một khóa học miễn phí cho đến khi bạn đặt giá trong mục **Price** của nó. Quản trị viên phải kết nối Stripe trước.
+
+- <Link path="guides/payments">Khóa học trả phí và thanh toán</Link> nói về định giá, mã giảm giá (**Coupons**) và những gì học viên thấy.
+- <Link path="guides/earnings-and-payouts">Thu nhập và chi trả</Link> nói về phần của bạn trong mỗi lượt bán và cách bạn được trả.
+
+## Trao đổi với học viên
+
+- <Link path="guides/announcements">Thông báo của khóa học</Link>: đăng một tin nhắn cho mọi người đã ghi danh, từ mục **Announcements** của khóa học.
+- <Link path="guides/lesson-discussions">Thảo luận bài học</Link>: trả lời câu hỏi của học viên và kiểm duyệt bài đăng, từ trang **Questions** của khóa học. Mục **First-lesson prompt** đặt câu hỏi dành cho học viên mới trong bài học đầu tiên.
+- <Link path="guides/reviews">Xếp hạng và đánh giá</Link>: đọc đánh giá và phản hồi, từ trang **Reviews** của khóa học.
+- <Link path="guides/notifications">Thông báo</Link>: những gì bạn và học viên được báo, ở chuông và qua email.
+
+## Xem khóa học đang hoạt động ra sao
+
+**Dashboard** hiển thị lượt ghi danh của từng khóa học, số người học hoạt động trong tuần này và tỷ lệ hoàn thành. Mở một khóa học để xem 30 hoặc 90 ngày gần nhất: lượt ghi danh mới và người học hoạt động mỗi ngày, nơi người học dừng lại (bỏ giữa chừng theo bài học), bao nhiêu người đã bắt đầu sau khi ghi danh, và kết quả của từng bài kiểm tra cùng các câu hỏi trong video. Xem <Link path="guides/course-analytics">Phân tích khóa học</Link>.

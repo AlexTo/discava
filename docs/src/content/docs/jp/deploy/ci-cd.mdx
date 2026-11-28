@@ -1,0 +1,125 @@
+---
+title: CI/CD リファレンス
+description: 各 GitHub Actions ワークフローの動作、実行タイミング、および読み取るすべての変数とシークレット。
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+ワークフローは `.github/workflows/` にあります。デプロイに関係するのは **CI** と **Deploy** の2つです。
+
+## パイプライン
+
+```d2 title="What runs when"
+direction: right
+pr: "Pull request"
+main: "Push to main"
+checks: "PR Checks"
+ci: "CI" {
+  build: "Build\n(lint, test, build)"
+  trivy: "Trivy scan"
+  docs: "Deploy Docs"
+  build -> docs
+}
+deploy: "Deploy"
+manual: "Run workflow\n(manual)"
+pages: "GitHub Pages"
+aws: "AWS stage"
+
+pr -> checks
+main -> ci
+ci -> deploy: "passed and\nAUTO_DEPLOY_STAGE set"
+manual -> deploy
+ci.docs -> pages
+deploy -> aws
+```
+
+## ワークフロー
+
+### CI (`ci.yml`)
+
+`main` へのプッシュごと、および手動実行時に動きます。
+
+| ジョブ | 内容 |
+| --- | --- |
+| **Build** | すべてのプロジェクトで lint、テスト、ビルドを行います。ビルドでは CDK アプリを synthesize し、テンプレートを Checkov でスキャンします。ビルドによってコミット済みのファイルが変更された場合は失敗します |
+| **Trivy** | 依存関係の既知の脆弱性と、リポジトリ内のシークレットをスキャンします |
+| **Playwright cache** | エンドツーエンドテストが使うブラウザを保存し、プルリクエストの開始を速くします |
+| **Deploy Docs** | このサイトを GitHub Pages に公開します。`main` へのプッシュ時のみ実行され、より新しいコミットが届いた場合はスキップされます |
+
+CI に AWS へのアクセスは不要です。例外は任意の Docker ログイン用ロールで、Trivy ジョブが使います。
+
+### Deploy (`deploy.yml`)
+
+次の2通りの方法で実行されます。
+
+- **手動**で、ステージ名を指定して実行します。実行元のコミットをデプロイします。
+- **`main` で CI が成功した後**、リポジトリ変数 `AUTO_DEPLOY_STAGE` が設定されている場合に実行されます。CI が検証したコミットをデプロイし、その後 `main` が進んでいた場合はスキップします。
+
+同じステージをデプロイ中の実行がある場合は、それが終わるまで待ちます。実行が重なることはありません。
+
+ジョブはステージ名と同じ名前の GitHub environment で動きます。これによりステージの変数が使えるようになり、AWS のデプロイロールも信頼します。手順は <Link path="deploy/first-deploy">初回デプロイ</Link> にまとめています。
+
+### PR Checks (`pr-checks.yml`)
+
+`main` へのプルリクエストで動きます。変更の影響を受けるプロジェクトの lint、テスト、ビルド、ローカルスタックに対するエンドツーエンドテスト、およびリポジトリ固有のいくつかのチェックを行います。AWS へのアクセスは不要です。例外は任意の Docker ログイン用ロールです。
+
+### メンテナー向け自動化
+
+これらはプロジェクト自身の開発プロセスを支えるものです。フォークでは放置してもよく、**Actions** タブで無効にすることもできます。
+
+| ワークフロー | 内容 |
+| --- | --- |
+| `agent-*.yml` | スペック駆動のプロセスを進めます。スペックのプルリクエストと、`openhands/…` という名前のブランチに対して動きます |
+| `archive-specs.yml` | `main` で `specs/*/tasks.md` が変更されたとき、完了したスペックをアーカイブするプルリクエストを用意します |
+| `post-merge-verify.yml` | `discava-development` への Deploy 実行後、デプロイされた各プルリクエストにつきテスト用の issue を開きます。フォークでプルリクエストをマージし、これらの issue が不要な場合は無効にしてください |
+| `cache-cleanup.yml` | プルリクエストが閉じたとき、その Actions キャッシュを削除し、GitHub の割り当て内に収めます |
+
+## 変数とシークレット
+
+ワークフローが読み取るものをすべて挙げます。必要な変数はセットアップスクリプトが設定します。
+
+### リポジトリ変数
+
+| 変数 | 設定者 | 用途 |
+| --- | --- | --- |
+| `AUTO_DEPLOY_STAGE` | セットアップスクリプト（選択した場合） | `main` で CI が成功するたびにデプロイする1つのステージ。未設定なら手動デプロイのみ |
+| `AWS_DOCKER_LOGIN_ROLE_ARN` | セットアップスクリプト | Amazon ECR Public に Docker でサインインし、イメージ取得のレート制限を避けるため。未設定なら匿名で取得します |
+| `AGENT_APP_LOGIN` | メンテナーのみ | メンテナー向け自動化がレビューを信頼する GitHub App。フォークでは未設定のままにします |
+| `DOCS_SITE`, `DOCS_BASE_PATH` | 任意で自分 | ドキュメントサイトの公開先。例: `https://docs.example.com` と `/`。未設定ならリポジトリの GitHub Pages アドレスになります |
+
+### 環境変数（ステージごと）
+
+| 変数 | 設定者 | 用途 |
+| --- | --- | --- |
+| `AWS_REGION` | セットアップスクリプト | デプロイがサインインするリージョン |
+| `AWS_DEPLOY_ROLE_ARN` | セットアップスクリプト | ワークフローが引き受けるロール |
+| `AWS_EXECUTION_ROLE_ARN` | セットアップスクリプト | CloudFormation がリソースを作成するときに使うロール |
+| `<STAGE>_…` | セットアップスクリプトまたは自分 | カスタムドメインなどの <Link path="deploy/configuration">設定の上書き</Link>。ステージのプレフィックスで始まる変数はすべて転送されます。例: `DISCAVA_DEVELOPMENT_INFRA_…` |
+
+### シークレット
+
+| シークレット | 必須 | 用途 |
+| --- | --- | --- |
+| `CODECOV_TOKEN` | いいえ | テストカバレッジを Codecov にアップロードする |
+
+**AWS のシークレットはありません**。ワークフローは、その実行1回のために GitHub が発行するトークンで AWS に身元を証明します。
+
+## GitHub が AWS にサインインする仕組み
+
+1. Deploy ジョブが GitHub に OIDC トークンを要求します。トークンのサブジェクトにはリポジトリと environment が入ります。既定では `repo:<owner>/<repo>:environment:<stage>` です。
+2. AWS の GitHub 用 OIDC プロバイダーがトークンを検証します。
+3. デプロイロールの信頼ポリシーは、その正確なサブジェクトだけを受け入れます。そのため、あなたのリポジトリで、その environment で動くジョブだけがロールを引き受けられます。
+4. ジョブは、その実行の間だけ有効な認証情報を受け取ります。
+
+だからこそ、environment の保護ルールがデプロイの関門になります。environment でジョブを実行できる人は、そのステージをデプロイできます。
+
+## 意図的に分けた2つのロール
+
+| ロール | 使う者 | できること |
+| --- | --- | --- |
+| **Deploy role** | ワークフロー | ステージのアセットをアップロードし、`<stage>-*` という名前の CloudFormation スタックを作成または更新します。リソースを自分で作ることはできません |
+| **Execution role** | CloudFormation | ステージのリソースを作成します。作成する IAM ロールには、ステージの permissions boundary を付ける必要があります |
+
+2つに分けることで、侵害されたワークフローにできることは、そのステージの CloudFormation デプロイにできることだけになります。また、デプロイされたものが boundary を超える権限を自分に与えることはできません。

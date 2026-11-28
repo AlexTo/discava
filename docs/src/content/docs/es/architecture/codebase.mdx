@@ -1,0 +1,120 @@
+---
+title: Mapa del código
+description: Dónde vive el código de cada componente en el monorepo y cómo el desarrollo local reproduce AWS.
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Discava es un monorepo de TypeScript gestionado con [Nx](https://nx.dev/) y pnpm, generado con el [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws).
+
+## Paquetes
+
+```
+packages/
+├── websites/
+│   ├── student-portal/      React + Vite + TanStack Router
+│   ├── instructor-portal/
+│   └── admin-portal/
+├── apis/
+│   ├── core-api/            tRPC, any signed-in user; also the public page renderer
+│   ├── instructor-api/      tRPC, instructors only
+│   └── admin-api/           tRPC, admins only
+├── databases/
+│   ├── core-table/          DynamoDB entities and write helpers (ElectroDB)
+│   └── search/              OpenSearch client, index definitions and index sync
+├── events/                  Lambda handlers for AWS-triggered events
+├── infra/                   The CDK app: stages and stacks
+├── common/
+│   ├── constructs/          CDK constructs, one per component
+│   ├── infra-config/        Per-stage deployment settings, local ports and origins
+│   ├── branding/            Brand rules shared by portals and backend
+│   ├── server-utils/        Code shared by backend functions
+│   ├── web-utils/           Non-UI code shared by portals
+│   ├── shadcn/              UI components and the shell shared by portals
+│   └── tiptap/              Rich-text document helpers
+├── tooling/
+│   ├── local-dev/           The Docker services local development runs instead of AWS
+│   ├── deploy/              Deploy and operations scripts
+│   └── agent/               CI and pull request tooling
+└── e2e/                     Playwright end-to-end tests against the local stack
+docs/                        This site
+scripts/setup-stage.sh       One-time AWS and GitHub setup per stage
+```
+
+Cada paquete es un proyecto de Nx llamado `@discava/<name>`. Los paquetes dentro de `common/` y `tooling/` llevan la carpeta como prefijo: `@discava/common-web-utils`, `@discava/tooling-deploy`.
+
+## Del componente al código
+
+| Componente | Código en tiempo de ejecución | Infraestructura |
+| --- | --- | --- |
+| Un portal | `packages/websites/<portal>` | `constructs/src/app/static-websites`, `WebsitesStack` |
+| Una API | `packages/apis/<api>` | `constructs/src/app/apis`, `<Api>Stack` |
+| Tabla principal | `packages/databases/core-table` | `constructs/src/app/dynamodb`, `DataStack` |
+| Renderizador de páginas | `packages/apis/core-api/src/page-renderer` | `constructs/src/app/static-websites/student-portal.ts`, `WebsitesStack` |
+| Búsqueda | `packages/databases/search` | `constructs/src/app/opensearch`, `DataStack` |
+| Enrutador de streams y manejadores de características | `packages/events/src/router`, y una carpeta por tema (`progress`, `search`, `analytics`, `notifications`, `earnings`, `media`, `branding`) | `constructs/src/core/stream-router.ts`, `StreamRouterStack` |
+| Pipeline de medios | `packages/events/src/media` | `constructs/src/app/media-convert`, `MediaPipelineStack` |
+| Webhook de Stripe | `packages/events/src/payments` | `constructs/src/app/apis/stripe-webhook-api.ts`, `PaymentsStack` |
+| Ejecución de pagos | `packages/events/src/earnings` | `PayoutsStack` |
+| Recordatorio de certificados | `packages/events/src/certificates` | `StreamRouterStack` |
+| Triggers de Cognito | `packages/events/src/identity` | `DataStack` |
+
+Las características del stream se registran en una sola lista, `STREAM_FEATURES` en `packages/databases/core-table/src/helpers/stream-features.ts`. La leen tanto el enrutador de streams desplegado como el ejecutor de eventos local.
+
+## Cómo se arma una API
+
+Cada API sigue la misma estructura:
+
+| Archivo | Función |
+| --- | --- |
+| `src/init.ts` | Construye los tipos de procedimiento: `publicProcedure`, `protectedProcedure` y otros que añaden acceso a la tabla |
+| `src/router.ts` | El router de tRPC: todos los procedimientos que expone la API |
+| `src/procedures/` | Los procedimientos, cada uno junto a sus pruebas |
+| `src/handler.ts` | El punto de entrada de Lambda |
+| `src/local-server.ts` | El mismo router servido en local |
+
+core-api tiene un punto de entrada más, `src/page-renderer/`, con `src/local-page-renderer.ts` para servirlo en local.
+
+La infraestructura compartida, como el middleware de autenticación y el adaptador de Lambda, vive una sola vez en `packages/common/server-utils`.
+
+Los portales importan el **tipo** del router de cada API, así que las entradas y salidas de un procedimiento se verifican de extremo a extremo en tiempo de compilación.
+
+## Reglas que abarcan varios registros
+
+Todas las APIs y manejadores escriben en la misma tabla. Una regla que más de un escritor debe cumplir, como "un elemento que los estudiantes ya usaron no se puede eliminar", se implementa una sola vez como ayudante en `core-table` que todos los escritores llaman. Cada una de esas reglas tiene una **comprobación de invariante**, y las pruebas de extremo a extremo las ejecutan todas contra la tabla después de cada escenario.
+
+## El desarrollo local reproduce AWS
+
+`pnpm dev` ejecuta el mismo código contra sustitutos locales:
+
+| En AWS | En local |
+| --- | --- |
+| Sitio web en CloudFront + S3 | Servidor de desarrollo de Vite |
+| API Gateway + Lambda | Un servidor HTTP local por API |
+| El renderizador de páginas | Un servidor HTTP local en el puerto 2026 |
+| Cognito | Un servidor OIDC local con usuarios predefinidos |
+| DynamoDB | DynamoDB local en Docker |
+| S3 | S3Mock en Docker |
+| SQS | ElasticMQ en Docker |
+| OpenSearch Serverless | OpenSearch en Docker |
+| DynamoDB Streams, EventBridge, Scheduler | El ejecutor de eventos (`packages/events/src/local`) |
+| MediaConvert | ffmpeg en Docker |
+| Transcribe | Un sustituto que escribe una pista de subtítulos de marcador |
+| Translate | Un sustituto que antepone a cada subtítulo su idioma de destino |
+| SES | Correos guardados en una bandeja local |
+| Stripe | Un sustituto de su API, la página de pago, las entregas de webhooks y Connect |
+| Secrets Manager (los secretos de Stripe) | Archivos ignorados por Git en `tmp/local-dev/secrets/` |
+
+El ejecutor de eventos dispara los mismos manejadores que dispararía AWS, a través del mismo registro de características del stream, así que el comportamiento en segundo plano es el mismo en ambos lugares. <Link path="guides/getting-started">Ejecutar Discava en local</Link> tiene los comandos.
+
+## Trabajar en el repositorio
+
+```sh
+pnpm build    # compile, bundle, synthesize and scan every project
+pnpm lint     # format and lint with Biome
+pnpm test     # run every project's tests
+```
+
+[DEVELOPMENT.md](https://github.com/AlexTo/discava/blob/main/DEVELOPMENT.md) cubre en detalle las convenciones, las pruebas y cómo se hacen los cambios.

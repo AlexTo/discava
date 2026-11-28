@@ -1,0 +1,327 @@
+---
+title: Chỉnh sửa khóa học đang chạy
+description: Chuyện gì xảy ra khi giảng viên thêm, gỡ, ẩn, khôi phục hoặc chỉnh sửa module, bài học và mục nội dung trong một khóa học đã xuất bản.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+Giảng viên tiếp tục chỉnh sửa một khóa học sau khi nó được xuất bản. Thiết kế này làm cho những chỉnh sửa đó an toàn với các học viên đã ghi danh: không có gì làm dở dang trở nên hiển thị, không có gì học viên đã làm bị mất, và tiến độ luôn đúng.
+
+Trạng thái của khóa học quyết định một chỉnh sửa hoạt động ra sao:
+
+| Trạng thái khóa học | Chỉnh sửa |
+|---|---|
+| **Draft** | Áp dụng ngay, và xóa là xóa cứng. Một bản nháp chưa bao giờ mở cho học viên, nên không có gì ở đó có thể ảnh hưởng đến họ |
+| **Published** | Theo các quy tắc trên trang này. Học viên có thể đã có tiến độ và các lượt làm |
+| **Archived** | Chương trình học chỉ đọc (xem [Vòng đời của một khóa học](#vòng-đời-của-một-khóa-học)) |
+
+Các procedure nằm trong instructor-api (`procedures/course.ts`, `module.ts`, `lesson.ts` và các tệp `content-item-*.ts`).
+
+## Quy trình
+
+### Vòng đời của một khóa học
+
+```d2 title="Lifecycle of a course: a draft is published once it has content; archiving makes it read-only and keeps whether it was ever published, and restore returns it there"
+direction: right
+
+new: "Created" {shape: oval}
+draft: Draft
+published: Published
+archived_draft: "Archived, read-only\n(never published)" {style.stroke-dash: 3}
+archived_published: "Archived, read-only\n(was published)" {style.stroke-dash: 3}
+
+new -> draft
+draft -> published: "publish\n(needs visible content)"
+draft -> archived_draft: archive
+published -> archived_published: archive
+archived_draft -> draft: restore
+archived_published -> published: restore
+```
+
+**Xuất bản**
+
+- Chỉ **draft** mới xuất bản được, và chỉ khi nó có ít nhất một mục nội dung mà học viên sẽ thấy, nên một khóa học không bao giờ được mở ra khi còn trống. Một mục nội dung bị ẩn hoặc lưu trữ, hoặc nằm dưới một module hay bài học bị ẩn hoặc lưu trữ, không được tính.
+- Việc xuất bản bị từ chối với khóa học đã lưu trữ: hãy khôi phục nó trước.
+- Xuất bản một khóa học không làm thay đổi bản ghi nào bên dưới nó. Các bản ghi `visible` trong bản nháp trở nên hiển thị với học viên cùng với khóa học, và các bản ghi bị ẩn vẫn ẩn cho đến khi chúng được xuất bản.
+
+**Khôi phục**
+
+- Khóa học ghi `publishedAt` lần đầu tiên nó được xuất bản và không bao giờ xóa nó. Đó là cách một khóa học đã lưu trữ nhớ được nó từng được mở cho học viên hay chưa.
+- **Khôi phục đưa một khóa học từng được xuất bản về Published, và một khóa học chưa từng về Draft.** Một khóa học mà học viên đã dùng không bao giờ quay lại draft, nơi xóa là vĩnh viễn.
+
+**Khóa học đã lưu trữ là chỉ đọc**
+
+- Không có gì trong chương trình học của nó có thể được thêm, sửa, xuất bản, ẩn, lưu trữ, sắp xếp lại hay khôi phục, và không video nào có thể được tải lên. Mỗi việc đó trả về `PRECONDITION_FAILED` ("Restore the course first"). Điều này bao gồm module, bài học, mục nội dung và quiz.
+- Những gì vẫn làm được: xem khóa học, khôi phục nó, và **xóa vĩnh viễn các bản ghi đã được lưu trữ**. Nhờ vậy một khóa học đã lưu trữ có thể được dọn dẹp mà không cần khôi phục, điều sẽ lại hiển thị nó cho học viên. Các lần xóa đó giữ các chốt chặn riêng của chúng (xem [Xóa vĩnh viễn](#xóa-vĩnh-viễn)).
+- Các thiết lập riêng của khóa học (giá, công tắc và tiêu chí chứng chỉ, lời nhắc bài học đầu tiên) có thể đổi ở bất kỳ trạng thái nào.
+
+**Lặp lại và tranh chấp đồng thời**
+
+- Lặp lại một hành động không ghi gì: xuất bản một khóa học đã xuất bản, hoặc khôi phục một khóa học không bị lưu trữ, trả về khóa học như hiện tại. Thử lại sau một timeout là an toàn.
+- Mỗi thay đổi có điều kiện theo trạng thái mà nó đã đọc. Nếu khóa học đổi trong lúc đó, yêu cầu trả về `CONFLICT`.
+- **Xuất bản so với một chỉnh sửa đồng thời.** Trong khóa học draft, nội dung có thể bị xóa, ẩn hoặc lưu trữ bất cứ lúc nào. Vì vậy transaction xuất bản kiểm tra rằng một trong các mục nội dung hiển thị mà nó đã đếm, cùng bài học và module chứa nó, vẫn còn và vẫn hiển thị. Nếu không, không có gì được xuất bản và yêu cầu trả về `CONFLICT`. Thử lại sẽ đếm lại.
+- **Xóa so với một lần xuất bản đồng thời.** Việc một lần xóa là vĩnh viễn hay là lưu trữ phụ thuộc vào trạng thái của khóa học khi yêu cầu đọc nó. Vì vậy một lần xóa vĩnh viễn trong khóa học draft (của một module, bài học hay mục nội dung) chạy trong một transaction cũng kiểm tra khóa học vẫn là draft. Nếu nó được xuất bản trong lúc đó, không có gì bị xóa và yêu cầu trả về `CONFLICT`. Thử lại sẽ lưu trữ thay vì xóa.
+- **Bất kỳ lần ghi nào so với một lần lưu trữ đồng thời.** Việc kiểm tra khóa học không bị lưu trữ nằm trong cùng transaction với mỗi lần ghi, bên cạnh các kiểm tra trên module và bài học. Yêu cầu thua cuộc đua đó trả về "Restore the course first".
+
+### Vòng đời của một module, bài học hoặc mục nội dung
+
+```d2 title="Lifecycle of a module, lesson or content item: the course's status decides where a new record starts and what delete does; then publish, hide, archive, restore and delete"
+direction: down
+
+new_draft: "Created in a\nDraft course" {shape: oval}
+new_live: "Created in a\nPublished course" {shape: oval}
+
+live: "Not archived" {
+  visible: Visible
+  hidden: Hidden
+
+  hidden -> visible: publish
+  visible -> hidden: hide
+}
+
+archived: "Archived\n(frozen until restored,\nwith everything under it)" {
+  style.stroke-dash: 3
+}
+
+deleted: Deleted permanently {shape: oval}
+
+new_draft -> live.visible
+new_live -> live.hidden
+live -> archived: "delete\n(course not Draft)"
+archived -> live: restore
+live -> deleted: "delete\n(course Draft)"
+archived -> deleted: "delete permanently\n(see below)"
+```
+
+- Sơ đồ theo dõi một module, bài học hoặc mục nội dung. Trạng thái của chính khóa học là riêng (xem ở trên), và không hành động nào trong số này đổi nó. Nó quyết định một bản ghi mới bắt đầu ở đâu và việc xóa là lưu trữ bản ghi hay gỡ bỏ nó. Trong một khóa học đã lưu trữ, không hành động nào trong số này được phép, ngoại trừ xóa vĩnh viễn một bản ghi đã lưu trữ.
+- Học viên chỉ thấy một bản ghi khi nó **Visible** và mọi mục cha của nó cũng vậy (xem [Hiển thị hiệu lực](#hiển-thị-hiệu-lực)).
+- Xuất bản một module hoặc bài học cũng xuất bản mọi bản ghi bị ẩn, chưa lưu trữ bên dưới nó mà chưa từng được xuất bản. Một bản ghi bị ẩn có chủ ý sau khi từng hiển thị vẫn bị ẩn. Ẩn, lưu trữ và khôi phục chỉ thay đổi chính bản ghi đó.
+- Một bản ghi đã lưu trữ giữ nguyên visibility của nó, nên khôi phục sẽ đưa nó về **Visible** hoặc **Hidden**, như trước. Nó chỉ khôi phục được khi module hoặc bài học cha không bị lưu trữ.
+- Một bản ghi đã lưu trữ, và mọi thứ bên dưới nó, bị đóng băng: không có gì trong đó có thể được xuất bản, ẩn hay sửa, và không có gì có thể được thêm vào.
+- Ngoài khóa học draft, mỗi thay đổi đối với những gì học viên thấy được sẽ kích hoạt việc tính lại tiến độ cho mọi người đã ghi danh.
+
+### Kiểm tra trước khi xóa vĩnh viễn
+
+```d2 title="Checks a permanent delete goes through before anything is removed, for a module or lesson and for a single content item"
+direction: down
+
+start: "Delete permanently\n(from the Archived view;\nallowed in an archived course)" {shape: oval}
+is_archived: "Is the record itself\narchived?" {shape: diamond}
+kind: "Module or lesson,\nor content item?" {shape: diamond}
+
+activity: "Student activity on any\nitem under it, or a\ndiscussion question on\na lesson?" {shape: diamond}
+limit: "More than 100 records\nincluding everything\nunder it?" {shape: diamond}
+transaction: "One transaction: each item\nconditioned on its checked\nupdatedAt and no student\nactivity, the parent on\nits checked archivedAt"
+
+item_activity: "Student activity\non the item?" {shape: diamond}
+item_delete: "One delete, conditioned on\nno student activity and the\nitem still being archived"
+
+changed: "Did a condition\nfail?" {shape: diamond}
+
+refused_archive: "PRECONDITION_FAILED:\narchive it first"
+refused_activity: "PRECONDITION_FAILED:\nit can stay archived,\nbut is never deleted"
+refused_limit: "PRECONDITION_FAILED:\ndelete some of its lessons\n(or content items) first,\nthen retry"
+conflict: "CONFLICT:\nnothing deleted"
+done: "Deleted; a video's transcode\ncanceled, and video and\nfile objects removed from S3" {shape: oval}
+
+start -> is_archived
+is_archived -> refused_archive: no
+is_archived -> kind: yes
+kind -> activity: module or lesson
+kind -> item_activity: content item
+activity -> refused_activity: yes
+activity -> limit: no
+limit -> refused_limit: yes
+limit -> transaction: no
+item_activity -> refused_activity: yes
+item_activity -> item_delete: no
+transaction -> changed
+item_delete -> changed
+changed -> conflict: yes
+changed -> done: no
+```
+
+## Mô hình dữ liệu
+
+Các thuộc tính trên các entity `curriculum` hỗ trợ chỉnh sửa trực tiếp:
+
+| Thuộc tính | Trên | Mục đích |
+|---|---|---|
+| `visibility: 'hidden' \| 'visible'` | Module, bài học, mục nội dung | Bắt buộc. Các procedure tạo đặt `visible` trong khóa học draft và `hidden` trong khóa học đã xuất bản, nên một quiz, bài học hoặc module mới không bao giờ bị thấy khi còn làm dở. Giảng viên bấm **Publish** để hiển thị nó |
+| `archivedAt` | Module, bài học, mục nội dung | Xóa mềm. Chỉ đặt trên chính bản ghi bị lưu trữ. Các con của nó bị ẩn vì cha của chúng bị lưu trữ, không phải vì tự chúng bị lưu trữ |
+| `publishedAt` | Module, bài học, mục nội dung | Khi bản ghi lần đầu trở nên hiển thị: lúc tạo trong khóa học draft, hoặc khi được xuất bản lần đầu. Không bao giờ bị xóa (xem [Xuất bản](#xuất-bản)) |
+| `studentActivityCount` | Mục nội dung | Số học viên khác nhau có bất kỳ dữ liệu nào cho mục đó. Không bao giờ bị giảm |
+| `lastChildOrder` | Khóa học, module, bài học | `order` cuối cùng đã giao cho một mục con. Thêm hoặc khôi phục một mục con sẽ lấy số kế tiếp trong cùng transaction, nên hai bản ghi được thêm cùng lúc không thể có chung `order` |
+
+**Điều gì được tính là hoạt động của học viên.** `studentActivityCount` được tăng (`ADD 1`) trong cùng transaction tạo bản ghi **đầu tiên** của một học viên cho mục đó:
+
+| Mục | Bản ghi đầu tiên |
+|---|---|
+| Quiz | `quizSummary` |
+| Video | `itemCompletion` hoặc `videoAnswerSheet`, cái nào đến trước. Một câu trả lời cho câu hỏi trong video tính một học viên cũng như một lần hoàn thành |
+| Bài tập tải lên | `assignmentSubmission` hoặc `itemCompletion` |
+| Văn bản, tệp | `itemCompletion` |
+
+Mọi bên ghi đều dựng transaction của mình từ `studentActivityWrites` (`core-table/src/helpers/student-activity.ts`), và các invariant trong `helpers/invariants/student-activity.ts` kiểm tra số đếm so với các bản ghi.
+
+`studentActivityCount` nằm trong partition chương trình học, nên cộng hay kiểm tra nó cho mọi thứ dưới một module hoặc bài học là một truy vấn. Các bản ghi phía học viên mà nó đếm được khóa theo người dùng và không thể trả lời "ai đã dùng mục này?" nếu không quét.
+
+## Hiển thị hiệu lực
+
+Một bản ghi chỉ hiển thị cho học viên nếu nó và mọi mục cha đều `visible` và không bị lưu trữ. Điều này được kiểm tra trên:
+
+- mọi lần đọc của học viên: `course.view` và `course.publicView` của core-api, và `quiz.view`;
+- mọi lần ghi của học viên: nộp quiz, đánh dấu một mục là hoàn thành;
+- mọi phép tính tiến độ.
+
+Vì vậy ẩn hoặc lưu trữ một module cũng chặn việc nộp một quiz bên trong nó, và gỡ các mục của nó khỏi tiến độ của mọi người.
+
+Quy tắc được cài đặt một lần, trong `core-table/src/helpers/curriculum.ts`: `isShown` cho một bản ghi và `filterEffectivelyVisible` cho cả một chương trình học. Các chế độ xem khóa học của core-api dùng nó, và phép tính tiến độ của core-table cũng vậy, thứ mà Lambda tính lại trong `packages/events` chạy. Những gì học viên thấy và những gì tiến độ của họ tính không bao giờ có thể bất đồng.
+
+Giảng viên chỉnh sửa qua `course.view` của instructor-api, trả về toàn bộ chương trình học, gồm cả các bản ghi bị ẩn và lưu trữ cùng `visibility`, `archivedAt` và `studentActivityCount` của chúng. Nó giới hạn cho các giảng viên dạy khóa học. Trình soạn khóa học để các bản ghi đã lưu trữ ra khỏi danh sách chính và đánh dấu các bản ghi bị ẩn là **Hidden**.
+
+## Các hành động trong khóa học đã xuất bản
+
+| Hành động | Học viên thấy gì | Dữ liệu và tiến độ của họ | Tiến độ được tính lại cho |
+|---|---|---|---|
+| **Add module** | Không có gì cho đến khi xuất bản. Xuất bản cũng xuất bản các bài học và mục bị ẩn của nó, nên nó xuất hiện cùng một lúc | Sau khi xuất bản, `progressPercent` giảm với mọi người. Các bài học và khóa học đã hoàn thành vẫn hoàn thành | Mọi học viên đã ghi danh, khi xuất bản |
+| **Remove module** | Đã lưu trữ: biến mất khỏi đề cương ở lần tải kế tiếp. Học viên đang ở một trang của nó nhận "This lesson has been removed by your instructor" | Được giữ (các lần hoàn thành, lượt làm, điểm tốt nhất), không còn được tính. Học viên đã xong mọi thứ khác trở thành `completed`. Khôi phục được, và khi đó tất cả được tính lại | Mọi học viên đã ghi danh |
+| **Edit module** (tiêu đề, mô tả) | Áp dụng ngay | Không ảnh hưởng | Không ai |
+| **Add lesson** | Không có gì cho đến khi xuất bản (cùng các mục bị ẩn của nó) | Như khi thêm một module | Mọi học viên đã ghi danh, khi xuất bản |
+| **Remove lesson** | Như khi gỡ một module | Như khi gỡ một module | Mọi học viên đã ghi danh |
+| **Edit lesson** (tiêu đề, mô tả) | Áp dụng ngay | Không ảnh hưởng | Không ai |
+| **Add content item** | Không có gì cho đến khi xuất bản, và chỉ khi bài học và module của nó cũng đã xuất bản | Sau khi xuất bản, `progressPercent` giảm. Nếu bài học của nó đã hoàn thành, bài học vẫn hoàn thành và mục hiện là **New** | Mọi học viên đã ghi danh, khi xuất bản |
+| **Remove content item** | Đã lưu trữ: biến mất ở lần tải kế tiếp. Nộp quiz trong đó hoặc đánh dấu hoàn thành bị từ chối với "no longer available" | Được giữ, không được tính. Nếu đó là mục chưa xong duy nhất của một học viên, bài học (và có thể cả khóa học) trở thành hoàn thành. Khôi phục được | Mọi học viên đã ghi danh |
+| **Edit content item**: tiêu đề, mô tả, nội dung văn bản | Áp dụng ngay | Việc hoàn thành được giữ | Không ai |
+| **Edit content item**: thay video | Đi qua luồng thay video và transcode lại. Học viên tiếp tục xem phiên bản trước cho đến khi bản mới sẵn sàng, và vẫn vậy nếu transcode của nó thất bại; các tệp của phiên bản trước bị xóa sau khi bản mới đã sẵn sàng lâu hơn thời hạn cookie đã ký của người xem | Việc hoàn thành được giữ | Không ai |
+| **Edit content item**: câu hỏi trong video | Xem <Link path="design/quizzes">Quiz</Link>: chỉ đổi đáp án hoặc lời giải thích thì không thấy được; đổi lời nhắc, loại hay các lựa chọn của một câu hỏi làm một câu trả lời đang làm dở trả về `CONFLICT` và không ghi gì; di chuyển hay gỡ một câu hỏi không bao giờ đụng đến các câu trả lời đã ghi | Việc hoàn thành và tiến độ không bị ảnh hưởng. Các câu trả lời đã ghi được giữ, không bao giờ chấm lại | Không ai |
+| **Edit content item**: quiz | Xem <Link path="design/quizzes">Quiz</Link>: sửa chỉ riêng đáp án thì không thấy được; sửa câu hỏi làm một lần nộp đang làm dở trả về `CONFLICT` | Các lượt làm, điểm tốt nhất và các lần đạt được giữ, không bao giờ chấm lại | Không ai |
+| **Hide** (bất kỳ cấp nào) | Biến mất như khi gỡ, nhưng không nằm trong chế độ xem Archived | Được giữ, không được tính; được tính lại khi hiển thị lại | Mọi học viên đã ghi danh |
+| **Reorder** (bất kỳ cấp nào) | Áp dụng ngay | Không ảnh hưởng | Không ai |
+
+"Tiến độ được tính lại" do Lambda phía máy chủ mô tả trong <Link path="design/progress-and-completion">Tiến độ và hoàn thành</Link> thực hiện, không bao giờ do trình duyệt của học viên.
+
+## Xuất bản
+
+Xuất bản một module hoặc bài học đặt nó và mọi hậu duệ bị ẩn **mới** của nó thành `visible` trong **một transaction**. Học viên thấy một bài học mới cùng mọi mục của nó cùng lúc, không phải từng mảnh một.
+
+Những hậu duệ nào được xuất bản cùng cha:
+
+| Hậu duệ | Được xuất bản cùng cha? |
+|---|---|
+| Bị ẩn, không có `publishedAt` (nội dung mới) | Có |
+| Bị ẩn, có `publishedAt` (bị ẩn có chủ ý sau khi học viên đã có thể thấy) | Không, nó vẫn bị ẩn |
+| Đã lưu trữ, hoặc một mục nội dung dưới một bài học đã lưu trữ | Không, để nguyên |
+
+- Bản ghi mà bạn tự xuất bản luôn được xuất bản, bất kể lịch sử của nó.
+- Mỗi module, bài học và mục nội dung ghi `publishedAt` lần đầu tiên nó trở nên hiển thị (khi nó được tạo trong khóa học draft, hoặc khi được xuất bản lần đầu) và không bao giờ xóa nó.
+- Trường hợp duy nhất mà điều này không phân biệt được là một bản ghi bị ẩn trước khi từng được xuất bản (ví dụ, ẩn một mục của một bài học mới khi còn đang xây dựng nó trong khóa học đã xuất bản). Nó vẫn được tính là mới, và được xuất bản cùng cha.
+- **Bị lưu trữ trong lúc việc xuất bản đang diễn ra.** Mọi bài học và mục mà lần xuất bản thay đổi (và bài học của mọi mục nó xuất bản) phải vẫn chưa bị lưu trữ khi transaction commit. Nếu không, không có gì được xuất bản và yêu cầu trả về `CONFLICT`. Thử lại sẽ đọc lại module hoặc bài học và bỏ qua bản ghi vừa bị lưu trữ.
+
+Ẩn không lan truyền xuống: nó chỉ thay đổi chính bản ghi, và các con của nó giữ `visibility` riêng. Dù vậy học viên không còn thấy các con, vì một bản ghi chỉ hiển thị dưới các mục cha hiển thị.
+
+## Sắp xếp lại
+
+Module được sắp trong khóa học của chúng, bài học trong module của chúng và mục nội dung trong bài học của chúng, mỗi loại theo `order` của nó. Mỗi cấp có một cách duy nhất để thay đổi: `module.reorder`, `lesson.reorder` và `contentItem.reorder`. `module.update` và `lesson.update` không nhận `order`.
+
+- Trong cổng giảng viên, tay nắm của mỗi hàng là một tay cầm kéo (chuột, cảm ứng hoặc bàn phím). Không có tay cầm trong khóa học đã lưu trữ, hoặc khi chỉ có một bản ghi để sắp xếp.
+- Sắp xếp lại là một chỉnh sửa như mọi chỉnh sửa khác, nên nó theo các quy tắc lưu trữ: bị từ chối trong khóa học đã lưu trữ, và dưới một module hoặc bài học đã lưu trữ ("Restore the course (module, lesson) first").
+- Nó áp dụng cho mọi loại mục nội dung như nhau.
+- Chuyển một bài học sang module khác, hoặc một mục nội dung sang bài học khác, không được hỗ trợ: khóa của chúng gồm id của cha.
+
+Mỗi procedure nhận các id của **mọi bản ghi trong cha chưa bị lưu trữ**, theo thứ tự chúng sẽ xuất hiện, và ghi mọi `order` (1, 2, 3, ...) trong một transaction, nên một lần kéo là một thay đổi nguyên tử.
+
+- Danh sách phải khớp chính xác với cha. Nếu nó thiếu một bản ghi, chứa một bản ghi đã bị lưu trữ hoặc gỡ, hoặc chứa một id không biết, yêu cầu trả về `CONFLICT` và không ghi gì: trình soạn đang làm việc từ một danh sách cũ, nên nó tải lại và thử lại. Một id xuất hiện hai lần là `BAD_REQUEST`.
+- Mỗi bản ghi có điều kiện là vẫn chưa bị lưu trữ, trong cùng transaction với các kiểm tra trên các mục cha của nó, nên một bản ghi bị lưu trữ trong lúc yêu cầu chạy sẽ hủy toàn bộ việc sắp xếp lại, một mục cha bị lưu trữ vào lúc đó cũng vậy.
+- Các bản ghi đã lưu trữ không nằm trong danh sách. Chúng giữ `order` mà chúng có.
+- Lặp lại một thứ tự mà cha đã có thì không ghi gì.
+- Transaction chứa tối đa 100 bản ghi, gồm cả các kiểm tra trên các mục cha, nên các giới hạn là:
+
+  | Procedure | Kiểm tra | Nhiều nhất |
+  |---|---|---|
+  | `module.reorder` | khóa học | 99 module trong một khóa học |
+  | `lesson.reorder` | khóa học, module | 98 bài học trong một module |
+  | `contentItem.reorder` | khóa học, module, bài học | 97 mục nội dung trong một bài học |
+
+  Một cha lớn hơn bị từ chối với `PRECONDITION_FAILED`, như các thao tác khác trên toàn bộ cha.
+- Một bản ghi được thêm cùng lúc với một lần sắp xếp lại sẽ nằm sau các bản ghi đã được sắp, và trình soạn hiển thị nó sau khi tải lại.
+- Một bản ghi được khôi phục đi đến cuối của cha nó (xem [Khôi phục](#khôi-phục)), nên nó không bao giờ có chung `order` với bản ghi khác.
+
+## Gỡ (lưu trữ)
+
+Ngoài khóa học draft, xóa luôn là lưu trữ, và cổng giảng viên gắn nhãn hành động là **Archive** (trong khóa học draft nó là **Delete** cho module và bài học, và **Remove** cho mục nội dung). Hộp thoại xác nhận hiển thị mức tác động từ `studentActivityCount`:
+
+- một mục nội dung: bao nhiêu học viên đã dùng nó, ví dụ "12 students have used it".
+- một module hoặc bài học: bao nhiêu mục bên dưới mà học viên đã dùng, ví dụ "Students have used 3 items in it". Cộng học viên qua các mục sẽ tính một học viên một lần cho mỗi mục họ đã dùng, nên số đếm là số mục, không phải số học viên.
+
+Dù thế nào nó cũng nói thêm rằng tiến độ của họ được giữ, và được tính lại nếu bản ghi được khôi phục.
+
+### Bị gỡ trong lúc học viên đang học
+
+| Học viên đang ở đâu | Chuyện gì xảy ra |
+|---|---|
+| Ở nơi khác trong khóa học | Module hoặc bài học biến mất khỏi đề cương ở lần tải kế tiếp |
+| Trên trang của bài học đó | Nội dung đã hiện trên màn hình vẫn đọc được. Lần tải lại dữ liệu kế tiếp (điều hướng, focus cửa sổ) hiển thị **"This lesson has been removed by your instructor"** kèm liên kết quay lại đề cương, không bao giờ là một trang 404 trơ trọi |
+| Đang làm dở một quiz trong đó | Việc nộp bị từ chối ("This quiz is no longer available"); bản nháp cục bộ bị bỏ; không tốn lượt làm nào |
+| Đánh dấu một mục là hoàn thành | Bị từ chối theo cách tương tự |
+| Liên kết hoặc bookmark cũ | Cùng trang "removed" |
+
+Việc lưu trữ kích hoạt tính lại tiến độ cho mọi học viên đã ghi danh, nên nội dung bị gỡ ngừng được tính ngay, không ai cần tải lại.
+
+### Những gì không thể làm với một bản ghi đã lưu trữ
+
+Một bản ghi đã lưu trữ, và mọi thứ bên dưới nó, giữ nguyên đúng như khi nó bị lưu trữ cho đến khi được khôi phục, nên một lần khôi phục đem lại những gì học viên đã thấy. Một **khóa học** đã lưu trữ cũng bị đóng băng như vậy (xem [Vòng đời của một khóa học](#vòng-đời-của-một-khóa-học)), và khóa học được nêu tên trước khi nó bị lưu trữ: "Restore the course first". Tất cả những việc sau bị từ chối với `PRECONDITION_FAILED`:
+
+- Xuất bản, ẩn hoặc sửa chính bản ghi đã lưu trữ: "Restore the module (lesson, content item) before publishing (hiding, editing) it".
+- Xuất bản, ẩn hoặc sửa bất kỳ thứ gì bên dưới nó, ví dụ một bài học trong module đã lưu trữ hoặc một mục nội dung trong bài học đã lưu trữ: "Restore the module first" hoặc "Restore the lesson first". Module được nêu trước khi cả hai đều bị lưu trữ.
+- Thêm bất kỳ thứ gì bên dưới nó: không có bài học mới trong module đã lưu trữ, và không có nội dung mới trong module hoặc bài học đã lưu trữ.
+- Tải tệp video lên: không URL tải lên nào được cấp cho khóa học, module hoặc bài học đã lưu trữ, hoặc để thay tệp của một mục nội dung đã lưu trữ.
+
+Các bản ghi dưới một module hoặc bài học đã lưu trữ vẫn có thể tự bị lưu trữ, rồi bị xóa vĩnh viễn, miễn là khóa học không bị lưu trữ.
+
+Các quy tắc này đúng ngay cả khi các yêu cầu chồng lên nhau. Mỗi lần ghi dưới một module hoặc bài học chạy trong một transaction DynamoDB, cùng với các kiểm tra rằng khóa học, module (và bài học) của nó vẫn tồn tại và không bị lưu trữ, và rằng chính bản ghi không bị lưu trữ. Nếu một yêu cầu khác lưu trữ hoặc xóa cha trong lúc đó, toàn bộ lần ghi bị từ chối với cùng lỗi, và không có gì được ghi. Vì vậy một module đang bị lưu trữ hoặc xóa vĩnh viễn không thể nhận thêm bài học mới, và một bài học không thể nhận thêm mục mới, vào phút chót.
+
+Một video bị lưu trữ khi vẫn đang transcode tiếp tục transcode. Khi job kết thúc, mục được đánh dấu `ready` (hoặc `failed`) mà không đụng đến `archivedAt` hay `visibility`, nên nó phát được nếu được khôi phục và vẫn bị ẩn cho đến lúc đó.
+
+## Khôi phục
+
+Trang khóa học của giảng viên có một phần **Archived** liệt kê mọi bản ghi bị lưu trữ theo đúng nghĩa riêng của nó, mới nhất trước: một module đã lưu trữ, một bài học bị lưu trữ trong module đang hoạt động, hoặc một mục bị lưu trữ trong bài học đang hoạt động. Các bản ghi dưới một cha đã lưu trữ không được liệt kê riêng, vì chúng quay lại cùng cha. Mỗi hàng hiển thị bản ghi đã ở đâu, khi nào bị lưu trữ, có gì trong đó, và học viên đã dùng nó chưa, kèm **Restore** và **Delete permanently**.
+
+- Khôi phục xóa `archivedAt` và đặt bản ghi ở **cuối** của cha nó (`writeAtEnd`). `order` của nó thành một đơn vị trên mức cao nhất trong số mọi anh chị em của nó, kể cả các bản ghi đã lưu trữ, và trên `lastChildOrder` của cha. Nó xếp cuối và không bao giờ trùng với một bản ghi đã lưu trữ khác được khôi phục sau. Giảng viên kéo nó đến chỗ họ muốn.
+- Vị trí của nó trước khi bị lưu trữ không được giữ: các bản ghi khác có thể đã được sắp xếp lại từ đó, nên vị trí đó có thể đã bị chiếm.
+- Một bài học chỉ khôi phục được nếu module của nó không bị lưu trữ, và một mục nội dung chỉ khi cả module lẫn bài học của nó đều không. Nếu không nó bị từ chối với "Restore the module first" hoặc "Restore the lesson first", nêu tên module trước khi cả hai đều bị lưu trữ.
+- Không có gì khôi phục được khi chính khóa học bị lưu trữ: nó bị từ chối với "Restore the course first".
+- Một quiz được khôi phục giữ phiên bản, các lượt làm và điểm tốt nhất của nó.
+- Khôi phục kích hoạt tính lại tiến độ, và mọi thứ được tính lại như trước.
+
+## Xóa vĩnh viễn
+
+Chỉ được đưa ra từ chế độ xem Archived, và chỉ khi tất cả điều sau đúng:
+
+- bản ghi tự nó đã bị lưu trữ (một bản ghi dưới cha đã lưu trữ phải được lưu trữ trước);
+- `studentActivityCount` là 0 cho mục đó, hoặc cho mọi mục dưới một bài học hay module;
+- với một bài học hoặc module, không có câu hỏi thảo luận nào được hỏi trên bài học, hoặc trên bất kỳ bài học nào của module. Các câu hỏi cũng là dữ liệu của học viên.
+
+Bất cứ thứ gì học viên đã dùng có thể được lưu trữ nhưng không bao giờ xóa vĩnh viễn. Trình soạn hiển thị **Delete permanently** là không khả dụng cho nó, kèm lý do đó. Nó cũng hoạt động trong khóa học đã lưu trữ: đó là chỉnh sửa chương trình học duy nhất mà khóa học đó cho phép.
+
+Các kiểm tra và việc xóa là những lệnh gọi riêng, nên bản thân việc xóa mang các điều kiện:
+
+- **Một module hoặc bài học** được xóa cùng mọi thứ bên dưới nó trong một transaction. Việc xóa mỗi mục nội dung có điều kiện theo `updatedAt` đã được kiểm tra (mọi lần ghi đều làm nó tăng) và theo `studentActivityCount = 0`. Việc xóa của chính module hoặc bài học có điều kiện theo `archivedAt` đã được kiểm tra, nên một lần khôi phục xen vào sẽ hủy nó. Các bài học dưới một module được xóa mà không có điều kiện riêng.
+- **Một mục nội dung đơn lẻ** là một lần xóa, có điều kiện theo `studentActivityCount = 0` và mục vẫn đang bị lưu trữ.
+
+Nếu một điều kiện thất bại, việc xóa bị từ chối với `CONFLICT` và không có gì bị gỡ. Mọi thất bại khác của transaction được báo là `INTERNAL_SERVER_ERROR`, cũng không có gì bị gỡ.
+
+Sau khi xóa, transcode đang chạy của một video bị hủy và các object S3 của video và tệp bị gỡ. Việc dọn dẹp đó là cố gắng hết sức: một thất bại được ghi log, không được ném ra.
+
+## Giới hạn và các yêu cầu lặp lại
+
+- **Chỉ cả tập.** Xuất bản một module hoặc bài học và xóa một cái (trong khóa học draft hoặc vĩnh viễn) đọc mọi trang hậu duệ, không chỉ 1 MB đầu tiên, nên không có gì bị bỏ sót chưa xuất bản hay mồ côi. Cả hai `course.view` cũng đọc mọi trang của chương trình học.
+- **Transaction 100 item.** Xuất bản một module hoặc bài học, và xóa một cái (trong khóa học draft hoặc vĩnh viễn), diễn ra trong một transaction DynamoDB tất cả-hoặc-không, chứa tối đa 100 bản ghi. Việc kiểm tra khóa học (và module, khi xuất bản một bài học) được tính vào giới hạn đó. Một module hoặc bài học lớn hơn vẫn có thể được xuất bản hoặc xóa, chỉ là theo từng bước:
+  - xuất bản một số bài học (hoặc mục nội dung) của nó trước, rồi module (hoặc bài học);
+  - trong khóa học draft, xóa một số bài học (hoặc mục nội dung) của nó trước, rồi module (hoặc bài học);
+  - nếu không, lưu trữ một số bài học (hoặc mục nội dung) của nó và xóa vĩnh viễn chúng trước, rồi module (hoặc bài học).
+
+  Khi một thao tác sẽ vượt giới hạn, nó bị từ chối với `PRECONDITION_FAILED` và một thông báo nêu bước kế tiếp đó. Nó không bao giờ bị tách ngầm thành nhiều transaction: nếu một trong số đó thất bại, một phần module đã biến mất, để lại các bài học hoặc mục không có cha.
+- **Lặp lại không ghi gì.** Lưu trữ thứ đã lưu trữ giữ nguyên `archivedAt` gốc của nó. Xuất bản một mục nội dung đã hiển thị, hoặc một module hay bài học không có gì bị ẩn trong hoặc dưới nó, ẩn thứ đã ẩn, và khôi phục thứ không bị lưu trữ đều trả về bản ghi không đổi. Một yêu cầu được thử lại, ví dụ sau một timeout phía client, là vô hại. Ngoại lệ là một lần xóa gỡ bỏ bản ghi (trong khóa học draft, hoặc vĩnh viễn): thử lại nó trả về `NOT_FOUND`, vì bản ghi đã biến mất.

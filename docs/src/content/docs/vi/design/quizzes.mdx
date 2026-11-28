@@ -1,0 +1,228 @@
+---
+title: Quiz
+description: "Mục nội dung quiz: mô hình dữ liệu, chấm điểm, lượt làm bài, chỉnh sửa giữa lúc làm bài, và trải nghiệm của học viên và giảng viên."
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/) (câu hỏi trong video)
+
+Quiz là một mục nội dung (`type: 'quiz'`) đặt trong chuỗi của một bài học, cùng với các mục video, văn bản và tệp. Nó có một hoặc nhiều câu hỏi, mỗi câu là **single choice** [một đáp án] hoặc **multiple choice** [nhiều đáp án].
+
+Quiz cũng có thể là mục duy nhất của một bài học dạng bài tập (bài học có `kind: 'assignment'`). Nó được tạo bằng `lesson.createQuizAssignment`, rồi được chỉnh sửa và làm bài như mọi quiz khác. Các câu hỏi ngắn đặt bên trong video dùng lại cấu trúc câu hỏi của quiz; xem [Câu hỏi trong video](#câu-hỏi-trong-video).
+
+## Mô hình dữ liệu
+
+### Mục nội dung quiz
+
+Các thuộc tính `contentItem` riêng của quiz. Cũng như các loại khác, thuộc tính nào là bắt buộc với một loại do zod schema của instructor-api (`schema/quiz.ts`) quy định, không phải ElectroDB.
+
+| Thuộc tính | Dạng |
+|---|---|
+| `questions` | `[{ questionId, kind: 'single' \| 'multiple', prompt, options: [{ optionId, text }] }]`. `prompt` là Tiptap JSON. An toàn để gửi cho học viên |
+| `answerKey` | `{ [questionId]: { correctOptionIds: string[], explanation? } }`. `explanation` là Tiptap JSON. **core-api không bao giờ đọc, trừ khi chấm điểm** |
+| `settings` | `{ passMarkPercent, attemptsAllowed /* null = unlimited */, shuffleOptions, revealAnswers: 'after_each_attempt' \| 'after_final_attempt' \| 'never' }` |
+| `quizVersion` | Số, tăng lên sau mỗi lần lưu. Một lần lưu nêu rõ phiên bản mà trình soạn thảo đã tải, và bị từ chối nếu quiz đã đổi sang phiên bản khác (xem [Lưu một quiz](#lưu-một-quiz)) |
+| `questionsHash` | Hash của riêng `questions` (không gồm đáp án hay `settings`), được tính lại sau mỗi lần lưu (`hashQuizQuestions`) |
+
+`questions` và `answerKey` là hai thuộc tính tách biệt để việc chuyển một mục nội dung cho học viên không thể làm lộ đáp án. Các lệnh đọc khóa học (`course.view`, `course.publicView`) chỉ liệt kê quiz theo tiêu đề và vị trí. Chúng không bao giờ gồm `questions` hay `answerKey`.
+
+`questionId` và `optionId` do client cung cấp và phải giữ nguyên qua các lần lưu, vì đáp án, câu trả lời của học viên và bước đối chiếu bên dưới đều tham chiếu đến chúng.
+
+### `quizAttempt`
+
+- pk `userId`, sk `courseId / contentItemId / attemptId`. `attemptId` là UUIDv7, nên các lượt làm một quiz của một học viên được sắp xếp theo thứ tự nộp bài.
+- Chứa `answers` (`{ [questionId]: optionId[] }`), `correctQuestionIds`, `scorePercent`, `passed`, `quizVersion`, `questionsHash`, `submittedAt`, cùng `moduleId` và `lessonId`. `correctQuestionIds` ghi lại những câu được chấm đúng tại thời điểm đó, vì đáp án có thể đổi về sau.
+- Không bao giờ được cập nhật sau khi ghi.
+
+### Tóm tắt quiz theo người dùng (`quizSummary`)
+
+- pk `userId`, sk `courseId / contentItemId`. Chứa `attemptsUsed`, `bestScore`, `bestAttemptId`, `passedAt`, cùng `moduleId` và `lessonId`.
+- Được ghi trong cùng giao dịch với mỗi lượt làm bài. Lượt đầu tiên tạo ra nó. Mỗi lượt sau có điều kiện dựa trên `attemptsUsed` mà nó đã đọc, nên giới hạn số lượt vẫn đúng ngay cả khi hai lần nộp chạy đua: bên thua đọc lại và bị từ chối.
+- `bestScore` chỉ tăng. `passedAt` được đặt bởi lượt đạt đầu tiên và không bao giờ bị xóa.
+- Việc tạo bản tóm tắt của một học viên làm tăng `studentActivityCount` của quiz (xem <Link path="design/live-course-editing">Chỉnh sửa khóa học đang chạy</Link>).
+- Lượt làm bài đạt, hoặc dùng hết lượt cuối, cũng ghi `itemCompletion` của quiz trong cùng giao dịch, trừ khi đã có sẵn (xem <Link path="design/progress-and-completion">Tiến độ và hoàn thành</Link>).
+- Bất biến `quiz-summary-matches-attempts` (`core-table/src/helpers/invariants/student-activity.ts`) kiểm tra rằng mọi bản tóm tắt khớp với các lượt làm của nó và mọi lượt làm đều có bản tóm tắt.
+
+## Chấm điểm
+
+- Chỉ ở phía máy chủ, trong core-api. Client không bao giờ nhận `answerKey` trước khi nộp bài.
+- Mỗi câu hỏi là được hoặc mất toàn bộ: các lựa chọn đã chọn phải bằng đúng `correctOptionIds`.
+- Điểm là phần trăm số câu đúng, làm tròn xuống số nguyên, nên học viên không bao giờ thấy nhiều hơn điểm thực. `passed` là `score >= passMarkPercent`.
+- Điểm **cao nhất** qua mọi lượt làm, và qua mọi phiên bản quiz, là điểm được tính.
+- Một lần đạt đã ghi nhận là vĩnh viễn, kể cả khi điểm đạt sau đó được nâng lên hoặc quiz bị chỉnh sửa.
+- Các lượt làm trước đây không bao giờ tự động được chấm lại.
+
+## API cho học viên
+
+core-api có ba procedure (`procedures/quiz.ts`), mỗi procedure nhận `courseId`, `moduleId`, `lessonId` và `contentItemId` của quiz. Cả ba đều yêu cầu:
+
+- một lượt ghi danh không ở trạng thái `dropped` (`FORBIDDEN` nếu không có trong khóa học đã xuất bản, còn lại là `NOT_FOUND`);
+- một quiz đang hiển thị thực sự: quiz, bài học và module của nó đều hiển thị và không bị lưu trữ. Nếu không, trả về `NOT_FOUND` "This quiz is no longer available".
+
+**`quiz.view`** trả về các câu hỏi, cài đặt, `quizVersion` và `questionsHash`, không bao giờ trả đáp án. Nó vẫn hoạt động trong khóa học đã lưu trữ, như phần còn lại của khóa học.
+
+**`quiz.submitAttempt`** nhận `answers` và `questionsHash` mà học viên đã trả lời. Nó chấm điểm trên máy chủ và ghi lượt làm cùng bản tóm tắt trong một giao dịch. Cùng giao dịch đó kiểm tra rằng:
+
+- khóa học vẫn được xuất bản;
+- module, bài học và quiz vẫn hiển thị và không bị lưu trữ;
+- quiz vẫn đúng `quizVersion` mà nó được chấm theo;
+- lượt ghi danh vẫn không bị dropped.
+
+Nếu có gì đổi trong khoảng đó, không có gì được ghi và lần nộp được đọc và chấm lại, tối đa ba lần, trước khi trả `CONFLICT`.
+
+| Từ chối | Khi nào |
+|---|---|
+| `PRECONDITION_FAILED` | Khóa học đã lưu trữ, hoặc không còn lượt nào |
+| `CONFLICT` | Các câu hỏi đã đổi kể từ lúc học viên tải (xem [bên dưới](#quiz-được-sửa-giữa-lúc-làm-bài)), hoặc ba lần thử đều thua cuộc đua |
+| `BAD_REQUEST` | Một câu trả lời nêu câu hỏi hoặc lựa chọn không tồn tại, lặp lại một lựa chọn, hoặc đưa nhiều hơn một lựa chọn cho câu hỏi một đáp án |
+
+**`quiz.myAttempts`** trả về bản tóm tắt của học viên (hoặc `null`) và các lượt làm của họ, mới nhất trước, mỗi lần một trang (`cursor` và `limit`, mặc định 10 và tối đa 100). Lịch sử được phân trang vì với số lượt không giới hạn thì nó không có cận trên.
+
+Kết quả của mỗi lượt cho biết câu nào đúng. Các lựa chọn đúng và lời giải thích (`reveal`) chỉ được trả về từ `submitAttempt` và `myAttempts` khi `revealAnswers` cho phép:
+
+| `revealAnswers` | Khi nào `reveal` được trả về |
+|---|---|
+| `after_each_attempt` | Ngay khi học viên đã làm một lượt |
+| `after_final_attempt` | Khi không còn lượt nào. Không bao giờ khi số lượt không giới hạn |
+| `never` | Không bao giờ |
+
+## Quiz được sửa giữa lúc làm bài
+
+Với mỗi lần nộp, client gửi `questionsHash` của các câu hỏi mà nó đã hiển thị.
+
+| Giảng viên đã đổi gì | Kết quả khi nộp |
+|---|---|
+| Chỉ đáp án hoặc lời giải thích (hash khớp) | Được chấp nhận và chấm theo đáp án **hiện tại**. Học viên không nhận ra gì |
+| Bất kỳ prompt, loại câu hỏi, hoặc cách diễn đạt, số lượng hay thứ tự của lựa chọn (hash khác) | `CONFLICT`, và **không tốn lượt nào**. Client tải lại và đối chiếu (bên dưới) |
+| Điểm đạt | Được chấp nhận và chấm theo điểm đạt hiện tại. Một lần đạt đã ghi nhận vẫn giữ nguyên |
+| `attemptsAllowed` hạ xuống bằng hoặc thấp hơn `attemptsUsed` | Bị từ chối với "No attempts remaining", kèm hiển thị điểm cao nhất |
+| Quiz, hoặc bài học hay module của nó, bị lưu trữ hoặc ẩn | Bị từ chối với "This quiz is no longer available"; bản nháp cục bộ bị bỏ |
+
+"Chỉ đáp án" nghĩa là màn hình của học viên trông giống hệt trước và sau. Ví dụ:
+
+- Sửa lựa chọn nào là đúng: đáp án ghi EC2 cho "Which service runs containers without managing servers?", và được sửa thành Fargate.
+- Thêm một lựa chọn đúng nữa cho câu hỏi nhiều đáp án. Màn hình không đổi, vì nó luôn ghi "Select all that apply" và không bao giờ nói có bao nhiêu lựa chọn đúng.
+- Thêm hoặc viết lại lời giải thích.
+
+Sắp xếp lại thứ tự các lựa chọn vẫn được coi là một thay đổi dù vô hại, để giữ quy tắc đơn giản: nếu màn hình có thể trông khác, học viên sẽ xem lại.
+
+### Đối chiếu sau `CONFLICT`
+
+Client so sánh `questions` cũ và mới theo `questionId`:
+
+- **Không đổi:** giữ câu trả lời.
+- **Bị xóa:** bỏ câu trả lời.
+- **Mới:** bắt đầu chưa trả lời, được đánh dấu **New**.
+- **Prompt, lựa chọn hoặc loại đã đổi:** các câu trả lời trỏ đến lựa chọn vẫn còn được giữ (với câu hỏi chuyển sang một đáp án, chỉ khi còn đúng một lựa chọn), và câu hỏi được đánh dấu **Updated**.
+
+`reconcile` trong `@discava/common-web-utils/quiz` thực hiện việc này. Học viên được đưa đến màn hình xem lại với thông báo "This quiz was updated. Check the marked questions before submitting." Truy vấn quiz cũng tải lại khi màn hình xem lại mở ra và khi cửa sổ lấy lại tiêu điểm, nên biểu ngữ thường xuất hiện trước khi họ bấm Submit. `CONFLICT` là điều bảo đảm.
+
+## Trải nghiệm của học viên
+
+Bài học là một trang cuộn duy nhất với các mục theo `order`. Một thanh bước ở trên cùng hiển thị trạng thái của từng mục (✓ xong, ⚠ quiz đã làm xong nhưng chưa đạt, còn lại là biểu tượng của loại mục) và cuộn đến mục đó. **Một quiz không đạt không bao giờ chặn việc đi tiếp.**
+
+Quiz là một thẻ trong luồng bài học (`QuizCard` trong `common/shadcn`, dùng chung với bản xem trước của giảng viên). Nó đi qua bốn màn hình:
+
+| Màn hình | Hiển thị | Nút |
+|---|---|---|
+| Overview | "5 questions · Pass 80% · 1 of 3 attempts used", điểm cao nhất và huy hiệu Passed | **Start quiz**, **Resume quiz** (có bản nháp đã lưu) hoặc **Retake quiz**. "No attempts remaining" khi không còn lượt |
+| Question | Một câu hỏi, với "Select all that apply" và hộp kiểm cho câu nhiều đáp án, nút radio cho câu một đáp án | **Back**, **Next**, và **Review answers** ở câu hỏi cuối |
+| Review | Mọi câu trả lời, với các câu chưa trả lời được đánh dấu | **Back**, **Submit answers** |
+| Result | "This attempt: 60% · Not passed", từng câu đúng hay sai, cùng các lựa chọn đúng và lời giải thích khi `revealAnswers` cho phép | **Done**, **Retake quiz** |
+
+- **Thanh điều hướng câu hỏi.** Quiz có nhiều hơn một câu hỏi hiển thị một hàng nút đánh số phía trên các lựa chọn. Mỗi nút nhảy đến câu hỏi của nó, được tô đầy khi đã trả lời, và nêu trạng thái của mình cho trình đọc màn hình ("Question 2, answered").
+- Phản hồi chỉ đến sau khi nộp, không bao giờ theo từng câu, để không thể dò đáp án từng lựa chọn một.
+- Các câu trả lời đang làm được lưu vào localStorage theo từng quiz (`readQuizDraft`, `writeQuizDraft`). Lượt làm chỉ được tạo trên máy chủ khi nộp.
+- Làm lại với điểm thấp hơn hiển thị "Your best score of 80% still counts."
+- Khả năng truy cập: một `fieldset` cho mỗi câu hỏi được gắn nhãn bằng số thứ tự và prompt, đúng và sai được hiển thị bằng biểu tượng và chữ (không chỉ bằng màu), hỗ trợ đầy đủ bàn phím.
+- Prompt và lời giải thích dùng trình hiển thị Tiptap chỉ đọc, dùng chung từ `common/shadcn`.
+
+## Lưu một quiz
+
+Việc tạo quiz, và mọi lần lưu sau đó, ghi toàn bộ quiz như một tài liệu. `quizVersion` là cách ngăn hai người soạn, hoặc một tab cũ, ghi đè lên nhau.
+
+```d2 title="What happens when an instructor saves a quiz: access and archive checks, the version check, then one conditional write"
+direction: down
+
+start: "contentItem.updateQuiz\n(sends the quizVersion\nthe editor loaded)" {shape: oval}
+access: "Instructor of this\ncourse, and the item\nis a quiz?" {shape: diamond}
+archived: "Quiz, its lesson, module\nor course archived?" {shape: diamond}
+stale: "Stored quizVersion\n= the one sent?" {shape: diamond}
+write: "One transaction: course, module and lesson\nstill exist and aren't archived, quiz isn't\narchived and is still at that quizVersion.\nWrites the new content, quizVersion + 1\nand the recomputed questionsHash"
+landed: "Did a condition fail?" {shape: diamond}
+
+forbidden: "FORBIDDEN or BAD_REQUEST"
+frozen: "PRECONDITION_FAILED:\nrestore it first"
+conflict: "CONFLICT: the quiz changed since it\nwas loaded; reload and retry.\nNothing written"
+done: "Saved as quizVersion + 1" {shape: oval}
+
+start -> access
+access -> forbidden: no
+access -> archived: yes
+archived -> frozen: yes
+archived -> stale: no
+stale -> conflict: no
+stale -> write: yes
+write -> landed
+landed -> conflict: "yes, and nothing is archived"
+landed -> frozen: "yes, and something was archived"
+landed -> done: no
+```
+
+- Trong hai lần lưu từ cùng một phiên bản, đúng một lần thành công; lần kia nhận `CONFLICT`. Việc kiểm tra được lặp lại bên trong giao dịch của lần ghi, nên nó đúng cả khi hai lần lưu diễn ra đồng thời, không chỉ khi lần này nối tiếp lần kia.
+- Một lần lưu thành công trả về `quizVersion` mới, mà trình soạn thảo dùng cho lần lưu kế tiếp.
+- `questionsHash` được tính lại chỉ từ `questions`, nên một lần lưu chỉ đổi đáp án, lời giải thích hoặc cài đặt vẫn giữ nguyên hash.
+- Quiz mới tạo bắt đầu ở `quizVersion` 1. Giống nội dung mới khác, nó bắt đầu `visible` trong khóa học nháp và `hidden` trong các trường hợp còn lại, và không thể được tạo hoặc chỉnh sửa dưới một module hay bài học đã lưu trữ, hoặc trong khóa học đã lưu trữ (xem <Link path="design/live-course-editing">Chỉnh sửa khóa học đang chạy</Link>).
+
+## Trải nghiệm của giảng viên
+
+- Nút **Quiz** nằm cùng các nút **Video**, **Text** và **File** trong hàng nội dung của bài học. Nó mở trình tạo cho một quiz mới, quiz này được tạo ở lần lưu đầu tiên; các lần lưu sau cập nhật nó.
+- Trình tạo mở trong một hộp thoại lớn, cho quiz mới và cho nút **Edit** của một quiz, giống các hộp thoại Text và Video. Đóng nó khi còn thay đổi chưa lưu sẽ hỏi trước:
+  - Cài đặt: tiêu đề, mô tả, điểm đạt, số lượt cho phép, xáo trộn lựa chọn, khi nào hiển thị đáp án.
+  - Một thẻ cho mỗi câu hỏi: prompt Tiptap (trình soạn thảo chỉ được gắn cho thẻ đang mở rộng), nút chuyển Single/Multiple, các hàng lựa chọn với dấu đánh dấu đúng (radio cho một đáp án, hộp kiểm cho nhiều đáp án), thêm/xóa/sắp xếp lại lựa chọn, lời giải thích tùy chọn.
+  - Kéo để sắp xếp lại các câu hỏi.
+  - Một bảng nội dung bên cạnh các câu hỏi liệt kê chúng theo số cùng phần đầu của mỗi prompt, đánh dấu những câu cần sửa; bấm vào một câu sẽ mở và cuộn đến câu đó.
+  - **Preview as student**, dùng chính thành phần thực dành cho học viên (`QuizCard`) trên quiz như đang có trong trình tạo, dù đã lưu hay chưa. Nó được chấm trong trình duyệt với cùng quy tắc như core-api, không gì được gửi hay lưu, và đáp án đúng cùng lời giải thích luôn được hiển thị. Các lượt làm của nó chỉ được tính khi nó đang mở.
+  - Toàn bộ quiz được lưu như một tài liệu: `contentItem.updateQuiz` thay thế câu hỏi, đáp án và cài đặt cùng lúc, dựa trên `quizVersion` mà trình tạo đã tải. Khi gặp `CONFLICT`, trình tạo đề nghị tải lại phiên bản mới nhất.
+  - Chỉ đọc, kèm lý do, khi quiz hoặc bất cứ thứ gì phía trên nó bị lưu trữ.
+- Xác thực, trong biểu mẫu và trong zod (API thực thi tất cả, bất kể biểu mẫu làm gì):
+  - 1 đến 50 câu hỏi, mỗi câu có 2 đến 10 lựa chọn. Văn bản lựa chọn dài 1 đến 500 ký tự.
+  - Một đáp án: đúng 1 lựa chọn đúng. Nhiều đáp án: ít nhất 1 lựa chọn đúng. Mọi id đúng phải là một trong các lựa chọn của câu hỏi.
+  - Mỗi câu hỏi có một mục đáp án, và đáp án không có mục nào cho câu hỏi khác. Id câu hỏi là duy nhất, và id lựa chọn là duy nhất trong một câu hỏi.
+  - Prompt và lời giải thích là tài liệu Tiptap tuân theo schema của trình soạn thảo (cùng các node và mark của `StarterKit`), lưu dưới dạng chuỗi JSON.
+  - Điểm đạt là số nguyên từ 0 đến 100. Số lượt cho phép là số nguyên từ 1, hoặc không giới hạn.
+  - Câu hỏi và đáp án cộng lại tối đa 300 KB, thấp hơn nhiều so với giới hạn 400 KB mỗi item của DynamoDB.
+  - Chuyển Multiple → Single khi có nhiều hơn một lựa chọn đúng sẽ hỏi giữ lựa chọn nào.
+- Chỉnh sửa một quiz đã có lượt làm sẽ cảnh báo "N students have attempted this quiz".
+
+Thống kê quiz cho giảng viên (phân bố điểm, kết quả theo từng câu hỏi) được xây dựng từ các lượt làm bởi tính năng stream `analytics-update`; xem <Link path="design/course-analytics">Phân tích khóa học</Link>.
+
+## Câu hỏi trong video
+
+Giảng viên có thể đặt tối đa 20 câu hỏi trên một mục video, mỗi câu tại một thời điểm trong video hoặc ở cuối. Chúng có mức rủi ro thấp: không có điểm đạt, không giới hạn lượt, không lưu điểm, và không bao giờ chặn tiến độ. Cách trình phát đặt câu hỏi nằm trong <Link path="design/video-player">Trình phát video và phụ đề</Link>.
+
+- **Nơi lưu:** trên `contentItem` của chính video, trong các thuộc tính `questions`, `answerKey` và `quizVersion` mà quiz dùng. Mỗi câu hỏi là một câu hỏi quiz cộng với `atSeconds` (số giây nguyên, hoặc `null` cho câu hỏi ở cuối) và một `contentHash` do máy chủ đặt. Video không có `settings` hay `questionsHash`.
+- **Lưu có phiên bản:** `contentItem.updateVideoQuestions` thay thế toàn bộ tập câu hỏi dựa trên `quizVersion` mà trình soạn thảo đã tải, như `updateQuiz`. Phiên bản 0 nghĩa là chưa từng lưu. Trong hai lần lưu từ cùng một phiên bản, đúng một lần thành công và lần kia nhận `CONFLICT`. Nó tách biệt với `contentItem.updateVideo`, nên có thể đổi câu hỏi mà không đụng đến media. Việc soạn thảo giới hạn cho các giảng viên của khóa học, và bị từ chối khi video, bài học, module hoặc khóa học đã lưu trữ.
+- **Hash theo từng câu hỏi:** `contentHash` bao gồm id, loại, prompt và lựa chọn của một câu hỏi, không gồm thời điểm hay đáp án. Nó đóng vai trò của `questionsHash` với quiz, nhưng theo từng câu hỏi, nên sửa một câu hỏi không bao giờ làm phiền người học đang trả lời câu khác, và di chuyển một câu hỏi không đổi gì.
+- **Phiếu trả lời:** các câu trả lời của một người học cho một video là một bản ghi `videoAnswerSheet` (pk `userId`, sk `courseId / contentItemId`) chứa, với mỗi câu hỏi đã trả lời, các lựa chọn đã chọn, việc đó đúng hay sai so với đáp án tại thời điểm đó, và thời gian. `answerCount` đặt điều kiện cho mọi lần ghi, nên hai tab không thể cùng thành công. Phiếu chỉ ngày càng có thêm mục.
+- **Chỉ câu trả lời đầu tiên:** câu trả lời đầu tiên cho một câu hỏi được ghi lại và không bao giờ bị đổi, thay thế hay chấm lại. Nộp lại sẽ trả về câu trả lời đã ghi. Đáp án và lời giải thích chỉ đến tay người học khi câu trả lời của họ đã được ghi. **Try again** là luyện tập, được chấm trong trình duyệt theo đáp án đã hiển thị, và không ghi gì. Bỏ qua không ghi gì.
+- **Rủi ro thấp:** một câu trả lời không tạo `itemCompletion` và không đổi tiến độ, kết quả quiz hay chứng chỉ. Nó có tính người học là đã dùng video (xem <Link path="design/live-course-editing">Chỉnh sửa khóa học đang chạy</Link>) và là hoạt động trong ngày đó.
+
+### Câu hỏi video được sửa giữa lúc trả lời
+
+Với mỗi câu trả lời, client gửi `contentHash` của câu hỏi mà nó đã hiển thị.
+
+| Giảng viên đã đổi gì | Kết quả khi nộp |
+|---|---|
+| Chỉ các lựa chọn đúng hoặc lời giải thích (hash khớp) | Được chấp nhận và chấm theo đáp án **hiện tại**. Người học không nhận ra gì |
+| Prompt, loại, hoặc cách diễn đạt, số lượng hay thứ tự của lựa chọn (hash khác) | `CONFLICT` và không ghi gì. Người học được báo câu hỏi đã được cập nhật và được hiển thị câu hỏi đã cập nhật |
+| Thời điểm của câu hỏi | Được chấp nhận. Các câu trả lời đã ghi không bị ảnh hưởng, và người học chưa trả lời sẽ được hỏi tại thời điểm mới |
+| Câu hỏi bị xóa | Bị từ chối vì không tìm thấy và không ghi gì. Video tiếp tục. Các câu trả lời đã ghi được giữ lại, nhưng câu hỏi không còn được hỏi hay liệt kê trong kết quả |
+| Video, bài học, module hoặc khóa học bị lưu trữ hoặc ẩn | Bị từ chối với "no longer available" |
+
+Các câu trả lời đã ghi không bao giờ bị chấm lại: người học đã trả lời sai vẫn là "incorrect" sau khi đáp án được sửa. Người học mở lại một câu hỏi đã trả lời sẽ thấy đáp án và lời giải thích hiện tại bên cạnh kết quả đã ghi của họ.
+
+Trình soạn thảo cảnh báo giảng viên khi mở các câu hỏi của một video mà người học đã dùng: câu trả lời của họ được giữ lại và không bị chấm lại. Bản xem trước trong trình soạn thảo chấm trong trình duyệt bằng đáp án của chính giảng viên và không ghi gì.

@@ -1,0 +1,77 @@
+---
+title: Guia do administrador
+description: O que um administrador faz no portal admin, como gerenciar categorias do catálogo, consultar, revogar e restaurar certificados, e onde ler sobre moderação de avaliações, identidade visual e pagamentos.
+---
+
+import Link from '@components/link.astro';
+
+Esta página é a visão geral do portal admin. Só contas do grupo `admin` da plataforma podem usá-lo.
+
+## Como se orientar
+
+A barra lateral tem cinco páginas:
+
+| Página | Para que serve |
+| --- | --- |
+| **Home** | Um cartão para cada área abaixo |
+| **Categories** | As categorias em que os instrutores organizam seus cursos |
+| **Reviews** | Remover avaliações de cursos que quebram as regras |
+| **Certificates** | Consultar um certificado para revogá-lo ou restaurá-lo |
+| **Payments** | Conectar a conta Stripe em que os alunos pagam |
+
+O menu da conta tem **Branding**, **Notification settings** e **Sign out**.
+
+## Categorias
+
+As categorias são a lista entre a qual os instrutores escolhem em **Catalogue details** de um curso. Os alunos navegam e filtram o catálogo por elas.
+
+**Adicionar uma categoria**
+
+1. Abra **Categories**.
+2. Digite o nome em **New category name**.
+3. Escolha **Add category**.
+
+Um nome que já está em uso é recusado.
+
+**Renomear uma categoria**
+
+1. Escolha **Rename** na categoria.
+2. Altere o nome.
+3. Escolha **Save**. Escape ou **Cancel** deixa como estava.
+
+**Arquivar uma categoria**
+
+1. Escolha **Archive** na categoria.
+2. Leia a janela: ela informa quantos cursos têm a categoria.
+3. Confirme com **Archive**.
+
+Uma categoria arquivada deixa de ser oferecida aos instrutores. Os cursos que a têm a mantêm. A página dela no portal do aluno diz que a categoria não está mais disponível. A lista mostra cada categoria como **Active** ou **Archived**, e o portal admin não tem como trazer de volta uma categoria arquivada.
+
+## Certificados
+
+1. Abra **Certificates**.
+2. Informe o **Certificate ID** e escolha **Look up**. O ID está na página do certificado e no PDF.
+3. O certificado aparece como **Valid** ou **Revoked**, com o histórico de quem o revogou ou restaurou e quando.
+
+- **Revoke** pede um **Reason**: Academic integrity, Issued in error, Order refunded ou Other. Other exige uma **Note**. Confirme com **Revoke certificate**. A página pública do certificado passa a dizer que ele foi revogado, e o aluno é avisado.
+- **Restore**, confirmado com **Restore certificate**, o torna válido de novo com o mesmo ID, e o aluno é avisado.
+
+Um administrador pode restaurar qualquer certificado. Um instrutor não pode restaurar um que um administrador revogou.
+
+<Link path="guides/certificates">Certificados</Link> cobre o resto: o que dá direito a um e o que alunos e instrutores veem.
+
+## Avaliações
+
+**Reviews** lista as avaliações de um curso e permite remover uma que quebra as regras, com um motivo. Uma avaliação removida deixa de contar na nota do curso, e o autor não pode publicar outra. Veja a seção sobre remoção pelo administrador em <Link path="guides/reviews">Notas e avaliações</Link>.
+
+## Identidade visual
+
+**Branding**, no menu da conta, define o nome, o logotipo, o ícone, a imagem de compartilhamento e a cor da plataforma para os três portais e as páginas públicas. Veja <Link path="guides/branding">Identidade visual</Link>.
+
+## Pagamentos
+
+**Payments** conecta a conta Stripe em que os alunos pagam. Até que seja conectada, todo curso é gratuito e os instrutores não podem definir um preço. Veja <Link path="guides/payments">Cursos pagos e pagamentos</Link> para conectar, trocar a chave, desconectar e fazer reembolsos, e <Link path="guides/earnings-and-payouts">Ganhos e repasses</Link> para o que é preciso para pagar instrutores.
+
+## Notificações
+
+**Notification settings**, no menu da conta, escolhe quais notificações também chegam a você por e-mail. Veja <Link path="guides/notifications">Notificações</Link>.

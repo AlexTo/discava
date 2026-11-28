@@ -1,0 +1,162 @@
+---
+title: Triển khai trên AWS
+description: Các stack CloudFormation tạo nên một stage của Discava, các tài nguyên AWS trong từng stack, và cách chúng phụ thuộc lẫn nhau.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+Một bản cài đặt đã triển khai được gọi là một **stage**. Một stage là một nhóm các stack CloudFormation, tất cả đều đặt tên theo dạng `<stage>-<Stack>`, ví dụ `discava-production-Data`. Nhiều stage có thể cùng tồn tại trong một tài khoản AWS mà không ảnh hưởng nhau.
+
+## Các stack
+
+Ứng dụng được chia thành mười stack. Chỉ một stack sẽ vượt giới hạn 500 tài nguyên của CloudFormation, và việc tách tài nguyên có trạng thái khỏi mã giúp các lần triển khai thường ngày không chạm vào dữ liệu.
+
+```d2 title="Stacks and their dependencies (an arrow points at what a stack needs)"
+direction: up
+
+websites: "Websites"
+data: "Data"
+payments: "Payments"
+media: "MediaPipeline"
+core: "CoreApi"
+router: "StreamRouter"
+payouts: "Payouts"
+instr: "InstructorApi"
+admin: "AdminApi"
+rc: "PortalConfig"
+
+data -> websites
+payments -> data
+payouts -> data
+admin -> payments
+media -> data
+core -> data
+core -> media
+core -> websites
+router -> data
+router -> core
+router -> websites
+instr -> data
+instr -> media
+instr -> core
+instr -> websites
+admin -> data
+admin -> core
+admin -> websites
+rc -> core
+rc -> instr
+rc -> admin
+```
+
+`PortalConfig` phụ thuộc vào mọi stack khác. Sơ đồ chỉ vẽ các mũi tên của nó tới ba API.
+
+Chúng được triển khai theo thứ tự này:
+
+```
+Websites → Data → Payments → MediaPipeline → CoreApi → StreamRouter → Payouts → InstructorApi → AdminApi → PortalConfig
+```
+
+| Stack | Chứa | Vì sao tách riêng |
+| --- | --- | --- |
+| **Websites** | Ba cổng (portal): mỗi cổng gồm một S3 bucket và một CloudFront distribution. Cổng học viên còn có hàm render trang | Không phụ thuộc vào gì. Các stack khác cần địa chỉ của các cổng cho CORS và chuyển hướng đăng nhập |
+| **Data** | Cognito user pool cùng các trigger của nó, bảng core, các bucket media bài học và media công khai cùng CloudFront distribution của chúng, bucket tải lên, collection tìm kiếm và hàm tạo các index của nó, các secret cho liên kết hủy đăng ký và Stripe | Mọi thứ có trạng thái. Hiếm khi thay đổi, và mọi stack backend khác đều phụ thuộc vào nó |
+| **Payments** | API webhook của Stripe: API Gateway và hàm của nó | Được Stripe gọi, không phải người dùng đã đăng nhập, nên tường lửa, giới hạn request và tên miền được thiết lập riêng khỏi các API khác |
+| **MediaPipeline** | Pipeline MediaConvert, các hàm phản ứng khi transcode và transcribe hoàn tất, lịch dọn dẹp, các hàng đợi lỗi | Xử lý video, được cả core-api và instructor-api sử dụng |
+| **CoreApi** | API Gateway và các hàm của core-api, hàm lập chỉ mục tìm kiếm lại, route hủy đăng ký email | API mà mọi người dùng đều gọi |
+| **StreamRouter** | Hàm router của table stream, một hàng đợi và một hàng đợi lỗi cho mỗi tính năng, các handler tính năng, hàm nhắc chứng chỉ và hàm lập chỉ mục lại bản chép lời | Các phản ứng nền với thay đổi dữ liệu, được giữ ngoài ngân sách tài nguyên của CoreApi |
+| **Payouts** | Lượt chi trả hằng ngày và lịch chạy của nó | Tách riêng để không stack nào tiến gần giới hạn tài nguyên. Nó chỉ đọc bảng và khóa Stripe |
+| **InstructorApi** | API Gateway và các hàm của instructor-api, cùng quyền về media và transcode | API của giảng viên |
+| **AdminApi** | API Gateway và các hàm của admin-api, gồm hàm lưu khóa Stripe | API của quản trị viên |
+| **PortalConfig** | Tệp `runtime-config.json` của từng cổng | Đọc giá trị từ mọi stack khác nên được triển khai cuối cùng |
+
+Khi một portal hoặc media distribution bật WAF, web ACL của nó là một stack nhỏ bổ sung ở `us-east-1`, nơi CloudFront yêu cầu đặt nó.
+
+## Mỗi tầng gồm những gì
+
+### Edge: CloudFront và API Gateway
+
+| Điểm vào | Dịch vụ | Origin |
+| --- | --- | --- |
+| Mỗi cổng | CloudFront | Một S3 bucket riêng tư chứa các tệp tĩnh |
+| Các trang công khai trên cổng học viên (`/learn/*`, `/instructors/*`, `/certificates/*`, `/sitemap.xml`, `/robots.txt`) | CloudFront distribution của cổng học viên | Hàm render trang, qua một function URL mà chỉ CloudFront mới được gọi |
+| Media bài học | CloudFront, chỉ nhận request đã ký | Một S3 bucket riêng tư |
+| Media công khai | CloudFront | Một S3 bucket riêng tư |
+| Mỗi API | API Gateway (REST, regional) | Lambda |
+| Webhook của Stripe | API Gateway (REST, regional) | Lambda |
+
+Không có S3 bucket nào công khai. CloudFront truy cập từng bucket qua Origin Access Control.
+
+### Tính toán: Lambda
+
+Toàn bộ mã chạy trong Lambda trên Node.js 24.
+
+- **Các hàm API.** Mỗi API phục vụ phần lớn procedure từ một hàm dùng chung. Procedure nào cần quyền truy cập vượt mức cơ bản (bảng, cộng với quyền đọc search trong core-api) sẽ chạy trong một hàm riêng, nhờ đó các quyền mạnh không nằm ở hàm xử lý mọi request khác:
+
+  | API | Các hàm riêng |
+  | --- | --- |
+  | core-api | Ký request media, tải lên bài tập, bắt đầu thanh toán hoặc hoàn tiền (đọc khóa Stripe) |
+  | instructor-api | Ký request media, ghi media bài học và gửi transcode, ảnh khóa học và ảnh hồ sơ, tài khoản nhận tiền (đọc khóa Stripe) |
+  | admin-api | Lưu các secret của Stripe (nơi duy nhất được ghi), ảnh thương hiệu |
+
+- **Các hàm sự kiện.** Mỗi công việc một hàm: hai trigger của Cognito, stream router và các handler tính năng của nó, các handler hoàn tất, khôi phục và dọn dẹp của media pipeline, nhắc chứng chỉ, webhook Stripe, lượt chi trả hằng ngày và liên kết hủy đăng ký email.
+- **Hàm render trang.** Handler thứ hai của core-api, được triển khai cùng cổng học viên. Nó chỉ đọc bảng.
+- **Các hàm vận hành.** Ba hàm không có trigger và chạy khi một lần triển khai hoặc một người vận hành gọi chúng: hàm tạo hoặc cập nhật các search index mỗi lần triển khai, và hai hàm dựng lại các index khóa học và bản chép lời.
+
+### Dữ liệu
+
+| Tài nguyên | Dịch vụ | Ghi chú |
+| --- | --- | --- |
+| Bảng core | DynamoDB, on-demand với trần thông lượng | Một change stream cấp dữ liệu cho stream router |
+| Tìm kiếm | OpenSearch Serverless | Hai index: khóa học và bản chép lời. Có thể co về không trên stage phát triển |
+| Media | S3 | Ba bucket: media bài học, tải lên, media công khai |
+| Người dùng | Cognito user pool | Các nhóm: `student`, `instructor`, `admin` |
+| Cấu hình | Biến môi trường của Lambda | Tên và địa chỉ tài nguyên, đặt lúc triển khai và được các hàm đọc từ môi trường của chúng. Hàm render trang đọc một tham số Systems Manager |
+| Secret | Secrets Manager | Khóa ký request media bài học, khóa ký liên kết hủy đăng ký, cùng khóa bí mật Stripe và secret ký webhook do quản trị viên lưu |
+
+### Xử lý media
+
+| Dịch vụ | Dùng để |
+| --- | --- |
+| MediaConvert | Transcode video đã tải lên thành các bản HLS |
+| Transcribe | Phụ đề tự động cho từng video |
+| Translate | Dịch phụ đề sang các ngôn ngữ phụ đề khác của khóa học |
+
+### Nhắn tin và lên lịch
+
+| Dịch vụ | Dùng để |
+| --- | --- |
+| DynamoDB Streams | Mọi thay đổi của bảng core |
+| SQS | Một hàng đợi và một hàng đợi lỗi cho mỗi tính năng stream, cùng các hàng đợi lỗi cho media pipeline và nhắc chứng chỉ |
+| EventBridge | Các rule kích hoạt khi một job MediaConvert hoặc Transcribe kết thúc, một lịch tìm video bị kẹt, và lịch hằng ngày của lượt chi trả |
+| EventBridge Scheduler | Các lịch một lần: dọn dẹp trễ media đã gỡ và nhắc chứng chỉ |
+| SES | Email thông báo |
+
+## Cấu hình lúc chạy
+
+Mã đã triển khai không bao giờ mã cứng tên tài nguyên.
+
+- **Các hàm backend** đọc tên bảng, tên bucket và endpoint từ **biến môi trường** (`DISCAVA_*`) của chính chúng, được đặt khi stack được triển khai. Không có gì được tải lúc chạy, và mỗi hàm chỉ nhận các thiết lập mà mã của nó đọc. Hàm render trang là ngoại lệ: nó đọc tên bảng và địa chỉ media công khai từ một tham số Systems Manager, vì nó được triển khai trong `Websites`, trước stack `Data` sở hữu chúng.
+- **Các cổng** tải `runtime-config.json` từ origin của chính chúng khi khởi động. Tệp này chứa các địa chỉ API, các id Cognito và địa chỉ của các cổng khác.
+
+Tệp của các cổng do stack `PortalConfig` ghi từ các giá trị mà những stack khác export, đó là lý do nó được triển khai cuối cùng.
+
+## Các stage dùng chung một tài khoản
+
+Ba cơ chế giữ các stage tách biệt:
+
+- **Tên.** Mọi stack và tên tài nguyên được tạo đều bắt đầu bằng tên stage, và quyền IAM được giới hạn theo tiền tố đó.
+- **Asset.** Mỗi stage tải đầu ra build lên dưới tiền tố riêng trong CDK bucket dùng chung, nên một stage không thể ghi đè thứ mà stage khác sắp triển khai.
+- **Permissions boundary.** Mọi IAM role mà một stage tạo ra đều mang boundary policy của stage đó, giới hạn những gì mã của chính stage có thể được cấp.
+
+## Nó được định nghĩa trong mã như thế nào
+
+| Nội dung | Ở đâu |
+| --- | --- |
+| Những stage nào tồn tại và thiết lập của chúng | `packages/common/infra-config/src/stages.config.ts` |
+| Ứng dụng CDK: một `ApplicationStage` cho mỗi stage được cấu hình | `packages/infra/src/main.ts` |
+| Cách các stack được ghép và nối | `packages/infra/src/stages/application-stage.ts` và `packages/infra/src/stacks/` |
+| Các khối xây dựng (một API, một bucket, một website) | `packages/common/constructs` |
+
+Một **construct** sở hữu tài nguyên của một thành phần và cung cấp các helper như `grantRead`. Một **stack** nối các construct với nhau và biến thiết lập của stage thành tùy chọn của construct. Xem <Link path="deploy/configuration">Cấu hình stage</Link> để biết các thiết lập.

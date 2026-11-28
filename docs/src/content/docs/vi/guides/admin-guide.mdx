@@ -1,0 +1,77 @@
+---
+title: Hướng dẫn cho quản trị viên
+description: Quản trị viên làm gì trong cổng quản trị, quản lý danh mục của catalogue, tra cứu, thu hồi và khôi phục chứng chỉ, và nơi đọc về kiểm duyệt đánh giá, thương hiệu và thanh toán.
+---
+
+import Link from '@components/link.astro';
+
+Trang này là phần tổng quan về cổng quản trị. Chỉ các tài khoản thuộc nhóm `admin` của nền tảng mới dùng được.
+
+## Tìm đường quanh cổng
+
+Thanh bên có năm trang:
+
+| Trang | Dùng để làm gì |
+| --- | --- |
+| **Home** | Một thẻ cho mỗi khu vực bên dưới |
+| **Categories** | Các danh mục mà giảng viên xếp khóa học vào |
+| **Reviews** | Gỡ các đánh giá khóa học vi phạm quy định |
+| **Certificates** | Tra cứu một chứng chỉ để thu hồi hoặc khôi phục |
+| **Payments** | Kết nối tài khoản Stripe mà học viên trả tiền vào |
+
+Menu tài khoản có **Branding**, **Notification settings** và **Sign out**.
+
+## Danh mục
+
+Danh mục là danh sách giảng viên chọn trong **Catalogue details** của một khóa học. Học viên duyệt và lọc catalogue theo các danh mục này.
+
+**Thêm một danh mục**
+
+1. Mở **Categories**.
+2. Nhập tên vào **New category name**.
+3. Chọn **Add category**.
+
+Tên đã được dùng sẽ bị từ chối.
+
+**Đổi tên một danh mục**
+
+1. Chọn **Rename** trên danh mục.
+2. Sửa tên.
+3. Chọn **Save**. Nhấn Escape hoặc **Cancel** sẽ giữ nguyên như cũ.
+
+**Lưu trữ một danh mục**
+
+1. Chọn **Archive** trên danh mục.
+2. Đọc hộp thoại: nó cho biết có bao nhiêu khóa học đang dùng danh mục này.
+3. Xác nhận bằng **Archive**.
+
+Danh mục đã lưu trữ không còn được đưa ra cho giảng viên chọn. Các khóa học đang có danh mục đó vẫn giữ nó. Trang của danh mục trong cổng học viên báo rằng danh mục không còn khả dụng. Danh sách hiển thị mỗi danh mục là **Active** hoặc **Archived**, và cổng quản trị không có cách nào đưa một danh mục đã lưu trữ trở lại.
+
+## Chứng chỉ
+
+1. Mở **Certificates**.
+2. Nhập **Certificate ID** và chọn **Look up**. ID nằm trên trang của chứng chỉ và trong file PDF của nó.
+3. Chứng chỉ hiển thị là **Valid** hoặc **Revoked**, kèm lịch sử ai đã thu hồi hoặc khôi phục và khi nào.
+
+- **Revoke** yêu cầu một **Reason**: Academic integrity, Issued in error, Order refunded hoặc Other. Other cần thêm **Note**. Xác nhận bằng **Revoke certificate**. Trang công khai của chứng chỉ khi đó báo rằng nó đã bị thu hồi, và học viên được thông báo.
+- **Restore**, xác nhận bằng **Restore certificate**, làm chứng chỉ có hiệu lực trở lại với cùng ID, và học viên được thông báo.
+
+Quản trị viên có thể khôi phục mọi chứng chỉ. Giảng viên không thể khôi phục chứng chỉ do quản trị viên đã thu hồi.
+
+<Link path="guides/certificates">Chứng chỉ</Link> nói về phần còn lại: điều gì giúp nhận được chứng chỉ, và những gì học viên và giảng viên nhìn thấy.
+
+## Đánh giá
+
+**Reviews** liệt kê các đánh giá của một khóa học và cho phép bạn gỡ một đánh giá vi phạm quy định, kèm lý do. Đánh giá bị gỡ không còn được tính vào điểm xếp hạng của khóa học, và tác giả của nó không thể đăng đánh giá khác. Xem phần gỡ bởi quản trị viên trong <Link path="guides/reviews">Xếp hạng và đánh giá</Link>.
+
+## Thương hiệu
+
+**Branding**, trong menu tài khoản, đặt tên, logo, biểu tượng, ảnh chia sẻ và màu của nền tảng cho cả ba cổng và các trang công khai. Xem <Link path="guides/branding">Thương hiệu</Link>.
+
+## Thanh toán
+
+**Payments** kết nối tài khoản Stripe mà học viên trả tiền vào. Cho đến khi kết nối, mọi khóa học đều miễn phí và giảng viên không thể đặt giá. Xem <Link path="guides/payments">Khóa học trả phí và thanh toán</Link> để biết cách kết nối, thay khóa, ngắt kết nối và hoàn tiền, và <Link path="guides/earnings-and-payouts">Thu nhập và chi trả</Link> để biết cần gì để trả tiền cho giảng viên.
+
+## Thông báo
+
+**Notification settings**, trong menu tài khoản, chọn những thông báo nào cũng được gửi đến bạn qua email. Xem <Link path="guides/notifications">Thông báo</Link>.

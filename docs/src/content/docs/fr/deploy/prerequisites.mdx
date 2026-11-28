@@ -1,0 +1,68 @@
+---
+title: Prérequis
+description: Le compte AWS, les permissions et les outils dont vous avez besoin avant de déployer Discava.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+## Un compte AWS
+
+Il vous faut un compte AWS dans lequel déployer. Un compte dédié, ou au moins un compte sans rien d'autre d'important dedans, est le choix le plus sûr pendant que vous apprenez le système.
+
+Les stages peuvent partager un compte. Chaque stage a ses propres rôles IAM, et les déploiements d'un stage ne peuvent pas atteindre les ressources d'un autre.
+
+### Permissions pour la configuration unique
+
+Le script de configuration s'exécute **une fois par stage, depuis votre machine, avec vos propres identifiants AWS**. Ces identifiants doivent pouvoir :
+
+- Créer un fournisseur OIDC IAM, des rôles IAM et des politiques gérées IAM
+- Initialiser CDK (`cdk bootstrap`), ce qui crée une stack CloudFormation avec un bucket S3, un dépôt ECR et des rôles IAM
+- Lire les certificats ACM, si vous utilisez des domaines personnalisés
+
+`AdministratorAccess` couvre tout cela. Après la configuration, les déploiements utilisent les rôles restreints créés par le script, pas vos identifiants.
+
+### Une région
+
+Choisissez la région où vit votre stage. Elle doit proposer tous les services qu'utilise Discava, dont **OpenSearch Serverless**, **MediaConvert**, **Transcribe**, **Translate** (traduction des sous-titres) et, pour les e-mails de notification, **SES**. Consultez la [liste des services AWS par région](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/) en cas de doute.
+
+Les règles WAF de CloudFront vivent toujours dans `us-east-1`. Un stage avec WAF sur ses portails ou ses médias (comme `discava-production`) déploie aussi de petites stacks là-bas, quelle que soit sa région principale.
+
+### Ce que ça coûte
+
+Tout est serverless et facturé à l'usage. `discava-development` est configuré pour descendre à zéro : aucun coût en inactivité, et un délai de 10 à 30 secondes à la première recherche après une période calme. `discava-production` garde une petite capacité de recherche tiède et active le WAF et les clés KMS, qui ont des frais mensuels fixes.
+
+## Outils sur votre machine
+
+| Outil | Pourquoi |
+| --- | --- |
+| [Git](https://git-scm.com/) | Pour cloner votre fork |
+| [Node.js 24](https://nodejs.org/) | Le script de configuration lit les stages depuis la config TypeScript |
+| [pnpm](https://pnpm.io/) | Installe le workspace. `corepack enable` vous donne la version que le dépôt fixe |
+| [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | Le script de configuration crée les ressources IAM avec |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | Permet au script de configuration de créer l'environnement GitHub et ses variables. Facultatif : sans lui, le script affiche les valeurs à saisir à la main |
+| Bash | Le script de configuration. Le bash fourni avec macOS convient |
+
+Docker n'est **pas** nécessaire pour configurer ou déployer. Il ne sert qu'à <Link path="guides/getting-started">lancer Discava en local</Link> et à exécuter l'analyse de vulnérabilités (`pnpm trivy`) sur votre machine.
+
+### Se connecter aux deux CLI
+
+```sh
+aws sts get-caller-identity   # should print your account and identity
+gh auth status                # should say you are logged in
+```
+
+Si la première échoue, connectez-vous avec `aws sso login --profile <profile>` ou `aws configure`. Si la seconde échoue, lancez `gh auth login`.
+
+## Un compte GitHub
+
+Vous devez pouvoir forker le dépôt et, sur le fork, modifier les paramètres et lancer des workflows. Un compte personnel avec l'offre gratuite suffit pour un fork public.
+
+## Facultatif, à décider plus tard
+
+- **Domaines personnalisés.** Sans eux, les portails sont servis depuis `*.cloudfront.net` et les API depuis `*.execute-api.amazonaws.com`. Pour utiliser les vôtres, il vous faut un domaine racine dont vous contrôlez le DNS, et des certificats ACM émis : un pour `core-api.<root>` et un pour `instructor-api.<root>` dans la région du stage, et un pour `<root>` et `*.<root>` dans `us-east-1`. Voir <Link path="deploy/configuration">Configuration d'un stage</Link>.
+- **E-mail.** Les e-mails de notification demandent une identité SES vérifiée. Sans elle, aucun e-mail n'est envoyé et tout le reste fonctionne.
+- **Paiements.** Vendre des cours demande un compte Stripe. Rien n'est nécessaire au déploiement : un administrateur le connecte ensuite dans le portail admin.
+
+Ensuite : <Link path="deploy/setup">fork et configuration</Link>.

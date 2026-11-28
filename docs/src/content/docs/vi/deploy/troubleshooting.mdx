@@ -1,0 +1,69 @@
+---
+title: Khắc phục sự cố
+description: Những lý do thường gặp khiến một lần setup hoặc triển khai thất bại, và cách sửa từng cái.
+sidebar:
+  order: 7
+---
+
+## Script setup
+
+**"Couldn't authenticate with AWS."** AWS CLI của bạn không có thông tin xác thực hợp lệ. Hãy đăng nhập (`aws sso login --profile <profile>` hoặc `aws configure`) rồi chạy lại script.
+
+**"`<stage>` is configured for account … ; switch credentials and re-run."** Stage nêu một tài khoản trong `stages.config.ts` và bạn đang đăng nhập vào tài khoản khác.
+
+**"Unknown stage."** Stage không có trong `stages.config.ts`. Hãy thêm nó vào đó trước.
+
+**"The origin remote isn't a GitHub repository."** Hiển thị với `--yes`; nếu không có nó, script hỏi repository. Hãy tự đặt: `GITHUB_REPOSITORY=<you>/discava ./scripts/setup-stage.sh`.
+
+**"stdin isn't a terminal."** Script không thể hỏi. Hãy chạy nó trong một terminal, hoặc truyền `--yes` để chấp nhận các giá trị mặc định.
+
+**"uses a custom OIDC subject claim template."** Repository hoặc tổ chức của bạn tùy biến subject của token OIDC. Hãy đặt `GITHUB_OIDC_SUBJECT_PREFIX` thành phần của subject đứng trước `:environment:` rồi chạy lại script.
+
+**"no issued certificate in … covers …" hoặc "… is for exactly …"** Với một tên miền gốc, script cần một chứng chỉ đã cấp cho mọi thành phần. Nó liệt kê từng cái không tìm thấy và dừng trước khi thay đổi bất cứ thứ gì. Hãy yêu cầu cấp chúng trong ACM, ở region mà thông báo nêu: region của stage cho hai API, `us-east-1` cho các cổng và media. Chờ cho đến khi mỗi cái ở trạng thái **Issued**, rồi chạy lại script. Mỗi API cần một chứng chỉ nêu đúng tên miền của chính nó (`core-api.<root>`, `instructor-api.<root>`), không phải wildcard. Các cổng và media có thể dùng chung một chứng chỉ cho `<root>` và `*.<root>`. Để triển khai không dùng tên miền riêng, hãy để trống tên miền gốc.
+
+## Deploy workflow
+
+**Workflow không bao giờ bắt đầu sau một lần push vào `main`.** Triển khai tự động cần ba thứ: biến repository `AUTO_DEPLOY_STAGE`, workflow đã được bật trên fork, và một lượt chạy CI đã **thành công**. Hãy kiểm tra lượt chạy CI: một job **Deploy Docs** thất bại (GitHub Pages chưa bật) hoặc job **Trivy** thất bại làm cả CI thất bại.
+
+**"Unknown stage".** Stage bạn gõ không có trong `stages.config.ts` ở commit đang được triển khai.
+
+**"Not authorized to perform sts:AssumeRoleWithWebIdentity".** AWS từ chối token của workflow. Các nguyên nhân thường gặp:
+
+- Tên của GitHub environment không đúng bằng tên của stage
+- Script setup được chạy từ bản clone của một repository khác (bản gốc thay vì fork của bạn), nên role tin tưởng repository đó
+- Fork bị đổi tên hoặc chuyển giao sau khi setup
+
+Hãy chạy lại script setup từ một bản clone của repository đang chạy workflow.
+
+**"Credentials could not be loaded" hoặc một role rỗng.** Environment không có biến `AWS_DEPLOY_ROLE_ARN`. Hãy chạy script setup, hoặc tạo các biến mà nó đã in ra.
+
+**"Invalid value for `<STAGE>_INFRA_…`".** Một ghi đè cấu hình có giá trị sai loại. Boolean là `true` hoặc `false`, số là số nguyên, và mức log là `DEBUG`, `INFO`, `WARN` hoặc `ERROR`. Hãy sửa biến trên GitHub environment và triển khai lại.
+
+**"SSM parameter /cdk-bootstrap/hnb659fds/version not found".** CDK chưa được bootstrap ở một region mà stage triển khai tới. Hãy chạy lại script setup và chấp nhận bootstrap, nhớ `us-east-1` cho các stage có WAF.
+
+**Access denied khi CloudFormation tạo một tài nguyên.** CloudFormation chạy với vai trò execution role, `cfn-execution-<stage>`. Role đó chỉ được làm những gì Discava tạo ra, và chỉ trên các tài nguyên có tên bắt đầu bằng tên stage (`discava-development-…`, hoặc `discavadevelopment…` với một số loại).
+
+Nếu bạn vừa kéo một phiên bản Discava mới hơn, hãy chạy lại script setup trước: nó cập nhật các quyền của role theo những gì phiên bản đó cần. Nếu lỗi vẫn còn, hoặc bạn tự thêm một tài nguyên, hãy xem lỗi nêu tên ai:
+
+- **`cfn-execution-<stage>` bị từ chối.** Hãy thêm action vào các policy của execution role trong `scripts/setup-stage.sh`. Nếu tên tài nguyên không bắt đầu bằng tên stage, hãy đặt cho nó một tên tường minh bắt đầu như vậy thay vào đó: `Names.uniqueResourceName` của CDK dựng một tên từ đường dẫn của construct. Sau đó chạy lại script.
+- **Role của một hàm bị từ chối khi nó chạy.** Hãy thêm action vào permissions boundary trong cùng script, rồi chạy lại. Mọi role mà stage tạo ra đều mang boundary đó. Execution role thì không, nên thêm một action vào boundary không bao giờ sửa được một lần triển khai.
+
+Một lần triển khai từ máy của bạn dùng các role mặc định của CDK, vốn làm được mọi thứ. Vì vậy một stack triển khai được cục bộ vẫn có thể thất bại trong Deploy workflow.
+
+**Bước Trivy thất bại.** Một dependency có lỗ hổng nghiêm trọng đã biết mà có bản sửa, hoặc một secret đã bị commit. Hãy cập nhật dependency. Một phát hiện mà bạn đã xem xét và chấp nhận thì đưa vào `.trivyignore`, mỗi dòng một ID.
+
+**Một stack bị kẹt ở `ROLLBACK_COMPLETE`.** Một stack thất bại ở lần tạo đầu tiên không thể được cập nhật. Hãy xóa nó trong console CloudFormation và triển khai lại.
+
+## Sau khi triển khai
+
+**Một cổng hiển thị lỗi đăng nhập.** Hãy kiểm tra người dùng có thuộc nhóm mà cổng đó cần (`student`, `instructor` hoặc `admin`) hay không.
+
+**Một tên miền riêng không phân giải được.** Các bản ghi DNS không được tạo giúp bạn. Hãy trỏ tên miền tới CloudFront distribution hoặc tên miền tùy chỉnh API Gateway của nó.
+
+**Các lệnh gọi API lỗi CORS sau khi thêm tên miền cổng.** Hãy triển khai lại. Các origin được phép của API được lấy từ tên miền của các cổng lúc triển khai.
+
+**Lượt tìm kiếm đầu tiên chậm.** Trên `discava-development`, tìm kiếm co về không. Truy vấn đầu tiên sau một quãng vắng phải chờ 10 đến 30 giây để có dung lượng.
+
+**Không có email nào đến.** Hãy kiểm tra hai biến `NOTIFICATIONS` đã được đặt, SES identity đã được xác minh ở region của stage, và tài khoản SES của bạn còn ở chế độ sandbox hay không.
+
+**Một video cứ ở trạng thái "processing".** Hãy xem danh sách job trong console MediaConvert ở region của stage để tìm một job thất bại và lỗi của nó.

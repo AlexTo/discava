@@ -1,0 +1,120 @@
+---
+title: 初回デプロイ
+description: Deploy ワークフローを実行し、ポータルを見つけて、最初のユーザーとカテゴリーを作成します。
+sidebar:
+  order: 3
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+<Link path="deploy/setup">セットアップ</Link>が終わっていれば、デプロイはワークフローを1回実行するだけです。
+
+## 1. Deploy ワークフローを実行する
+
+フォークの **Actions** タブで **Deploy → Run workflow** を選び、ステージ名を入力して実行します。ターミナルからなら次のとおりです。
+
+```sh
+gh workflow run deploy.yml -f stage=discava-development
+gh run watch
+```
+
+初回のデプロイでは、複数の CloudFront ディストリビューションや OpenSearch Serverless コレクションを含むすべてのリソースを作成するため、2回目以降よりずっと時間がかかります。
+
+### ワークフローの動作
+
+<Steps>
+
+1. **ステージが存在することを確認します。** `stages.config.ts` にあるかを調べるので、打ち間違いは AWS に触れる前に失敗します。
+
+2. **設定の上書きを転送します。** ステージの GitHub environment（またはリポジトリ）にある変数のうち、名前がステージのプレフィックス（`discava-development` なら `DISCAVA_DEVELOPMENT_`）で始まるものはすべてビルドに渡されます。カスタムドメインはこの仕組みで反映されます。
+
+3. **Trivy でスキャンします。** 修正のある重大な既知の脆弱性や、コミットされたシークレットがあると、デプロイは止まります。
+
+4. **AWS にサインインします。** 短期間有効な OIDC トークンを使い、デプロイロールとしてサインインします。
+
+5. **CDK で CloudFormation テンプレートを synthesize します。** ステージの permissions boundary をすべてのロールに適用します。
+
+6. **デプロイします。** 依存関係の順に各スタックをデプロイします。CloudFormation は実行ロールとしてリソースを作成します。自動実行では、この時点で `main` に新しいコミットがあれば、この手順はスキップされます。
+
+</Steps>
+
+## 2. ポータルを見つける
+
+各ポータルは CloudFront ディストリビューションです。そのアドレスは `Websites` スタックの出力にあります。AWS CLI をステージのリージョンに設定して、次を実行します。
+
+```sh
+aws cloudformation describe-stacks \
+  --stack-name discava-development-Websites \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `DistributionDomainName`)].[OutputKey,OutputValue]' \
+  --output table
+```
+
+受講生、講師、管理者のポータルに、それぞれ `*.cloudfront.net` のアドレスが1つずつ表示されます。受講生ポータルを開いてください。カタログが表示されるはずです。今はまだ空です。
+
+## 3. 最初のユーザーを作成する
+
+ユーザーは Cognito ユーザープールにあり、使えるポータルと API を決める3つのグループに分かれています。
+
+| グループ | 使えるもの |
+| --- | --- |
+| `student` | 受講生ポータル |
+| `instructor` | 講師ポータル |
+| `admin` | 管理ポータル |
+
+`discava-development` では**セルフサインアップがオフ**なので、見知らぬ人がテスト用ステージでアカウントを作ることはできません。ユーザーは自分で追加します。
+
+<Steps>
+
+1. ステージのリージョンで **Cognito** コンソールを開き、ステージのユーザープールを選びます。その ID は `discava-development-Data` スタックの出力にあります。
+
+2. メールアドレスと一時パスワードを指定して、**Create user** を選びます。パスワードは8文字以上で、大文字、小文字、数字、記号を含める必要があります。一時パスワードは3日で失効します。
+
+3. ユーザーを開き、**Add user to group** を選んで、必要なグループをそれぞれ追加します。すべてを見られるように、自分を3つすべてに追加してください。
+
+4. メールアドレスでいずれかのポータルにサインインします。Cognito が恒久的なパスワードの設定を求めます。
+
+</Steps>
+
+`discava-production` では、セルフサインアップがオンで、MFA が必須です。サインアップした人は自動的に `student` と `instructor` のグループに追加されます。管理者は、どのステージでも必ず手作業で追加します。
+
+## 4. カテゴリーを追加する
+
+コースは、管理者が管理するカテゴリーで整理されます。管理ポータルにサインインして作成するか、クローンから開始用のセット（Science、Technology、Mathematics、Communication、Business）を書き込みます。
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+
+DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}" pnpm nx run @discava/tooling-deploy:seed-categories
+```
+
+シェルにある AWS の認証情報とリージョン（ステージのものである必要があります）を使い、すでにあるカテゴリーはスキップします。`DISCAVA_DYNAMODB_CORE_TABLE` がない場合は、代わりにローカル開発用のテーブルに書き込みます。
+
+## 5. 最初から最後まで試す
+
+<Steps>
+
+1. **講師ポータル**でコースを作成し、動画付きのレッスンを追加して公開します。動画は MediaConvert でトランスコードされ、アップロードの数分後に再生できるようになります。
+
+2. **受講生ポータル**でそのコースを見つけ、登録して、レッスンを再生します。
+
+3. **管理ポータル**でカテゴリー一覧を確認します。
+
+</Steps>
+
+管理者が管理ポータルで設定するもので、デプロイ不要のものが2つあります。
+
+- プラットフォームの名前、ロゴ、色: <Link path="guides/branding">ブランディング</Link>
+- コースを販売するための Stripe アカウント: <Link path="guides/payments">有料コースと支払い</Link>
+
+## 以降のデプロイ
+
+- **自動:** `AUTO_DEPLOY_STAGE` を設定していれば、CI が成功した `main` へのプッシュごとに、そのステージがデプロイされます。その間に新しいコミットが `main` に届いた場合、デプロイはスキップされます。
+- **手動:** Deploy ワークフローをもう一度実行します。実行元のコミットをデプロイするので、古いコミットから実行すればロールバックにもなります。
+
+同じステージへのデプロイが重なることはありません。2回目の実行は、1回目を待ちます。
+
+新しいバージョンの Discava を取り込んだら、デプロイの前に<Link path="deploy/setup">セットアップスクリプトをもう一度実行</Link>してください。新しいバージョンが作成するものを、ステージのロールが許可するようになります。
+
+次へ: カスタムドメインとメールで<Link path="deploy/configuration">ステージを設定</Link>します。

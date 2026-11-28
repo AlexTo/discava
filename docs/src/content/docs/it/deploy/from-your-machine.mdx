@@ -1,0 +1,83 @@
+---
+title: Deploy dalla tua macchina
+description: Distribuisci, aggiorna e distruggi uno stage con le tue credenziali AWS, senza GitHub Actions.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+GitHub Actions è il modo consigliato per distribuire. Distribuire dalla tua macchina è utile per uno stage di test personale o per il debug di un deploy.
+
+## Prima di iniziare
+
+- Un clone con le dipendenze installate (`pnpm i`) e la AWS CLI
+- Credenziali AWS nella tua shell per l'account di destinazione (`aws sts get-caller-identity` funziona)
+- Una regione, in `AWS_REGION` o nel tuo profilo AWS
+- CDK con bootstrap eseguito in quella regione, una volta per account e regione:
+
+  ```sh
+  pnpm exec cdk bootstrap aws://<account-id>/<region>
+  ```
+
+  Uno stage con WAF sui portali o sui media richiede anche il bootstrap di `us-east-1`.
+
+## Deploy
+
+```sh
+pnpm nx deploy @discava/infra "discava-development/*"
+```
+
+Il pattern `<stage>/*` seleziona ogni stack dello stage. Questo compila i portali e le funzioni Lambda, sintetizza i template e li distribuisce senza chiedere approvazione.
+
+Per usare ogni volta un profilo AWS con nome per uno stage, imposta il suo `credentials` in `packages/common/infra-config/src/stages.config.ts`. I comandi di deploy, destroy e reindex di questa pagina lo useranno:
+
+```ts
+'discava-development': {
+  credentials: { type: 'profile', profile: 'my-profile' },
+  region: 'eu-west-1',
+  infra: { /* … */ },
+},
+```
+
+## Differenze rispetto a un deploy da GitHub
+
+| | GitHub Actions | La tua macchina |
+| --- | --- | --- |
+| Credenziali | I ruoli di deploy e di esecuzione dello stage, con permessi limitati | Le tue, tramite i ruoli di bootstrap di CDK |
+| Permissions boundary | Applicata a ogni ruolo | Non applicata |
+| Override di configurazione | Letti dalle variabili dell'environment GitHub | Letti dalla tua shell: `export DISCAVA_DEVELOPMENT_INFRA_…` prima di distribuire |
+| Analisi delle vulnerabilità | Gira per prima | Esegui tu `pnpm trivy` (richiede Docker) |
+
+Poiché gli override vengono dalla tua shell, un deploy locale di uno stage che su GitHub usa domini personalizzati **li rimuove** a meno che tu non esporti le stesse variabili. Scegli un solo modo di distribuire ogni stage e mantienilo.
+
+## Script di manutenzione
+
+Girano dalla tua macchina contro uno stage distribuito, in qualunque modo sia stato distribuito. Nessuno serve nell'uso normale: gli indici di ricerca e le analisi si mantengono aggiornati da soli.
+
+| Quando | Comando |
+| --- | --- |
+| Ricostruire l'indice di ricerca dei corsi, ad esempio dopo un deploy che aggiunge un campo di ricerca | `pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development` |
+| Ricostruire l'indice di ricerca delle trascrizioni, per ogni corso o per uno solo | `pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development [--course=<courseId>]` |
+| Ricalcolare i dati di analisi di un corso dai suoi record | `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` |
+| Scrivere le categorie iniziali | `pnpm nx run @discava/tooling-deploy:seed-categories` |
+
+I due comandi di reindex cercano la funzione di reindex dello stage nei suoi stack CloudFormation e la invocano, quindi servono solo le credenziali AWS e il nome dello stage. Senza `--stage`, `reindex-transcripts` gira sullo stack locale.
+
+Gli ultimi due scrivono direttamente nella tabella. Puntali prima alla tabella dello stage, altrimenti scrivono nella tabella di sviluppo locale:
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+export DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}"
+```
+
+## Distruggere
+
+```sh
+pnpm nx destroy @discava/infra "discava-development/*"
+```
+
+CDK ti chiede di confermare. `discava-development` elimina tutto, dati compresi. `discava-production` conserva le sue risorse con stato (tra cui il pool di utenti, la tabella, i bucket dei media e la collezione di ricerca) quando i suoi stack vengono eliminati, e ha la protezione dall'eliminazione attiva: rimuoverle è un passaggio deliberato e manuale.
+
+I ruoli e le policy creati dallo <Link path="deploy/setup">script di setup</Link> non fanno parte di alcuno stack. Eliminali nella console IAM se non ti servono più.

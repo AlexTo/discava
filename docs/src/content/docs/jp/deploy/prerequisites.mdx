@@ -1,0 +1,68 @@
+---
+title: 前提条件
+description: Discava をデプロイする前に必要な、AWS アカウント、権限、ツールを説明します。
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+## AWS アカウント
+
+デプロイ先の AWS アカウントが 1 つ必要です。システムを学んでいる間は、専用のアカウント、または少なくとも重要なものが入っていないアカウントを使うのが最も安全です。
+
+ステージ同士でアカウントを共有できます。各ステージには専用の IAM ロールが作られ、あるステージのデプロイが別のステージのリソースに届くことはありません。
+
+### 一度きりのセットアップに必要な権限
+
+セットアップスクリプトは、**ステージごとに 1 回、あなたのマシンから、あなた自身の AWS 認証情報で**実行します。その認証情報には、次の権限が必要です。
+
+- IAM OIDC プロバイダー、IAM ロール、IAM マネージドポリシーの作成
+- CDK のブートストラップ（`cdk bootstrap`）。S3 バケット、ECR リポジトリ、IAM ロールを持つ CloudFormation スタックが作られます
+- カスタムドメインを使う場合は、ACM 証明書の読み取り
+
+`AdministratorAccess` があればすべて足ります。セットアップ後のデプロイは、あなたの認証情報ではなく、スクリプトが作った権限を絞ったロールを使います。
+
+### リージョン
+
+ステージを置くリージョンを選びます。Discava が使うすべてのサービスを提供しているリージョンが必要です。たとえば **OpenSearch Serverless**、**MediaConvert**、**Transcribe**、**Translate**（字幕翻訳）、通知メール用の **SES** です。不明な場合は、[AWS のリージョン別サービス一覧](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/)を確認してください。
+
+CloudFront の WAF ルールは、常に `us-east-1` にあります。ポータルやメディアに WAF を使うステージ（`discava-production` など）は、メインのリージョンにかかわらず、そこにも小さなスタックをデプロイします。
+
+### 費用
+
+すべてサーバーレスで、使った分だけ課金されます。`discava-development` はゼロまでスケールダウンする設定です。待機中は費用がかからず、しばらく使わなかった後の最初の検索は 10 から 30 秒遅れます。`discava-production` は、少量の検索容量をウォーム状態に保ち、WAF と KMS キーを有効にします。これらには毎月の固定費がかかります。
+
+## マシンに必要なツール
+
+| ツール | 用途 |
+| --- | --- |
+| [Git](https://git-scm.com/) | フォークをクローンするため |
+| [Node.js 24](https://nodejs.org/) | セットアップスクリプトが、TypeScript の設定からステージを読み取ります |
+| [pnpm](https://pnpm.io/) | ワークスペースをインストールします。`corepack enable` で、リポジトリが固定しているバージョンが使えます |
+| [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | セットアップスクリプトが、これで IAM リソースを作成します |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | セットアップスクリプトが GitHub 環境とその変数を作成できるようにします。任意です。ない場合、スクリプトが値を表示するので、手で入力します |
+| Bash | セットアップスクリプト用。macOS に付属の bash で動作します |
+
+セットアップやデプロイに、Docker は**不要**です。Docker が必要なのは、<Link path="guides/getting-started">Discava をローカルで実行する</Link>ときと、マシンで脆弱性スキャン（`pnpm trivy`）を実行するときだけです。
+
+### 両方の CLI にサインインする
+
+```sh
+aws sts get-caller-identity   # should print your account and identity
+gh auth status                # should say you are logged in
+```
+
+1 つ目が失敗する場合は、`aws sso login --profile <profile>` または `aws configure` でサインインしてください。2 つ目が失敗する場合は、`gh auth login` を実行してください。
+
+## GitHub アカウント
+
+リポジトリをフォークし、そのフォークで設定を変更してワークフローを実行できる必要があります。公開フォークなら、無料プランの個人アカウントで十分です。
+
+## 任意、あとで決めてよいもの
+
+- **カスタムドメイン。** 使わない場合、ポータルは `*.cloudfront.net` から、API は `*.execute-api.amazonaws.com` から提供されます。独自のドメインを使うには、DNS を管理しているルートドメインと、発行済みの ACM 証明書が必要です。ステージのリージョンに `core-api.<root>` と `instructor-api.<root>` の証明書をそれぞれ 1 つずつ、`us-east-1` に `<root>` と `*.<root>` の証明書を 1 つです。<Link path="deploy/configuration">ステージ設定</Link>を参照してください。
+- **メール。** 通知メールには、検証済みの SES ID が必要です。ない場合、メールは送信されず、ほかはすべて動作します。
+- **決済。** コースの販売には Stripe アカウントが必要です。デプロイ時には何も要りません。管理者が、あとで管理者ポータルから接続します。
+
+次へ: <Link path="deploy/setup">フォークとセットアップ</Link>。

@@ -1,0 +1,68 @@
+---
+title: 前提条件
+description: 部署 Discava 之前你需要的 AWS 账户、权限和工具。
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+## AWS 账户
+
+你需要一个用来部署的 AWS 账户。在学习这套系统期间，最稳妥的选择是使用专用账户，或者至少是里面没有其他重要内容的账户。
+
+多个 stage 可以共用一个账户。每个 stage 都有自己的 IAM 角色，一个 stage 的部署无法触及另一个 stage 的资源。
+
+### 一次性设置所需的权限
+
+设置脚本**每个 stage 运行一次，在你的机器上，使用你自己的 AWS 凭证**。这些凭证必须能够：
+
+- 创建 IAM OIDC provider、IAM 角色和 IAM 托管策略
+- 引导 CDK（`cdk bootstrap`），它会创建一个 CloudFormation 堆栈，包含一个 S3 存储桶、一个 ECR 仓库和若干 IAM 角色
+- 读取 ACM 证书（如果你使用自定义域名）
+
+`AdministratorAccess` 可以满足以上全部要求。设置完成后，部署使用脚本创建的、范围受限的角色，而不是你的凭证。
+
+### 区域
+
+选择你的 stage 所在的区域。该区域必须提供 Discava 使用的所有服务，其中包括 **OpenSearch Serverless**、**MediaConvert**、**Transcribe**、**Translate**（字幕翻译），以及用于通知邮件的 **SES**。如果不确定，请查看 [AWS 区域服务列表](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/)。
+
+CloudFront 的 WAF 规则始终位于 `us-east-1`。在门户或媒体上启用了 WAF 的 stage（例如 `discava-production`）还会在那里部署几个小型堆栈，不论它的主区域是哪里。
+
+### 费用
+
+一切都是无服务器的，按使用量计费。`discava-development` 配置为缩容到零：空闲时没有费用，安静一段时间后的第一次搜索会有 10 到 30 秒的延迟。`discava-production` 保留少量预热的搜索容量，并开启 WAF 和 KMS 密钥，这两者有固定的月费。
+
+## 你机器上的工具
+
+| 工具 | 用途 |
+| --- | --- |
+| [Git](https://git-scm.com/) | 克隆你的 fork |
+| [Node.js 24](https://nodejs.org/) | 设置脚本从 TypeScript 配置中读取 stage |
+| [pnpm](https://pnpm.io/) | 安装工作区。`corepack enable` 会提供仓库锁定的版本 |
+| [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | 设置脚本用它创建 IAM 资源 |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | 让设置脚本创建 GitHub environment 及其变量。可选：没有它时，脚本会打印出这些值，供你手动填写 |
+| Bash | 运行设置脚本。macOS 自带的 bash 即可 |
+
+设置或部署**不需要** Docker。只有<Link path="guides/getting-started">在本地运行 Discava</Link>，以及在你的机器上运行漏洞扫描（`pnpm trivy`）时才需要它。
+
+### 登录两个 CLI
+
+```sh
+aws sts get-caller-identity   # should print your account and identity
+gh auth status                # should say you are logged in
+```
+
+如果第一条失败，请用 `aws sso login --profile <profile>` 或 `aws configure` 登录。如果第二条失败，请运行 `gh auth login`。
+
+## GitHub 账户
+
+你需要能够 fork 该仓库，并在 fork 上更改设置和运行 workflow。对于公开的 fork，免费方案的个人账户就足够了。
+
+## 可选，稍后再决定
+
+- **自定义域名。** 没有自定义域名时，门户由 `*.cloudfront.net` 提供，API 由 `*.execute-api.amazonaws.com` 提供。要使用你自己的域名，你需要一个由你控制 DNS 的根域名，以及已签发的 ACM 证书：在 stage 所在区域为 `core-api.<root>` 和 `instructor-api.<root>` 各签发一张，并在 `us-east-1` 为 `<root>` 和 `*.<root>` 签发一张。参见 <Link path="deploy/configuration">Stage 配置</Link>。
+- **邮件。** 通知邮件需要一个已验证的 SES 身份。没有它就不会发送邮件，其他功能都正常工作。
+- **支付。** 销售课程需要一个 Stripe 账户。部署时不需要任何设置：管理员之后在管理门户中连接它。
+
+下一步：<Link path="deploy/setup">Fork 和设置</Link>。

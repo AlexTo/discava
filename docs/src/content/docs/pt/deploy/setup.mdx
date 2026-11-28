@@ -1,0 +1,141 @@
+---
+title: Fork e setup
+description: Faça o fork do Discava, prepare as configurações do GitHub do fork e execute o script de setup que o conecta à sua conta AWS.
+sidebar:
+  order: 2
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+Esta página conecta um fork do Discava à sua conta AWS. No final, seu fork tem tudo de que o workflow Deploy precisa, e nada foi implantado ainda.
+
+## 1. Fork e clone
+
+<Steps>
+
+1. Faça o fork de [AlexTo/discava](https://github.com/AlexTo/discava) no GitHub. Mantenha o nome `discava`, a menos que tenha um motivo para mudá-lo.
+
+2. Clone **o seu fork**, não o original. O script de setup lê o repositório em que deve confiar a partir do remote `origin`.
+
+   ```sh
+   git clone https://github.com/<you>/discava.git
+   cd discava
+   ```
+
+3. Instale as dependências. O script de setup precisa delas para ler a lista de stages.
+
+   ```sh
+   corepack enable
+   pnpm i
+   ```
+
+</Steps>
+
+## 2. Prepare o fork no GitHub
+
+Três configurações no seu fork, todas na aba **Settings** ou **Actions**.
+
+<Steps>
+
+1. **Ative os workflows.** O GitHub desativa os workflows em um fork novo. Abra a aba **Actions** e escolha **I understand my workflows, go ahead and enable them**.
+
+2. **Ative o GitHub Pages.** Vá em **Settings → Pages** e defina **Source** como **GitHub Actions**.
+
+   O workflow de CI publica este site de documentação no Pages a cada push em `main`. Se o Pages estiver desativado, esse job falha, o CI é marcado como falho e o deploy automático que espera o CI nunca começa. Os deploys manuais funcionam de qualquer forma.
+
+3. **Opcional: adicione `CODECOV_TOKEN`.** O CI envia a cobertura de testes ao Codecov. Para ver a cobertura do seu fork, adicione o token do Codecov como um secret de repositório em **Settings → Secrets and variables → Actions**.
+
+</Steps>
+
+:::note[O endereço do site de documentação]
+O CI compila o site de documentação para o endereço do GitHub Pages do seu fork, `https://<owner>.github.io/<repository>`, então não há nada a mudar. Para publicá-lo em outro lugar, como um domínio personalizado, defina as variáveis de repositório `DOCS_SITE` (por exemplo `https://docs.example.com`) e `DOCS_BASE_PATH` (por exemplo `/my-lms`, ou `/` para a raiz do domínio).
+:::
+
+## 3. Execute o script de setup
+
+O script é `scripts/setup-stage.sh`. Execute-o uma vez para cada stage que você implanta.
+
+```sh
+./scripts/setup-stage.sh discava-development
+```
+
+Ele faz uma série de perguntas, cada uma com um padrão detectado que você aceita com Enter. Nada é criado até você confirmar o resumo no final. É seguro executá-lo de novo: cada etapa cria o que falta e atualiza o que existe.
+
+### O que ele pergunta
+
+Nesta ordem:
+
+| Pergunta | O que responder |
+| --- | --- |
+| **Stage** | O stage a configurar. Os stages vêm de `packages/common/infra-config/src/stages.config.ts` |
+| **GitHub** | Nada a responder se `origin` for o seu fork. Ele mostra o repositório em que vai confiar: confira se é o seu |
+| **AWS credentials** | O perfil do AWS CLI da conta de destino, ou em branco para as suas credenciais padrão. Ele mostra como você está autenticado |
+| **Region** | A região principal do stage. Não é perguntada se `stages.config.ts` define uma |
+| **CDK bootstrap** | Sim, para cada região que ele informar como sem bootstrap |
+| **GitHub environment** | Sim, para criar o environment com o nome do stage e definir suas variáveis. Não é perguntada sem o GitHub CLI |
+| **Deploy automatically?** | Sim para fazer deploy deste stage sempre que o CI passar em `main`. Não (o padrão) para fazer deploy só quando você executar o workflow. Apenas um stage pode ter deploy automático |
+| **Root domain** | Deixe em branco por enquanto. Você pode executar o script de novo depois para servir cada componente a partir de um subdomínio dele, usando certificados que ele encontra no ACM (veja <Link path="deploy/configuration">Configuração do stage</Link>) |
+| **Continue?** | Sim, quando o resumo mostrar seu repositório, conta, região e stage |
+
+### O que ele cria
+
+Na **AWS**:
+
+| Recurso | Nome | Finalidade |
+| --- | --- | --- |
+| Provedor OIDC | `token.actions.githubusercontent.com` | Permite que o GitHub Actions faça login nesta conta. Compartilhado por todos os stages |
+| Role de deploy | `github-deploy-<stage>` | Assumido pelo workflow Deploy. Confia apenas no environment do seu repositório chamado `<stage>`. Pode publicar assets e gerenciar as stacks do CloudFormation do stage |
+| Role de execução | `cfn-execution-<stage>` | Usado pelo CloudFormation para criar os recursos do stage. Suas permissões estão em uma política inline e três políticas gerenciadas: `cfn-execution-<stage>-data`, `-edge` e `-compute` |
+| Permissions boundary | `permissions-boundary-<stage>` | Todo role IAM que o stage cria deve carregá-lo, o que limita o que uma stack implantada pode conceder a si mesma |
+| Role de login no Docker | `github-docker-login-<repo>` | Permite que os workflows do seu repositório façam login no Amazon ECR Public, para que os pulls de imagem não sofram limite de taxa. Compartilhado por todos os stages |
+| Stack de bootstrap do CDK | `CDKToolkit` | O bucket de assets e os roles de que o CDK precisa, em cada região que você aceitou |
+
+Um stage com WAF nos portais ou na mídia, como `discava-production`, também recebe bootstrap em `us-east-1`.
+
+No **GitHub**:
+
+| Onde | Variável | Valor |
+| --- | --- | --- |
+| Environment `<stage>` | `AWS_REGION` | A região do stage |
+| Environment `<stage>` | `AWS_DEPLOY_ROLE_ARN` | O role de deploy |
+| Environment `<stage>` | `AWS_EXECUTION_ROLE_ARN` | O role de execução |
+| Repositório | `AWS_DOCKER_LOGIN_ROLE_ARN` | O role de login no Docker |
+| Repositório | `AUTO_DEPLOY_STAGE` | O nome do stage, só se você escolheu deploys automáticos |
+
+Elas são **variáveis, não secrets**. O ARN de um role não é sensível: o role de deploy só pode ser assumido por um workflow executado no environment correspondente do seu repositório, e o role de login no Docker apenas por workflows do seu repositório.
+
+### Sem o GitHub CLI
+
+Se o `gh` não estiver instalado ou autenticado, o script ainda cria tudo na AWS e depois mostra o environment e as variáveis para você criar manualmente em **Settings → Environments** e **Settings → Secrets and variables → Actions → Variables**.
+
+### Executar sem interação
+
+```sh
+AWS_PROFILE=my-profile AWS_REGION=eu-west-1 ./scripts/setup-stage.sh --yes discava-development
+```
+
+`--yes` aceita todos os padrões, então não ativa o deploy automático. `./scripts/setup-stage.sh --help` lista as variáveis de ambiente que predefinem cada resposta.
+
+### Quando executá-lo de novo
+
+- Para adicionar ou alterar domínios personalizados ou o remetente de notificações (veja <Link path="deploy/configuration">Configuração do stage</Link>)
+- Depois de baixar uma versão mais nova do Discava, antes de fazer o deploy dela. O script guarda as permissões do role de execução e do boundary, e uma versão que usa um novo tipo de recurso da AWS as amplia. Sem a atualização, o deploy falha com um erro de acesso negado
+
+## 4. Proteja a produção
+
+Qualquer pessoa que possa executar workflows no seu fork pode fazer deploy de um stage. Para `discava-production`, ou qualquer stage com usuários reais, abra **Settings → Environments → `<stage>`** e:
+
+- Adicione **required reviewers**, para que cada deploy espere aprovação
+- Restrinja as **deployment branches** a `main`
+
+## Confira seu trabalho
+
+```sh
+gh variable list --env discava-development
+gh variable list
+```
+
+O primeiro deve listar as três variáveis `AWS_*`. O segundo deve listar `AWS_DOCKER_LOGIN_ROLE_ARN`, e `AUTO_DEPLOY_STAGE` se você escolheu deploys automáticos.
+
+Próximo: <Link path="deploy/first-deploy">seu primeiro deploy</Link>.

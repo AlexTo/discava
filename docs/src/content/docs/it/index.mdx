@@ -1,34 +1,47 @@
 ---
-title: docs
-description: Documentazione per docs.
+title: Discava
+description: Documentazione di Discava, il Learning Management System serverless e nativo AWS.
 template: splash
 hero:
-  title: docs
-  tagline: Documentazione del progetto realizzata con Astro e Starlight.
-  actions:
-    - text: Inizia
-      link: /it/guides/getting-started
-      icon: right-arrow
+  title: Discava
+  tagline: Il Learning Management System serverless che gira nel tuo account AWS.
 ---
 
 import { CardGrid, Card } from '@astrojs/starlight/components';
 import { ContributorList } from 'astro-contributors';
+import Link from '@components/link.astro';
+
+## Scegli il tuo percorso
 
 <CardGrid>
-  <Card title="Guide" icon="open-book">
-    Documentazione di riferimento per docs.
+  <Card title="Voglio provarlo" icon="laptop">
+    Esegui l'intero sistema sul tuo computer con Docker. Non serve un account AWS.
+
+    <Link path="guides/getting-started">Esegui Discava in locale</Link>
   </Card>
-  <Card title="Blog" icon="pencil">
-    Notizie e aggiornamenti dal team.
+  <Card title="Voglio distribuirlo" icon="rocket">
+    Fai il fork del repository, collegalo al tuo account AWS e lascia che GitHub Actions lo distribuisca.
+
+    <Link path="deploy">Guida alla distribuzione</Link>
   </Card>
-  <Card title="Snippets" icon="seti:config">
-    Frammenti di contenuto riutilizzabili utilizzati nella documentazione.
+  <Card title="Voglio capirlo" icon="puzzle">
+    I componenti, come vengono distribuiti su AWS e come una richiesta li attraversa.
+
+    <Link path="architecture">Architettura</Link>
   </Card>
-  <Card title="Localizzato" icon="translate">
-    La localizzazione è configurata di default — aggiungi le lingue di destinazione in `astro.config.mjs`.
+  <Card title="Voglio modificarlo" icon="pencil">
+    Come funziona ogni funzionalità: modello dati, regole e il codice che le applica.
+
+    <Link path="design">Design</Link>
   </Card>
 </CardGrid>
 
-## Grazie ai nostri fantastici contributori!
+## Cos'è Discava
+
+Discava è una piattaforma di apprendimento gratuita e open source. Gli istruttori creano corsi con video, testo, quiz e compiti. Gli studenti si iscrivono, oppure acquistano un corso a pagamento, poi studiano e seguono i propri progressi. Gli istruttori ricevono la loro quota di ogni vendita. Gli amministratori gestiscono le categorie del catalogo, moderano le recensioni, personalizzano il marchio della piattaforma e collegano l'account Stripe che incassa i pagamenti.
+
+È volutamente rigida nelle scelte: un solo cloud provider (AWS), un solo modo di distribuire (CDK), e ogni parte è serverless, quindi un'installazione inattiva costa quasi nulla.
+
+## Grazie ai nostri fantastici collaboratori!
 
 <ContributorList githubRepo="AlexTo/discava" />

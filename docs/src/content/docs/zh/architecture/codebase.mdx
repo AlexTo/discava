@@ -1,0 +1,120 @@
+---
+title: 代码库地图
+description: 每个组件的代码在 monorepo 中的位置，以及本地开发如何对应 AWS。
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Discava 是一个 TypeScript monorepo，用 [Nx](https://nx.dev/) 和 pnpm 管理，由 [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws) 生成脚手架。
+
+## 包
+
+```
+packages/
+├── websites/
+│   ├── student-portal/      React + Vite + TanStack Router
+│   ├── instructor-portal/
+│   └── admin-portal/
+├── apis/
+│   ├── core-api/            tRPC, any signed-in user; also the public page renderer
+│   ├── instructor-api/      tRPC, instructors only
+│   └── admin-api/           tRPC, admins only
+├── databases/
+│   ├── core-table/          DynamoDB entities and write helpers (ElectroDB)
+│   └── search/              OpenSearch client, index definitions and index sync
+├── events/                  Lambda handlers for AWS-triggered events
+├── infra/                   The CDK app: stages and stacks
+├── common/
+│   ├── constructs/          CDK constructs, one per component
+│   ├── infra-config/        Per-stage deployment settings, local ports and origins
+│   ├── branding/            Brand rules shared by portals and backend
+│   ├── server-utils/        Code shared by backend functions
+│   ├── web-utils/           Non-UI code shared by portals
+│   ├── shadcn/              UI components and the shell shared by portals
+│   └── tiptap/              Rich-text document helpers
+├── tooling/
+│   ├── local-dev/           The Docker services local development runs instead of AWS
+│   ├── deploy/              Deploy and operations scripts
+│   └── agent/               CI and pull request tooling
+└── e2e/                     Playwright end-to-end tests against the local stack
+docs/                        This site
+scripts/setup-stage.sh       One-time AWS and GitHub setup per stage
+```
+
+每个包都是一个名为 `@discava/<name>` 的 Nx 项目。`common/` 和 `tooling/` 下的包会带上文件夹名作为前缀：`@discava/common-web-utils`、`@discava/tooling-deploy`。
+
+## 从组件到代码
+
+| 组件 | 运行时代码 | 基础设施 |
+| --- | --- | --- |
+| 门户 | `packages/websites/<portal>` | `constructs/src/app/static-websites`、`WebsitesStack` |
+| API | `packages/apis/<api>` | `constructs/src/app/apis`、`<Api>Stack` |
+| 核心表 | `packages/databases/core-table` | `constructs/src/app/dynamodb`、`DataStack` |
+| 页面渲染函数 | `packages/apis/core-api/src/page-renderer` | `constructs/src/app/static-websites/student-portal.ts`、`WebsitesStack` |
+| 搜索 | `packages/databases/search` | `constructs/src/app/opensearch`、`DataStack` |
+| 流路由和功能处理函数 | `packages/events/src/router`，以及每个主题一个文件夹（`progress`、`search`、`analytics`、`notifications`、`earnings`、`media`、`branding`） | `constructs/src/core/stream-router.ts`、`StreamRouterStack` |
+| 媒体流水线 | `packages/events/src/media` | `constructs/src/app/media-convert`、`MediaPipelineStack` |
+| Stripe webhook | `packages/events/src/payments` | `constructs/src/app/apis/stripe-webhook-api.ts`、`PaymentsStack` |
+| 结算运行 | `packages/events/src/earnings` | `PayoutsStack` |
+| 证书提醒 | `packages/events/src/certificates` | `StreamRouterStack` |
+| Cognito 触发器 | `packages/events/src/identity` | `DataStack` |
+
+流功能本身登记在同一个列表里，即 `packages/databases/core-table/src/helpers/stream-features.ts` 中的 `STREAM_FEATURES`。部署后的流路由和本地事件运行器都读取它。
+
+## API 如何组成
+
+每个 API 都遵循相同的结构：
+
+| 文件 | 作用 |
+| --- | --- |
+| `src/init.ts` | 构建过程类型：`publicProcedure`、`protectedProcedure`，以及增加表访问能力的类型 |
+| `src/router.ts` | tRPC 路由：该 API 暴露的每一个过程 |
+| `src/procedures/` | 各个过程，每个都与它的测试放在一起 |
+| `src/handler.ts` | Lambda 入口 |
+| `src/local-server.ts` | 在本地提供服务的同一个路由 |
+
+core-api 还有一个入口 `src/page-renderer/`，并用 `src/local-page-renderer.ts` 在本地提供服务。
+
+共享的底层代码，例如认证中间件和 Lambda 适配器，只在 `packages/common/server-utils` 中放一份。
+
+门户会导入每个 API 路由的**类型**，所以过程的输入和输出在编译时就能端到端检查。
+
+## 跨记录的规则
+
+每个 API 和处理函数都写入同一张表。多个写入方都必须遵守的规则，例如“学生已经用过的内容项不能删除”，会在 `core-table` 里实现为一个辅助函数，由每个写入方调用。每条这样的规则都有一个**不变量检查**，端到端测试会在每个场景之后对表运行全部检查。
+
+## 本地开发对应 AWS
+
+`pnpm dev` 用本地替身运行同样的代码：
+
+| 在 AWS 上 | 在本地 |
+| --- | --- |
+| CloudFront + S3 网站 | Vite 开发服务器 |
+| API Gateway + Lambda | 每个 API 一个本地 HTTP 服务器 |
+| 页面渲染函数 | 端口 2026 上的本地 HTTP 服务器 |
+| Cognito | 带预设用户的本地 OIDC 服务器 |
+| DynamoDB | Docker 中的 DynamoDB local |
+| S3 | Docker 中的 S3Mock |
+| SQS | Docker 中的 ElasticMQ |
+| OpenSearch Serverless | Docker 中的 OpenSearch |
+| DynamoDB Streams、EventBridge、Scheduler | 事件运行器（`packages/events/src/local`） |
+| MediaConvert | Docker 中的 ffmpeg |
+| Transcribe | 写入占位字幕轨道的替身 |
+| Translate | 在每条字幕前加上目标语言的替身 |
+| SES | 邮件保存到本地收件箱 |
+| Stripe | 替身，模拟它的 API、结账页面、webhook 投递和 Connect |
+| Secrets Manager（Stripe 密钥） | `tmp/local-dev/secrets/` 下被 Git 忽略的文件 |
+
+事件运行器通过同一份流功能注册表触发 AWS 会触发的同样的处理函数，所以后台行为在两处是一致的。命令见 <Link path="guides/getting-started">在本地运行 Discava</Link>。
+
+## 在仓库中工作
+
+```sh
+pnpm build    # compile, bundle, synthesize and scan every project
+pnpm lint     # format and lint with Biome
+pnpm test     # run every project's tests
+```
+
+[DEVELOPMENT.md](https://github.com/AlexTo/discava/blob/main/DEVELOPMENT.md) 完整介绍了约定、测试以及如何进行变更。

@@ -1,0 +1,37 @@
+---
+title: Annunci
+description: Pubblicare, modificare ed eliminare annunci per gli studenti di un corso, chi può leggerli e chi riceve la notifica.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+Un annuncio è un breve messaggio di un istruttore agli studenti iscritti a un corso. Ha un titolo (fino a 120 caratteri) e un testo formattato.
+
+## Per gli istruttori
+
+Apri il corso da **My Courses** e vai alla sezione **Announcements**, in fondo alla pagina.
+
+- **Pubblica**: inserisci un titolo e il testo, poi scegli **Post announcement**. Solo un corso pubblicato accetta nuovi annunci. Un corso in bozza mostra "Publish the course to post announcements."
+- **Modifica**: scegli **Edit** su un annuncio, cambia il titolo o il testo, poi **Save changes**. Gli studenti vedono il nuovo testo con l'indicazione "edited".
+- **Elimina**: scegli **Delete** e conferma. L'annuncio scompare dalla home del corso. L'azione non si può annullare.
+
+Cosa viene comunicato agli studenti:
+
+- La pubblicazione notifica ogni studente iscritto una sola volta, nella campanella e, a meno che non l'abbia disattivata, anche via email.
+- La modifica non invia nulla.
+- L'eliminazione non ritira la notifica che gli studenti hanno già ricevuto.
+- Pubblicare lo stesso annuncio due volte, per esempio con un doppio clic, lo pubblica comunque una sola volta.
+
+In un corso archiviato puoi ancora modificare ed eliminare gli annunci, ma non pubblicarne di nuovi.
+
+## Chi può leggerli
+
+- Gli studenti iscritti al corso leggono gli annunci nella home del corso, dal più recente. Funziona anche dopo l'archiviazione del corso.
+- Uno studente che ha lasciato il corso, uno studente di un altro corso e i visitatori non possono leggerli.
+- Gli istruttori che tengono il corso li leggono nel portale istruttori.
+
+## Per gli sviluppatori
+
+Gli annunci non aggiungono una consegna propria. La pubblicazione scrive l'annuncio e una richiesta di notificare gli studenti del corso in un'unica transazione, tramite il contratto del producer delle notifiche (`notifyCourseStudents`, il tipo `announcement.posted`). Poi il fan-out delle notifiche le recapita. Vedi <Link path="guides/notifications">Notifiche</Link> per i dettagli.

@@ -1,0 +1,39 @@
+---
+title: 설계 개요
+description: Discava 기능 설계를 문서화하는 방식과 설계들이 공통으로 의존하는 개념을 설명합니다.
+sidebar:
+  order: 0
+---
+
+import Link from '@components/link.astro';
+
+이 섹션은 **Discava의 기능이 어떻게 동작하는지**를 설명합니다. 각 페이지는 하나의 기능 영역을 다룹니다.
+
+## 페이지
+
+| 페이지 | 내용 |
+|---|---|
+| <Link path="design/assignments">과제 채점과 피드백</Link> | 업로드 과제를 점수와 피드백과 함께 반환하기, 재제출 요청, 피드백 라운드, 대기 인덱스와 채점 대기열, 일일 강사 알림, 제출 파일 미리보기 |
+| <Link path="design/branding">브랜딩</Link> | 관리자가 설정하는 플랫폼 이름, 로고, 아이콘, 공유 이미지, 색상: 브랜드 레코드, 포털과 공개 페이지가 읽는 게시 문서, 색상 팔레트, 이미지 검사 |
+| <Link path="design/catalogue-categories">카탈로그 카테고리</Link> | 관리자가 관리하는 카테고리 분류 체계, 강좌의 카탈로그 필드, 그리고 이들이 검색 패싯에 반영되는 방식 |
+| <Link path="design/certificates">수료증</Link> | 수료증이 발급되고, 강좌별로 켜고 끄고, 공유되고, 검증되는 방식 |
+| <Link path="design/course-analytics">강좌 분석</Link> | 강사 대시보드와 강좌 분석 페이지: 각 수치의 의미, 그리고 수치가 레코드보다 몇 초 늦는 이유 |
+| <Link path="design/instructor-payouts">강사 정산</Link> | 주문에서 수익이 기록되는 방식, 원장과 일별 요약, 일일 정산 실행과 복구, 결제 계정 규칙 |
+| <Link path="design/live-course-editing">라이브 강좌 편집</Link> | 강좌 게시 후 모듈, 레슨, 콘텐츠 항목을 추가, 삭제, 숨김, 복원, 편집하기 |
+| <Link path="design/payments">결제</Link> | Stripe Checkout으로 유료 강좌 구매하기: 가격, 주문, 강좌를 정확히 한 번 전달하는 웹훅, 환불, 관리자의 Stripe 연결 |
+| <Link path="design/progress-and-completion">진행률과 완료</Link> | 항목, 레슨, 강좌 완료가 기록되는 방식과 이를 책임지는 서버 측 재계산 |
+| <Link path="design/public-pages">공개 페이지</Link> | 크롤러와 링크 미리보기를 위한 강좌 랜딩 페이지와 강사 프로필: 페이지 렌더러, 캐싱과 최신성, SPA 재작성, 색인 설정, 미리보기 동영상의 노출 규칙 |
+| <Link path="design/quizzes">퀴즈</Link> | 퀴즈 콘텐츠 항목: 데이터 모델, 채점, 응시, 학생과 강사의 경험 |
+| <Link path="design/search">검색</Link> | 콘텐츠 유형을 가로지르는 검색: OpenSearch Serverless 컬렉션, 색인 파이프라인, 가시성이 강제되는 방식 |
+| <Link path="design/stream-event-router">스트림 이벤트 라우터</Link> | 기능이 core 테이블 변경에 반응하는 방식: 등록, 큐, 실패 큐, 알람, 핸들러의 의무, 로컬 라우터 |
+| <Link path="design/video-player">동영상 플레이어와 자막</Link> | 레슨 동영상 플레이어가 이어보기, 배속 변경, 키보드 반응, 자막 표시를 하는 방식과 자막이 생성되거나 업로드되는 방식 |
+
+## 공통 개념
+
+**커리큘럼 계층.** 강좌는 모듈을 포함하고, 모듈은 레슨을 포함하며, 레슨은 콘텐츠 항목(동영상, 텍스트, 파일, 퀴즈, 과제)의 순서 있는 목록을 포함합니다. 넷 모두 ElectroDB의 `curriculum` 컬렉션을 통해 하나의 DynamoDB 파티션(`COURSE#<courseId>`)에 있으므로 강좌 전체가 쿼리 한 번입니다. 강좌의 커리큘럼이 DynamoDB의 페이지당 1 MB를 넘을 수 있으므로, 이 쿼리는 모든 페이지를 읽습니다.
+
+**유효 가시성.** 모듈, 레슨, 콘텐츠 항목은 **자신과 모든 상위 항목**이 `visible`이고 보관되지 않았을 때만 학생에게 표시됩니다. 학생의 읽기, 학생의 쓰기, 진행률 계산은 모두 유효 가시성을 사용하며, 레코드 자체의 `visibility`만 보는 일은 없습니다. 이 규칙은 `@discava/core-table`의 `filterEffectivelyVisible`로 한 번만 구현되어 있습니다.
+
+**수강 등록.** 학생은 수강 중일 때만 강좌의 콘텐츠를 읽고 그 안에 무엇이든 쓸 수 있습니다. 즉 `status`가 `dropped`가 아닌 `enrolment` 레코드(pk `courseId`, sk `userId`)가 있어야 합니다. 학생은 core-api의 `course.enrol`로 직접 등록하며, **게시된** **무료** 강좌에만 가능합니다. 강좌의 상태와 가격은 수강 등록 쓰기와 같은 트랜잭션에서 확인되므로, 요청 도중 보관되거나 가격이 매겨진 강좌는 새 수강 등록을 받을 수 없습니다. 유료 강좌는 결제된 주문으로만 들어갈 수 있습니다(<Link path="design/payments">결제</Link> 참고). 다시 등록하면 기존 수강 등록을 반환합니다. 초안이나 보관된 강좌는 익명의 `course.publicView`와 마찬가지로 `NOT_FOUND`로 응답하므로 초안의 존재가 노출되지 않습니다. 수강 중인 학생은 강좌가 보관된 뒤에도 읽을 수 있지만, 그들에게도 읽기 전용입니다. `course.myEnrolment`는 호출자의 수강 등록을 반환하거나, 없으면 없음을 반환합니다.
+
+**학생 데이터는 사용자 기준 키입니다.** `progress`, `itemCompletion`, `quizAttempt`, `quizSummary`는 `userId`를 파티션 키로 사용하므로 "강좌에서 한 학생의 진행률"은 쿼리 한 번입니다. 반대로 "이 항목을 만진 학생은 누구인가?"는 스캔 없이는 답할 수 없으며, 그래서 콘텐츠 항목이 `studentActivityCount`를 가집니다.

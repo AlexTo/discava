@@ -1,34 +1,47 @@
 ---
-title: docs
-description: docsのドキュメント。
+title: Discava
+description: サーバーレスで AWS ネイティブな学習管理システム、Discava のドキュメント。
 template: splash
 hero:
-  title: docs
-  tagline: AstroとStarlightで構築されたプロジェクトドキュメント。
-  actions:
-    - text: はじめる
-      link: /jp/guides/getting-started
-      icon: right-arrow
+  title: Discava
+  tagline: 自分の AWS アカウントで動く、サーバーレスな学習管理システム。
 ---
 
 import { CardGrid, Card } from '@astrojs/starlight/components';
 import { ContributorList } from 'astro-contributors';
+import Link from '@components/link.astro';
+
+## 目的に合わせて選ぶ
 
 <CardGrid>
-  <Card title="Guides" icon="open-book">
-    docsのリファレンスドキュメント。
+  <Card title="試してみたい" icon="laptop">
+    Docker を使って、システム全体を手元のマシンで動かします。AWS アカウントは不要です。
+
+    <Link path="guides/getting-started">Discava をローカルで実行する</Link>
   </Card>
-  <Card title="Blog" icon="pencil">
-    チームからのニュースとアップデート。
+  <Card title="デプロイしたい" icon="rocket">
+    リポジトリをフォークし、自分の AWS アカウントに接続して、GitHub Actions にデプロイさせます。
+
+    <Link path="deploy">デプロイガイド</Link>
   </Card>
-  <Card title="Snippets" icon="seti:config">
-    ドキュメント全体で使用される再利用可能なコンテンツフラグメント。
+  <Card title="仕組みを理解したい" icon="puzzle">
+    コンポーネント、AWS 上でのデプロイ方法、リクエストがそれらをどう通るか。
+
+    <Link path="architecture">アーキテクチャ</Link>
   </Card>
-  <Card title="Localised" icon="translate">
-    ローカライゼーションは最初から設定されています — `astro.config.mjs`でターゲットロケールを追加してください。
+  <Card title="変更したい" icon="pencil">
+    各機能の仕組み。データモデル、ルール、それを守るコード。
+
+    <Link path="design">設計</Link>
   </Card>
 </CardGrid>
 
-## 素晴らしいコントリビューターの皆様に感謝します！
+## Discava とは
+
+Discava は、無料でオープンソースの学習プラットフォームです。講師は、動画、テキスト、クイズ、課題でコースを作ります。受講者は受講登録するか、有料コースを購入して学び、進捗を追跡します。講師は、販売ごとに自分の取り分を受け取ります。管理者は、カタログのカテゴリを管理し、レビューを管理し、プラットフォームをブランディングし、支払いを受け取る Stripe アカウントを接続します。
+
+方針ははっきりしています。クラウドプロバイダーは AWS のみ、デプロイ方法は CDK のみ、すべての部品はサーバーレスなので、使われていないインストールのコストはほぼゼロです。
+
+## 素晴らしいコントリビューターの皆さんに感謝します
 
 <ContributorList githubRepo="AlexTo/discava" />

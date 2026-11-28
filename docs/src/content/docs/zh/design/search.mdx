@@ -1,0 +1,317 @@
+---
+title: 搜索
+description: "课程搜索如何工作：OpenSearch Serverless 集合、索引流水线，以及如何强制执行可见性。"
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+core table（`packages/databases/core-table`）是为基于键的访问而构建的，不是为"查找标题或描述与这段文字匹配的课程"而构建的。[Amazon OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html) 是为此准备的搜索层，它独立于 core table 之外，而不是通过增加更多 GSI 来实现。
+
+## 范围
+
+同一个集合中有两个索引：
+
+| 索引 | 内容 | 谁可以搜索它 |
+|---|---|---|
+| `courses` | 每一门当前**已发布**的课程。未发布的课程，其文档会被删除，而不是带着标记保留 | 任何人，无论是否登录（`course.publicSearch`、`course.publicSuggest`） |
+| `transcripts` | 已选课的学习者可以观看的视频的字幕轨道片段 | 已选课的学习者，限于一门课程之内（`transcript.search`） |
+
+更多内容类型（讲师、公告）会在之后加入，每一种都有自己的索引和自己的过程，而不是用一个查询把它们混在一起。映射类型在 OpenSearch 2.0 中已被移除，所以每种类型一个索引。每种类型也有自己的可见性规则，分开放置最容易阅读和测试。
+
+## 费用 NextGen 而非 zero-ETL
+
+两种 AWS 原生的替代方案都因为费用被否决：
+
+- **同步**：[OpenSearch Ingestion 针对 DynamoDB 的 zero-ETL 集成](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/OpenSearchIngestionForDynamoDB.html)运行一条托管的流水线，按 OCU 小时计费并有固定的最低用量，无论表是否在变化，而且没有本地开发中的对应物。DynamoDB Streams 加一个 Lambda（见下文）在两次写入之间不产生任何费用，并且复用本地事件运行器。
+- **集合容量**：经典代的容量有固定的 2 OCU 下限，持续计费。集合改为放在一个 NextGen 集合组中（`AWS::OpenSearchServerless::CollectionGroup`，`Generation: NEXTGEN`），它的下限由各 stage 自行选择（stage 的 `search` 配置中的 `min{Indexing,Search}CapacityInOcu`）。
+
+| Stage | 最小 OCU（索引 / 搜索） | 效果 |
+|---|---|---|
+| `discava-development` | 0 / 0 | 在测试人员之间缩容到零。安静一段时间后的第一次搜索要等待约 10 到 30 秒的冷启动 |
+| `discava-production` | 1 / 1 | 从不从冷状态提供服务，并且仍低于经典代的下限 |
+
+NextGen 只在部分区域可用（撰写本文时：美国东部弗吉尼亚北部/俄亥俄、美国西部俄勒冈、亚太孟买/新加坡/悉尼/东京、欧洲法兰克福/爱尔兰/西班牙/斯德哥尔摩）。请确认该 stage 的部署区域是其中之一。
+
+## 包
+
+| 包 | 内容 |
+|---|---|
+| `packages/databases/search` | 客户端（`getOpenSearchClient`、`resolveIndexName`）、每个索引的 zod 模式和映射（`src/indices`）、索引清单生成器，以及索引同步（`src/index-sync`） |
+| `packages/common/constructs` | `OpenSearchCollection`（通用的：一个 NextGen 集合组、集合、它的安全策略、`grantRead`/`grantWrite`、索引同步自定义资源）和 `SearchCollection`（Discava 对它的实例） |
+| `packages/events` | `src/search/search-indexing.ts` 让 `courses` 索引与表保持同步，`search-reindex.ts` 重建它。`transcript-indexing.ts` 和 `transcript-reindex.ts` 对 `transcripts` 做同样的事（见[转录搜索](#转录搜索)） |
+| `packages/apis/core-api` | `course.publicSearch` 和 `course.publicSuggest`（`procedures/search.ts`，以及 `helpers/search-query.ts` 和 `suggest-query.ts`）。`transcript.search`（`procedures/transcript.ts`，以及 `helpers/transcript-access.ts`、`transcript-query.ts` 和 `transcript-snippet.ts`） |
+| `packages/common/web-utils` | `webvtt`：字幕面板和转录索引器共用的 WebVTT 解析器 |
+
+**索引同步**会创建缺失的索引，并把映射应用到已有的索引（`putMapping`）。它从不删除索引。它在每次部署时运行，所以被手动删除的索引会回来。
+
+搜索包有意模仿 `packages/databases/core-table` 的结构。它是手工构建的，以匹配 [awslabs/nx-plugin-for-aws#1267](https://github.com/awslabs/nx-plugin-for-aws/issues/1267) 所提议的 `ts#opensearch` 生成器（尚未进入 `@aws/nx-plugin`），这样它可以贡献给上游，之后再以很小的改动换回去。
+
+## 索引流水线
+
+```d2 title="A course change reaches the search index through the stream router"
+direction: right
+
+table: "Core table" {shape: cylinder}
+router: "Stream router"
+queue: "search-indexing queue"
+index: "Search indexing"
+search: "courses index" {shape: cylinder}
+
+table -> router: "stream"
+router -> queue: "SEARCH_STREAM_FILTERS"
+queue -> index
+index -> table: "read course and rating"
+index -> search: "index / delete"
+```
+
+core table 的流只有一个读取者，即<Link path="design/stream-event-router">流事件路由器</Link>，它把每个变更发送到为其注册的每个功能的队列。搜索索引是这样的功能之一（`search-indexing`），有它自己的队列和失败队列，所以它的失败永远不会阻塞其他功能。
+
+它的过滤器 `SEARCH_STREAM_FILTERS`（`core-table/src/helpers/search-stream.ts`）放行 `course` 或 `courseRating` 记录的每一次插入和变更，以及 `course` 的移除。课程结构的编辑和单条评价不会改变文档，所以它们不会被路由。
+
+`search-indexing.ts` 只用变更来得知哪门课程发生了变化，然后读取该课程在表中的当前状态：
+
+- 批次中每个不同的 `courseId` 都按键读取一次，使用一致性读取，并带上它的评分统计。
+- 如果课程是 `'published'`，就写入它的文档（由 `toCourseDocument` 构建，并按 `CourseDocumentSchema` 校验）。如果它未发布或已不存在，就删除它的文档。
+- 文档的 id 是课程的 `courseId`，所以被重放、重试或乱序的记录会收敛到同一个文档，绝不会产生重复。
+
+新创建的索引一开始是空的。流只携带索引存在之后做出的更改，所以在那之前发布的课程，要到下次被写入或索引被重建时才可被搜索。
+
+### 课程文档
+
+除了 `courseId`、`title`、`description`、`imageKey`、`status`、`publishedAt` 和 `updatedAt` 之外，文档还带有三组可选字段：
+
+| 组 | 字段 | 映射为 |
+|---|---|---|
+| 目录 | `categoryId`、`tags`、`level`、`language`、`durationHours` | `keyword`（`tags` 为数组），`durationHours` 为 `integer` |
+| 评分 | `ratingCount`、`ratingAverage`、`ratingScore`、`ratingBoost` | `integer` 和 `float`。未被评分的课程只有 `ratingBoost`，值为 1 |
+| 价格 | `priceAmount`（最小单位）、`priceCurrency` | `integer`、`keyword` |
+
+`title` 和 `description` 是使用 `english` 分析器的 `text`，所以 "design" 能找到 "designing"。
+
+文档存储的是 `categoryId`，而不是分类的名称或 slug。这样重命名就不会触及任何文档，响应在构建时会从 `category` 记录中解析名称和 slug。
+
+### 对已部署的 stage 重新索引
+
+`src/search/search-reindex.ts` 是一个私有的 Lambda，没有事件源，也没有 API 路由。它逐页读取已发布的课程，使用与流索引器相同的 `toCourseDocument` 通过 `_bulk` 写入它们，然后删除不再发布的课程的文档。在索引被重新创建之后、在索引缺陷之后，或在新增了字段的部署之后，运行它：
+
+```sh
+pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development
+```
+
+它会打印已索引的课程数以及移除的过期文档数。运行两次得到的文档相同。
+
+- 它使用自己的角色运行，因为集合的数据访问策略只列出了该堆栈的 Lambda 角色。个人的 AWS 登录在数据平面上会得到 403。
+- `grantWrite` 的 `aoss:WriteDocument` 也涵盖删除。
+- 它的超时是 5 分钟。如果目录大到一次调用处理不完，就需要让该 Lambda 交接给它自己。
+
+在本地，`pnpm nx run @discava/e2e:seed-local-courses` 通过讲师 API 创建并发布课程，并由流对它们建立索引。
+
+### 推出目录字段
+
+向 `courses` 映射添加字段是增量的：部署时，索引同步的 `putMapping` 会把它就地应用到线上的索引，无需新索引。目录字段就是这样添加的。更改或移除已有属性是破坏性变更，需要改用 #270 的带版本索引。
+
+在这样的部署之前发布的课程，在它下次被写入之前，新字段没有值，所以部署之后要**运行一次重新索引**（上面的命令）。
+
+## 搜索过程
+
+`course.publicSearch` 构建在 `publicSearchProcedure`（`src/init.ts`）之上，它添加了一个手写的搜索插件（`createSearchPlugin`，位于 `src/middleware/search.ts`）和 core-table 插件。该插件是手写的，因为 `connection` 生成器目前还没有 tRPC 到 OpenSearch 的组合。
+
+它是公开的，与 `course.publicList` 一样：未登录的调用者也可以搜索。可见性被强制执行两次：在索引时（见上文），以及在查询中再次执行，查询总是过滤 `status: 'published'`，尽管每一门被索引的课程本来就已是已发布的。这样，其中一处的缺陷就不是调用者与草稿或已归档课程之间的唯一屏障。
+
+`buildSearchRequest`（`helpers/search-query.ts`）构建一个请求：
+
+- **文本**：对 `title` 和 `description` 的 `multi_match`。任何一个词都可以匹配，匹配的词越多排名越高。没有文本时，每门已发布的课程都匹配。
+- **排序**：在默认排序下，文本查询的分数乘以课程的 `ratingBoost`，所以评分好的课程排在同样相关但评分差的课程之前。没有文本时，顺序是最新发布的在前。`rating` 和 `newest` 排序会取代这两者。
+- **过滤器**：分类、标签、级别、语言和时长放在 `post_filter` 中，所以命中结果是完全过滤过的。最低评分放在查询本身中，所以每个分面计数都遵循它。
+- **分面**：每个分面一个 `filter` 聚合，应用除它自己之外的每个过滤器，所以它的计数显示的是选择另一个值会得到什么。
+
+响应会根据 `category` 记录给出每个命中的分类名称，这些记录与搜索并行读取。耗时超过 8 秒的请求会变成 tRPC `TIMEOUT`，所以冷启动的集合会在 Lambda 自己的超时之前给出一个清晰的、可重试的错误。
+
+## 建议
+
+**规格：** [`specs/20261119-195009-search-suggestions/`](https://github.com/AlexTo/discava/tree/main/specs/20261119-195009-search-suggestions/)
+
+学生门户的搜索框（`site-search.tsx`）会在你输入时最多显示 10 门匹配的课程。`course.publicSuggest`（输入 `{ q }`，输出 `{ items: [{ courseId, title, imageKey? }] }`）构建在 `publicSearchProcedure` 之上，与 `publicSearch` 位于同一个文件。它的请求由 `buildSuggestRequest`（`helpers/suggest-query.ts`）构建。
+
+### 为什么不用 `publicSearch`
+
+`publicSearch` 总是运行五个分面聚合，从 core table 读取每一个分类，并返回完整的结果卡片。建议不需要这些，而且触发得频繁得多。单独的过程还可以有自己的输入范围（3 到 200 个字符）和更短的超时，而不必放宽 `publicSearch` 的。给 `publicSearch` 加一个 `mode` 标志的方案被否决了：一个过程有两种输出形态，更难做类型定义和测试。
+
+### 查询
+
+对 `title` 的 `match_bool_prefix`，位于与完整搜索相同的 `function_score` 内，带有 `ratingBoost` 和相同的 `status: 'published'` 过滤器。
+
+- 除最后一个词之外的每个词都作为完整的（词干化的）词来匹配，最后一个词作为前缀。"pyth" 能找到 "Python for Data Analysis"。
+- 请求没有设置 `operator`，所以各词之间是 OR 关系。一个词匹配就足够了，匹配更多词的课程得分更高："java zzzz" 仍然会建议 Java 课程。
+- 命中结果按分数排序，然后按 `publishedAt` 降序，再按 `courseId`。
+- 没有聚合，`track_total_hits` 关闭，只获取 `courseId`、`title` 和 `imageKey`。
+
+它查询现有的 `title` 字段，所以映射不变，任何 stage 都不需要重新索引。
+
+已知的限制：最后一个词在应用前缀之前会先被词干化，所以如果输入了一半的词，其词干不是已索引词干的前缀，那么在输入下一个字符之前可能会漏掉。如果这被证明太常见，后续方案是添加一个 `title.suggest` 子字段，类型为 `search_as_you_type`，使用 `standard` 分析器，并用 `multi_match` `bool_prefix` 查询。它是增量的（`putMapping`），但每个 stage 需要一次重新索引。
+
+### 输入、防抖与复用
+
+- 去除首尾空白后少于 **3 个字符**或多于 200 个字符时，不发送任何内容。
+- 去除首尾空白的文本会**防抖 300 毫秒**（`useDebouncedValue`），所以一阵连续输入只会针对最后的文本发送一个请求。
+- 查询以文本为键，所以 "javas" 的缓慢响应会落到 "javas" 的缓存条目中，永远不会替换 "javascript" 的列表。在 `staleTime`（60 秒）内重新输入最近的文本会复用它的结果，并且不发送任何请求。
+- 提交表单或选择一行会取消待处理的防抖，所以不会为已经提交的文本再发出请求。
+
+### 失败、超时与限流
+
+请求有 **3 秒的超时**（`SUGGEST_REQUEST_TIMEOUT_MS`），比 `publicSearch` 的 8 秒更短，所以冷启动的集合不会在每次停顿时占用 Lambda 并发。`TimeoutError` 会变成 tRPC `TIMEOUT`，与 `publicSearch` 相同。门户把任何错误（包括 429）都视为 "no suggestions"：它不显示提示，也不重试，因为下一次停顿反正会取代这个请求。
+
+`course.publicSuggest` 在 `PUBLIC_OPERATIONS` 中，但它不使用共享的 `publicThrottle`。该限额由所有调用者共享，不按访客计数，对 core-api 收到的最频繁的请求来说太紧了：在 `discava-development` 上，两个人同时输入就会让下拉框悄悄停止工作。它有自己的限流，由两个 `coreApi` stage 键设定，即 `publicSuggestThrottleRateLimit` 和 `publicSuggestThrottleBurstLimit`：
+
+| Stage | 建议限流（速率 / 突发） | 其他公开操作 |
+|---|---|---|
+| `discava-development` | 5 / 10 | 1 / 3 |
+| `discava-production` | 100 / 200 | 20 / 40 |
+| 默认（stage 两个键都没设置） | 100 / 200 | 20 / 40 |
+
+一个人持续输入大约消耗 1 个请求/秒。
+
+- 开发环境的 5 / 10 大约可覆盖五位测试人员同时使用，并使匿名洪流所能触及的范围保持很小。那里的 WAF 是关闭的，core-api 的预留并发 10 仍然限制并发请求数。
+- 生产环境的 100 / 200 大约可覆盖 100 人在同一时刻输入。一个请求是 10 条命中的查询，没有 core-table 读取，所以它占用 Lambda 的时间很短。与该 stage 的其他限额一样，请根据真实流量调高。
+
+两个 stage 都没有按 IP 的速率规则，所以一个重度调用者仍然可以用掉整个限额，其他公开操作也是如此。
+
+## 转录搜索
+
+**规格：** [`specs/20261120-002950-transcript-search/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002950-transcript-search/)
+
+已选课的学习者可以搜索课程视频中所说的内容，并在该时刻打开视频。显示某个视频转录的面板，在<Link path="design/video-player">视频播放器</Link>页面中描述。
+
+### 为什么用单独的索引
+
+`transcripts` 索引与 `courses` 并列，而不在它之内：
+
+- **单位**：一个是一门课程，另一个是一个片段。
+- **生命周期**：课程文档在课程已发布期间存在。片段在它的视频可以被观看期间存在，即使在草稿或已归档的课程中也是如此。
+- **可见性**：`courses` 是公开的，转录只供已选课的学习者使用。把付费课程的内容排除在匿名调用者查询的索引之外，意味着公开查询中的失误不可能返回它。
+- **大小**：转录有几兆字节。放在课程文档上的话，每次课程编辑都会重写它们，每次目录搜索也都会对它们打分。
+
+索引同步会在部署时创建该索引，不更改任何已有的映射。
+
+### 片段，以及命中如何变成时间
+
+一个文档是一条字幕轨道的一个**片段**：连续的字幕条目，用单个空格连接。当下一个条目会使片段超过从其第一个条目开始后的 30 秒，或超过 600 个字符时，片段结束。第一个之后的每个片段都以上一个片段的最后一个条目开始，所以横跨两个条目的短语总能在一个片段内被找到。
+
+文档存储文本、它的开始和结束时间，以及每个条目的开始时间和在文本中的字符偏移量（只存储，不索引）。每条轨道每小时视频大约有 130 个文档。
+
+把命中变成时间的步骤：
+
+1. 查询要求对整个片段做高亮，使用两个私有区字符作为标签（`transcript-query.ts` 中的 `MATCH_START` 和 `MATCH_END`）。
+2. 该过程找到第一个带标签的匹配，取它的偏移量，并查找它所落入的条目。该条目的开始时间就是这个时刻的时间。
+3. 片段摘要从同一段文本中截取，并作为 `{ text, match }` 部分返回，绝不是 HTML。
+
+重叠意味着共享条目中的匹配会被找到两次。该过程请求 40 个命中，并按视频、轨道和条目开始时间去除重复，最终返回最多 20 个。
+
+### `transcript-indexing` 功能
+
+它是一个独立的流功能（见<Link path="design/stream-event-router">流事件路由器</Link>），有自己的队列和失败队列。它读取课程媒体存储桶，而课程索引器不应该这样做，并且一个损坏的字幕文件不能拖住课程索引。与 `search-indexing` 一样，它只用变更来得知哪个内容项发生了变化（`transcript-actions.ts`），然后读取该内容项在表中的当前状态（`transcript-sync.ts`）。
+
+| 记录 | 效果 |
+|---|---|
+| `contentItem` INSERT | 已经有 `captionTracks` 的视频会被同步 |
+| `contentItem` MODIFY | `captionTracks`、`captionTracksRev`、`status`、`s3Key`、`previousS3Key`、`visibility` 或 `archivedAt` 发生变化的视频会被同步。任何其他变化（例如学生计数器）什么都不做，也不读取任何内容 |
+| `contentItem` REMOVE | 该 `contentItemId` 的所有文档都被删除 |
+| `lesson` 或 `module` MODIFY | 如果它是否显示发生了变化，它之下的每个视频内容项都会被同步 |
+| `lesson` 或 `module` REMOVE | 该 `lessonId` 或 `moduleId` 的所有文档都被删除 |
+
+**同步一个内容项**（`syncItemTranscripts`）：
+
+1. 以一致性读取的方式读取该内容项、它的课时和它的模块。
+2. 算出需要的文档。如果这三者都是显示的，并且该内容项是有可播放版本的视频，那么它们就是该版本每条轨道的片段，由课程媒体存储桶中的 WebVTT 文件构建。否则不需要任何文档。
+3. 列出索引中为该内容项保存的 id，用 `_bulk` 写入需要的文档，并删除其余的。
+4. 再次读取这三条记录。如果文档所依赖的内容发生了变化，就再同步一次（最多 3 轮，之后以失败交给重试），所以对同一个内容项的两次重叠同步，最终仍然落在当前状态上。
+
+文档的 id 是 `<contentItemId>.<trackId>.<seq>`（`transcriptDocumentId`）。因此重复的、延迟的或乱序的投递会写入相同的文档，而被替换的轨道会得到一个新的 `trackId`，不会被误认为旧的轨道。
+
+**已知的遗留情形。** OpenSearch Serverless 在几秒之后才会让搜索看到写入，并且没有 `refresh=wait_for`。如果一条轨道在几秒内被添加又被替换，第二次同步在列出 id 时可能看不到第一次的文档，并把它们遗留下来。它们永远不会被显示，因为搜索只返回其轨道和版本在表中仍被列出的命中（见下文）。重建会移除它们。任何地方都不依赖 `_delete_by_query`。
+
+写入方（Transcribe 的完成、instructor-api 的字幕过程、版本切换）保持不变，并且不会因为搜索而失败。
+
+### 重建
+
+该索引在每个 stage 上一开始都是空的，只会得知之后的变更，所以在部署之前已有字幕的视频需要运行一次。重建也是对上述遗留情形、被重新创建的索引，以及将来分析器变更的修复手段。
+
+```sh
+pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development
+pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development --course=<courseId>
+```
+
+`transcript-reindex.ts` 是一个私有的 Lambda，没有事件源，与 `search-reindex.ts` 相同。对于每门课程（一门，或者对每个状态用 `course.query.byStatus` 得到的每一门课程），它读取课程结构，同步每个视频内容项，然后删除该课程中其内容项不在课程结构里的文档。
+
+当它的时间快用完时，它会返回一个游标，脚本会再次调用它，直到没有游标为止，然后打印总数。没有 `--stage` 时，它在进程内针对本地堆栈运行。运行两次得到的文档相同。
+
+### 搜索过程
+
+`transcript.search` 仅限已登录用户（`courseSearchProcedure`），接收 `{ courseId, q, language? }`，其中 `q` 为 2 到 200 个字符。每次调用时它会：
+
+1. 读取课程的课程结构和调用者的选课记录，并调用 `requireEnrolment`，即 `contentItem.videoUrl` 所用的函数；
+2. 从表中构建**可观看集合**（`watchableVideos`）：有效可见、有可播放版本的视频内容项，每个都带有它的版本和轨道 id；
+3. 用它自己构建的过滤器查询索引：来自已检查输入的 `courseId`，位于可观看集合中的 `contentItemId`，以及下面的语言规则。集合为空时，它不做查询就直接返回空结果；
+4. 丢弃版本或轨道不在可观看集合中的任何命中；
+5. 标题取自它读取的课程结构，而不是索引。
+
+索引比表落后几秒，并且可能保留遗留内容，所以如果过滤器信任已索引的标记，那么在这几秒内会返回刚被隐藏的视频的文本。用表来构建过滤器堵住了这个缺口，并且浏览器发送的任何内容都无法把视频加入其中。这又是"强制执行两次"的规则：索引器只保留可观看内容项的片段，而查询只放行可观看的内容项。
+
+代价是每次搜索一次课程结构查询，而 `course.view` 在课程播放器的每个页面上本来就要付出这一代价。耗时超过 8 秒的请求会变成 `TIMEOUT`，与课程搜索相同。
+
+### 搜索哪条轨道
+
+系统为学生所播放版本的每条轨道（最多 10 条）构建片段，每个片段都带有它的 `language`、`isDefault` 和 `trackLanguages`。
+
+对于每个视频，搜索会在浏览器发送的语言对应的轨道中查找（学习者记住的字幕语言），如果视频有该轨道的话，否则在默认轨道中查找。这样同一个时刻就不会以两种语言被列出两次，并且结果与学习者打开的转录一致。更改字幕语言不需要重新索引。
+
+`text` 使用 `standard` 分析，并有一个 `english` 子字段。每个查询都匹配两者，并要求每个词都出现，所以英文轨道得到课程搜索所具有的词干化，而其他语言按完整的词匹配。短语匹配的排名更高。中文、日文和泰文按字符切分，这仍然能找到短语，但排名较弱。按语言的子字段将是一个增量变更。
+
+### 费用
+
+不改变任何 stage 配置：第二个索引不会给集合组增加容量下限。
+
+- **索引**发生在视频生成字幕或轨道变化时的短暂突发中：每条轨道每小时视频一次 `_bulk`，约 130 个小文档。
+- **搜索**在提交时进行，而不是每次按键，并且限定到一门课程，没有聚合。
+- **存储**每条轨道每小时视频约 150 KB 的源数据，所以一门 20 小时、有两条轨道的课程约有 5,000 个文档和 6 MB。
+- **周边**：每个被路由的 `contentItem`、`lesson` 或 `module` 变更一条 SQS 消息，每次同步每条轨道一次 S3 GET，每次搜索一次课程结构查询。
+
+在容量下限为 0 的 stage 上，安静一段时间后的第一次搜索可能遇到冷启动并超时。在索引一侧，队列的五次接收应当比一次冷启动更长。
+
+### 它与 #270 如何契合
+
+添加索引是索引同步本来就能处理的情形，所以这里的一切都不与 #270（更改已有索引的映射）冲突。
+
+- 每个调用者都使用 `resolveIndexName('transcripts')`，所以当逻辑名称变成带版本索引的别名时，调用者不需要改变。
+- 之后的增量更改通过 `putMapping` 进行。
+- 破坏性变更（`text` 的分析器，字段的类型）是 #270 的情形，上面的重建就是它所需要的"重建任务"。它的过期写入防护应当把内容项的 `captionTracksRev` 与版本一起使用：文档带有 `versionId`，`captionTracksRev` 到时可以作为字段添加。
+- 在上线之前，破坏性变更就是"删除索引，部署，运行重建"。
+
+### AI 导师（#289）可以依赖什么
+
+文档是一个约 30 秒的片段，带有它的课程、模块、课时、视频、版本、轨道、语言和时间范围。因此检索可以限定到一个课时、一个视频或一门课程，并且可以引用 "lesson X at 12:40"。
+
+`watchableVideos` 给出学习者可以观看的视频，`buildTranscriptSearchRequest` 构建针对它们过滤的请求。导师调用的是同样的两个函数，所以它无法检索学习者无法观看的内容。
+
+检索是词法的（BM25）。导师是否需要向量检索，是留给 #289 的开放问题：它需要为每个片段生成嵌入，并需要一个 `knn_vector` 字段，而 NextGen 搜索集合是否接受它，必须先验证。如果它需要在创建时设置某个选项，就需要重新创建索引并重建，这在上线之前不产生任何费用。
+
+## 本地开发
+
+`pnpm dev` 会在 9200 端口运行一个 `opensearchproject/opensearch` 容器（`packages/tooling/local-dev/src/opensearch`，与 DynamoDB local 和 S3Mock 使用相同的 `runLocalContainer` 模式），单节点，禁用安全插件，并限制内存。`@discava/search` 的 `dev` 目标会启动它并同步本地索引。
+
+- 本地事件运行器（`packages/events/src/local/event-runner.ts`）运行与已部署 stage 相同的流路由器、功能和索引处理程序。
+- `pnpm nx run @discava/tooling-local-dev:reset-local-data` 也会清除索引。
+
+该镜像在 `packages/databases/search/config.json` 中固定为 3.x 版本，而不是 `latest`。[OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-overview.html) 会自动把集合升级到新的开源版本，并要求客户端兼容 OpenSearch 3.x，所以本地开发停留在该版本线上，不会每次发布新版本就变动。固定时它是最新的版本，选择它是为了匹配 Serverless，所以与其他本地镜像不同，它没有被推迟两周。当 Serverless 移到更新的次版本时，请重新固定它，并对照它的[受支持操作列表](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-genref.html)重新检查 `sync-indices.ts` 和各过程中的调用。
+
+## 与 #1267 的差异
+
+记录在此，以便上游的 `ts#opensearch` 提案（或采用它的 PR）逐一核对：
+
+- CDK 目前还没有 `AWS::OpenSearchServerless::*` 的 L2 构造，只有 L1 的 `Cfn*` 资源；`OpenSearchCollection` 在它们之上手工实现了数据访问策略和 `grantRead`/`grantWrite`。
+- 被授权方的数据访问策略条目需要它字面的主体 ARN（OpenSearch Serverless 在这里按 ARN 授权，而不是通过被授权方自己的 IAM 策略）。每次授权都会在被授权方的堆栈中创建它自己的策略，以被授权方的构造路径命名，而不是在一个依赖每个被授权方的堆栈中创建一个共享策略：共享策略会导入每个角色的 ARN，而 CloudFormation 之后会拒绝部署一个不再导出已移到另一个堆栈的角色的堆栈。
+- 索引同步自定义资源自己的数据访问授权，是与 `grantRead`/`grantWrite` 所填充的策略分开的、立即创建的、同一堆栈内的策略：它必须在自定义资源第一次运行之前就存在，也就是在集合所在堆栈自己的部署期间，而延迟的跨堆栈策略无法保证这一点。
+- 每个集合都创建在它自己的 NextGen `AWS::OpenSearchServerless::CollectionGroup` 之内（见[费用 NextGen 而非 zero-ETL](#费用-nextgen-而非-zero-etl)），这是一个晚于 #1267 出现的资源；按 #1267 现状编写的生成器会创建一个经典的、始终运行的集合。
+- 生成索引清单的目标叫 `generate-indices-manifest`，而不是 `indices`：这个工作区中的其他每个目标都是动词（`compile`、`bundle`、`pull-image`），而 `indices` 读起来像是创建或列出索引，而不是写出清单文件。

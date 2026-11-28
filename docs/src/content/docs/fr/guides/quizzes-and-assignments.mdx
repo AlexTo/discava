@@ -1,0 +1,78 @@
+---
+title: Quiz et devoirs
+description: Créer un quiz et ses paramètres, le passer en tant qu'étudiant, définir un devoir, rendre un travail, les travaux en retard, et noter, rendre et demander un nouveau dépôt.
+---
+
+import Link from '@components/link.astro';
+
+Un quiz est corrigé automatiquement. Un devoir est un travail qu'un étudiant téléverse et qu'un instructeur note.
+
+## Quiz : pour les instructeurs
+
+Dans **Course content**, ajoutez un **Quiz** à une leçon. Le créateur de quiz comprend :
+
+- **Questions** : jusqu'à 50. Chacune est **Single choice** ou **Multiple choice**, avec 2 à 10 options et une **Explanation** facultative.
+- **Pass mark (%)** : de 0 à 100.
+- **Attempts allowed** : **Unlimited**, ou un nombre d'au moins 1.
+- **Show the correct answers** : After each attempt, After the last attempt, ou Never.
+- **Shuffle the options for each student**.
+
+Il n'y a pas de limite de temps.
+
+**Preview as student** vous permet de passer le quiz comme le ferait un étudiant. Les réponses sont vérifiées et rien n'est enregistré.
+
+Vous pouvez modifier un quiz après que des étudiants l'ont tenté. Leurs tentatives et leurs meilleurs scores sont conservés et ne sont jamais corrigés de nouveau. Un étudiant en cours de tentative est invité à vérifier les questions modifiées avant de soumettre.
+
+## Quiz : pour les étudiants
+
+Le quiz indique son nombre de questions, la note de réussite et le nombre de tentatives dont vous disposez.
+
+1. Choisissez **Start quiz**.
+2. Répondez à chaque question. **Next** et **Back** permettent de passer de l'une à l'autre.
+3. Choisissez **Review answers** pour voir ce que vous avez répondu et ce qui reste sans réponse. **Change** vous ramène à une question.
+4. Choisissez **Submit answers**.
+
+Le résultat affiche le score de cette tentative et si vous avez réussi. C'est votre meilleur score qui compte.
+
+- **Resume quiz** reprend une tentative que vous avez quittée.
+- **Retake quiz** commence une autre tentative, tant qu'il vous en reste.
+- Réussir le quiz, ou utiliser votre dernière tentative, le marque comme terminé.
+- Dans un cours archivé, les quiz sont fermés.
+
+## Devoirs : pour les instructeurs
+
+Dans un module, choisissez **New assignment** et sélectionnez son type :
+
+- **Upload** : les étudiants soumettent un fichier et vous le notez.
+- **Quiz** : un quiz noté automatiquement.
+
+Un devoir de type téléversement comprend un **Assignment title**, des **Instructions**, des **Max points** (un nombre entier de 1 à 1000) et une date limite facultative.
+
+### Notation
+
+**Home** liste les travaux **Waiting for grading**. Le lien **Submissions** d'un devoir dans **Course content** liste chaque étudiant, avec l'état Not submitted, Waiting, Resubmission requested ou Returned.
+
+1. Ouvrez un travail rendu.
+2. Lisez le fichier.
+3. Saisissez les **Points**, de 0 au maximum, et votre **Feedback**.
+4. Choisissez **Return** pour donner la note à l'étudiant, ou **Request resubmission** pour demander une autre version.
+
+Après avoir rendu un travail, vous pouvez encore modifier la note avec **Save grade**. L'étudiant en est informé à chaque fois. Vous pouvez lire le travail d'un étudiant qui a quitté le cours, mais pas le noter.
+
+## Devoirs : pour les étudiants
+
+Le devoir affiche ses instructions, les **Maximum points** et la date limite, s'il en a une.
+
+1. Choisissez **Choose file** et sélectionnez votre travail.
+2. Choisissez **Submit**.
+
+- Vous soumettez un seul fichier de 100 Mo maximum : pdf, docx, xlsx, pptx, odt, ods, odp, txt, csv, md, png, jpg, jpeg, gif, webp ou zip.
+- **Les travaux en retard sont acceptés.** Après la date limite, votre travail est marqué **Late**.
+- **Resubmit** remplace votre fichier jusqu'à ce que l'instructeur rende le travail. Un travail rendu ne peut plus être modifié.
+- Si votre instructeur vous demande de soumettre de nouveau, vous voyez ses commentaires et pouvez soumettre une nouvelle version.
+- Un travail rendu affiche vos points et les commentaires.
+- Dans un cours archivé, les travaux ne peuvent plus être soumis.
+
+Vous êtes prévenu dans la cloche, et par e-mail sauf si vous le désactivez, quand un travail est rendu, quand un nouveau dépôt est demandé et quand une note change. Voir <Link path="guides/notifications">Notifications</Link>.
+
+Les notes peuvent compter pour un certificat. Voir <Link path="guides/certificates">Certificats</Link>.

@@ -1,0 +1,220 @@
+---
+title: リクエストとデータの流れ
+description: サインイン、API 呼び出し、公開ページ、動画のアップロード、データの変更、購入、検索が、Discava のコンポーネントをどう通過するか。
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+7つの流れで、システムの大部分を説明できます。
+
+## サインイン
+
+```d2 title="Sign-in"
+shape: sequence_diagram
+browser: "Browser"
+portal: "Portal (CloudFront)"
+cognito: "Cognito"
+trigger: "Pre token generation"
+table: "Core table"
+
+browser -> portal: "load app and runtime-config.json"
+browser -> cognito: "redirect to sign-in page"
+cognito -> trigger: "before issuing tokens"
+trigger -> table: "write the user record"
+cognito -> browser: "tokens, with the user's groups"
+```
+
+1. ポータルが読み込まれ、`runtime-config.json` を読んで Cognito を見つけます。
+2. ユーザーが Cognito のホスト型ページでサインインします。
+3. トークンを発行する前に、Cognito がユーザーのレコードをコアテーブルに書き込む関数を呼び出します。これにより、トークンを持つ人にはアプリケーション側に必ず行があります。この書き込みはベストエフォートです。失敗したり遅かったりしても、ユーザーはサインインでき、次回のサインインまたはトークン更新時に再試行されます。
+4. ブラウザーは、ユーザーのグループを含むトークンを受け取ります。
+
+ユーザーが自分でサインアップすると、2つ目のトリガーが `student` と `instructor` のグループに追加します。
+
+## API を呼び出す
+
+```d2 title="An API call"
+shape: sequence_diagram
+browser: "Browser"
+waf: "WAF"
+gw: "API Gateway"
+fn: "API function"
+table: "Core table"
+
+browser -> waf: "tRPC call with token"
+waf -> gw: "allowed"
+gw -> gw: "verify token with Cognito, throttle"
+gw -> fn: "invoke"
+fn -> fn: "check group, validate input"
+fn -> table: "read or write"
+fn -> browser: "result"
+```
+
+リクエストは、データに触れる前に3回チェックされます。
+
+1. **WAF**（ステージでオンの場合）が、一般的な攻撃をフィルタリングします。
+2. **API Gateway** がユーザープールに対してトークンを検証し、リクエスト制限を適用します。公開されているいくつかのプロシージャ（公開済みコースのランディングページの表示など）は、トークンの確認を省きます。
+3. **関数**が、呼び出し元のグループ（instructor-api は `instructor`、admin-api は `admin` が必要）を確認し、入力を検証し、そのプロシージャのルール（「呼び出し元がこのコースに登録している」など）を適用します。
+
+## 公開ページを提供する
+
+コースのランディングページ、講師のプロフィール、証明書ページは、ポータルの JavaScript を実行しないクローラーやリンクプレビューにも読める必要があります。
+
+```d2 title="A public page"
+shape: sequence_diagram
+visitor: "Crawler or browser"
+cf: "Student portal (CloudFront)"
+fn: "Page renderer"
+table: "Core table"
+
+visitor -> cf: "GET /learn/<courseId>"
+cf -> fn: "on a cache miss"
+fn -> table: "read the course"
+fn -> cf: "HTML"
+cf -> visitor: "HTML, cached for up to five minutes"
+```
+
+1. 受講生ポータルの CloudFront ディストリビューションは、`/learn/*`、`/instructors/*`、`/certificates/*`、`/sitemap.xml`、`/robots.txt` をページレンダラーに振り分けます。それ以外のパスはすべて静的サイトです。
+2. レンダラーはテーブルを読み、ポータル自身の `index.html` にページの内容とメタデータを埋め込みます。読み取り専用のアクセスしか持たず、呼び出せるのは CloudFront だけです。
+3. CloudFront はパスだけで応答をキャッシュするので、誰が要求したかには左右されません。
+
+詳しい設計は <Link path="design/public-pages">公開ページ</Link> にあります。
+
+## 動画の旅
+
+```d2 title="From upload to playback"
+direction: right
+instructor: "Instructor"
+api: "instructor-api"
+upload: "Upload bucket"
+mc: "MediaConvert"
+lesson: "Lesson media bucket"
+done: "transcode-complete"
+tr: "Transcribe"
+cap: "transcribe-complete"
+table: "Core table"
+cf: "CloudFront"
+student: "Student"
+
+instructor -> api: "1. ask to upload"
+instructor -> upload: "2. PUT file (presigned URL)"
+api -> mc: "3. submit job"
+mc -> lesson: "4. HLS renditions"
+mc -> done: "5. job finished (EventBridge)"
+done -> table: "mark ready"
+done -> tr: "6. start captions"
+tr -> cap: "7. finished (EventBridge)"
+cap -> lesson: "caption track"
+student -> cf: "8. play (signed)"
+cf -> lesson
+```
+
+**アップロード。** ブラウザーは、instructor-api が発行する署名付き URL を使って S3 に直接アップロードします。そのため、大きなファイルが Lambda 関数を通ることはありません。
+
+**トランスコード。** MediaConvert が、アップロードされた動画を複数の画質の HLS レンディションに変換するので、プレーヤーは視聴者の接続に合わせて切り替わります。ジョブが終わると、EventBridge のルールが関数を呼び出し、動画を準備完了にして、字幕用の Transcribe ジョブを開始します。
+
+**字幕。** Transcribe が終わると、2つ目の関数が字幕トラックを保存します。コースに他の字幕言語がある場合は、字幕翻訳機能（[変更への反応](#変更への反応) を参照）が Amazon Translate でトラックを翻訳します。トランスクリプトのインデックス機能が、字幕のテキストを検索に追加します。
+
+**復旧。** 30分ごとに関数が動き、処理中のまま止まった動画を見つけます。各完了ハンドラーには失敗キューがあり、使われなくなったファイルは、スケジュールされたクリーンアップで削除されます。
+
+**再生。** レッスンメディアは非公開です。登録済みの受講生がレッスンを開くと、core-api が登録を確認し、有効期間の短い CloudFront の署名を発行します。CloudFront は、それを持つリクエストにだけ動画を配信します。サインインの有無にかかわらず誰でも見られるものが2つあります。コースのプレビュー動画と、講師が無料プレビューにしたレッスンです。署名キーは、署名を行う各 API の専用の関数が持ち、API の共有関数は持ちません。
+
+## 変更への反応
+
+結果の中には、多くのレコードに依存するものがあります。受講生のコース進捗、コースの検索エントリー、講師の分析と収益などです。これらは、データを変更したリクエストの中では計算されません。その後で、テーブルの変更ストリームから再計算されます。
+
+```d2 title="One stream reader, one queue per feature"
+direction: right
+api: "Any API write"
+table: "Core table"
+stream: "Change stream"
+router: "Stream router"
+q1: "progress queue"
+q2: "search queue"
+q3: "analytics queue"
+q4: "notification queue"
+h1: "Progress recalculation"
+h2: "Search indexing"
+h3: "Analytics update"
+h4: "Notification delivery"
+os: "OpenSearch"
+ses: "SES"
+
+api -> table
+table -> stream
+stream -> router
+router -> q1
+router -> q2
+router -> q3
+router -> q4
+q1 -> h1
+q2 -> h2
+q3 -> h3
+q4 -> h4
+h1 -> table
+h3 -> table
+h2 -> os
+h4 -> ses
+```
+
+図には8つの機能のうち4つを示しています。
+
+| 機能 | 変更への反応 |
+| --- | --- |
+| 進捗の再計算 | 受講生のコース進捗を更新し、コースが完了したら証明書を発行する |
+| 検索インデックス | courses インデックスのコースのエントリーを更新する |
+| トランスクリプトのインデックス | transcripts インデックスの動画の字幕テキストを更新する |
+| 分析の更新 | コースの分析の数値を更新する |
+| 通知の配信 | 一斉配信を各受講生に展開し、SES でメールを送信する |
+| 収益の記録 | 支払い済み注文のうち、各講師の取り分を記録する |
+| 字幕の翻訳 | 動画の字幕を、コースの他の言語に翻訳する |
+| ブランドの公開 | プラットフォームのブランドファイルを公開メディアに書き込み、ポータルがそれを取得する |
+
+- **ストリームルーター**は、ストリームの唯一の読み取り手です。各変更を、フィルターに一致するすべての機能のキューにコピーします。
+- 各**機能**には専用のキューがあるため、遅い機能や失敗する機能が他の機能を遅らせることはありません。
+- 失敗し続けるメッセージは、その機能の**失敗キュー**に移され、アラームが上がります。オペレーターが原因を直して、キューを再配信します。
+- ハンドラーは同じ変更を2回、または順序を前後して受け取ることがあるため、どちらの場合でも同じ結果になるように書かれています。
+
+ユーザーにとっての結果として、進捗や分析などの数値は、その原因となった操作の数秒後に更新されます。
+
+詳しい設計は <Link path="design/stream-event-router">ストリームイベントルーター</Link> にあり、その機能のうち2つは <Link path="design/search">検索</Link> と <Link path="design/progress-and-completion">進捗と修了</Link> で扱っています。
+
+## コースを購入する
+
+有料コースは Stripe のページで購入し、受講生の登録は、ブラウザーが戻ってきたことではなく、Stripe の確認によって行われます。
+
+```d2 title="A purchase"
+direction: right
+student: "Student portal"
+core: "core-api"
+table: "Core table"
+stripe: "Stripe"
+hook: "Stripe webhook API"
+
+student -> core: "1. Buy now"
+core -> table: "2. pending order"
+core -> stripe: "3. create checkout"
+student -> stripe: "4. pay"
+stripe -> hook: "5. signed confirmation"
+hook -> table: "6. order paid + enrolment"
+```
+
+1. core-api は `pending` の注文を書き込み、Stripe にチェックアウトページを要求して、受講生をそこへ送ります。金額はコース自身の価格から、受講生がクーポンを入力していればその分を引いたもので、ブラウザーから送られた数値ではありません。クーポンは注文を書き込む前に確保されるので、複数の受講生が同時にチェックアウトしても利用回数の上限が守られます。
+2. 受講生が Stripe で支払います。Discava がカード番号を目にすることはありません。
+3. Stripe が署名付きの確認を webhook API に送ります。ハンドラーは署名を検証し、1つのトランザクションで注文を支払い済みにして、登録を作成します。
+4. コースページに戻ると、ポータルは登録が表示されるのを待ちます。通常は数秒以内です。
+
+Stripe は確認を複数回届けることがあるため、ハンドラーは2回目には何も変更しません。配信できない支払い（その間にコースが非公開になった場合など）は、自動的に返金されます。
+
+支払い済みの注文は、他の書き込みと同じように変更ストリームを流れます。収益の機能が各講師の取り分を記録し、毎日の処理が支払い期限のものを支払います。詳しい設計は <Link path="design/payments">支払い</Link> と <Link path="design/instructor-payouts">講師への支払い</Link> にあります。
+
+## 検索
+
+検索は OpenSearch から読み取り、ストリームがそれを最新に保ちます。
+
+- **カタログ。** core-api の公開の検索プロシージャが、クエリとフィルターを送り、公開済みのコースを関連度と評価の順に返します。もう1つのプロシージャが、受講生の入力中にタイトルを提案します。新しく公開されたコースは、公開の数秒後に表示されます。
+- **コース内。** 登録済みの受講生は、コースの動画で話された内容を検索できます。core-api は、受講生が視聴できる動画をテーブルから判断し、クエリをそれらに限定するので、インデックスがアクセスを決めることはありません。
+
+設計は <Link path="design/search">検索</Link> にあります。

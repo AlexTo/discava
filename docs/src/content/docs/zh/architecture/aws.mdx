@@ -1,0 +1,162 @@
+---
+title: 在 AWS 上部署
+description: 一个 Discava 环境由哪些 CloudFormation 堆栈组成，每个堆栈里有哪些 AWS 资源，以及它们之间如何依赖。
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+一次部署的安装称为一个 **stage**（环境）。一个 stage 是一组 CloudFormation 堆栈，全部命名为 `<stage>-<Stack>`，例如 `discava-production-Data`。多个 stage 可以放在同一个 AWS 账号里，互不影响。
+
+## 堆栈
+
+应用被拆分为十个堆栈。只用一个堆栈会超过 CloudFormation 500 个资源的上限，而且把有状态资源和代码分开，可以让日常部署不碰数据。
+
+```d2 title="Stacks and their dependencies (an arrow points at what a stack needs)"
+direction: up
+
+websites: "Websites"
+data: "Data"
+payments: "Payments"
+media: "MediaPipeline"
+core: "CoreApi"
+router: "StreamRouter"
+payouts: "Payouts"
+instr: "InstructorApi"
+admin: "AdminApi"
+rc: "PortalConfig"
+
+data -> websites
+payments -> data
+payouts -> data
+admin -> payments
+media -> data
+core -> data
+core -> media
+core -> websites
+router -> data
+router -> core
+router -> websites
+instr -> data
+instr -> media
+instr -> core
+instr -> websites
+admin -> data
+admin -> core
+admin -> websites
+rc -> core
+rc -> instr
+rc -> admin
+```
+
+`PortalConfig` 依赖其他所有堆栈。图中只画出了它指向三个 API 的箭头。
+
+它们按以下顺序部署：
+
+```
+Websites → Data → Payments → MediaPipeline → CoreApi → StreamRouter → Payouts → InstructorApi → AdminApi → PortalConfig
+```
+
+| 堆栈 | 包含内容 | 为什么单独拆分 |
+| --- | --- | --- |
+| **Websites** | 三个门户：每个门户一个 S3 存储桶和一个 CloudFront 分发。学生门户还有页面渲染函数 | 不依赖任何其他堆栈。其他堆栈需要门户的地址来配置 CORS 和登录重定向 |
+| **Data** | Cognito 用户池及其触发器、核心表、课程媒体和公开媒体存储桶及其 CloudFront 分发、上传存储桶、搜索集合及创建其索引的函数、退订链接和 Stripe 的密钥 | 所有有状态的资源。很少变更，且其他每个后端堆栈都依赖它 |
+| **Payments** | Stripe webhook API：它的 API Gateway 和函数 | 由 Stripe 调用，而不是由已登录用户调用，所以它的防火墙、请求限制和域名与其他 API 分开设置 |
+| **MediaPipeline** | MediaConvert 流水线、响应转码和转录完成的函数、清理计划、失败队列 | 视频处理，core-api 和 instructor-api 都会用到 |
+| **CoreApi** | core-api 的 API Gateway 和函数、搜索重新索引函数、邮件退订路由 | 每个用户都会调用的 API |
+| **StreamRouter** | 表流的路由函数、每个功能各一个队列和失败队列、功能处理函数、证书提醒函数和转录重新索引函数 | 对数据变更的后台响应，不占用 CoreApi 的资源配额 |
+| **Payouts** | 每日结算运行及其计划 | 单独拆出，避免任何堆栈接近资源上限。它只读取表和 Stripe 密钥 |
+| **InstructorApi** | instructor-api 的 API Gateway 和函数，以及它们的媒体和转码权限 | 讲师使用的 API |
+| **AdminApi** | admin-api 的 API Gateway 和函数，包括保存 Stripe 密钥的那个函数 | 管理员使用的 API |
+| **PortalConfig** | 每个门户的 `runtime-config.json` | 需要读取其他每个堆栈的值，所以最后部署 |
+
+当某个门户或媒体分发启用了 WAF 时，它的 web ACL 是 `us-east-1` 中一个额外的小堆栈，因为 CloudFront 要求如此。
+
+## 每一层包含什么
+
+### 边缘：CloudFront 和 API Gateway
+
+| 入口 | 服务 | 源站 |
+| --- | --- | --- |
+| 每个门户 | CloudFront | 存放静态文件的私有 S3 存储桶 |
+| 学生门户上的公开页面（`/learn/*`、`/instructors/*`、`/certificates/*`、`/sitemap.xml`、`/robots.txt`） | 学生门户的 CloudFront 分发 | 页面渲染函数，通过只有 CloudFront 能调用的函数 URL 访问 |
+| 课程媒体 | CloudFront，仅接受签名请求 | 私有 S3 存储桶 |
+| 公开媒体 | CloudFront | 私有 S3 存储桶 |
+| 每个 API | API Gateway（REST，区域型） | Lambda |
+| Stripe webhook | API Gateway（REST，区域型） | Lambda |
+
+没有任何 S3 存储桶是公开的。CloudFront 通过 Origin Access Control 访问每个存储桶。
+
+### 计算：Lambda
+
+所有代码都运行在 Node.js 24 的 Lambda 中。
+
+- **API 函数。** 每个 API 的大部分过程由一个共享函数提供服务。需要超出基础权限（访问表，core-api 中还包括读取搜索）的过程，会运行在专用函数里，这样强大的权限就不会落到处理其他所有请求的函数上：
+
+  | API | 专用函数 |
+  | --- | --- |
+  | core-api | 签名媒体请求、作业上传、发起结账或退款（读取 Stripe 密钥） |
+  | instructor-api | 签名媒体请求、写入课程媒体并提交转码、课程图片和头像、结算账户（读取 Stripe 密钥） |
+  | admin-api | 保存 Stripe 密钥（唯一的写入方）、品牌图片 |
+
+- **事件函数。** 每个任务一个：两个 Cognito 触发器、流路由及其功能处理函数、媒体流水线的完成、恢复和清理处理函数、证书提醒、Stripe webhook、每日结算运行，以及邮件退订链接。
+- **页面渲染函数。** core-api 的第二个处理程序，随学生门户一起部署。它只读取表。
+- **运维函数。** 有三个没有触发器，在部署或运维人员调用时运行：每次部署时创建或更新搜索索引的函数，以及重建课程和转录索引的两个函数。
+
+### 数据
+
+| 资源 | 服务 | 说明 |
+| --- | --- | --- |
+| 核心表 | DynamoDB，按需模式并设有吞吐量上限 | 变更流会送入流路由 |
+| 搜索 | OpenSearch Serverless | 两个索引：课程和转录。在开发 stage 上可以缩容到零 |
+| 媒体 | S3 | 三个存储桶：课程媒体、上传、公开媒体 |
+| 用户 | Cognito 用户池 | 用户组：`student`、`instructor`、`admin` |
+| 配置 | Lambda 环境变量 | 资源名称和地址，在部署时设置，由函数从环境中读取。页面渲染函数读取一个 Systems Manager 参数 |
+| 密钥 | Secrets Manager | 签名课程媒体请求的密钥、签名退订链接的密钥，以及管理员保存的 Stripe 密钥和 webhook 签名密钥 |
+
+### 媒体处理
+
+| 服务 | 用途 |
+| --- | --- |
+| MediaConvert | 把上传的视频转码为 HLS 多码率版本 |
+| Transcribe | 为每个视频自动生成字幕 |
+| Translate | 把字幕翻译成课程的其他字幕语言 |
+
+### 消息和计划任务
+
+| 服务 | 用途 |
+| --- | --- |
+| DynamoDB Streams | 核心表的每一次变更 |
+| SQS | 每个流功能一个队列和一个失败队列，另外还有媒体流水线和证书提醒的失败队列 |
+| EventBridge | MediaConvert 或 Transcribe 任务完成时触发的规则、查找卡住视频的计划，以及结算运行的每日计划 |
+| EventBridge Scheduler | 一次性计划：延迟清理已下线的媒体，以及证书提醒 |
+| SES | 通知邮件 |
+
+## 运行时配置
+
+部署后的代码里从不硬编码资源名称。
+
+- **后端函数** 从自己的**环境变量**（`DISCAVA_*`）读取表名、存储桶名和端点，这些变量在堆栈部署时设置。运行时不会再去获取任何内容，函数只会拿到它的代码要读取的设置。页面渲染函数是例外：它从一个 Systems Manager 参数读取表名和公开媒体地址，因为它部署在 `Websites` 中，早于拥有这些值的 `Data` 堆栈。
+- **门户** 在加载时从自己的源站获取 `runtime-config.json`。其中包含 API 地址、Cognito 的 id 以及其他门户的地址。
+
+门户的这个文件由 `PortalConfig` 堆栈根据其他堆栈导出的值写出，这就是它最后部署的原因。
+
+## 共用一个账号的多个 stage
+
+有三种机制让各个 stage 互不干扰：
+
+- **名称。** 每个堆栈和生成的资源名称都以 stage 名称开头，IAM 权限的范围限定在这个前缀内。
+- **资产。** 每个 stage 把构建产物上传到共享 CDK 存储桶中各自的前缀下，所以一个 stage 不会覆盖另一个 stage 即将部署的内容。
+- **权限边界。** stage 创建的每个 IAM 角色都带有该 stage 的边界策略，限制该 stage 自己的代码能被授予的权限。
+
+## 在代码中如何定义
+
+| 内容 | 位置 |
+| --- | --- |
+| 有哪些 stage 及其设置 | `packages/common/infra-config/src/stages.config.ts` |
+| CDK 应用：每个已配置的 stage 对应一个 `ApplicationStage` | `packages/infra/src/main.ts` |
+| 堆栈如何组合和连接 | `packages/infra/src/stages/application-stage.ts` 和 `packages/infra/src/stacks/` |
+| 基础构件（API、存储桶、网站） | `packages/common/constructs` |
+
+**construct** 拥有一个组件的资源，并提供 `grantRead` 之类的辅助方法。**堆栈** 把 construct 连接起来，并把 stage 设置转换为 construct 的选项。设置项见 <Link path="deploy/configuration">Stage 配置</Link>。

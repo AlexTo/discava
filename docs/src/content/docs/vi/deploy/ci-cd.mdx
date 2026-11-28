@@ -1,0 +1,125 @@
+---
+title: Tham chiếu CI/CD
+description: Mỗi workflow của GitHub Actions làm gì, khi nào chạy, và mọi biến cùng secret mà nó đọc.
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+Các workflow nằm trong `.github/workflows/`. Hai cái quan trọng cho việc triển khai: **CI** và **Deploy**.
+
+## Pipeline
+
+```d2 title="What runs when"
+direction: right
+pr: "Pull request"
+main: "Push to main"
+checks: "PR Checks"
+ci: "CI" {
+  build: "Build\n(lint, test, build)"
+  trivy: "Trivy scan"
+  docs: "Deploy Docs"
+  build -> docs
+}
+deploy: "Deploy"
+manual: "Run workflow\n(manual)"
+pages: "GitHub Pages"
+aws: "AWS stage"
+
+pr -> checks
+main -> ci
+ci -> deploy: "passed and\nAUTO_DEPLOY_STAGE set"
+manual -> deploy
+ci.docs -> pages
+deploy -> aws
+```
+
+## Các workflow
+
+### CI (`ci.yml`)
+
+Chạy trên mọi lần push vào `main`, và khi bạn chạy thủ công.
+
+| Job | Làm gì |
+| --- | --- |
+| **Build** | Lint, kiểm thử và build mọi dự án. Bước build synthesize ứng dụng CDK và quét các template bằng Checkov. Thất bại nếu bản build làm thay đổi bất kỳ tệp nào đã commit |
+| **Trivy** | Quét các dependency tìm lỗ hổng đã biết và quét repository tìm secret |
+| **Playwright cache** | Lưu trình duyệt mà các bài kiểm thử end-to-end dùng, để các pull request khởi động nhanh hơn |
+| **Deploy Docs** | Xuất bản site này lên GitHub Pages. Chỉ khi push vào `main`, và bị bỏ qua nếu đã có commit mới hơn |
+
+CI không cần quyền truy cập AWS, ngoài role đăng nhập Docker tùy chọn mà job Trivy dùng.
+
+### Deploy (`deploy.yml`)
+
+Chạy theo hai cách:
+
+- **Thủ công**, với tên stage. Triển khai commit mà nó được chạy từ đó.
+- **Sau khi CI thành công trên `main`**, nếu biến repository `AUTO_DEPLOY_STAGE` được đặt. Triển khai commit mà CI đã xác minh, và bỏ qua nếu `main` đã đi tiếp kể từ đó.
+
+Một lượt chạy chờ lượt khác đang triển khai cùng stage. Chúng không bao giờ chồng lên nhau.
+
+Job chạy trong GitHub environment mang tên stage. Đó là thứ làm cho các biến của stage khả dụng và là thứ mà AWS deploy role tin tưởng. <Link path="deploy/first-deploy">Lần triển khai đầu tiên</Link> liệt kê các bước của nó.
+
+### PR Checks (`pr-checks.yml`)
+
+Chạy trên các pull request vào `main`: lint, kiểm thử và build cho các dự án mà thay đổi ảnh hưởng, các bài kiểm thử end-to-end trên stack cục bộ, và một vài kiểm tra riêng của repository. Nó không cần quyền truy cập AWS, ngoài role đăng nhập Docker tùy chọn.
+
+### Tự động hóa của maintainer
+
+Những workflow này hỗ trợ quy trình phát triển của chính dự án. Một fork có thể bỏ mặc chúng hoặc tắt chúng trong tab **Actions**.
+
+| Workflow | Làm gì |
+| --- | --- |
+| `agent-*.yml` | Vận hành quy trình theo đặc tả (spec): chúng xử lý các pull request spec và các nhánh tên `openhands/…` |
+| `archive-specs.yml` | Chuẩn bị một pull request lưu trữ một spec đã xong, khi một `specs/*/tasks.md` thay đổi trên `main` |
+| `post-merge-verify.yml` | Sau một lượt chạy Deploy tới `discava-development`, mở một issue kiểm thử cho mỗi pull request mà nó đã triển khai. Hãy tắt nó nếu bạn merge pull request trong fork và không muốn các issue này |
+| `cache-cleanup.yml` | Xóa các cache Actions của một pull request khi nó đóng, để nằm dưới hạn mức của GitHub |
+
+## Biến và secret
+
+Mọi thứ mà các workflow đọc. Script setup đặt giúp bạn những biến cần thiết.
+
+### Biến repository
+
+| Biến | Do ai đặt | Dùng để |
+| --- | --- | --- |
+| `AUTO_DEPLOY_STAGE` | Script setup, nếu bạn chọn | Stage duy nhất được triển khai mỗi khi CI thành công trên `main`. Không đặt nghĩa là chỉ triển khai thủ công |
+| `AWS_DOCKER_LOGIN_ROLE_ARN` | Script setup | Đăng nhập Docker vào Amazon ECR Public để việc kéo image không bị giới hạn tốc độ. Không đặt nghĩa là kéo ẩn danh |
+| `AGENT_APP_LOGIN` | Chỉ maintainer | GitHub App mà tự động hóa của maintainer tin tưởng các đánh giá từ đó. Để trống trong một fork |
+| `DOCS_SITE`, `DOCS_BASE_PATH` | Bạn, tùy chọn | Nơi site tài liệu được xuất bản, như `https://docs.example.com` và `/`. Không đặt nghĩa là địa chỉ GitHub Pages của repository |
+
+### Biến environment, mỗi stage một bộ
+
+| Biến | Do ai đặt | Dùng để |
+| --- | --- | --- |
+| `AWS_REGION` | Script setup | Region mà bản triển khai đăng nhập vào |
+| `AWS_DEPLOY_ROLE_ARN` | Script setup | Role mà workflow đảm nhận |
+| `AWS_EXECUTION_ROLE_ARN` | Script setup | Role mà CloudFormation dùng để tạo tài nguyên |
+| `<STAGE>_…` | Script setup hoặc bạn | <Link path="deploy/configuration">Ghi đè cấu hình</Link>, như tên miền riêng. Mọi biến bắt đầu bằng tiền tố của stage đều được chuyển tiếp, ví dụ `DISCAVA_DEVELOPMENT_INFRA_…` |
+
+### Secret
+
+| Secret | Bắt buộc | Dùng để |
+| --- | --- | --- |
+| `CODECOV_TOKEN` | Không | Tải độ phủ kiểm thử lên Codecov |
+
+**Không có secret AWS nào**. Workflow chứng minh danh tính với AWS bằng một token mà GitHub cấp cho đúng lượt chạy đó.
+
+## GitHub đăng nhập vào AWS như thế nào
+
+1. Job Deploy xin GitHub một token OIDC. Subject của token nêu tên repository và environment: mặc định là `repo:<owner>/<repo>:environment:<stage>`.
+2. OIDC provider của AWS cho GitHub xác minh token.
+3. Trust policy của deploy role chỉ chấp nhận đúng subject đó, nên chỉ một job trong repository của bạn, chạy trong environment đó, mới đảm nhận được nó.
+4. Job nhận thông tin xác thực tồn tại trong suốt lượt chạy.
+
+Đó là lý do các quy tắc bảo vệ của environment chính là cổng triển khai của bạn: ai được chạy một job trong environment thì được triển khai stage.
+
+## Hai role, có chủ đích
+
+| Role | Ai dùng | Có thể làm gì |
+| --- | --- | --- |
+| **Deploy role** | Workflow | Tải lên các asset của stage, và tạo hoặc cập nhật các stack CloudFormation tên `<stage>-*`. Nó không thể tự tạo tài nguyên |
+| **Execution role** | CloudFormation | Tạo các tài nguyên của stage. Bất kỳ IAM role nào nó tạo ra đều phải mang permissions boundary của stage |
+
+Việc tách chúng nghĩa là một workflow bị xâm phạm chỉ làm được những gì một lần triển khai CloudFormation của stage đó làm được, và không thứ gì nó triển khai có thể tự cấp cho mình nhiều hơn mức boundary cho phép.

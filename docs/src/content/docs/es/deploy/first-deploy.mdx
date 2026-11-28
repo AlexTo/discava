@@ -1,0 +1,120 @@
+---
+title: Primer despliegue
+description: Ejecuta el workflow Deploy, encuentra tus portales y crea los primeros usuarios y categorías.
+sidebar:
+  order: 3
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+Con la <Link path="deploy/setup">configuración</Link> hecha, desplegar es una sola ejecución de un workflow.
+
+## 1. Ejecuta el workflow Deploy
+
+Desde la pestaña **Actions** de tu fork, elige **Deploy → Run workflow**, escribe el nombre de la etapa y ejecútalo. O desde tu terminal:
+
+```sh
+gh workflow run deploy.yml -f stage=discava-development
+gh run watch
+```
+
+El primer despliegue crea todos los recursos, incluidas varias distribuciones de CloudFront y una colección de OpenSearch Serverless, así que tarda mucho más que los siguientes.
+
+### Qué hace el workflow
+
+<Steps>
+
+1. **Comprueba que la etapa existe** en `stages.config.ts`, para que un error tipográfico falle antes de tocar AWS.
+
+2. **Reenvía las sobrescrituras de configuración.** Cada variable del entorno de GitHub de la etapa (o del repositorio) cuyo nombre empieza con el prefijo de la etapa (`DISCAVA_DEVELOPMENT_` para `discava-development`) se pasa a la compilación. Así llegan a ella los dominios personalizados.
+
+3. **Analiza con Trivy.** El despliegue se detiene ante una vulnerabilidad crítica conocida que tenga corrección, o ante un secreto incluido en el código.
+
+4. **Inicia sesión en AWS** como el rol de despliegue, con un token OIDC de corta duración.
+
+5. **Sintetiza** las plantillas de CloudFormation con CDK, con el permissions boundary de la etapa aplicado a cada rol.
+
+6. **Despliega** cada stack en orden de dependencia. CloudFormation crea los recursos como el rol de ejecución. Una ejecución automática omite este paso si `main` ya tiene un commit más nuevo.
+
+</Steps>
+
+## 2. Encuentra tus portales
+
+Cada portal es una distribución de CloudFront. Sus direcciones son salidas del stack `Websites`. Con tu AWS CLI configurada en la región de la etapa:
+
+```sh
+aws cloudformation describe-stacks \
+  --stack-name discava-development-Websites \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `DistributionDomainName`)].[OutputKey,OutputValue]' \
+  --output table
+```
+
+Obtienes una dirección `*.cloudfront.net` para cada uno de los portales de estudiante, instructor y administración. Abre el portal del estudiante: deberías ver el catálogo, vacío por ahora.
+
+## 3. Crea tus primeros usuarios
+
+Los usuarios viven en un grupo de usuarios de Cognito, en tres grupos que deciden qué portal y qué API puede usar un usuario:
+
+| Grupo | Puede usar |
+| --- | --- |
+| `student` | Portal del estudiante |
+| `instructor` | Portal del instructor |
+| `admin` | Portal de administración |
+
+`discava-development` tiene el **registro propio desactivado**, así que un extraño no puede crear una cuenta en tu etapa de pruebas. Los usuarios los agregas tú:
+
+<Steps>
+
+1. Abre la consola de **Cognito** en la región de la etapa y elige el grupo de usuarios de la etapa. Su id es una salida del stack `discava-development-Data`.
+
+2. **Create user**, con una dirección de correo y una contraseña temporal. Una contraseña necesita al menos 8 caracteres, con una mayúscula, una minúscula, un dígito y un símbolo. La temporal caduca a los 3 días.
+
+3. Abre el usuario, elige **Add user to group** y agrega cada grupo que necesite. Agrégate a los tres para verlo todo.
+
+4. Inicia sesión en un portal con la dirección de correo. Cognito te pide que definas una contraseña permanente.
+
+</Steps>
+
+En `discava-production`, el registro propio está activado y MFA es obligatorio. Las personas que se registran se agregan automáticamente a los grupos `student` e `instructor`. Los administradores siempre se agregan a mano, en todas las etapas.
+
+## 4. Agrega categorías
+
+Los cursos se organizan en categorías que gestiona un administrador. Puedes iniciar sesión en el portal de administración y crearlas, o escribir el conjunto inicial (Science, Technology, Mathematics, Communication, Business) desde tu clon:
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+
+DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}" pnpm nx run @discava/tooling-deploy:seed-categories
+```
+
+Usa las credenciales y la región de AWS de tu shell, que deben ser las de la etapa, y omite las categorías que ya existen. Sin `DISCAVA_DYNAMODB_CORE_TABLE` escribe en la tabla de desarrollo local.
+
+## 5. Pruébalo de extremo a extremo
+
+<Steps>
+
+1. En el **portal del instructor**, crea un curso, agrega una lección con un video y publícalo. MediaConvert transcodifica el video y se puede reproducir unos minutos después de subirlo.
+
+2. En el **portal del estudiante**, encuentra el curso, inscríbete y reproduce la lección.
+
+3. En el **portal de administración**, revisa la lista de categorías.
+
+</Steps>
+
+Dos cosas que un administrador define en el portal de administración, sin desplegar:
+
+- El nombre, el logotipo y el color de la plataforma: <Link path="guides/branding">Marca</Link>
+- La cuenta de Stripe, para vender cursos: <Link path="guides/payments">Cursos de pago y pagos</Link>
+
+## Despliegues posteriores
+
+- **Automáticamente:** si defines `AUTO_DEPLOY_STAGE`, cada push a `main` que pasa CI despliega esa etapa. Un despliegue se omite cuando ha llegado a `main` un commit más nuevo mientras tanto.
+- **Manualmente:** ejecuta de nuevo el workflow Deploy. Despliega el commit desde el que lo ejecutas, que también es la forma de revertir: ejecútalo desde un commit anterior.
+
+Los despliegues a una etapa nunca se solapan. Una segunda ejecución espera a la primera.
+
+Tras traer una versión más nueva de Discava, <Link path="deploy/setup">ejecuta de nuevo el script de configuración</Link> antes de desplegar, para que los roles de la etapa permitan lo que crea la nueva versión.
+
+Siguiente: <Link path="deploy/configuration">configura tu etapa</Link> con dominios personalizados y correo.

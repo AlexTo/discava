@@ -1,0 +1,131 @@
+---
+title: Enrutador de eventos del stream
+description: "Cómo una función reacciona a los cambios en la tabla core: el registro, su cola y cola de fallos, las obligaciones del handler, el comportamiento local y el redrive."
+sidebar:
+  order: 7
+---
+
+**Especificación:** [`specs/20261116-183449-stream-event-router/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-183449-stream-event-router/)
+
+El stream de DynamoDB de la tabla core tiene **un solo lector**: el enrutador del stream. Envía cada cambio a la cola de cada función que lo quiere, y el handler de cada función lee su propia cola.
+
+Una función que reacciona a cambios de la tabla añade un registro, un handler y la conexión del handler (abajo). No añade cola, alarma ni mapeo de stream propios. Hoy hay ocho funciones registradas; la [tabla de abajo](#métricas-a-vigilar) las lista.
+
+```d2 title="One stream reader, one queue and failure queue per feature"
+table: "Core table"
+stream: "DynamoDB Stream"
+router: "Stream router"
+pq: "progress-recalculation queue"
+sq: "search-indexing queue"
+pf: "progress failure queue"
+sf: "search failure queue"
+ph: "progress handler"
+sh: "search handler"
+
+table -> stream
+stream -> router
+router -> pq: "filters match"
+router -> sq: "filters match"
+pq -> ph
+sq -> sh
+pq -> pf: "after maxReceiveCount"
+sq -> sf: "after maxReceiveCount"
+```
+
+## El registro
+
+`STREAM_FEATURES` en `packages/databases/core-table/src/helpers/stream-features.ts` es la única definición que leen tanto el stack desplegado como el ejecutor de eventos local.
+
+| Campo | Significado |
+|---|---|
+| `name` | Único, en kebab-case. Nombra la cola, la cola de fallos, la alarma y el handler |
+| `filters` | Qué registros quiere la función: un `eventName` (`INSERT`, `MODIFY` o `REMOVE`), la `image` que se mira (`NewImage` u `OldImage`) y las `entities` (nombres de entidad de ElectroDB). Un registro que pasa cualquier filtro va a la función |
+| `handler` | La función `events-*` que lee la cola de la función |
+| `batch` | `maxRecords` y `windowSeconds`: cuántos cambios, y cuánto esperar para reunirlos, por ejecución del handler |
+| `maxReceiveCount` | Cuántas veces se recibe un mensaje antes de pasar a la cola de fallos |
+| `maxConcurrency` | Tope opcional de ejecuciones concurrentes del handler (al menos 2, un mínimo del mapeo de origen de eventos) |
+
+`featuresFor(record)` es la única lógica de coincidencia. Tanto el enrutador como el ejecutor local la llaman, así que no pueden discrepar. Un registro va a toda función con un filtro coincidente, como su propia copia, y a ninguna otra. Un registro que no coincide con ninguna no produce nada.
+
+Los filtros y el comparador de cada función viven en su propio módulo junto al registro (`progress-stream.ts` con `PROGRESS_STREAM_FILTERS` y `matchesProgressStreamFilters`, `search-stream.ts`, y así sucesivamente), y `featuresFor` llama a esos comparadores.
+
+Las pruebas fallan cuando un nombre se repite, un filtro nombra una entidad que la tabla core no define, un filtro no coincide con nada en los registros de muestra (`stream-features.test.ts`), o un `handler` no nombra ninguna función (`handlers.test.ts` en `packages/events`).
+
+## Añadir una función
+
+1. Añade una entrada a `STREAM_FEATURES`.
+2. Escribe el handler en `packages/events` y su envoltorio `events-*` con `ts#lambda-function`. Lee sus registros mediante `sqsToStreamRecords` (`src/router/sqs-stream-records.ts`), que desenvuelve los mensajes de la cola en registros del stream.
+3. Añade el handler a `HANDLERS` en `packages/events/src/router/handlers.ts`, por el que el ejecutor local despacha. `handlers.test.ts` falla cuando el `handler` de un registro falta allí, o cuando contiene un handler que ninguna función usa.
+4. Construye la Lambda del handler en `StreamRouterStack` (`packages/infra/src/stacks/stream-router-stack.ts`), como hacen `createProgressRecalculationLambda` y `createSearchIndexingLambda`: crea la función `events-*`, dale lo que lee y escribe (la tabla core, sus ajustes de tiempo de despliegue y así sucesivamente), y añádela al objeto `handlers` pasado a `StreamRouter`, con la clave del nombre de la función. Sin ello, `StreamRouter` lanza `No handler given for stream feature '<name>'` al sintetizar.
+5. Con el handler pasado, el constructo `StreamRouter` construye la cola, la cola de fallos, la alarma y el mapeo de origen de eventos a partir de la entrada, y el ejecutor local construye su equivalente.
+6. Escribe las pruebas de entrega duplicada y reordenada del handler (abajo).
+7. Añade las métricas de cola de la función a la [lista de abajo](#métricas-a-vigilar).
+
+## Qué construye el constructo por función
+
+- Una **cola**, con un tiempo de visibilidad de seis veces el tiempo límite del handler.
+- Una **cola de fallos**, que retiene un mensaje tras `maxReceiveCount` recepciones y lo conserva durante 14 días.
+- Una **alarma** que está en estado de alarma siempre que la cola de fallos contiene algún mensaje. No tiene destino de notificación: se ve en la consola de CloudWatch.
+- Un **mapeo de origen de eventos** de la cola al handler, usando el `batch` y el `maxConcurrency` del registro.
+
+Todas las colas comparten una clave KMS gestionada por el cliente con rotación. Una etapa puede cambiar al cifrado gestionado por SQS con `enableKmsEncryption: false`, como la tabla core. Los mensajes contienen registros completos de la tabla, así que trátalos como datos de la tabla.
+
+El enrutador tiene una cola de fallos y una alarma propias (`StreamRouterFailures`) para un registro que nunca puede enviar: demasiado grande para un mensaje, o rechazado por la cola. Contiene una descripción del registro (su id de evento, claves, entidad, funciones, tamaño y el motivo; no su contenido) para poder encontrarlo en la tabla. Los lotes fallidos del propio mapeo del stream (números de shard y de secuencia) van allí también. Un envío que falla por un motivo transitorio lo reintenta el mapeo del stream, solo para ese registro.
+
+## Obligaciones del handler
+
+El enrutador no promete orden por registro ni entrega exactamente una vez. Todo handler DEBE ser seguro de ejecutar dos veces con los mismos registros, y con registros en cualquier orden, y DEBE explicar cómo en el comentario de cabecera de su archivo:
+
+- **Derivar el resultado de los datos actuales** donde importa el orden, nunca del registro solo. La indexación de búsqueda lee del cambio solo la identidad del curso y vuelve a leer el curso de la tabla core, luego lo indexa si está publicado y lo elimina si no está publicado o ya no existe. El recálculo de progreso recalcula el progreso de cada estudiante a partir del currículo y las finalizaciones en cada ejecución.
+- Un cambio que no puede procesarse (no nombra ningún curso, por ejemplo) **falla** en lugar de omitirse, para acabar en la cola de fallos donde alguien pueda verlo.
+- Los contadores y otros valores que se acumulan a partir de los propios registros (aplicar un cambio dos veces o desordenado los desvía) necesitan su propia comprobación de que la entrega duplicada y la reordenada dan el mismo resultado, o deben recalcularse a partir de la tabla.
+
+Las pruebas de una función nueva incluyen una entrega duplicada y una reordenada.
+
+## Fallos y redrive
+
+Un handler que lanza una excepción devuelve sus mensajes a la cola tras el tiempo de visibilidad. Tras `maxReceiveCount` recepciones, un mensaje pasa a la cola de fallos de esa función y deja de bloquear cambios posteriores. Las demás funciones no se ven afectadas.
+
+Una vez corregida la causa, reproduce los mensajes con el redrive propio del servicio de colas. No se construye ninguna herramienta de reproducción, porque los handlers son seguros de ejecutar de nuevo.
+
+Para una etapa desplegada, en la consola de SQS abre la cola de fallos y elige **Start DLQ redrive** hacia la cola de la función (o usa `aws sqs start-message-move-task --source-arn <failure queue ARN> --destination-arn <feature queue ARN>`). Comprueba que la alarma de la cola de fallos vuelve a OK.
+
+## Métricas a vigilar
+
+Toda cola de SQS publica métricas de profundidad y antigüedad bajo el espacio de nombres `AWS/SQS`, con una dimensión `QueueName`:
+
+- **`ApproximateNumberOfMessagesVisible`** en la cola de una función: cambios en espera. Debería volver cerca de cero entre ráfagas.
+- **`ApproximateAgeOfOldestMessage`** en la cola de una función: cuánto se ha retrasado el handler. Una antigüedad creciente con una profundidad plana significa un handler atascado o limitado.
+- **`ApproximateNumberOfMessagesVisible`** en la cola de fallos de una función: cualquier valor por encima de cero es trabajo apartado, y activa la alarma de la función.
+
+| Función | Cola | Cola de fallos |
+|---|---|---|
+| `progress-recalculation` | `ProgressRecalculationQueue` | `ProgressRecalculationFailures` |
+| `search-indexing` | `SearchIndexingQueue` | `SearchIndexingFailures` |
+| `transcript-indexing` | `TranscriptIndexingQueue` | `TranscriptIndexingFailures` |
+| `analytics-update` | `AnalyticsUpdateQueue` | `AnalyticsUpdateFailures` |
+| `earnings-recording` | `EarningsRecordingQueue` | `EarningsRecordingFailures` |
+| `notification-delivery` | `NotificationDeliveryQueue` | `NotificationDeliveryFailures` |
+| `caption-translation` | `CaptionTranslationQueue` | `CaptionTranslationFailures` |
+| `brand-publishing` | `BrandPublishingQueue` | `BrandPublishingFailures` |
+
+Los nombres son los ids lógicos del constructo (los nombres de cola desplegados llevan el prefijo del stack y un sufijo). Una función nueva añade una fila aquí.
+
+## Comportamiento local
+
+`pnpm dev` ejecuta el mismo enrutador en el ejecutor de eventos (`packages/events/src/local`), con ElasticMQ como cola (compatible con la API de SQS, en Docker, en memoria) y un ejecutor de función por registro. Usa los mismos `STREAM_FEATURES` y `featuresFor` que el enrutador desplegado y conserva el tamaño de lote y la ventana de cada función. Un mensaje recibido `maxReceiveCount` veces pasa a la cola de fallos de la función y se registra en el log. Nada necesita una cuenta de AWS.
+
+El ejecutor (puerto 2024) tiene rutas para ver y reproducir las colas locales:
+
+```sh
+# queue and failure queue counts per feature
+curl http://localhost:2024/router/queues
+
+# move a feature's failed messages back to its queue
+curl -X POST http://localhost:2024/router/redrive/search-indexing
+
+# make a feature's next 5 batches fail, to reproduce a failure end to end
+curl -X POST http://localhost:2024/router/fail/search-indexing -d '{"batches": 5}'
+```
+
+El redrive es una pequeña utilidad del ejecutor, no el redrive del servicio de colas, que ElasticMQ no documenta. Las colas están en memoria, así que detener `pnpm dev` las vacía.

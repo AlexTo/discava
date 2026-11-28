@@ -1,0 +1,68 @@
+---
+title: Prerequisiti
+description: L'account AWS, i permessi e gli strumenti che ti servono prima di distribuire Discava.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+## Un account AWS
+
+Ti serve un account AWS in cui distribuire. Un account dedicato, o almeno uno senza nient'altro di importante, è la scelta più sicura mentre impari il sistema.
+
+Gli stage possono condividere un account. Ogni stage ha i propri ruoli IAM, e i deploy di uno stage non possono raggiungere le risorse di un altro.
+
+### Permessi per il setup una tantum
+
+Lo script di setup gira **una volta per stage, dalla tua macchina, con le tue credenziali AWS**. Quelle credenziali devono poter:
+
+- Creare un provider OIDC IAM, ruoli IAM e policy gestite IAM
+- Eseguire il bootstrap di CDK (`cdk bootstrap`), che crea uno stack CloudFormation con un bucket S3, un repository ECR e ruoli IAM
+- Leggere i certificati ACM, se usi domini personalizzati
+
+`AdministratorAccess` copre tutto. Dopo il setup, i deploy usano i ruoli con permessi limitati creati dallo script, non le tue credenziali.
+
+### Una regione
+
+Scegli la regione in cui vive il tuo stage. Deve offrire ogni servizio che Discava usa, tra cui **OpenSearch Serverless**, **MediaConvert**, **Transcribe**, **Translate** (traduzione dei sottotitoli) e, per le email di notifica, **SES**. Se hai dubbi, consulta l'[elenco dei servizi AWS per regione](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/).
+
+Le regole WAF di CloudFront vivono sempre in `us-east-1`. Uno stage con WAF sui portali o sui media (come `discava-production`) distribuisce anche piccoli stack lì, qualunque sia la sua regione principale.
+
+### Quanto costa
+
+Tutto è serverless e fatturato a consumo. `discava-development` è configurato per scalare a zero: nessun costo quando è inattivo, e un ritardo di 10-30 secondi alla prima ricerca dopo un periodo di quiete. `discava-production` mantiene una piccola capacità di ricerca sempre attiva e attiva WAF e chiavi KMS, che hanno costi mensili fissi.
+
+## Strumenti sulla tua macchina
+
+| Strumento | Perché |
+| --- | --- |
+| [Git](https://git-scm.com/) | Per clonare il tuo fork |
+| [Node.js 24](https://nodejs.org/) | Lo script di setup legge gli stage dalla configurazione TypeScript |
+| [pnpm](https://pnpm.io/) | Installa il workspace. `corepack enable` ti dà la versione fissata dal repository |
+| [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | Lo script di setup crea con essa le risorse IAM |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | Permette allo script di setup di creare l'environment GitHub e le sue variabili. Opzionale: senza di essa, lo script stampa i valori da inserire a mano |
+| Bash | Lo script di setup. Va bene la bash fornita con macOS |
+
+Docker **non** serve per il setup o il deploy. Serve solo per <Link path="guides/getting-started">eseguire Discava in locale</Link> e per eseguire sulla tua macchina l'analisi delle vulnerabilità (`pnpm trivy`).
+
+### Accedi a entrambe le CLI
+
+```sh
+aws sts get-caller-identity   # should print your account and identity
+gh auth status                # should say you are logged in
+```
+
+Se la prima fallisce, accedi con `aws sso login --profile <profile>` o `aws configure`. Se la seconda fallisce, esegui `gh auth login`.
+
+## Un account GitHub
+
+Devi poter fare il fork del repository e, sul fork, cambiare le impostazioni ed eseguire workflow. Un account personale con il piano gratuito basta per un fork pubblico.
+
+## Opzionali, da decidere dopo
+
+- **Domini personalizzati.** Senza di essi, i portali sono serviti da `*.cloudfront.net` e le API da `*.execute-api.amazonaws.com`. Per usare i tuoi, ti servono un dominio radice di cui controlli il DNS e certificati ACM emessi: uno ciascuno per `core-api.<root>` e `instructor-api.<root>` nella regione dello stage, e uno per `<root>` e `*.<root>` in `us-east-1`. Vedi <Link path="deploy/configuration">Configurazione dello stage</Link>.
+- **Email.** Le email di notifica richiedono un'identità SES verificata. Senza, non viene inviata alcuna email e tutto il resto funziona.
+- **Pagamenti.** Vendere corsi richiede un account Stripe. Al momento del deploy non serve nulla: un amministratore lo collega dopo, nel portale admin.
+
+Prossimo passo: <Link path="deploy/setup">fork e setup</Link>.

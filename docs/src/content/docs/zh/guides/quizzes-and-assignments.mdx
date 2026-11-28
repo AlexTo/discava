@@ -1,0 +1,78 @@
+---
+title: 测验和作业
+description: 创建测验及其设置，学生如何参加测验，布置作业，提交作品，迟交，以及批改、退回和要求重新提交。
+---
+
+import Link from '@components/link.astro';
+
+测验是自动批改的。作业是学生上传、由讲师批改的作品。
+
+## 测验：给讲师
+
+在 **Course content** 中，给课时添加一个 **Quiz**。测验构建器包含：
+
+- **Questions**：最多 50 道。每道是 **Single choice** 或 **Multiple choice**，有 2 到 10 个选项和一个可选的 **Explanation**。
+- **Pass mark (%)**：0 到 100。
+- **Attempts allowed**：**Unlimited**，或至少为 1 的数字。
+- **Show the correct answers**：After each attempt、After the last attempt 或 Never。
+- **Shuffle the options for each student**。
+
+没有时间限制。
+
+**Preview as student** 让你像学生一样参加测验。答案会被检查，但不会保存任何内容。
+
+学生尝试过之后，你仍然可以编辑测验。他们的尝试和最高分会保留，绝不会重新批改。正在进行一次尝试的学生，会被要求在提交前检查改动过的题目。
+
+## 测验：给学生
+
+测验会显示题目数量、及格分和你有多少次尝试机会。
+
+1. 选择 **Start quiz**。
+2. 回答每道题。**Next** 和 **Back** 在题目之间移动。
+3. 选择 **Review answers** 查看你回答了什么，以及还有什么没回答。**Change** 会带你回到某道题。
+4. 选择 **Submit answers**。
+
+结果会显示这次尝试的分数以及你是否通过。以你的最高分为准。
+
+- **Resume quiz** 继续你中途离开的尝试。
+- **Retake quiz** 在你还有剩余尝试次数时开始另一次尝试。
+- 通过测验，或用完最后一次尝试，会把它标记为完成。
+- 在已归档的课程中，测验已关闭。
+
+## 作业：给讲师
+
+在模块中，选择 **New assignment** 并选择它的类型：
+
+- **Upload**：学生提交一个文件，由你批改。
+- **Quiz**：自动批改的测验。
+
+上传类作业有 **Assignment title**、**Instructions**、**Max points**（1 到 1000 的整数）和一个可选的截止日期。
+
+### 批改
+
+**Home** 列出 **Waiting for grading** 的提交。**Course content** 中某个作业的 **Submissions** 链接会列出每位学生，状态为 Not submitted、Waiting、Resubmission requested 或 Returned。
+
+1. 打开一份提交。
+2. 阅读文件。
+3. 输入 **Points**（0 到满分）和你的 **Feedback**。
+4. 选择 **Return** 把成绩给学生，或选择 **Request resubmission** 要求再提交一个版本。
+
+退回作品之后，你仍然可以用 **Save grade** 修改成绩。每次都会通知学生。你可以阅读已离开课程的学生的作品，但不能批改。
+
+## 作业：给学生
+
+作业会显示它的说明、**Maximum points**，以及截止日期（如果有）。
+
+1. 选择 **Choose file** 并选取你的作品。
+2. 选择 **Submit**。
+
+- 你提交一个最大 100 MB 的文件：pdf、docx、xlsx、pptx、odt、ods、odp、txt、csv、md、png、jpg、jpeg、gif、webp 或 zip。
+- **迟交的作品会被接受。**截止日期之后，你的提交会标记为 **Late**。
+- 在讲师退回之前，**Resubmit** 会替换你的文件。已退回的作品无法更改。
+- 如果讲师要求你重新提交，你会看到他们的反馈，并可以提交新版本。
+- 已退回的作品会显示你的分数和反馈。
+- 在已归档的课程中，无法再提交作品。
+
+作品被退回、被要求重新提交以及成绩变化时，你会在铃铛中收到通知，除非你关闭，也会收到电子邮件。参见<Link path="guides/notifications">通知</Link>。
+
+成绩可以计入证书的条件。参见<Link path="guides/certificates">证书</Link>。

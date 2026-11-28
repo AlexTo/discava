@@ -1,0 +1,145 @@
+---
+title: Corsi a pagamento e pagamenti
+description: Collegare Stripe come amministratore, fissare il prezzo di un corso come istruttore, acquistarne uno come studente e i rimborsi.
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+Un corso è gratuito a meno che il suo istruttore non gli dia un prezzo. I pagamenti sono incassati da Stripe, su un account Stripe che l'amministratore della piattaforma collega.
+
+## Per gli amministratori: collegare Stripe
+
+Niente di Stripe è impostato quando Discava viene distribuito. Finché un amministratore non collega un account, ogni corso è gratuito e non si può impostare alcun prezzo.
+
+1. Nella dashboard di Stripe, apri Developers, poi API keys, e copia una di queste:
+   - Una **secret key** (inizia con `sk_`).
+   - Una **restricted key** (inizia con `rk_`) con accesso in scrittura a Checkout Sessions, Refunds e Webhook Endpoints, e in lettura ad Accounts, Events e PaymentIntents. Senza Refunds e PaymentIntents, i pagamenti che non possono essere recapitati non vengono rimborsati e i rimborsi fatti nella dashboard non vengono registrati.
+2. Apri **Payments** nel portale admin.
+3. Incolla la chiave in **Stripe secret key** e scegli **Connect Stripe**.
+
+Discava controlla la chiave, registra nel tuo account Stripe il proprio indirizzo di conferma (un webhook endpoint) e memorizza la chiave. Non crei mai un webhook né copi a mano un segreto di firma.
+
+La pagina mostra poi **Connected**, il nome dell'account, gli ultimi quattro caratteri della chiave e **Test mode** o **Live mode**. La modalità dipende dalla chiave. In modalità test gli studenti pagano con le carte di prova di Stripe e vengono iscritti senza che si muova denaro reale, quindi usa una chiave live prima che arrivino studenti veri.
+
+Per pagare gli istruttori, l'account Stripe deve avere anche **Connect** abilitato. Vedi <Link path="guides/earnings-and-payouts">Guadagni e pagamenti</Link>.
+
+### Sostituire la chiave
+
+Scegli **Replace key**, incolla la nuova chiave e scegli **Save key**. Conferma con **Replace the key**.
+
+- **Una nuova chiave per lo stesso account** è una rotazione. I pagamenti continuano e i checkout già aperti si completano.
+- **Una chiave per un altro account, o per l'altra modalità,** è un cambio: da ora i pagamenti vanno a quell'account. Un cambio aspetta che non ci sia alcun checkout aperto. Un checkout dura fino a un'ora e la pagina ti dice quando termina l'ultimo. Prima di cambiare, controlla le consegne dei webhook del vecchio account nella dashboard di Stripe: una conferma che Stripe non ha ancora recapitato non può essere accettata in seguito.
+
+Un cambio influisce anche sui guadagni non pagati degli istruttori. Leggi prima <Link path="guides/earnings-and-payouts">Guadagni e pagamenti</Link>.
+
+### Scollegare
+
+Scegli **Disconnect** e conferma con **Disconnect Stripe**. Questo ferma i nuovi acquisti: gli studenti vedono "Payments are unavailable right now" e gli istruttori non possono impostare un prezzo. I prezzi già impostati restano e gli studenti che hanno pagato mantengono l'accesso. Come un cambio, aspetta i checkout aperti.
+
+### La cronologia delle modifiche
+
+**Recent changes** elenca le ultime modifiche: quando, chi, cosa è successo (collegato, chiave sostituita, account cambiato, scollegato, o fallito con il motivo) e la modalità. Di una chiave mostra solo gli ultimi quattro caratteri.
+
+"Confirmation address changed" significa che l'indirizzo del webhook dello stage non è più quello registrato presso Stripe, per esempio dopo aver aggiunto un dominio personalizzato. Salva di nuovo la chiave per registrare quello nuovo.
+
+### Rimborsare uno studente
+
+Rimborsa il pagamento nella dashboard di Stripe.
+
+- **Un rimborso completo** termina l'iscrizione dello studente in pochi secondi e lo avvisa, nella campanella e via email. I suoi progressi vengono conservati.
+- **Un rimborso parziale** lascia l'accesso com'è.
+
+Uno studente il cui pagamento non può essere recapitato viene rimborsato automaticamente: il corso è stato ritirato mentre pagava, oppure era già iscritto. Non riceve alcuna notifica di rimborso.
+
+## Per gli istruttori: fissare il prezzo di un corso
+
+1. Apri il corso da **My Courses** e vai alla sezione **Price**.
+2. Inserisci un **Price**: `0` per gratuito, oppure un importo da 1,00 a 10.000,00.
+3. Scegli una **Currency**: USD, EUR, GBP, AUD o CAD.
+4. Scegli **Save price**.
+
+- Puoi cambiare il prezzo quando vuoi. Il nuovo prezzo si applica ai nuovi acquisti.
+- Gli studenti già iscritti mantengono l'accesso, sia che abbiano pagato un prezzo diverso sia che si siano iscritti quando il corso era gratuito.
+- Se vedi "Payments aren't set up yet; ask an administrator", Stripe non è collegato. Puoi comunque riportare un corso a gratuito.
+
+Il prezzo compare nella pagina pubblica del corso e nella sua scheda del catalogo, oppure "Free".
+
+## Per gli studenti: acquistare un corso
+
+Un corso con un prezzo mostra il prezzo e **Buy now** al posto di **Enrol now**. Se non hai effettuato l'accesso, il pulsante dice **Sign in to buy** e ti porta prima ad accedere.
+
+1. **Buy now** ti porta alla pagina di pagamento di Stripe, che mostra il corso e l'importo.
+2. Dopo il pagamento, torni al corso. Dice "Confirming your payment", poi sei iscritto, di solito in pochi secondi, e si apre la prima lezione che non hai completato con la riga "You're enrolled in" seguita dal nome del corso. Se il corso non ha ancora lezioni visibili agli studenti, si apre invece la pagina del corso.
+3. Se annulli, torni al corso con "Payment cancelled" e non viene addebitato nulla. Scegliere di nuovo Buy now entro un'ora riapre lo stesso pagamento.
+
+Iscriversi a un corso gratuito apre la stessa lezione, senza il passaggio del pagamento. Vedi <Link path="guides/finding-and-taking-courses">Trovare e seguire i corsi</Link>.
+
+Ti viene addebitato una sola volta, quante volte tu faccia clic.
+
+Se il tuo pagamento viene rimborsato per intero, la tua iscrizione termina e la pagina del corso offre di nuovo Buy now. I tuoi progressi vengono conservati: riacquista il corso e riparti da dove ti eri fermato. Se nel frattempo il corso è diventato gratuito, anche iscriversi riporta i tuoi progressi.
+
+### Chiedere un rimborso
+
+La pagina del corso indica le condizioni di rimborso accanto al prezzo. Puoi avere un rimborso:
+
+- entro 14 giorni dal pagamento,
+- mentre hai completato meno della metà del corso,
+- una volta per corso.
+
+Finché hai diritto, la pagina del corso mostra **Request a refund** e la data fino alla quale puoi chiederlo.
+
+1. Scegli **Request a refund**.
+2. Conferma con **Request refund**. La pagina dice "Refund requested" con la data, e che il tuo accesso termina quando viene confermato.
+3. Stripe rimborsa l'intero importo. La tua iscrizione termina e la pagina del corso offre di nuovo **Buy now**.
+4. Ricevi una notifica nella campanella e un'email. Questa email non si può disattivare.
+
+Quando non hai più diritto, il pulsante è sostituito dal motivo: il periodo di rimborso è terminato, hai completato metà del corso, oppure sei già stato rimborsato per questo corso.
+
+Se sei stato rimborsato per un corso su tua richiesta, la pagina ti avvisa accanto a **Buy now** e un secondo acquisto di quel corso non può essere rimborsato. Un rimborso fatto da un operatore in Stripe, o automaticamente per un pagamento che non poteva essere recapitato, non conta contro di te.
+
+I tuoi progressi e l'eventuale certificato vengono conservati.
+
+### Lasciare un corso
+
+Per un corso a cui ti sei iscritto senza pagare, la pagina del corso mostra **Leave course**. Conferma e l'iscrizione termina: il corso esce da My Learning e i tuoi progressi vengono conservati. Iscriviti di nuovo per continuare. Un corso che hai pagato non ha **Leave course**: chiedi invece un rimborso.
+
+## Codici sconto
+
+### Per gli istruttori: creare codici
+
+Apri un corso a pagamento da **My Courses** e scegli **Coupons** in alto nella pagina. Un corso gratuito non ha nulla da scontare, quindi la pagina ti chiede di impostare prima un prezzo. Scegli **Create code** e dagli:
+
+- **Un codice**, da 4 a 24 lettere, cifre o trattini, senza distinzione tra maiuscole e minuscole. Lascialo vuoto, o scegli **Generate**, e Discava ne crea uno come `K7QD-2MXP`.
+- **Un tipo e un valore**: **Percent off**, un numero intero da 1 a 100, oppure **Fixed amount** nella valuta del corso, da 1,00 fino al prezzo.
+- **Una data di scadenza** (facoltativa). Il codice funziona fino alla fine di quel giorno, UTC.
+- **Un numero massimo di utilizzi** (facoltativo).
+
+Poi scegli **Create**. Ogni codice appare come **Active**, **Disabled**, **Expired** o **Used up**.
+
+Ogni codice appartiene a un solo corso. Non ci sono codici che coprono più corsi o l'intero sito, né importazione di massa.
+
+**Disable** disattiva un codice subito e **Enable** lo riattiva. **Edit limits** cambia la scadenza e il massimo, ma mai sotto gli utilizzi che il codice ha già. **Delete** è offerto solo finché nessuno ha usato il codice; disabilita invece uno già usato. Il tipo e il valore di un codice non si possono cambiare: disabilitalo e creane uno nuovo.
+
+Un rimborso non restituisce un utilizzo.
+
+### Per gli studenti: usare un codice
+
+1. In un corso a pagamento, scegli **Have a code?**.
+2. Inserisci il codice e scegli **Apply**. La pagina mostra il prezzo di listino, lo sconto e il totale, e il pulsante di acquisto dice **Pay** con il totale.
+3. Paga come al solito.
+
+**Remove code** torna al prezzo di listino. Nulla viene consumato finché non paghi.
+
+- Ogni studente può usare un codice una volta.
+- Un codice che non si può usare dice perché: disattivato, scaduto, usato il numero massimo di volte, già usato da te, o che lascia un prezzo troppo basso per essere pagato. Un codice che non esiste e un codice di un altro corso danno lo stesso messaggio.
+- Se un codice copre l'intero prezzo, il pulsante dice **Enrol for free**: sei iscritto subito, senza pagina di pagamento.
+
+## Limiti
+
+- Solo carte.
+- I codici sconto appartengono a un solo corso ciascuno: nessun codice per l'intero sito o di massa.
+- Nessuna imposta viene calcolata o riscossa.
+
+<Link path="design/payments">Pagamenti</Link> descrive come funziona.

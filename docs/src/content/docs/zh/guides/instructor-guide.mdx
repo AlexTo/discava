@@ -1,0 +1,124 @@
+---
+title: 讲师指南
+description: 讲师在讲师门户中可以做什么，从创建和发布课程，到公开页面、字幕、免费试看、定价和收入，并附有详细指南的链接。
+sidebar:
+  order: 0
+---
+
+import Link from '@components/link.astro';
+
+本页是讲师门户的概览。要使用该门户，你的账户必须是讲师：如果提示你不是讲师，请联系管理员。
+
+## 熟悉界面
+
+侧边栏有四个页面：
+
+| 页面 | 用途 |
+| --- | --- |
+| **Home** | 你的课程数量、**Waiting for grading**（待批改的作业提交）和你最新的课程 |
+| **Dashboard** | 每门课程的报名、活跃度和完成情况 |
+| **My Courses** | 你教授的所有课程。**Open course** 会打开课程页面，你在那里构建和管理课程 |
+| **Earnings** | 你的课程赚了多少，以及已经支付了多少 |
+
+账户菜单中有 **Public profile**、**Notification settings** 和 **Sign out**。
+
+课程页面是一个长页面。顶部的链接会跳转到各个部分：**Content**、**Landing page**、**Catalogue**、**Captions**、**Certificates**、**First-lesson prompt**、**Price** 和 **Announcements**。课程标题旁边的 **Reviews**、**Questions** 和 **Coupons** 会打开各自的页面。
+
+## 构建课程
+
+1. 在 Home 或 My Courses 中选择 **Create a course**。填写 **Course title** 和 **Course summary**。课程起初是草稿。
+2. 在 **Course content** 中，用 **New module** 添加一个模块。
+3. 在模块中，用 **New lesson** 添加课时，或用 **New assignment** 添加作业。
+4. 在课时中添加内容：**Video**、**Text**、**Quiz** 或 **File**。
+5. 拖动抓手来重新排序模块、课时和内容。
+6. 在 **Catalogue details** 中设置分类、难度、语言、时长和最多 8 个标签。学生通过这些筛选目录和搜索。
+7. 添加课程图片。
+
+每个视频都会自动添加字幕。<Link path="guides/building-a-course">构建课程</Link> 会逐步讲解每个步骤。
+
+还可以添加的内容：
+
+- **测验**：单选题和多选题、及格分数、尝试次数（或不限次数），以及何时显示正确答案。**Preview as student** 可以试做测验而不保存任何内容。参见 <Link path="guides/quizzes-and-assignments">测验和作业</Link>。
+- **作业**：学生上传文件由你批改，或使用自动评分的测验。上传型作业有说明、满分和可选的截止日期。它的 **Submissions** 链接列出提交的作业，Home 则列出 **Waiting for grading**。你可以用分数和反馈来 **Return** 作业，或选择 **Request resubmission**。参见 <Link path="guides/quizzes-and-assignments">测验和作业</Link>。
+- **视频中的提问**：视频上的 **Questions** 对话框最多可添加 20 个问题，每个问题设在视频中的某个时间点或结尾。答案不会计入进度或证书。参见 <Link path="guides/video-lessons">视频课程</Link>。
+- **证书**：在 **Certificates** 部分打开 **Issue a certificate on completion**，还可以要求通过每个测验，或要求作业达到最低成绩。同一部分列出已颁发的证书，并带有 **Revoke** 和 **Restore**。参见 <Link path="guides/certificates">证书</Link>。
+
+## 发布和修改课程
+
+课程页面上的 **Publish** 会让草稿课程对学生可见。之后：
+
+- 新模块、新课时和新内容保持隐藏，直到你在每一项上选择 **Publish**。**Hide** 会把它从学生的视野中撤回。
+- 移除模块、课时或内容项时，会将其归档而不是删除。**Archived** 部分列出它们，并带有 **Restore** 和 **Delete permanently**。学生已经使用过的内容无法永久删除。
+- 已归档的课程在你选择 **Restore** 之前无法编辑。
+
+<Link path="guides/building-a-course">构建课程</Link> 有详细说明，<Link path="design/live-course-editing">课程实时编辑</Link> 描述了你修改已发布课程时学生看到的内容。
+
+## 你的落地页和个人资料
+
+已发布课程的页面 `/learn/<courseId>` 是公开的：未登录的访客可以看到它，搜索引擎和链接预览也可以读取。
+
+**在课程页面上**，**Landing page** 部分包含：
+
+- **What students will learn** 和 **Requirements**：各最多 10 条，每条最多 160 个字符。可以用“Move up”和“Move down”按钮重新排序。完成后选择 **Save landing page**。
+- **预览视频**：一个简短的视频，最长 5 分钟（1 到 2 分钟效果最好），作为单独的文件上传，不是你的课时视频之一。字幕会自动添加。**Replace** 会在新视频准备好之前继续播放旧视频，**Remove video** 则回到课程图片。任何人都可以观看，但不会有课时视频变为公开。
+
+它上方的 **Landing page checklist** 显示还缺什么：学习成果、要求、预览视频、课程图片，以及你个人资料中的头衔和照片。它从不阻止你发布。课程发布后，**View public page** 会打开该页面。
+
+**你的公开个人资料**（账户菜单中的 **Public profile**）包含：
+
+| 字段 | 限制 |
+| --- | --- |
+| Display name | 最多 60 个字符 |
+| Handle | 3 到 30 个字符。你的地址是 `/instructors/<handle>` |
+| Headline | 最多 100 个字符 |
+| Bio | 最多 2,000 个字符 |
+| Photo | 个人资料首次保存后添加 |
+
+个人资料在你创建第一门课程时生成，只要你教授至少一门已发布的课程，它就是公开的。已发布课程的每位讲师都会显示在其页面上，你无法选择退出。
+
+修改会在 5 分钟内到达搜索引擎和链接预览。已归档的课程，或没有任何已发布课程的个人资料，也会以同样的速度不再被搜到。工作原理参见 <Link path="design/public-pages">公开页面</Link>。
+
+## 字幕语言
+
+每个视频都会自动添加字幕。在课程页面上，**Caption languages** 部分可以让你选择翻译成哪些其他语言。你已有的视频和以后添加的视频都遵循你的选择，包括预览视频。字幕准备好之后，翻译一个视频需要几分钟。
+
+如果站点关闭了字幕，这一部分不会出现；如果字幕翻译不可用，它会这样说明。
+
+- **你自己的字幕始终优先。** 如果你上传了某种语言的字幕，该上传会被保留，不会被翻译替换。要修正翻译，请在视频的 Captions 对话框中上传你自己的该语言字幕。
+- **替换视频的主字幕** 会移除其翻译轨道，并根据新字幕重新翻译。
+- **移除一种语言** 会从每个视频中移除该语言的翻译轨道。你上传的字幕会保留。
+- **Captions 对话框** 显示每种语言的状态：translating、translated、uploaded、failed、too long、no room（一个视频最多 10 条轨道）或 not translated，并附原因。不是课程语言的自动字幕不会被翻译：请改为上传视频所用语言的字幕。
+- 对话框中的 **Translate again** 会再次请求某一个视频缺失的翻译。该部分中的 **Translate missing captions again** 则对整门课程执行。
+- **机器翻译可能有错。** 学生看到的翻译轨道会标有“(auto-translated)”。每行字幕是单独翻译的，所以在依赖之前，请检查你能读懂的语言。
+
+## 免费试看课时
+
+免费试看让任何人在报名前观看某个课时，这是展示你课程内容最快的方式。
+
+1. 在 **Course content** 中，对某个课时选择 **Make free preview**。
+2. 用 **Make free preview** 确认。
+
+该课时会显示“Free preview”徽章，其标题链接到你落地页上的试看。在该课时、其模块和课程都发布之前，徽章显示“not public yet”。
+
+- 访客无需登录或付费即可看到课时的视频、文本和文件。不会为他们保存任何内容：没有进度，没有视频位置，没有讨论。
+- **测验保持锁定。** 访客能看到测验的标题和题目数量，但看不到题目，需要报名后才能参加。
+- **作业课时无法标记。** 只有普通课时可以。
+- 要停止试看，选择 **Remove free preview**。新的访问会立即停止，试看地址随后会显示试看已不可用。正在播放的视频最多可继续播放一小时，文件链接则几分钟内有效。隐藏或归档该课时、其模块或课程，效果相同。
+
+## 为课程收费
+
+课程在你于 **Price** 部分设定价格之前是免费的。管理员必须先连接 Stripe。
+
+- <Link path="guides/payments">付费课程和支付</Link> 涵盖定价、折扣码（**Coupons**）以及学生看到的内容。
+- <Link path="guides/earnings-and-payouts">收入和提现</Link> 涵盖你在每笔销售中的份额以及如何获得付款。
+
+## 与学生交流
+
+- <Link path="guides/announcements">公告</Link>：在课程的 **Announcements** 部分向所有已报名的学生发布消息。
+- <Link path="guides/lesson-discussions">课时讨论</Link>：在课程的 **Questions** 页面回答学生的问题并审核帖子。**First-lesson prompt** 部分设置新学生在第一个课时被问到的问题。
+- <Link path="guides/reviews">评分和评价</Link>：在课程的 **Reviews** 页面阅读评价并回复。
+- <Link path="guides/notifications">通知</Link>：你和你的学生会收到哪些通知，在铃铛中和通过邮件。
+
+## 查看课程表现
+
+**Dashboard** 显示每门课程的报名数、本周活跃的学习者和完成率。打开一门课程可以看到最近 30 天或 90 天：每天的新报名和活跃学习者、学习者在哪里停下（课时流失）、报名后有多少人开始学习，以及每个测验和视频中提问的结果。参见 <Link path="guides/course-analytics">课程分析</Link>。

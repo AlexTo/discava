@@ -1,0 +1,183 @@
+---
+title: Cấu hình stage
+description: Cách một stage được cấu hình, cách ghi đè thiết lập mà không commit chúng, và cách thêm tên miền riêng, email và các stage mới.
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+## Cấu hình nằm ở đâu
+
+Mỗi stage được định nghĩa trong một tệp: `packages/common/infra-config/src/stages.config.ts`. Một stage liệt kê các thiết lập theo từng **thành phần**, dưới `infra`:
+
+| Thành phần | Nó là gì |
+| --- | --- |
+| `identity` | Cognito user pool |
+| `coreApi`, `instructorApi`, `adminApi` | Ba API |
+| `payments` | API webhook của Stripe |
+| `coreTable` | Bảng DynamoDB |
+| `streamRouter` | Các hàng đợi chuyển thay đổi của bảng tới các handler của chúng |
+| `studentPortal`, `instructorPortal`, `adminPortal` | Ba website |
+| `lessonMedia`, `publicMedia` | Các bucket video và hình ảnh cùng CloudFront distribution của chúng |
+| `search` | Collection OpenSearch Serverless |
+| `notifications` | Bên gửi email |
+
+**Mọi thiết lập bảo mật đều mặc định bật.** Một stage chỉ liệt kê những gì nó nới lỏng hoặc định cỡ. `discava-development` tắt phần lớn biện pháp bảo vệ để giữ chi phí thấp, còn `discava-production` nêu thẳng các giá trị đã được tăng cường.
+
+Các thiết lập thông dụng:
+
+| Thiết lập | Ý nghĩa |
+| --- | --- |
+| `enableWaf` | Đặt một WAF web ACL phía trước thành phần |
+| `enableKmsEncryption`, `enableKeyRotation` | Mã hóa bằng khóa KMS do khách hàng quản lý, và xoay vòng nó |
+| `retainOnDelete`, `enableDeletionProtection` | Giữ dữ liệu nếu stack bị xóa, và từ chối việc xóa nhầm |
+| `throttleRateLimit`, `throttleBurstLimit` | Giới hạn request theo từng method của API Gateway |
+| `reservedConcurrency` | Số request tối đa mà hàm của một API chạy cùng lúc |
+| `maxReadRequestUnits`, `maxWriteRequestUnits` | Trần thông lượng của bảng |
+| `min…CapacityInOcu`, `max…CapacityInOcu` | Dung lượng tìm kiếm. Mức tối thiểu 0 sẽ co về không khi nhàn rỗi |
+| `timeoutSeconds`, `logLevel`, `enableTracing` | Thời gian chờ request của một API, mức log thấp nhất (`DEBUG`, `INFO`, `WARN`, `ERROR`) và tracing X-Ray |
+| `publicThrottle…`, `publicSuggestThrottle…` | Các giới hạn riêng của core API cho các lệnh gọi không cần đăng nhập, và cho gợi ý tìm kiếm |
+| `enableSelfSignUp`, `enableMfa` | Có cho bất kỳ ai tạo tài khoản hay không, và có bắt buộc MFA hay không |
+| `studentPortal.allowSearchEngineIndexing` | Cho phép các công cụ tìm kiếm lập chỉ mục các trang công khai. Tắt trừ khi được đặt; `discava-production` bật nó |
+| `studentPortal.linkedInOrganizationId` | ID trang tổ chức LinkedIn của bạn, được nêu tên trên các chứng chỉ mà học viên thêm vào LinkedIn |
+
+`packages/common/infra-config/src/stages.types.ts` ghi lại mọi thiết lập và giá trị mặc định của nó.
+
+Khi tắt WAF, các giới hạn throttle, đồng thời và thông lượng là thứ chặn chi phí của một đợt dồn request. Hãy nâng chúng lên khi mức sử dụng thực tế tăng.
+
+## Ghi đè mà không commit
+
+Các giá trị đặc thù cho tài khoản của bạn, như tên miền và ARN chứng chỉ, không nên được commit vào một fork công khai. Thay vào đó, bất kỳ thiết lập thành phần nào cũng có thể được đưa ra qua một biến tên:
+
+```
+<STAGE>_INFRA_<COMPONENT>_<FIELD>
+```
+
+viết theo upper snake case. Ví dụ, `coreApi.throttleRateLimit` trên `discava-development` là `DISCAVA_DEVELOPMENT_INFRA_CORE_API_THROTTLE_RATE_LIMIT`.
+
+Hãy đặt nó như một **biến trên GitHub environment của stage**. Deploy workflow chuyển tiếp mọi biến bắt đầu bằng tiền tố của stage:
+
+```sh
+gh variable set DISCAVA_DEVELOPMENT_INFRA_CORE_API_THROTTLE_RATE_LIMIT \
+  --env discava-development --body 5
+```
+
+Giá trị là văn bản thuần trên một dòng: `true` hoặc `false`, một số nguyên, hoặc danh sách phân tách bằng dấu phẩy cho các thiết lập `…_DOMAIN_NAMES`. Một giá trị sai loại sẽ làm lần triển khai thất bại.
+
+Ngoài các thành phần:
+
+- `<STAGE>_REGION` và `<STAGE>_ACCOUNT` ghi đè `region` và `account` của stage
+- `<STAGE>_CAPTION_TRANSLATION_ENABLED` và `<STAGE>_CAPTION_TRANSLATION_MAX_LANGUAGES_PER_COURSE` ghi đè [dịch phụ đề](#dịch-phụ-đề)
+- `credentials` và `payouts` không thể bị ghi đè. Hãy đổi chúng trong `stages.config.ts`
+
+## Tên miền riêng
+
+Mỗi API, cổng và media distribution có thể có tên miền riêng. Với mỗi cái, bạn cần:
+
+- Một **tên miền** mà bạn kiểm soát
+- Một **chứng chỉ ACM đã được cấp** bao phủ nó, ở đúng region
+- Một **bản ghi DNS** trỏ tới nó, mà bạn tạo sau khi triển khai
+
+| Thành phần | Biến cho tên miền | Region của chứng chỉ |
+| --- | --- | --- |
+| Core API | `…_INFRA_CORE_API_DOMAIN_NAME` | Region của stage |
+| Instructor API | `…_INFRA_INSTRUCTOR_API_DOMAIN_NAME` | Region của stage |
+| Admin API | `…_INFRA_ADMIN_API_DOMAIN_NAME` | Region của stage |
+| Payments (API webhook của Stripe) | `…_INFRA_PAYMENTS_DOMAIN_NAME` | Region của stage |
+| Cổng học viên | `…_INFRA_STUDENT_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| Cổng giảng viên | `…_INFRA_INSTRUCTOR_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| Cổng quản trị | `…_INFRA_ADMIN_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| Media bài học | `…_INFRA_LESSON_MEDIA_DOMAIN_NAMES` | `us-east-1` |
+| Media công khai | `…_INFRA_PUBLIC_MEDIA_DOMAIN_NAMES` | `us-east-1` |
+
+Mỗi cái cũng nhận một `…_CERTIFICATE_ARN` tương ứng. Một tên miền chỉ được áp dụng khi chứng chỉ của nó cũng được đặt. Các cổng và media chấp nhận nhiều tên miền phân tách bằng dấu phẩy; một API chỉ nhận một.
+
+**Cách dễ nhất để đặt chúng là chạy lại script setup.** Hãy đưa cho nó một tên miền gốc và nó sẽ phục vụ mỗi thành phần từ một tên miền con cố định của gốc đó, tìm chứng chỉ đã cấp cho từng cái trong ACM và ghi các biến. Nếu thành phần nào chưa có chứng chỉ, nó liệt kê những cái còn thiếu và dừng trước khi thay đổi bất cứ thứ gì. Nó chưa bao phủ admin API và payments API: hãy tự đặt các biến của chúng. Ở lần chạy sau, nhấn Enter để giữ tên miền gốc mà nó đề xuất. Xóa trống nó sẽ gỡ các biến tên miền mà script đã đặt.
+
+```sh
+./scripts/setup-stage.sh discava-development
+```
+
+| Thành phần | Tên miền cho gốc `example.com` |
+| --- | --- |
+| Core API | `core-api.example.com` |
+| Instructor API | `instructor-api.example.com` |
+| Cổng học viên | `example.com`, `www.example.com` |
+| Cổng giảng viên | `instructor.example.com` |
+| Cổng quản trị | `admin.example.com` |
+| Media bài học | `lesson-media.example.com` |
+| Media công khai | `media.example.com` |
+
+Với các tên miền khác, hãy tự đặt các biến trên GitHub environment.
+
+Ba quy tắc cần biết:
+
+- **Mỗi API cần chứng chỉ riêng nêu đúng tên miền của nó.** Không phải wildcard, và không dùng chung với API khác. Nếu không, trình duyệt có thể dùng lại một kết nối cho hai API và nhận lỗi từ API sai.
+- **Phát video cần một tên miền cha dùng chung.** Khi media bài học có tên miền riêng, việc phát được cấp phép bằng các cookie dùng chung giữa API và media bài học, nên cả hai phải nằm dưới một tên miền cha, được đưa ra qua `…_INFRA_LESSON_MEDIA_COOKIE_DOMAIN`. Script setup đặt nó thành tên miền gốc.
+- **DNS do bạn quản lý.** Sau khi triển khai, hãy trỏ mỗi tên miền tới đích của nó: một CloudFront distribution cho các cổng và media (các output `…DistributionDomainName` của stack), tên miền tùy chỉnh API Gateway cho các API (output `…DomainNameAlias` của stack của API). Cho tới lúc đó các tên miền không phân giải được, dù các cổng đã dùng chúng.
+
+Tên miền của các cổng được tự động lấy làm các origin CORS được phép của các API và làm địa chỉ đăng nhập và đăng xuất của Cognito.
+
+## Email thông báo
+
+Email được gửi qua SES. Hãy xác minh một tên miền hoặc địa chỉ trong SES, ở region của stage. Với một tên miền gốc, script setup làm phần còn lại: khi gốc đó là một domain identity SES đã xác minh, chạy lại nó sẽ gửi email dưới dạng `notifications@<root>`. Để dùng người gửi khác, hãy tự đặt các biến dưới đây; script giữ nguyên người gửi mà bạn đã đặt khi chạy lại:
+
+| Biến | Ví dụ |
+| --- | --- |
+| `…_INFRA_NOTIFICATIONS_FROM_ADDRESS` | `notifications@example.com` |
+| `…_INFRA_NOTIFICATIONS_SES_IDENTITY` | `example.com` |
+
+Nếu không đặt cái nào, sẽ không có email nào được gửi và mỗi email được ghi nhận là bị bỏ qua. Thông báo trong ứng dụng vẫn hoạt động bình thường. Một tài khoản SES mới ở chế độ sandbox và chỉ gửi tới các địa chỉ đã xác minh cho đến khi AWS cấp quyền production.
+
+## Thanh toán
+
+Stripe **không cần cấu hình lúc triển khai**: không có secret nào để tạo và không có webhook nào để đăng ký. Sau khi triển khai, quản trị viên dán một khóa Stripe vào trang Payments của cổng quản trị, và Discava tự đăng ký địa chỉ webhook của stage. <Link path="guides/payments">Khóa học trả phí và thanh toán</Link> có các bước.
+
+API webhook có thể có tên miền riêng, `…_INFRA_PAYMENTS_DOMAIN_NAME` trong bảng ở trên. Nếu bạn thêm hoặc đổi nó sau khi kết nối Stripe, hãy lưu lại khóa trên trang Payments để địa chỉ mới được đăng ký.
+
+Để trả tiền cho giảng viên, tài khoản Stripe phải bật Connect. Một khóa bị giới hạn (restricted key) được kỳ vọng cần quyền ghi với Accounts, Account Links, Login Links và Transfers (các lệnh gọi mà việc chi trả thực hiện); danh sách này chưa được xác nhận với một restricted key thật, nên hãy dùng secret key nếu việc onboarding hoặc chi trả bị từ chối. Việc đổi tài khoản hoặc chế độ Stripe đã kết nối sẽ giữ lại mọi khoản thu nhập chưa trả của giảng viên: chúng hiển thị là Held, và lượt chi trả không gửi gì cho chúng. <Link path="guides/earnings-and-payouts">Thu nhập và chi trả</Link> có góc nhìn của giảng viên.
+
+### Thiết lập chi trả
+
+Mục `payouts` của một stage trong `stages.config.ts` đặt phần nền tảng giữ lại và thời điểm giảng viên được trả:
+
+| Thiết lập | Ý nghĩa | Mặc định |
+| --- | --- | --- |
+| `platformFeeBasisPoints` | Phí của nền tảng trên số tiền đã trả, tính theo basis point (2000 là 20%). Áp dụng cho các giao dịch bán được ghi nhận sau một thay đổi | `2000` |
+| `holdDays` | Số ngày thu nhập của một giao dịch bán bị giữ trước khi có thể chi trả, để bù cho hoàn tiền | `14` |
+| `minimumPayoutMinor` | Khoản chi trả nhỏ nhất được gửi, tính theo đơn vị nhỏ nhất của tiền tệ (1000 là 10.00). Số dư nhỏ hơn sẽ chờ | `1000` |
+
+`discava-development` giữ thu nhập một ngày, để người kiểm thử thấy chúng chuyển sang trạng thái có thể trả nhanh chóng. Một giá trị có thể sinh ra số tiền sai, như phí trên 10000, làm bản build thất bại. Lượt chi trả chạy hằng ngày.
+
+## Dịch phụ đề
+
+Phụ đề video được dịch máy bằng Amazon Translate, tính phí theo ký tự. Mục `captionTranslation` của một stage giới hạn chi phí đó:
+
+| Thiết lập | Ý nghĩa | Mặc định |
+| --- | --- | --- |
+| `enabled` | Stage có dịch phụ đề hay không | `true` |
+| `maxLanguagesPerCourse` | Số ngôn ngữ phụ đề nhiều nhất mà một khóa học có thể chọn, từ 0 đến 9 | `9` |
+
+`discava-development` cho phép ba ngôn ngữ mỗi khóa học.
+
+## Thêm một stage
+
+1. Thêm một mục vào `stages.config.ts` bên cạnh hai mục hiện có, với các thiết lập mà nó nới lỏng. Thêm `payouts` nếu các giá trị mặc định không phù hợp.
+2. Commit và push nó.
+3. Chạy `./scripts/setup-stage.sh <new-stage>` để tạo các role và GitHub environment của nó.
+4. Chạy Deploy workflow với tên của stage mới.
+
+Không có gì khác thay đổi: ứng dụng CDK tạo một stage cho mỗi mục trong tệp.
+
+Nếu bạn định triển khai stage mới từ máy của mình với các ghi đè environment, hãy thêm cả tiền tố của nó vào `inputs` của target `synth` trong `packages/infra/project.json`, để cache của Nx nhận ra khi một ghi đè thay đổi.
+
+## Lên production
+
+`discava-production` đã sẵn sàng để triển khai nguyên trạng. Trước khi người dùng thật đến:
+
+- Chạy script setup cho nó, và bootstrap CDK ở `us-east-1` khi được hỏi (các rule WAF của nó nằm ở đó)
+- <Link path="deploy/setup">Bảo vệ GitHub environment của nó</Link> bằng người duyệt bắt buộc
+- Cấp cho nó các tên miền riêng và một SES identity đã xác minh
+- Xem lại các giới hạn request trong `stages.config.ts` so với lượng truy cập bạn dự kiến
+- Nếu bạn bán khóa học, hãy xem lại các thiết lập `payouts` và kết nối một khóa Stripe **live** trên trang Payments của cổng quản trị

@@ -1,0 +1,136 @@
+---
+title: Pagos a instructores
+description: Cómo se registran las ganancias de los instructores a partir de los pedidos, el libro mayor y sus resúmenes diarios, la ejecución diaria de pagos y su recuperación, y la regla de la cuenta de pago.
+sidebar:
+  order: 11
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261116-013137-instructor-payouts/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013137-instructor-payouts/)
+
+## La regla
+
+**Cada venta y cada reembolso se registra una vez, y ninguna ganancia se paga dos veces.** Las ganancias son un libro mayor de solo agregado construido a partir de los <Link path="design/payments">pedidos</Link>, y un pago toma entradas del libro mayor, nunca un monto calculado por separado.
+
+## Las reglas de ingresos
+
+`helpers/revenue.ts` en core-table es aritmética entera pura en la unidad más pequeña de una moneda.
+
+- **Comisión.** La plataforma se queda con una comisión sobre el monto pagado, definida por etapa en puntos básicos (2000 es 20%) y redondeada hacia arriba en la mitad. Una venta conserva la comisión con la que se registró: cambiar el ajuste solo afecta a las ventas posteriores.
+- **Reparto.** Los instructores de un curso se reparten una venta por igual. El reparto se aplica por separado al precio de lista, al monto pagado y a la comisión, y las unidades sobrantes van de una en una a los primeros instructores por ID, así que las partes siempre suman el total.
+- **Neto.** El neto de un instructor es su parte del monto pagado menos su parte de la comisión.
+- **Reembolso.** Un reembolso devuelve la parte del instructor del monto reembolsado, menos la comisión devuelta sobre él. Cada paso se calcula como la parte del nuevo total reembolsado menos la parte del registrado, así que sin importar cómo se divida un reembolso en pasos, las entradas suman exactamente una vez cuando el pedido está totalmente reembolsado. Un reembolso tiene como tope el monto pagado.
+
+## El libro mayor
+
+| Registro | Contiene |
+| --- | --- |
+| `earningOrder` | La instantánea del libro mayor de una venta, y el total reembolsado registrado hasta ahora |
+| `earningEntry` | Una línea por instructor por venta o paso de reembolso: bruto, descuento, reembolso, comisión y neto, cuándo se libera y el pago que la tomó |
+| `earningDay` | La suma de las entradas de un instructor para un curso, moneda y día UTC |
+
+`helpers/earning.ts` en core-table es el único escritor de los tres, con una excepción: `helpers/payout.ts` es el único código que define o borra el `payoutId` de una entrada. Una venta, y cada paso de reembolso, es **una transacción** que contiene las entradas, las sumas a sus filas de día y el contador del pedido, así que el informe y el libro mayor no pueden discrepar.
+
+Una entrada nunca nombra al comprador. También lleva la cuenta de Stripe y el modo con los que se pagó su pedido: consulta [la regla de la cuenta de pago](#la-regla-de-la-cuenta-de-pago).
+
+## Registro
+
+El registro es una <Link path="design/stream-event-router">función de stream</Link>, `earnings-recording`. Recibe cada cambio de un `order` y actúa sobre los que son ventas. Un pedido es una venta cuando se cumplen ambas:
+
+- está `paid`, o `refunded` con el motivo `requested`;
+- su monto es mayor que cero.
+
+Un pedido reembolsado automáticamente por no poder entregarse nunca fue una venta, ni tampoco el pedido de monto cero de un cupón que cubre todo el precio. En un pedido con descuento, el bruto de la entrada es el precio de lista y su descuento es la diferencia con el monto pagado.
+
+El enrutador entrega al menos una vez y en cualquier orden, y el handler está construido para eso:
+
+- **Cada imagen de pedido lleva todo lo necesario**, así que cualquiera basta para registrar la venta y actualizar su total reembolsado. Ningún registro espera a otro.
+- **Los duplicados no cambian nada.** Las entradas de una venta se crean con la condición de que no existan, y un total reembolsado que el libro mayor ya alcanzó no registra nada.
+- **El orden no importa.** Una imagen más antigua que llega tarde encuentra un total registrado más alto y no hace nada.
+- **Un fallo reintenta el lote.** Se aplica todo lo que se puede, luego el lote lanza un error, y lo que se aplicó no hace nada la segunda vez.
+
+La entrada de una venta se libera `holdDays` después de que se pagó el pedido. La entrada de un reembolso se libera de inmediato, así que reduce el siguiente pago.
+
+## Las lecturas de la página Earnings
+
+instructor-api sirve las cifras propias de quien llama y no recibe ningún ID de instructor como entrada.
+
+- `earnings.report` suma las filas de día en un período de como máximo 366 días: una consulta de rango, agrupada por moneda y curso.
+- `earnings.lines` pagina las entradas de un curso, construidas campo por campo para que nada más del registro llegue a quien llama.
+- `payout.overview` clasifica las entradas que ningún pago ha tomado en **en espera**, **esperando la configuración de la cuenta**, **listas** y **retenidas**, por moneda, y lista los pagos del instructor.
+
+## Cuentas de pago
+
+Un instructor cobra en una cuenta Stripe Connect Express.
+
+- `payout.startOnboarding` crea la cuenta, de forma idempotente, y devuelve el enlace de incorporación de Stripe.
+- `payout.account` lee el estado de la cuenta desde Stripe y lo guarda en `payoutAccount` cuando cambió. Si no se puede llegar a Stripe, devuelve el estado guardado marcado como `stale`.
+- `payout.dashboardLink` devuelve un enlace de inicio de sesión al panel Stripe Express del instructor, una vez terminada la incorporación.
+
+| Estado | Significado |
+| --- | --- |
+| `not_started` | Aún no hay cuenta. No se guarda nada |
+| `in_progress` | El formulario de Stripe no está terminado |
+| `active` | Stripe puede enviarle transferencias y pagos |
+| `restricted` | Stripe necesita algo más |
+
+Nada de esto llama a Stripe a menos que la conexión de la plataforma esté activa. Sin una, `payout.account` responde `unavailable`.
+
+## La ejecución de pagos
+
+Una función Lambda, en el stack `Payouts`, se ejecuta una vez al día mediante una programación de EventBridge. Puede leer la clave de Stripe y nada más de los secretos.
+
+1. **Vincularse a la cuenta de pago.** La ejecución trabaja para la cuenta y el modo actuales de la conexión, y solo con una clave que se demuestre que le pertenece.
+2. **Recuperar.** Los pagos que una ejecución anterior dejó sin liquidar se terminan primero: uno todavía en `collecting` o `releasing` devuelve sus entradas, y uno `pending` se liquida como se describe abajo.
+3. **Por cada instructor con una cuenta activa,** se vuelve a leer la cuenta desde Stripe. A una que ya no está activa se le guarda su nuevo estado y se omite.
+4. **Por moneda,** se suman las entradas liberadas que ningún pago ha tomado. Una suma por debajo del mínimo de la etapa, o que no sea mayor que cero, espera.
+5. **Reunir, sellar y enviar.** Se crea un pago en `collecting`, se le adjuntan las entradas en lotes de 99 (una transacción contiene 100 ítems) y se sella como `pending`. Luego se crea la transferencia en Stripe, con el ID del pago como clave de idempotencia y grupo de transferencia, y el pago se marca como `sent`.
+
+| Estado | Significado |
+| --- | --- |
+| `collecting` | Se están adjuntando entradas |
+| `pending` | Sellado. Su transferencia puede existir o no |
+| `sent` | Stripe aceptó la transferencia |
+| `releasing` | Devolviendo sus entradas |
+| `failed` | Stripe rechazó la transferencia. Sus entradas están abiertas de nuevo |
+
+### Por qué nada se paga dos veces
+
+- Una entrada se adjunta con la condición de que no tenga pago, así que dos ejecuciones superpuestas no pueden tomarla ambas.
+- Un pago se marca `failed`, y sus entradas se reabren, **solo cuando Stripe rechazó definitivamente** la transferencia: una solicitud inválida o un error de permisos. Un tiempo de espera agotado, un 5xx, un límite de tasa o cualquier cosa no reconocida deja el pago en `pending`.
+- La recuperación busca la transferencia de un pago `pending` por su grupo de transferencia antes de volver a intentar. Si existe, el pago se marca como enviado. Si no, se vuelve a usar la misma clave de idempotencia.
+- Una ejecución reclama un pago sin liquidar antes de tocarlo, y deja en paz uno en el que otra ejecución trabajó en los últimos 15 minutos.
+
+El fallo de un instructor no detiene a los demás, pero la ejecución igualmente termina como fallida para que un operador lo vea. Si Stripe rechaza la clave guardada, la ejecución se detiene de inmediato, ya que ninguna llamada posterior puede tener éxito.
+
+## La regla de la cuenta de pago
+
+Una ganancia pertenece a la cuenta de Stripe y al modo con los que se pagó su pedido, y el dinero solo se mueve dentro de esa cuenta. Después de que un administrador cambia de cuenta o de modo:
+
+- Las ganancias sin pagar de la cuenta anterior quedan **retenidas**. La ejecución no envía nada por ellas, y la página Earnings le dice al instructor que contacte a la plataforma.
+- La cuenta de pago de cada instructor es por cuenta de pago, así que configuran los pagos de nuevo.
+- Volver a la cuenta anterior hace que las ganancias antiguas se puedan pagar como antes.
+
+## Ajustes
+
+Por etapa, bajo `payouts` en `stages.config.ts`. Consulta <Link path="deploy/configuration">Configuración de etapas</Link>.
+
+## Invariantes
+
+`helpers/invariants/earnings.ts` en core-table comprueba, después de cada escenario de extremo a extremo, que las entradas coincidan con su pedido, que los reembolsos nunca superen lo pagado, que las filas de día igualen la suma de sus entradas, que el monto de un pago iguale sus entradas y que cada cuenta de pago esté bien formada.
+
+## Desarrollo local
+
+El sustituto de Stripe cubre la parte de Connect: cuentas Express, enlaces de incorporación, enlaces de panel y transferencias.
+
+- `POST http://localhost:2024/payout-run` ejecuta la ejecución de pagos una vez. Un cuerpo opcional `{ "graceSeconds": n }` reemplaza el período de gracia de recuperación de 15 minutos.
+- `LOCAL_PAYOUT_RUN_INTERVAL_SECONDS` la ejecuta con un temporizador.
+- `GET /stripe/test/transfers` lista las transferencias hechas, y `POST /stripe/test/transfers/fail-next` hace que la siguiente transferencia falle de una forma elegida (por ejemplo `rejected` o `timeout`).
+
+## Limitaciones
+
+- Sin manejo de impuestos, facturas ni formularios fiscales.
+- Sin conversión de moneda: cada moneda tiene su propio saldo y sus propios pagos.
+- Las disputas y los contracargos no se registran.
+- Las ganancias retenidas las paga a mano la plataforma. Nada las mueve a la cuenta nueva.

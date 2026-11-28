@@ -1,0 +1,37 @@
+---
+title: Thông báo khóa học
+description: Đăng, sửa và xóa thông báo gửi đến học viên của một khóa học, ai đọc được và ai nhận được thông báo.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+Thông báo khóa học (announcement) là một tin nhắn ngắn từ giảng viên gửi đến các học viên đã đăng ký khóa học. Nó có tiêu đề (tối đa 120 ký tự) và nội dung có định dạng.
+
+## Dành cho giảng viên
+
+Mở khóa học từ **My Courses** và đi đến mục **Announcements**, gần cuối trang.
+
+- **Đăng**: nhập tiêu đề và nội dung, rồi chọn **Post announcement**. Chỉ khóa học đã xuất bản mới nhận thông báo mới. Khóa học nháp sẽ hiển thị "Publish the course to post announcements."
+- **Sửa**: chọn **Edit** trên một thông báo, đổi tiêu đề hoặc nội dung, rồi chọn **Save changes**. Học viên thấy nội dung mới kèm dấu "edited".
+- **Xóa**: chọn **Delete** và xác nhận. Thông báo biến mất khỏi trang chủ khóa học. Không thể hoàn tác.
+
+Học viên được báo như thế nào:
+
+- Đăng thông báo sẽ báo cho mỗi học viên đã đăng ký một lần, trong biểu tượng chuông và, trừ khi họ đã tắt, qua email.
+- Sửa thông báo không gửi gì cả.
+- Xóa thông báo không thu hồi thông báo mà học viên đã nhận.
+- Đăng cùng một thông báo hai lần, ví dụ do nhấp đúp, vẫn chỉ đăng một lần.
+
+Trong khóa học đã lưu trữ, bạn vẫn có thể sửa và xóa thông báo, nhưng không đăng được thông báo mới.
+
+## Ai đọc được
+
+- Học viên đã đăng ký khóa học đọc thông báo ở trang chủ khóa học, mới nhất trước. Việc này vẫn hoạt động sau khi khóa học được lưu trữ.
+- Học viên đã rời khóa học, học viên của khóa học khác và khách truy cập không đọc được.
+- Các giảng viên dạy khóa học đọc chúng trong cổng giảng viên.
+
+## Dành cho nhà phát triển
+
+Thông báo khóa học không có cơ chế gửi riêng. Khi đăng, hệ thống ghi thông báo và một yêu cầu báo cho học viên của khóa học trong cùng một transaction, thông qua hợp đồng producer của notifications (`notifyCourseStudents`, kiểu `announcement.posted`). Sau đó cơ chế fan-out của notification sẽ chuyển đi. Xem <Link path="guides/notifications">Thông báo</Link> để biết cách hoạt động.

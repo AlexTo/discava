@@ -1,0 +1,85 @@
+---
+title: Tìm và học các khóa học
+description: Tìm kiếm và duyệt catalogue với vai trò học viên, trang khóa học công khai, bản xem trước miễn phí và hồ sơ giảng viên, đăng ký một khóa học miễn phí và rời khỏi nó, và My Learning.
+---
+
+import Link from '@components/link.astro';
+
+Bạn có thể tìm kiếm, duyệt và đọc các trang khóa học mà không cần tài khoản. Bạn đăng nhập để ghi danh.
+
+## Tìm kiếm
+
+Ô tìm kiếm ở phần đầu trang ghi "What do you want to learn?".
+
+1. Nhập ít nhất 3 ký tự. Các khóa học phù hợp được gợi ý khi bạn gõ.
+2. Chọn một gợi ý bằng phím mũi tên và Enter, hoặc bằng cách bấm vào nó, để mở khóa học đó.
+3. Hoặc nhấn Enter mà không chọn gợi ý nào để xem mọi kết quả.
+
+Trên trang kết quả bạn có thể:
+
+- **Sort by** Relevance, Highest rated hoặc Newest.
+- Lọc theo danh mục, cấp độ, ngôn ngữ, thời lượng và thẻ.
+- Đặt **Minimum rating**: từ 4.5, 4.0, 3.5 hoặc 3.0 trở lên.
+- Chọn **Clear filters** để bắt đầu lại.
+
+<Link path="guides/reviews">Xếp hạng và đánh giá</Link> giải thích xếp hạng ảnh hưởng đến thứ tự như thế nào.
+
+## Duyệt
+
+- **Browse courses**, tại `/courses`, liệt kê catalogue. Chọn một danh mục để thu hẹp, hoặc **All**.
+- Mỗi danh mục có trang riêng, với một ô tìm kiếm cho danh mục đó.
+- Danh mục mà nền tảng đã lưu trữ sẽ báo rằng nó không còn khả dụng, kèm liên kết đến **Browse all courses**.
+
+## Trang khóa học
+
+Trang của một khóa học đã xuất bản là công khai. Nó hiển thị khóa học bao gồm những gì, nội dung, giá hoặc "Free", xếp hạng và đánh giá, và các giảng viên.
+
+- **Play preview** phát video xem trước của khóa học, nếu có.
+- Bài học được đánh dấu **Free preview** mở ra mà không cần đăng nhập hay ghi danh. Bạn có thể xem video, đọc văn bản và tải file của nó. Các bài kiểm tra vẫn bị khóa: "Enrol to take this quiz". Không có gì được lưu cho bạn cho đến khi bạn ghi danh.
+- **View profile** trên thẻ của một giảng viên mở hồ sơ của họ, cùng các khóa học họ dạy.
+
+Nếu một giảng viên ngừng cung cấp bản xem trước, địa chỉ của nó báo "This preview is no longer available." kèm **View the course**.
+
+## Ghi danh vào khóa học miễn phí
+
+1. Trên trang khóa học, chọn **Enrol now**.
+2. Nếu bạn chưa đăng nhập, chọn **Continue to sign in** và đăng nhập. Bạn quay lại khóa học.
+3. Bài học đầu tiên bạn chưa hoàn thành sẽ mở ra, với "You're enrolled in" và tên khóa học.
+
+Nếu bạn ghi danh từ một bài học xem trước miễn phí, bạn ở lại bài học đó và có thể chọn **Start this lesson**.
+
+Khóa học có giá sẽ hiện **Buy now**. Xem <Link path="guides/payments">Khóa học trả phí và thanh toán</Link>.
+
+## Rời khỏi khóa học
+
+Với khóa học bạn chưa trả tiền, trang khóa học hiện **Leave course**.
+
+1. Chọn **Leave course**.
+2. Xác nhận bằng **Leave course**.
+
+Việc ghi danh của bạn kết thúc và tiến độ được giữ lại. Bạn có thể ghi danh lại bất cứ lúc nào và học tiếp, trừ khi khóa học đã được đặt giá từ đó: khi ấy bạn sẽ cần mua nó.
+
+Khóa học bạn đã trả tiền không có **Leave course**. Hãy yêu cầu hoàn tiền thay vào đó.
+
+## My Learning
+
+**My Learning** trên phần đầu trang liệt kê các khóa học của bạn trong hai tab, **In progress** và **Completed**. Mỗi thẻ hiển thị tiến độ và một nút:
+
+| Nút | Khi nào |
+| --- | --- |
+| **Start** | Bạn chưa hoàn thành gì |
+| **Continue** | Bạn đang học dở |
+| **Review** | Bạn đã hoàn thành khóa học |
+| **See what's new** | Bạn đã hoàn thành khóa học và giảng viên đã bổ sung thêm kể từ đó |
+
+Khi bạn đã đăng nhập, trang chủ chào đón bạn trở lại với **Continue learning** cho khóa học bạn đang học, các khóa học khác của bạn, và các khóa học để bắt đầu.
+
+Trang khóa học của một khóa bạn đã ghi danh hiển thị tiến độ theo phần trăm, với **Start learning** hoặc **Continue learning**. Khóa học đã hoàn thành hiển thị **Completed**, ngày, và **Review course**.
+
+## Xem thêm
+
+- <Link path="guides/video-lessons">Bài học video</Link>: trình phát, phụ đề và tìm kiếm những gì đã được nói.
+- <Link path="guides/quizzes-and-assignments">Bài kiểm tra và bài tập</Link>.
+- <Link path="guides/lesson-discussions">Thảo luận bài học</Link>: đặt câu hỏi trong một bài học.
+- <Link path="guides/certificates">Chứng chỉ</Link>.
+- <Link path="guides/notifications">Thông báo</Link>: chuông và cài đặt email.

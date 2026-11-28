@@ -1,0 +1,78 @@
+---
+title: 作业评分与反馈
+description: 讲师如何用分数和反馈批改上传类作业、请求重新提交并查看待处理的作业，以及背后的记录和规则。
+sidebar:
+  order: 12
+---
+
+**规格：** [`specs/20261120-230057-assignment-grading/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-230057-assignment-grading/)
+
+学生向上传类作业提交一个文件，在作业被退回之前可以替换它。课程的讲师可以列出每位已选课学生的作业，打开一份提交，然后要么附上分数和反馈将其作为最终结果退回，要么只附反馈请求重新提交。只有课程的讲师才能列出、读取或退回提交。
+
+| 谁 | API | 过程 |
+|---|---|---|
+| 学生 | core-api | `assignment.uploadUrl`、`submit`、`mySubmission`、`submissionFileUrl` |
+| 讲师 | instructor-api | `assignmentSubmission.list`、`get`、`fileUrl`、`return`、`requestResubmission`、`amendGrade`，以及 `gradingQueue.list` |
+
+## 提交与评分
+
+每位学生对每个作业有一条 `assignmentSubmission` 记录。它的 `status` 按下表变化：
+
+| 转换 | 谁 | 条件 | 效果 |
+|---|---|---|---|
+| 提交（首次） | 学生 | 尚无提交 | `submitted`，`version` 为 1，进入待处理索引 |
+| 重新提交 | 学生 | `version` 未变，且状态为 `submitted` 或 `resubmission_requested` | `submitted`，`version` 加 1，重新进入待处理索引 |
+| 请求重新提交 | 讲师 | `version` 和 `reviewRevision` 未变，状态为 `submitted` | `resubmission_requested`，离开待处理索引 |
+| 作为最终结果退回 | 讲师 | `version` 和 `reviewRevision` 未变，状态为 `submitted` 或 `resubmission_requested` | `returned`，设置分数，学生不能再重新提交 |
+| 修改成绩 | 讲师 | `reviewRevision` 未变，状态为 `returned` | 分数和反馈改变，状态保持 `returned` |
+
+- **并发。** 讲师的每次操作都会使 `reviewRevision` 加一，每次写入都以讲师当时看到的 `version` 和 `reviewRevision` 为条件。退回不会落到学生之后替换过的文件上，两位讲师同时操作时，恰好有一个成功。
+- **分数** 是 0 到该作业 `maxPoints` 之间的数字，最多两位小数。`pointsOutOf` 保存该作业被评分时所依据的满分，以防 `maxPoints` 之后发生变化。
+- **已离开的学生。** 对不再选课的学生，退回或修改会被拒绝。讲师仍然可以阅读他们的作业。
+- **完成状态不受影响。** 评分永远不会改变学生的完成状态，也不会改变内容项的 `studentActivityCount`。请求重新提交不会撤销完成状态，重新提交也不会把该学生重复计算一次。
+
+## 反馈轮次
+
+讲师的每次操作都会写入一条 `submissionFeedback` 记录：请求重新提交、最终退回或修改。请求重新提交时必须填写反馈，退回时反馈是可选的。
+
+- 轮次只追加，以提交和时间为键，因此一位学生的历史只需一次查询，最新的排在最前。学生可以在多次重新提交之间看到之前的反馈，从而知道被要求做什么。
+- 提交本身只保存当前成绩。轮次是独立的记录，因为每一轮可以包含 20 000 个字符的 Tiptap JSON，而且数量没有上限：把列表放在提交上，可能会达到 DynamoDB 的条目大小限制。
+
+每次操作，学生都会收到应用内通知和邮件通知（默认开启）：`assignment.returned`、`assignment.resubmission_requested` 和 `assignment.grade_updated`，每个都按该轮的 `feedbackId` 去重。通知和轮次与提交的变更在同一个事务中写入。
+
+## 待处理索引与选课
+
+等待讲师处理的提交（状态为 `submitted`）带有 `waitingCourseId` 和 `waitingSince`，它们构成一个稀疏索引（`byWaiting`）的键，课程为分区键，提交时间为排序键。每个更改 `status` 的写入，都会通过 `waitingKeys` 同时设置或移除这两个属性。
+
+因此，讲师主页上的评分队列（`gradingQueue.list`）对讲师教授的每门课程只做一次查询，每次的结果本身已按最早优先排序，再在内存中合并。它读取每一个待处理条目，所以总数是精确的。
+
+**选课在读取时应用。** 队列会批量读取所列学生的选课记录，并排除选课状态为 `dropped` 或缺失的学生。如果把选课状态存进索引，退款和结账就必须在各自的事务中重写学生在该课程中的每一份提交。改为读取时处理，就不必触动支付代码，重新选课的学生也会无需任何写入就重新出现在队列中。
+
+由于缺失选课记录会隐藏学生，部分读取不能冒充完整读取。当 DynamoDB 在限流下留下未处理的键时，队列会再次请求它们，最多三次，间隔逐渐变长，然后让请求失败，而不是返回一个更短的队列。
+
+按作业列出的列表会读取该课程的每一份提交和每一条选课记录（两次单分区查询），把它们合并，并在内存中分页，每次 50 行，游标编码了最后一行的排序位置。没有提交的学生显示为 "not submitted"，已离开的学生显示为 "no longer enrolled"。
+
+## 每日通知
+
+讲师通过 `assignment.submissions_received` 获知新的提交，每个作业每天（UTC）对每位讲师最多一次，在应用内发送，邮件默认关闭。一条小的 `submissionNotice` 记录（每个作业每天一条，两天后过期）作为标记。`submit` 先读取它；如果不存在，同一个事务会创建它，并为每位讲师写入一条通知，数量设有上限，使事务保持在 DynamoDB 的 100 个条目限制以内。如果另一份提交在竞争中获胜，已有的重试会在没有标记和通知的情况下再次运行。这让"每天最多一次"成为数据库层面的事实，而不是寄希望于时机。
+
+## 预览已提交的文件
+
+审阅页面在评分表单旁边显示 PDF 和图片（png、jpg、jpeg、gif、webp）；其他所有文件类型显示它们的详细信息和一个 Download 按钮。
+
+- **图片** 是一个 `<img>`，使用与下载相同的五分钟有效的 CloudFront 签名 URL。浏览器对图片会忽略 `Content-Disposition`。
+- **PDF** 从签名 URL 获取，并由 `react-pdf`（PDF.js）绘制到 canvas 上，仅在审阅页面加载。存储的文件以 `Content-Disposition: attachment` 提供，而门户的 CSP 会阻止 `<iframe>` 和 `<embed>`，所以绘制到 canvas 不需要更改分发、CSP 或存储的对象。
+
+**已知缺陷：JPEG 2000 和 JBIG2。** PDF.js 用 WebAssembly 解码这些内嵌图片格式，而门户的 CSP（`script-src 'self'`，没有 `'wasm-unsafe-eval'`）会阻止它。这类图片可能无法绘制，但页面的其余部分仍会渲染，Download 仍然可用。为此放宽共享的 CSP 被认为不值得。
+
+讲师尚未发送的分数和反馈保存在他们自己的浏览器中，按提交分别保存，不会保存到服务器。
+
+## 检查所强制的规则
+
+core-table 的 `helpers/assignment-grading.ts` 中的共享辅助函数是成绩字段和 `submissionFeedback` 唯一的写入者。学生的提交位于 `helpers/assignment-submission.ts`，它通过同一个 `waitingKeys` 设置待处理键。`helpers/invariants/assignment-grading.ts` 中的检查涵盖：
+
+- 成绩的形态：`returned` 的分数在 `pointsOutOf` 之内，并且有退回者和时间，其他状态都没有这些；
+- 待处理键与 `status` 一致；
+- 每一轮都属于某一份提交，以及轮次的形态；
+- 最新一轮与提交的状态和 `reviewRevision` 一致；
+- 每日通知标记的形态。

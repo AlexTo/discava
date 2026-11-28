@@ -1,0 +1,220 @@
+---
+title: 请求与数据流
+description: 登录、API 调用、公开页面、视频上传、数据变更、购买和搜索如何在 Discava 的各组件之间流转。
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+七个流程可以解释系统的大部分行为。
+
+## 登录
+
+```d2 title="Sign-in"
+shape: sequence_diagram
+browser: "Browser"
+portal: "Portal (CloudFront)"
+cognito: "Cognito"
+trigger: "Pre token generation"
+table: "Core table"
+
+browser -> portal: "load app and runtime-config.json"
+browser -> cognito: "redirect to sign-in page"
+cognito -> trigger: "before issuing tokens"
+trigger -> table: "write the user record"
+cognito -> browser: "tokens, with the user's groups"
+```
+
+1. 门户加载并读取 `runtime-config.json`，找到 Cognito。
+2. 用户在 Cognito 的托管页面登录。
+3. 在签发令牌之前，Cognito 调用一个函数，把用户的记录写入核心表，这样应用中任何持有令牌的人都有对应的一行记录。这次写入是尽力而为：如果失败或很慢，用户仍然可以登录，下次登录或刷新令牌时会再试一次。
+4. 浏览器收到包含用户所属用户组的令牌。
+
+用户自行注册时，第二个触发器会把他们加入 `student` 和 `instructor` 组。
+
+## 调用 API
+
+```d2 title="An API call"
+shape: sequence_diagram
+browser: "Browser"
+waf: "WAF"
+gw: "API Gateway"
+fn: "API function"
+table: "Core table"
+
+browser -> waf: "tRPC call with token"
+waf -> gw: "allowed"
+gw -> gw: "verify token with Cognito, throttle"
+gw -> fn: "invoke"
+fn -> fn: "check group, validate input"
+fn -> table: "read or write"
+fn -> browser: "result"
+```
+
+请求在接触数据之前会被检查三次：
+
+1. 当 stage 启用了 **WAF** 时，它过滤常见攻击。
+2. **API Gateway** 对照用户池验证令牌，并应用请求限制。少数公开过程跳过令牌检查，例如查看已发布课程的介绍页。
+3. **函数** 检查调用者所属的用户组（instructor-api 要求 `instructor`，admin-api 要求 `admin`），验证输入，并应用该过程的规则，例如“调用者已报名此课程”。
+
+## 提供公开页面
+
+课程介绍页、讲师主页和证书页面必须能被爬虫和链接预览读取，而它们不会运行门户的 JavaScript。
+
+```d2 title="A public page"
+shape: sequence_diagram
+visitor: "Crawler or browser"
+cf: "Student portal (CloudFront)"
+fn: "Page renderer"
+table: "Core table"
+
+visitor -> cf: "GET /learn/<courseId>"
+cf -> fn: "on a cache miss"
+fn -> table: "read the course"
+fn -> cf: "HTML"
+cf -> visitor: "HTML, cached for up to five minutes"
+```
+
+1. 学生门户的 CloudFront 分发把 `/learn/*`、`/instructors/*`、`/certificates/*`、`/sitemap.xml` 和 `/robots.txt` 发送给页面渲染函数。其他所有路径都是静态站点。
+2. 渲染函数读取表，并把页面的内容和元数据填入门户自己的 `index.html`。它只有只读权限，并且只有 CloudFront 能调用它。
+3. CloudFront 只按路径缓存响应，因此结果从不取决于是谁在请求。
+
+完整设计见 <Link path="design/public-pages">公开页面</Link>。
+
+## 视频的旅程
+
+```d2 title="From upload to playback"
+direction: right
+instructor: "Instructor"
+api: "instructor-api"
+upload: "Upload bucket"
+mc: "MediaConvert"
+lesson: "Lesson media bucket"
+done: "transcode-complete"
+tr: "Transcribe"
+cap: "transcribe-complete"
+table: "Core table"
+cf: "CloudFront"
+student: "Student"
+
+instructor -> api: "1. ask to upload"
+instructor -> upload: "2. PUT file (presigned URL)"
+api -> mc: "3. submit job"
+mc -> lesson: "4. HLS renditions"
+mc -> done: "5. job finished (EventBridge)"
+done -> table: "mark ready"
+done -> tr: "6. start captions"
+tr -> cap: "7. finished (EventBridge)"
+cap -> lesson: "caption track"
+student -> cf: "8. play (signed)"
+cf -> lesson
+```
+
+**上传。** 浏览器使用 instructor-api 提供的预签名 URL 直接上传到 S3，所以大文件不会经过 Lambda 函数。
+
+**转码。** MediaConvert 把上传的文件转成多个画质的 HLS 版本，让播放器适应观看者的网络。任务完成后，一条 EventBridge 规则调用一个函数，把视频标记为就绪，并启动 Transcribe 任务生成字幕。
+
+**字幕。** Transcribe 完成后，第二个函数保存字幕轨道。如果课程还有其他字幕语言，字幕翻译功能（见[对变更作出响应](#对变更作出响应)）会用 Amazon Translate 翻译这条轨道。转录索引功能会把字幕文本加入搜索。
+
+**恢复。** 一个函数每 30 分钟运行一次，查找卡在处理中的视频。每个完成处理函数都有失败队列，已下线的文件由计划清理删除。
+
+**播放。** 课程媒体是私有的。已报名的学生打开课时时，core-api 检查报名情况，并签发一个短期有效的 CloudFront 签名。CloudFront 只向带有该签名的请求提供视频。有两类内容对任何人开放，无论是否登录：课程的预览视频，以及讲师标记为免费预览的课时。签名密钥由每个负责签名的 API 中的一个专用函数持有，而不是由 API 的共享函数持有。
+
+## 对变更作出响应
+
+有些结果依赖许多记录：学生的课程进度、课程的搜索条目、讲师的分析数据和收入。它们不会在修改数据的那个请求内计算，而是之后根据表的变更流重新计算。
+
+```d2 title="One stream reader, one queue per feature"
+direction: right
+api: "Any API write"
+table: "Core table"
+stream: "Change stream"
+router: "Stream router"
+q1: "progress queue"
+q2: "search queue"
+q3: "analytics queue"
+q4: "notification queue"
+h1: "Progress recalculation"
+h2: "Search indexing"
+h3: "Analytics update"
+h4: "Notification delivery"
+os: "OpenSearch"
+ses: "SES"
+
+api -> table
+table -> stream
+stream -> router
+router -> q1
+router -> q2
+router -> q3
+router -> q4
+q1 -> h1
+q2 -> h2
+q3 -> h3
+q4 -> h4
+h1 -> table
+h3 -> table
+h2 -> os
+h4 -> ses
+```
+
+图中展示了八个功能中的四个：
+
+| 功能 | 对变更的响应方式 |
+| --- | --- |
+| 进度重新计算 | 更新学生的课程进度，并在课程完成时签发证书 |
+| 搜索索引 | 更新课程在课程索引中的条目 |
+| 转录索引 | 更新视频的字幕文本在转录索引中的内容 |
+| 分析更新 | 更新课程的分析数据 |
+| 通知投递 | 把广播分发给相应的学生，并通过 SES 发送邮件 |
+| 收入记录 | 记录每位讲师在已支付订单中的份额 |
+| 字幕翻译 | 把视频的字幕翻译成课程的其他语言 |
+| 品牌发布 | 把平台的品牌文件写入公开媒体，门户从那里获取 |
+
+- **流路由** 是这个流唯一的读取方。它把每个变更复制到每个过滤条件匹配的功能的队列中。
+- 每个**功能**都有自己的队列，所以速度慢或出错的功能不会拖延其他功能。
+- 反复失败的消息会转入该功能的**失败队列**，并触发告警。运维人员修复原因后重新投递队列。
+- 处理函数可能收到重复或乱序的变更，所以每个处理函数的编写都保证两种情况下结果相同。
+
+对用户的影响是：进度和分析等数据会在触发它们的操作之后几秒才更新。
+
+完整设计见 <Link path="design/stream-event-router">流事件路由</Link>，其中两个功能分别见 <Link path="design/search">搜索</Link> 和 <Link path="design/progress-and-completion">进度与完成</Link>。
+
+## 购买课程
+
+付费课程在 Stripe 的页面上购买，学生是否报名取决于 Stripe 的确认，而不是浏览器返回。
+
+```d2 title="A purchase"
+direction: right
+student: "Student portal"
+core: "core-api"
+table: "Core table"
+stripe: "Stripe"
+hook: "Stripe webhook API"
+
+student -> core: "1. Buy now"
+core -> table: "2. pending order"
+core -> stripe: "3. create checkout"
+student -> stripe: "4. pay"
+stripe -> hook: "5. signed confirmation"
+hook -> table: "6. order paid + enrolment"
+```
+
+1. core-api 写入一个 `pending` 订单，然后向 Stripe 请求一个结账页面并把学生送过去。金额是课程自己的价格，如果学生输入了优惠券则减去优惠，绝不使用浏览器发来的数字。优惠券在写入订单之前先被占用，所以多名学生同时结账时，兑换次数限制依然有效。
+2. 学生在 Stripe 上付款。Discava 从不接触银行卡号。
+3. Stripe 向 webhook API 发送签名确认。处理函数验证签名，然后在一个事务中把订单标记为已支付并创建报名记录。
+4. 回到课程页面后，门户等待报名记录出现，通常在几秒内。
+
+Stripe 可能多次投递同一个确认，所以处理函数在第二次不会改变任何内容。无法送达的付款，例如在此期间课程被取消发布，会被自动退款。
+
+已支付的订单随后像其他写入一样经过变更流：收入功能记录每位讲师的份额，每日运行支付到期的款项。完整设计见 <Link path="design/payments">支付</Link> 和 <Link path="design/instructor-payouts">讲师结算</Link>。
+
+## 搜索
+
+搜索从 OpenSearch 读取，由变更流保持其更新。
+
+- **目录。** core-api 的公开搜索过程发送查询和过滤条件，返回按相关度和评分排序的已发布课程。另一个过程在学生输入时建议标题。新发布的课程会在发布几秒后出现。
+- **课程内部。** 已报名的学生可以搜索课程视频中说过的内容。core-api 根据表来确定学生可以观看哪些视频，并把查询限制在这些视频内，所以索引从不决定访问权限。
+
+设计见 <Link path="design/search">搜索</Link>。

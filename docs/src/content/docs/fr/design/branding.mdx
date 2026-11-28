@@ -1,0 +1,52 @@
+---
+title: Image de marque
+description: "Comment la marque de la plateforme définie par l'admin est stockée, publiée et appliquée : l'enregistrement et sa révision, les clés d'image immuables, le document publié et son budget de cache, le moteur de rendu des pages, la palette de couleurs et les vérifications SVG."
+sidebar:
+  order: 13
+---
+
+**Spec :** [`specs/20261122-090054-admin-branding/`](https://github.com/AlexTo/discava/tree/main/specs/20261122-090054-admin-branding/)
+
+Un administrateur définit un logo, un nom, une icône, une image de partage et une couleur depuis le portail admin, et chaque portail et page publique les affiche en moins de 5 minutes, sans déploiement. Cette page décrit comment cela fonctionne.
+
+## L'enregistrement et sa révision
+
+La marque est un seul enregistrement `platformBrand` dans la table core, avec une clé constante. Il est absent jusqu'à la première sauvegarde, et absent signifie la marque par défaut. `saveBrand` dans `helpers/platform-brand.ts` en est le seul écrivain.
+
+Chaque sauvegarde porte la marque entière et la `revision` que l'administrateur a chargée.
+
+- Une première sauvegarde est conditionnée par l'absence de l'enregistrement, et les suivantes par le fait que `revision` vaut toujours la valeur chargée.
+- Une condition qui échoue devient `CONFLICT` (« Someone else changed the branding. Reload to see their changes. »), de sorte qu'une sauvegarde périmée ne peut jamais s'appliquer à moitié.
+- Les champs `changedBy`, `changedByName` et `changedAt` indiquent qui a sauvegardé en dernier.
+
+## Images et clés immuables
+
+Les images vivent dans le bucket média public sous `brand/<kind>/<nonce>.<ext>`, où `kind` vaut `logo`, `icon` ou `share-image`. `branding.createUploadUrl` présigne un `PUT` avec le type de contenu exact, la longueur, un `Cache-Control` immuable d'un an et la balise `lifecycle=unattached`. Un nouveau téléversement est une nouvelle clé, donc une image remplacée ne peut jamais être servie depuis un cache une fois que la marque pointe ailleurs.
+
+`branding.save` lit chaque objet nouvellement référencé et vérifie son type, sa taille et sa forme selon les règles de `@discava/common-branding/image-rules` (le portail admin applique les mêmes règles avant le téléversement). Il retire la balise d'un objet conservé, et la remet sur un objet remplacé, que la règle de cycle de vie du bucket supprime après un jour. Rien n'est écrit si une image échoue.
+
+### Vérifications SVG
+
+Un logo SVG est analysé (`helpers/brand-image.ts` d'admin-api) et refusé sauf si chaque élément et attribut figure sur une liste d'autorisation : pas de `script`, `foreignObject`, `iframe`, d'attributs de gestionnaire d'événements, ni de références autres qu'un `#fragment` du même document. Refuser plutôt que réécrire garde le fichier stocké exactement tel qu'il a été téléversé. Les logos sont affichés via `<img>`, où les navigateurs n'exécutent jamais les scripts SVG, et la distribution ajoute une `Content-Security-Policy` avec `sandbox` pour un fichier ouvert directement. L'icône est uniquement en PNG, car les icônes d'écran d'accueil iOS doivent être en mode raster.
+
+## Le document publié
+
+Les navigateurs ne lisent pas la table. La fonctionnalité de flux `brand-publishing` (voir [le routeur](./stream-event-router/)) lit l'enregistrement courant, jamais l'image du flux, de sorte qu'une livraison tardive ne peut pas publier une révision plus ancienne. Elle écrit `brand/brand.json` dans le bucket média public avec `Cache-Control: public, max-age=60, s-maxage=240`. Le document omet qui a sauvegardé et quand. Les portails le récupèrent depuis une autre origine, donc la distribution ajoute des en-têtes CORS pour `GET` et `HEAD` à tout ce qui est sous `brand/`.
+
+C'est le **budget de cache** : un navigateur conserve le document jusqu'à 60 secondes et CloudFront jusqu'à 240, de sorte qu'un changement atteint chaque nouveau chargement de page en moins de 5 minutes. Un document absent, illisible ou invalide donne la marque par défaut, donc une panne ne casse jamais une page.
+
+## Dans les portails
+
+`BrandProvider` dans `@discava/common-web-utils/brand` se place à l'intérieur de `RuntimeConfigProvider` dans chaque portail, et `useBrand()` donne la marque résolue. Il part de la marque que le moteur de rendu des pages a intégrée, sinon de la dernière marque vue (conservée dans `localStorage`), sinon de rien. Avec une marque, il s'affiche aussitôt et se rafraîchit en arrière-plan ; sans, il retient le premier rendu jusqu'à l'arrivée de `brand.json` ou jusqu'à une seconde écoulée. Il définit les variables CSS, les liens d'icône, la couleur du thème et le titre. Le portail admin l'alimente aussi depuis `branding.get` et chaque sauvegarde, de sorte que l'administrateur voit un changement tout de suite.
+
+## Le moteur de rendu des pages
+
+Le [moteur de rendu des pages](./public-pages/) lit l'enregistrement à chaque rendu (la page est ensuite mise en cache 300 secondes) et l'applique au suffixe du titre, à `og:site_name`, au fournisseur JSON-LD, à `og:image` et `twitter:image` (l'image de partage quand la page n'a pas la sienne), aux liens d'icône et à un style `:root` en ligne, et intègre le document de marque dans les données de la page pour que le portail parte de lui. Si la lecture échoue, il consigne un avertissement et rend la marque par défaut.
+
+## La palette de couleurs
+
+`brandPalette(hex)` dans `@discava/common-branding/colour` renvoie les variables CSS à remplacer : `--primary`, `--primary-foreground`, `--ring`, les équivalents de la barre latérale et `--brand-link`. Elle choisit la couleur de texte au meilleur rapport de contraste WCAG avec la couleur de marque et refuse la couleur quand aucune n'atteint 4,5:1. `--brand-link` est la couleur de marque seulement quand elle atteint 4,5:1 sur l'arrière-plan de la page. La même fonction s'exécute dans admin-api, l'aperçu du portail admin, les portails et le moteur de rendu, donc ils ne peuvent pas diverger. Les couleurs à signification (destructive, graphiques et statuts) ne sont pas touchées.
+
+## Ce qui n'est pas aux couleurs de la marque
+
+Les pages de connexion hébergées de Cognito et le site de documentation gardent leur propre apparence.

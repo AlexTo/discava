@@ -1,0 +1,39 @@
+---
+title: Aperçu de la conception
+description: Comment les conceptions des fonctionnalités de Discava sont documentées, et les concepts partagés sur lesquels elles reposent.
+sidebar:
+  order: 0
+---
+
+import Link from '@components/link.astro';
+
+Cette section décrit **comment fonctionnent les fonctionnalités de Discava**. Chaque page couvre un domaine fonctionnel.
+
+## Pages
+
+| Page | Contenu |
+|---|---|
+| <Link path="design/assignments">Notation et retours sur les devoirs</Link> | Rendre les devoirs à téléverser avec des points et un retour, demandes de nouvelle remise, tours de retour, index d'attente et file de notation, avis quotidien à l'instructeur, et aperçu des fichiers remis |
+| <Link path="design/branding">Image de marque</Link> | Le nom, le logo, l'icône, l'image de partage et la couleur de la plateforme définis par l'admin : l'enregistrement de marque, le document publié que lisent les portails et les pages publiques, la palette de couleurs et les vérifications des images |
+| <Link path="design/catalogue-categories">Catégories du catalogue</Link> | La taxonomie des catégories gérée par l'admin, les champs de catalogue d'un cours, et comment ils alimentent les facettes de recherche |
+| <Link path="design/certificates">Certificats</Link> | Comment un certificat de complétion est émis, activé ou désactivé par cours, partagé et vérifié |
+| <Link path="design/course-analytics">Analytique de cours</Link> | Le tableau de bord instructeur et la page d'analytique de cours : ce que signifie chaque chiffre, et pourquoi les chiffres retardent de quelques secondes sur les enregistrements |
+| <Link path="design/instructor-payouts">Paiements aux instructeurs</Link> | Comment les gains sont enregistrés à partir des commandes, le registre et ses résumés par jour, l'exécution quotidienne des paiements et sa reprise, et la règle du compte de paiement |
+| <Link path="design/live-course-editing">Édition de cours en direct</Link> | Ajouter, supprimer, masquer, restaurer et modifier des modules, des leçons et des éléments de contenu après la publication d'un cours |
+| <Link path="design/payments">Paiements</Link> | Acheter un cours payant avec Stripe Checkout : prix, commandes, le webhook qui livre un cours exactement une fois, remboursements, et la connexion Stripe de l'administrateur |
+| <Link path="design/progress-and-completion">Progression et complétion</Link> | Comment la complétion des éléments, des leçons et des cours est enregistrée, et le recalcul côté serveur qui en est responsable |
+| <Link path="design/public-pages">Pages publiques</Link> | Pages d'accueil des cours et profils d'instructeurs pour les robots d'exploration et les aperçus de liens : le moteur de rendu des pages, la mise en cache et la fraîcheur, la réécriture SPA, le réglage d'indexation et les règles d'exposition de la vidéo d'aperçu |
+| <Link path="design/quizzes">Quiz</Link> | L'élément de contenu quiz : modèle de données, notation, tentatives, et l'expérience de l'étudiant et de l'instructeur |
+| <Link path="design/search">Recherche</Link> | Recherche entre types de contenu : la collection OpenSearch Serverless, le pipeline d'indexation, et comment la visibilité est appliquée |
+| <Link path="design/stream-event-router">Routeur d'événements de flux</Link> | Comment une fonctionnalité réagit aux changements de la table core : son enregistrement, sa file, sa file d'échecs, son alarme et les obligations de son gestionnaire, ainsi que le routeur local |
+| <Link path="design/video-player">Lecteur vidéo et sous-titres</Link> | Comment le lecteur vidéo des leçons reprend la lecture, change de vitesse, répond au clavier et affiche les sous-titres, et comment les sous-titres sont générés ou téléversés |
+
+## Concepts partagés
+
+**Hiérarchie du curriculum.** Un cours contient des modules, un module contient des leçons, et une leçon contient une liste ordonnée d'éléments de contenu (vidéo, texte, fichier, quiz, devoir). Les quatre vivent dans une seule partition DynamoDB (`COURSE#<courseId>`) via la collection `curriculum` d'ElectroDB, donc un cours entier se lit en une requête. Cette requête lit chaque page, car le curriculum d'un cours peut dépasser la limite de 1 Mo par page de DynamoDB.
+
+**Visibilité effective.** Un module, une leçon ou un élément de contenu n'est affiché aux étudiants que si **lui et chacun de ses ancêtres** sont `visible` et non archivés. Les lectures étudiantes, les écritures étudiantes et les calculs de progression utilisent tous la visibilité effective, jamais la seule `visibility` d'un enregistrement. La règle est implémentée une seule fois, sous le nom `filterEffectivelyVisible` dans `@discava/core-table`.
+
+**Inscription.** Un étudiant ne lit le contenu d'un cours, et n'y écrit quoi que ce soit, que s'il est inscrit : il a un enregistrement `enrolment` (pk `courseId`, sk `userId`) dont le `status` n'est pas `dropped`. Les étudiants s'inscrivent eux-mêmes avec `course.enrol` de core-api, et seulement à un cours **publié** et **gratuit** : le statut et le prix du cours sont vérifiés dans la même transaction que l'écriture de l'inscription, donc un cours archivé ou mis à un prix en cours de requête ne peut pas prendre une nouvelle inscription. On n'entre dans un cours payant que par une commande payée (voir <Link path="design/payments">Paiements</Link>). S'inscrire de nouveau renvoie l'inscription existante. Un cours en brouillon ou archivé répond `NOT_FOUND`, comme le fait `course.publicView` anonyme, donc l'existence d'un brouillon ne fuit pas. Un étudiant inscrit peut toujours lire un cours après son archivage, mais c'est aussi en lecture seule pour lui. `course.myEnrolment` renvoie l'inscription de l'appelant, ou aucune.
+
+**Les données étudiantes sont indexées par utilisateur.** `progress`, `itemCompletion`, `quizAttempt` et `quizSummary` utilisent `userId` comme clé de partition, donc « la progression d'un étudiant dans un cours » se lit en une requête. L'envers est qu'on ne peut pas répondre à « quels étudiants ont touché cet élément ? » sans un scan, c'est pourquoi les éléments de contenu portent un `studentActivityCount`.

@@ -1,0 +1,131 @@
+---
+title: Stream event router
+description: "Come una funzionalità reagisce alle modifiche della core table: la registrazione, la sua coda e coda dei fallimenti, gli obblighi dell'handler, il comportamento locale e il redrive."
+sidebar:
+  order: 7
+---
+
+**Spec:** [`specs/20261116-183449-stream-event-router/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-183449-stream-event-router/)
+
+Lo stream DynamoDB della core table ha **un solo lettore**: lo stream router. Invia ogni modifica alla coda di ogni funzionalità che la richiede, e l'handler di ciascuna funzionalità legge la propria coda.
+
+Una funzionalità che reagisce alle modifiche della tabella aggiunge una registrazione, un handler e il collegamento dell'handler (vedi sotto). Non aggiunge code, allarmi o mapping dello stream propri. Oggi sono registrate otto funzionalità; la [tabella più avanti](#metriche-da-tenere-docchio) le elenca.
+
+```d2 title="One stream reader, one queue and failure queue per feature"
+table: "Core table"
+stream: "DynamoDB Stream"
+router: "Stream router"
+pq: "progress-recalculation queue"
+sq: "search-indexing queue"
+pf: "progress failure queue"
+sf: "search failure queue"
+ph: "progress handler"
+sh: "search handler"
+
+table -> stream
+stream -> router
+router -> pq: "filters match"
+router -> sq: "filters match"
+pq -> ph
+sq -> sh
+pq -> pf: "after maxReceiveCount"
+sq -> sf: "after maxReceiveCount"
+```
+
+## La registrazione
+
+`STREAM_FEATURES` in `packages/databases/core-table/src/helpers/stream-features.ts` è l'unica definizione letta sia dallo stack distribuito sia dall'event runner locale.
+
+| Campo | Significato |
+|---|---|
+| `name` | Univoco, in kebab-case. Dà il nome alla coda, alla coda dei fallimenti, all'allarme e all'handler |
+| `filters` | Quali record vuole la funzionalità: un `eventName` (`INSERT`, `MODIFY` o `REMOVE`), l'`image` da esaminare (`NewImage` o `OldImage`) e le `entities` (nomi delle entità ElectroDB). Un record che supera uno qualsiasi dei filtri va alla funzionalità |
+| `handler` | La funzione `events-*` che legge la coda della funzionalità |
+| `batch` | `maxRecords` e `windowSeconds`: quante modifiche, e quanto attendere per raccoglierle, a ogni esecuzione dell'handler |
+| `maxReceiveCount` | Quante volte un messaggio viene ricevuto prima di passare alla coda dei fallimenti |
+| `maxConcurrency` | Limite facoltativo alle esecuzioni concorrenti dell'handler (almeno 2, il minimo di un event source mapping) |
+
+`featuresFor(record)` è l'unica logica di corrispondenza. Il router e il runner locale la chiamano entrambi, quindi non possono essere in disaccordo. Un record va a ogni funzionalità con un filtro corrispondente, come copia propria, e a nessun'altra. Un record che non corrisponde a nessuna non produce nulla.
+
+I filtri e il matcher di ogni funzionalità stanno nel proprio modulo accanto al registro (`progress-stream.ts` con `PROGRESS_STREAM_FILTERS` e `matchesProgressStreamFilters`, `search-stream.ts`, e così via), e `featuresFor` chiama quei matcher.
+
+I test falliscono quando un nome si ripete, un filtro indica un'entità che la core table non definisce, un filtro non corrisponde a nulla nei record di esempio (`stream-features.test.ts`), o un `handler` non indica nessuna funzione (`handlers.test.ts` in `packages/events`).
+
+## Aggiungere una funzionalità
+
+1. Aggiungi una voce a `STREAM_FEATURES`.
+2. Scrivi l'handler in `packages/events` e il suo wrapper `events-*` con `ts#lambda-function`. Leggi i suoi record tramite `sqsToStreamRecords` (`src/router/sqs-stream-records.ts`), che trasforma i messaggi della coda in record dello stream.
+3. Aggiungi l'handler a `HANDLERS` in `packages/events/src/router/handlers.ts`, attraverso cui il runner locale smista. `handlers.test.ts` fallisce quando l'`handler` di una registrazione non è presente, o quando contiene un handler che nessuna funzionalità usa.
+4. Costruisci la Lambda dell'handler in `StreamRouterStack` (`packages/infra/src/stacks/stream-router-stack.ts`), come fanno `createProgressRecalculationLambda` e `createSearchIndexingLambda`: crea la funzione `events-*`, concedile l'accesso a ciò che legge e scrive (la core table, le sue impostazioni al momento del deploy e così via), e aggiungila all'oggetto `handlers` passato a `StreamRouter`, con chiave il nome della funzionalità. Senza di essa, `StreamRouter` lancia `No handler given for stream feature '<name>'` durante il synth.
+5. Con l'handler passato, il construct `StreamRouter` costruisce la coda, la coda dei fallimenti, l'allarme e l'event source mapping dalla voce, e il runner locale costruisce il proprio equivalente.
+6. Scrivi i test dell'handler per la consegna duplicata e riordinata (vedi sotto).
+7. Aggiungi le metriche di coda della funzionalità all'[elenco più avanti](#metriche-da-tenere-docchio).
+
+## Cosa costruisce il construct per ogni funzionalità
+
+- Una **coda**, con un visibility timeout pari a sei volte il timeout dell'handler.
+- Una **coda dei fallimenti**, che trattiene un messaggio dopo `maxReceiveCount` ricezioni e lo conserva per 14 giorni.
+- Un **allarme** che è in stato di allarme ogni volta che la coda dei fallimenti contiene un messaggio. Non ha destinatari di notifica: compare nella console CloudWatch.
+- Un **event source mapping** dalla coda all'handler, che usa `batch` e `maxConcurrency` della registrazione.
+
+Tutte le code condividono una sola chiave KMS gestita dal cliente, con rotazione. Uno stage può passare alla cifratura gestita da SQS con `enableKmsEncryption: false`, come la core table. I messaggi contengono interi record della tabella, quindi trattali come dati della tabella.
+
+Il router ha una propria coda dei fallimenti e un proprio allarme (`StreamRouterFailures`) per un record che non può mai inviare: troppo grande per un messaggio, o rifiutato dalla coda. Contiene una descrizione del record (il suo event id, le chiavi, l'entità, le funzionalità, la dimensione e il motivo; non il contenuto) così da poterlo trovare nella tabella. Anche i batch falliti del mapping dello stream (numeri di shard e di sequenza) finiscono lì. Un invio che fallisce per un motivo transitorio viene ritentato dal mapping dello stream, solo per quel record.
+
+## Obblighi dell'handler
+
+Il router non promette né l'ordine per record né la consegna esattamente una volta. Ogni handler DEVE poter essere eseguito due volte con gli stessi record, e con record in qualsiasi ordine, e DEVE spiegare come nel commento di intestazione del suo file:
+
+- **Ricava il risultato dai dati correnti** dove l'ordine conta, mai dal solo record. L'indicizzazione della ricerca legge dalla modifica solo l'identità del corso e rilegge il corso dalla core table, poi lo indicizza se è pubblicato e lo rimuove se non è pubblicato o non esiste più. Il ricalcolo dei progressi ricalcola i progressi di ogni studente dal curriculum e dai completamenti a ogni esecuzione.
+- Una modifica che non può essere gestita (per esempio non indica nessun corso) **fallisce** invece di essere saltata, così finisce nella coda dei fallimenti dove qualcuno può vederla.
+- I contatori e gli altri valori che si accumulano dai record stessi (applicare una modifica due volte o fuori ordine li fa derivare) richiedono un proprio controllo che la consegna duplicata e riordinata diano lo stesso risultato, oppure devono essere ricalcolati dalla tabella.
+
+I test di una nuova funzionalità includono una consegna duplicata e una riordinata.
+
+## Fallimenti e redrive
+
+Un handler che lancia un'eccezione restituisce i suoi messaggi alla coda dopo il visibility timeout. Dopo `maxReceiveCount` ricezioni, un messaggio passa alla coda dei fallimenti di quella funzionalità e non blocca più le modifiche successive. Le altre funzionalità non sono toccate.
+
+Una volta risolta la causa, riproduci i messaggi con il redrive del servizio di code. Non è costruito alcuno strumento di replay, perché gli handler possono essere rieseguiti senza rischi.
+
+Per uno stage distribuito, nella console SQS apri la coda dei fallimenti e scegli **Start DLQ redrive** verso la coda della funzionalità (oppure usa `aws sqs start-message-move-task --source-arn <failure queue ARN> --destination-arn <feature queue ARN>`). Verifica che l'allarme della coda dei fallimenti torni a OK.
+
+## Metriche da tenere d'occhio
+
+Ogni coda SQS pubblica metriche di profondità ed età nel namespace `AWS/SQS`, con una dimensione `QueueName`:
+
+- **`ApproximateNumberOfMessagesVisible`** sulla coda di una funzionalità: modifiche in attesa. Dovrebbe tornare vicino a zero tra una raffica e l'altra.
+- **`ApproximateAgeOfOldestMessage`** sulla coda di una funzionalità: quanto è indietro l'handler. Un'età in crescita con una profondità piatta indica un handler bloccato o limitato.
+- **`ApproximateNumberOfMessagesVisible`** sulla coda dei fallimenti di una funzionalità: qualsiasi valore sopra zero è lavoro messo da parte, e fa scattare l'allarme della funzionalità.
+
+| Funzionalità | Coda | Coda dei fallimenti |
+|---|---|---|
+| `progress-recalculation` | `ProgressRecalculationQueue` | `ProgressRecalculationFailures` |
+| `search-indexing` | `SearchIndexingQueue` | `SearchIndexingFailures` |
+| `transcript-indexing` | `TranscriptIndexingQueue` | `TranscriptIndexingFailures` |
+| `analytics-update` | `AnalyticsUpdateQueue` | `AnalyticsUpdateFailures` |
+| `earnings-recording` | `EarningsRecordingQueue` | `EarningsRecordingFailures` |
+| `notification-delivery` | `NotificationDeliveryQueue` | `NotificationDeliveryFailures` |
+| `caption-translation` | `CaptionTranslationQueue` | `CaptionTranslationFailures` |
+| `brand-publishing` | `BrandPublishingQueue` | `BrandPublishingFailures` |
+
+I nomi sono gli id logici del construct (i nomi delle code distribuite portano il prefisso dello stack e un suffisso). Una nuova funzionalità aggiunge una riga qui.
+
+## Comportamento locale
+
+`pnpm dev` esegue lo stesso router nell'event runner (`packages/events/src/local`), con ElasticMQ come coda (compatibile con l'API SQS, in Docker, in memoria) e un runner per funzionalità per ogni registrazione. Usa gli stessi `STREAM_FEATURES` e `featuresFor` del router distribuito e mantiene la dimensione e la finestra del batch di ogni funzionalità. Un messaggio ricevuto `maxReceiveCount` volte passa alla coda dei fallimenti della funzionalità e viene registrato nel log. Non serve nessun account AWS.
+
+Il runner (porta 2024) ha route per ispezionare e rieseguire le code locali:
+
+```sh
+# queue and failure queue counts per feature
+curl http://localhost:2024/router/queues
+
+# move a feature's failed messages back to its queue
+curl -X POST http://localhost:2024/router/redrive/search-indexing
+
+# make a feature's next 5 batches fail, to reproduce a failure end to end
+curl -X POST http://localhost:2024/router/fail/search-indexing -d '{"batches": 5}'
+```
+
+Il redrive è un piccolo helper del runner, non il redrive del servizio di code, che ElasticMQ non documenta. Le code sono in memoria, quindi fermare `pnpm dev` le svuota.

@@ -1,0 +1,46 @@
+---
+title: Analytique de cours
+description: Ce que montrent le tableau de bord du portail instructeur et la page d'analytique d'un cours, comment chaque chiffre est défini, et pourquoi les chiffres retardent de quelques secondes sur les enregistrements.
+sidebar:
+  order: 8
+---
+
+import Link from '@components/link.astro';
+
+**Spec :** [`specs/20261120-154551-first-lesson-start/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154551-first-lesson-start/) (l'activation, ainsi que les réponses et les refus de l'invite de première leçon)
+
+Le tableau de bord du portail instructeur affiche une carte de synthèse par cours, et chaque carte ouvre la page d'analytique de ce cours. Les deux lisent des chiffres stockés, tenus à jour à partir du flux de la table core. Rien n'est compté à partir des enregistrements lors d'une requête, donc les pages se chargent vite quel que soit le nombre d'étudiants inscrits.
+
+Le portail les lit via `analytics.courseSummaries` (les cartes), `analytics.course`, `analytics.quiz` et `analytics.videoQuestions` d'instructor-api.
+
+## Définitions
+
+| Chiffre | Définition |
+|---|---|
+| **Enrolments** [inscriptions] | Chaque inscription que le cours a eue, y compris les étudiants qui ont abandonné. Le graphique d'historique compte chacune au jour UTC où l'étudiant s'est inscrit |
+| **Dropped** [abandons] | Les inscriptions dont le statut est abandonné. Elles restent dans l'historique des inscriptions mais sortent de tous les autres chiffres ci-dessous |
+| **Active learner** [apprenant actif] | Un étudiant inscrit qui a terminé un élément (ce qui inclut la remise d'un devoir), soumis une tentative de quiz ou répondu à une question vidéo. Se connecter ou ouvrir une page ne compte pas, car ni l'un ni l'autre n'est enregistré |
+| **Active this week** [actifs cette semaine] | Apprenants actifs distincts dans la semaine calendaire en cours, du lundi au dimanche, UTC. La page d'analytique affiche aussi les apprenants actifs distincts par jour UTC, sur les 30 ou 90 derniers jours |
+| **Completion rate** [taux de complétion] | Inscriptions terminées divisées par toutes les inscriptions qui n'ont pas abandonné. Un cours sans de telles inscriptions affiche « No data », pas 0 % |
+| **Activated** [activés] | Inscriptions qui ont fait une première chose dans le cours : l'inscription a une date de dernière activité, fixée par le premier élément terminé, la première tentative de quiz, la première remise de devoir ou la première réponse à une question vidéo. Chaque inscription compte, y compris celles qui ont pris fin. C'est compté à partir de la date de dernière activité de l'inscription, donc aucun nouveau marqueur n'est conservé, et c'est « jusqu'ici » : un apprenant qui n'a pas encore commencé peut encore devenir activé. Le graphique d'historique l'attribue au jour UTC où l'étudiant s'est inscrit |
+| **Activation rate** [taux d'activation] | Inscriptions activées divisées par toutes les inscriptions, celles qui ont pris fin comprises dans les deux. Il est affiché pour toute la période et pour les apprenants inscrits au cours des 30 ou 90 derniers jours. Un cours sans inscriptions affiche « No data », pas 0 % |
+| **Prompt answers and dismissals** [réponses et refus de l'invite] | Combien d'apprenants ont répondu à l'invite de première leçon, et combien ont appuyé sur **Not now**. Chaque apprenant compte une fois par cours. Le nombre de fois où l'invite a été affichée n'est pas enregistré, donc il n'y a pas de taux |
+| **Drop-off** [décrochage] | Pour chaque leçon actuellement affichée aux étudiants, dans l'ordre du cours : combien d'apprenants l'ont commencée, combien l'ont terminée, et la part de terminées parmi ceux qui l'ont commencée. Les leçons masquées ou archivées, et les leçons de modules masqués ou archivés, sont exclues |
+| **Score bands** [tranches de scores] | Le meilleur score de chaque étudiant par quiz, en tranches de dix points (0-9, 10-19, ... 90-100), de sorte qu'un étudiant compte une fois quel que soit son nombre de tentatives |
+| **Most-missed questions** [questions les plus ratées] | Classées par taux d'échec sur toutes les tentatives. Une question doit avoir au moins 5 tentatives pour être classée, donc une seule mauvaise tentative ne peut pas la placer en tête |
+| **Video question results** [résultats des questions vidéo] | Pour chaque vidéo affichée aux étudiants qui a des questions, et par question actuelle : son moment (ou « End of video »), le début de son énoncé, combien d'apprenants ont répondu, combien se sont trompés, et le taux d'échec, classé comme les questions de quiz avec le même minimum de 5 réponses. Seule la première réponse enregistrée de chaque apprenant compte : **Try again** et les passages ne sont pas enregistrés. Les questions supprimées ne sont pas listées. Les résultats ne contiennent aucun identifiant d'apprenant |
+| **Modules without questions** [modules sans questions] | La vue de décrochage par leçon nomme aussi chaque module affiché aux étudiants qui a une vidéo affichée et aucun quiz affiché ni vidéo affichée avec des questions, en suggérant à l'instructeur d'en ajouter. Elle est lue à partir du curriculum actuel, ce n'est donc pas un compteur et elle ne peut pas dériver |
+
+## Fraîcheur
+
+Les chiffres retardent de quelques secondes sur les enregistrements, comme la progression d'un cours. Un changement (une inscription, une complétion, une tentative de quiz) apparaît normalement au chargement suivant dans les 30 secondes. Les cartes comme la page d'analytique indiquent quand les chiffres ont été mis à jour pour la dernière fois.
+
+## Comment les chiffres sont tenus à jour
+
+Le gestionnaire `analytics-update` est une fonctionnalité du <Link path="design/stream-event-router">routeur d'événements de flux</Link>. Il tient des compteurs dans cinq enregistrements de la table core : `courseStats`, `periodStats`, `lessonStats`, `quizScoreStats` et `quizQuestionStats`.
+
+- **Chaque changement compte une fois.** Les comptes d'un changement sont écrits dans une transaction avec un `analyticsMarker` nommé d'après l'enregistrement du flux. Un enregistrement livré à nouveau trouve son marqueur et ne compte rien.
+- **Chaque apprenant compte une fois par jour et par semaine.** Un second marqueur par apprenant et par période fait de « actif » un compte d'apprenants distincts.
+- **L'ordre n'a pas d'importance.** Les compteurs ne font qu'augmenter, et les chiffres de décrochage d'une leçon sont établis à partir des enregistrements actuels de l'étudiant, pas du changement arrivé.
+
+Si les chiffres s'écartent un jour des enregistrements, l'invariant `analytics-matches-records` le détecte, et `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId>` recalcule les chiffres d'un cours à partir de ses enregistrements.

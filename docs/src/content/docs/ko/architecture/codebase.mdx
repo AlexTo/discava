@@ -1,0 +1,120 @@
+---
+title: 코드베이스 지도
+description: 각 구성 요소의 코드가 모노레포 어디에 있는지, 로컬 개발이 AWS를 어떻게 흉내 내는지 설명합니다.
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Discava는 [Nx](https://nx.dev/)와 pnpm으로 관리하는 TypeScript 모노레포이며, [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws)로 스캐폴딩했습니다.
+
+## 패키지
+
+```
+packages/
+├── websites/
+│   ├── student-portal/      React + Vite + TanStack Router
+│   ├── instructor-portal/
+│   └── admin-portal/
+├── apis/
+│   ├── core-api/            tRPC, any signed-in user; also the public page renderer
+│   ├── instructor-api/      tRPC, instructors only
+│   └── admin-api/           tRPC, admins only
+├── databases/
+│   ├── core-table/          DynamoDB entities and write helpers (ElectroDB)
+│   └── search/              OpenSearch client, index definitions and index sync
+├── events/                  Lambda handlers for AWS-triggered events
+├── infra/                   The CDK app: stages and stacks
+├── common/
+│   ├── constructs/          CDK constructs, one per component
+│   ├── infra-config/        Per-stage deployment settings, local ports and origins
+│   ├── branding/            Brand rules shared by portals and backend
+│   ├── server-utils/        Code shared by backend functions
+│   ├── web-utils/           Non-UI code shared by portals
+│   ├── shadcn/              UI components and the shell shared by portals
+│   └── tiptap/              Rich-text document helpers
+├── tooling/
+│   ├── local-dev/           The Docker services local development runs instead of AWS
+│   ├── deploy/              Deploy and operations scripts
+│   └── agent/               CI and pull request tooling
+└── e2e/                     Playwright end-to-end tests against the local stack
+docs/                        This site
+scripts/setup-stage.sh       One-time AWS and GitHub setup per stage
+```
+
+각 패키지는 `@discava/<name>`이라는 이름의 Nx 프로젝트입니다. `common/`과 `tooling/` 아래 패키지는 폴더 이름을 접두사로 붙입니다. 예: `@discava/common-web-utils`, `@discava/tooling-deploy`.
+
+## 구성 요소에서 코드까지
+
+| 구성 요소 | 런타임 코드 | 인프라 |
+| --- | --- | --- |
+| 포털 | `packages/websites/<portal>` | `constructs/src/app/static-websites`, `WebsitesStack` |
+| API | `packages/apis/<api>` | `constructs/src/app/apis`, `<Api>Stack` |
+| 코어 테이블 | `packages/databases/core-table` | `constructs/src/app/dynamodb`, `DataStack` |
+| 페이지 렌더러 | `packages/apis/core-api/src/page-renderer` | `constructs/src/app/static-websites/student-portal.ts`, `WebsitesStack` |
+| 검색 | `packages/databases/search` | `constructs/src/app/opensearch`, `DataStack` |
+| 스트림 라우터와 기능 핸들러 | `packages/events/src/router`와 주제별 폴더 (`progress`, `search`, `analytics`, `notifications`, `earnings`, `media`, `branding`) | `constructs/src/core/stream-router.ts`, `StreamRouterStack` |
+| 미디어 파이프라인 | `packages/events/src/media` | `constructs/src/app/media-convert`, `MediaPipelineStack` |
+| Stripe 웹훅 | `packages/events/src/payments` | `constructs/src/app/apis/stripe-webhook-api.ts`, `PaymentsStack` |
+| 정산 실행 | `packages/events/src/earnings` | `PayoutsStack` |
+| 수료증 알림 | `packages/events/src/certificates` | `StreamRouterStack` |
+| Cognito 트리거 | `packages/events/src/identity` | `DataStack` |
+
+스트림 기능 자체는 `packages/databases/core-table/src/helpers/stream-features.ts`의 `STREAM_FEATURES`라는 하나의 목록에 등록됩니다. 배포된 스트림 라우터와 로컬 이벤트 러너가 모두 이 목록을 읽습니다.
+
+## API의 구성
+
+모든 API는 같은 구조를 따릅니다.
+
+| 파일 | 역할 |
+| --- | --- |
+| `src/init.ts` | 프로시저 타입을 만듭니다: `publicProcedure`, `protectedProcedure`, 테이블 접근을 추가한 것들 |
+| `src/router.ts` | tRPC 라우터: API가 노출하는 모든 프로시저 |
+| `src/procedures/` | 프로시저들. 각각 테스트와 나란히 둡니다 |
+| `src/handler.ts` | Lambda 진입점 |
+| `src/local-server.ts` | 같은 라우터를 로컬에서 제공 |
+
+core-api에는 진입점이 하나 더 있습니다. `src/page-renderer/`이며, 로컬에서 제공하는 `src/local-page-renderer.ts`가 딸려 있습니다.
+
+인증 미들웨어와 Lambda 어댑터 같은 공통 배관 코드는 `packages/common/server-utils`에 한 번만 존재합니다.
+
+포털은 각 API의 라우터 **타입**을 가져오므로, 프로시저의 입력과 출력이 컴파일 시점에 끝에서 끝까지 검사됩니다.
+
+## 레코드에 걸친 규칙
+
+모든 API와 핸들러는 같은 테이블에 씁니다. "학생이 사용한 항목은 삭제할 수 없다"처럼 둘 이상의 쓰기 주체가 지켜야 하는 규칙은 `core-table`의 도우미 하나로 구현하고, 모든 쓰기 주체가 이를 호출합니다. 이런 규칙마다 **불변식 검사**가 있으며, 엔드투엔드 테스트는 모든 시나리오 뒤에 테이블에 대해 이 검사를 전부 실행합니다.
+
+## 로컬 개발은 AWS를 흉내 냅니다
+
+`pnpm dev`는 같은 코드를 로컬 대역(stand-in)에 대해 실행합니다.
+
+| AWS | 로컬 |
+| --- | --- |
+| CloudFront + S3 웹사이트 | Vite 개발 서버 |
+| API Gateway + Lambda | API마다 로컬 HTTP 서버 |
+| 페이지 렌더러 | 2026 포트의 로컬 HTTP 서버 |
+| Cognito | 미리 정해진 사용자가 있는 로컬 OIDC 서버 |
+| DynamoDB | Docker의 DynamoDB local |
+| S3 | Docker의 S3Mock |
+| SQS | Docker의 ElasticMQ |
+| OpenSearch Serverless | Docker의 OpenSearch |
+| DynamoDB Streams, EventBridge, Scheduler | 이벤트 러너 (`packages/events/src/local`) |
+| MediaConvert | Docker의 ffmpeg |
+| Transcribe | 자리표시자 자막 트랙을 쓰는 대역 |
+| Translate | 각 자막 앞에 대상 언어를 붙이는 대역 |
+| SES | 로컬 받은편지함에 저장되는 이메일 |
+| Stripe | API, 결제 페이지, 웹훅 전송, Connect를 흉내 내는 대역 |
+| Secrets Manager (Stripe 시크릿) | `tmp/local-dev/secrets/` 아래의 Git 무시 파일 |
+
+이벤트 러너는 같은 스트림 기능 레지스트리를 통해 AWS가 호출했을 것과 같은 핸들러를 실행하므로, 백그라운드 동작이 두 환경에서 같습니다. 명령어는 <Link path="guides/getting-started">Discava를 로컬에서 실행하기</Link>에 있습니다.
+
+## 저장소에서 작업하기
+
+```sh
+pnpm build    # compile, bundle, synthesize and scan every project
+pnpm lint     # format and lint with Biome
+pnpm test     # run every project's tests
+```
+
+관례, 테스트, 변경 방법은 [DEVELOPMENT.md](https://github.com/AlexTo/discava/blob/main/DEVELOPMENT.md)에 자세히 나와 있습니다.

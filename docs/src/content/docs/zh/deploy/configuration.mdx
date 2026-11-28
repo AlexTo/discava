@@ -1,0 +1,183 @@
+---
+title: Stage 配置
+description: stage 如何配置，如何在不提交的情况下覆盖设置，以及如何添加自定义域名、邮件和新的 stage。
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+## 配置存放在哪里
+
+每个 stage 都定义在同一个文件中：`packages/common/infra-config/src/stages.config.ts`。stage 在 `infra` 下按**组件**列出设置：
+
+| 组件 | 含义 |
+| --- | --- |
+| `identity` | Cognito 用户池 |
+| `coreApi`、`instructorApi`、`adminApi` | 三个 API |
+| `payments` | Stripe webhook API |
+| `coreTable` | DynamoDB 表 |
+| `streamRouter` | 把表的变更传送给各处理程序的队列 |
+| `studentPortal`、`instructorPortal`、`adminPortal` | 三个网站 |
+| `lessonMedia`、`publicMedia` | 视频和图片存储桶及其 CloudFront 分发 |
+| `search` | OpenSearch Serverless 集合 |
+| `notifications` | 邮件发送方 |
+
+**每项安全设置默认都是开启的。** stage 只列出它放宽或指定规模的内容。`discava-development` 关闭了大部分保护以节省费用，而 `discava-production` 则明确写出加固后的值。
+
+常用设置：
+
+| 设置 | 含义 |
+| --- | --- |
+| `enableWaf` | 在组件前面放置一个 WAF web ACL |
+| `enableKmsEncryption`、`enableKeyRotation` | 使用客户管理的 KMS 密钥加密，并轮换该密钥 |
+| `retainOnDelete`、`enableDeletionProtection` | 删除堆栈时保留数据，并拒绝意外删除 |
+| `throttleRateLimit`、`throttleBurstLimit` | API Gateway 每个方法的请求限额 |
+| `reservedConcurrency` | API 的函数同时处理的最大请求数 |
+| `maxReadRequestUnits`、`maxWriteRequestUnits` | 表的吞吐量上限 |
+| `min…CapacityInOcu`、`max…CapacityInOcu` | 搜索容量。最小值为 0 表示空闲时缩容到零 |
+| `timeoutSeconds`、`logLevel`、`enableTracing` | API 的请求超时、最低日志级别（`DEBUG`、`INFO`、`WARN`、`ERROR`）和 X-Ray 追踪 |
+| `publicThrottle…`、`publicSuggestThrottle…` | core API 中无需登录的调用以及搜索建议各自独立的限额 |
+| `enableSelfSignUp`、`enableMfa` | 是否允许任何人创建账户，以及是否要求 MFA |
+| `studentPortal.allowSearchEngineIndexing` | 允许搜索引擎为公开页面建立索引。除非设置，否则关闭；`discava-production` 将其开启 |
+| `studentPortal.linkedInOrganizationId` | 你的 LinkedIn 组织主页 ID，学生把证书添加到 LinkedIn 时会写明该组织 |
+
+`packages/common/infra-config/src/stages.types.ts` 记录了每项设置及其默认值。
+
+关闭 WAF 后，节流、并发和吞吐量限额就是限制大量请求所带来费用的手段。随着实际用量增长，请相应调高。
+
+## 在不提交的情况下覆盖
+
+特定于你账户的值，例如域名和证书 ARN，不应该提交到公开的 fork 中。任何组件设置都可以改用如下命名的变量来提供：
+
+```
+<STAGE>_INFRA_<COMPONENT>_<FIELD>
+```
+
+使用大写蛇形命名。例如，`discava-development` 上的 `coreApi.throttleRateLimit` 是 `DISCAVA_DEVELOPMENT_INFRA_CORE_API_THROTTLE_RATE_LIMIT`。
+
+把它设置为**该 stage 的 GitHub environment 上的变量**。Deploy workflow 会转发所有以该 stage 前缀开头的变量：
+
+```sh
+gh variable set DISCAVA_DEVELOPMENT_INFRA_CORE_API_THROTTLE_RATE_LIMIT \
+  --env discava-development --body 5
+```
+
+值是单行纯文本：`true` 或 `false`，整数，或者对于 `…_DOMAIN_NAMES` 设置，用逗号分隔的列表。类型错误的值会使部署失败。
+
+组件之外：
+
+- `<STAGE>_REGION` 和 `<STAGE>_ACCOUNT` 覆盖该 stage 的 `region` 和 `account`
+- `<STAGE>_CAPTION_TRANSLATION_ENABLED` 和 `<STAGE>_CAPTION_TRANSLATION_MAX_LANGUAGES_PER_COURSE` 覆盖[字幕翻译](#字幕翻译)
+- `credentials` 和 `payouts` 无法覆盖。请在 `stages.config.ts` 中修改
+
+## 自定义域名
+
+每个 API、门户和媒体分发都可以有自己的域名。对于每一个，你需要：
+
+- 一个你控制的**域名**
+- 一张覆盖该域名、位于正确区域的**已签发 ACM 证书**
+- 一条指向它的 **DNS 记录**，在部署之后由你创建
+
+| 组件 | 域名变量 | 证书区域 |
+| --- | --- | --- |
+| Core API | `…_INFRA_CORE_API_DOMAIN_NAME` | stage 所在区域 |
+| Instructor API | `…_INFRA_INSTRUCTOR_API_DOMAIN_NAME` | stage 所在区域 |
+| Admin API | `…_INFRA_ADMIN_API_DOMAIN_NAME` | stage 所在区域 |
+| 支付（Stripe webhook API） | `…_INFRA_PAYMENTS_DOMAIN_NAME` | stage 所在区域 |
+| 学生门户 | `…_INFRA_STUDENT_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| 讲师门户 | `…_INFRA_INSTRUCTOR_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| 管理门户 | `…_INFRA_ADMIN_PORTAL_DOMAIN_NAMES` | `us-east-1` |
+| 课程媒体 | `…_INFRA_LESSON_MEDIA_DOMAIN_NAMES` | `us-east-1` |
+| 公开媒体 | `…_INFRA_PUBLIC_MEDIA_DOMAIN_NAMES` | `us-east-1` |
+
+每个组件还有一个对应的 `…_CERTIFICATE_ARN`。只有同时设置了证书，域名才会生效。门户和媒体接受多个以逗号分隔的域名；API 只接受一个。
+
+**设置这些的最简单方式是重新运行设置脚本。** 给它一个根域名，它就会让每个组件使用该根域名下固定的子域名，在 ACM 中找到每个组件已签发的证书，并写入这些变量。如果某个组件没有证书，它会列出缺少的证书，并在做出任何更改之前停止。它目前不覆盖 admin API 和 payments API：请自行设置它们的变量。之后再次运行时，按 Enter 即可保留它提供的根域名。清空根域名会移除脚本设置的域名变量。
+
+```sh
+./scripts/setup-stage.sh discava-development
+```
+
+| 组件 | 根域名为 `example.com` 时的域名 |
+| --- | --- |
+| Core API | `core-api.example.com` |
+| Instructor API | `instructor-api.example.com` |
+| 学生门户 | `example.com`、`www.example.com` |
+| 讲师门户 | `instructor.example.com` |
+| 管理门户 | `admin.example.com` |
+| 课程媒体 | `lesson-media.example.com` |
+| 公开媒体 | `media.example.com` |
+
+对于其他域名，请自行在 GitHub environment 上设置变量。
+
+需要了解三条规则：
+
+- **每个 API 需要一张恰好包含其域名的独立证书。** 不能是通配符证书，也不能与另一个 API 共用。否则浏览器可能把一个连接复用于两个 API，并从错误的那个得到错误响应。
+- **视频播放需要共同的父域名。** 当课程媒体使用自定义域名时，播放通过 API 与课程媒体之间共享的 cookie 授权，因此两者必须位于同一个父域名之下，该父域名由 `…_INFRA_LESSON_MEDIA_COOKIE_DOMAIN` 给出。设置脚本会把它设为根域名。
+- **DNS 由你自己管理。** 部署之后，把每个域名指向它的目标：门户和媒体指向 CloudFront 分发（`…DistributionDomainName` 堆栈输出），API 指向 API Gateway 自定义域名（该 API 堆栈的 `…DomainNameAlias` 输出）。在此之前这些域名无法解析，尽管门户已经在使用它们。
+
+门户域名会被自动采用，作为 API 允许的 CORS 来源，以及 Cognito 的登录和退出地址。
+
+## 通知邮件
+
+邮件通过 SES 发送。请在 stage 所在区域的 SES 中验证一个域名或地址。如果配置了根域名，其余工作由设置脚本完成：一旦根域名成为已验证的 SES 域名身份，再次运行脚本就会以 `notifications@<root>` 发送邮件。要使用其他发件人，请自行设置下面的变量；脚本再次运行时会保留你设置的发件人：
+
+| 变量 | 示例 |
+| --- | --- |
+| `…_INFRA_NOTIFICATIONS_FROM_ADDRESS` | `notifications@example.com` |
+| `…_INFRA_NOTIFICATIONS_SES_IDENTITY` | `example.com` |
+
+两者都没有设置时，不会发送任何邮件，每封邮件都会被记录为已跳过。应用内通知不受影响。新的 SES 账户处于沙盒中，在 AWS 授予生产访问权限之前，只能向已验证的地址发送邮件。
+
+## 支付
+
+Stripe **不需要部署时配置**：不用创建密钥，也不用注册 webhook。部署之后，管理员在管理门户的 Payments 页面粘贴一个 Stripe 密钥，Discava 会自行注册该 stage 的 webhook 地址。步骤见<Link path="guides/payments">付费课程与支付</Link>。
+
+webhook API 可以有自己的域名，即上表中的 `…_INFRA_PAYMENTS_DOMAIN_NAME`。如果你在连接 Stripe 之后添加或更改了它，请在 Payments 页面再次保存密钥，以便注册新的地址。
+
+要向讲师付款，Stripe 账户必须启用 Connect。受限密钥预计需要对 Accounts、Account Links、Login Links 和 Transfers（付款所发起的调用）的写权限；这份列表尚未用真实的受限密钥确认过，所以如果入驻或付款被拒绝，请使用 secret key。切换所连接的 Stripe 账户或模式，会冻结所有讲师未支付的收入：它们显示为 Held，付款运行不会为它们发送任何款项。讲师的视角见<Link path="guides/earnings-and-payouts">收入与付款</Link>。
+
+### 付款设置
+
+stage 在 `stages.config.ts` 中的 `payouts` 条目设定平台保留多少，以及何时向讲师付款：
+
+| 设置 | 含义 | 默认值 |
+| --- | --- | --- |
+| `platformFeeBasisPoints` | 平台对已付金额收取的费用，以基点计（2000 即 20%）。适用于更改之后记录的销售 | `2000` |
+| `holdDays` | 一笔销售的收入在可以付款之前被冻结的天数，用于覆盖退款 | `14` |
+| `minimumPayoutMinor` | 发出的最小付款额，以货币的最小单位计（1000 即 10.00）。余额更小时需要等待 | `1000` |
+
+`discava-development` 把收入冻结一天，这样测试人员可以很快看到它们变为可付款。可能导致金额错误的值，例如超过 10000 的费用，会使构建失败。付款运行每天一次。
+
+## 字幕翻译
+
+视频字幕由 Amazon Translate 机器翻译，按字符计费。stage 的 `captionTranslation` 条目为这笔费用设定上限：
+
+| 设置 | 含义 | 默认值 |
+| --- | --- | --- |
+| `enabled` | 该 stage 是否翻译字幕 | `true` |
+| `maxLanguagesPerCourse` | 一门课程最多可选择的字幕语言数，0 到 9 | `9` |
+
+`discava-development` 允许每门课程三种语言。
+
+## 添加 stage
+
+1. 在 `stages.config.ts` 中现有两个条目旁边添加一个条目，写上它放宽的设置。如果默认值不合适，请添加 `payouts`。
+2. 提交并推送。
+3. 运行 `./scripts/setup-stage.sh <new-stage>` 来创建它的角色和 GitHub environment。
+4. 用新 stage 的名称运行 Deploy workflow。
+
+其他都不用改：CDK 应用会为文件中的每个条目创建一个 stage。
+
+如果你打算用环境覆盖项从你的机器部署新的 stage，还要把它的前缀添加到 `packages/infra/project.json` 中 `synth` 目标的 `inputs`，这样当覆盖项变化时，Nx 的缓存才能察觉。
+
+## 上线生产
+
+`discava-production` 可以原样部署。真实用户到来之前：
+
+- 为它运行设置脚本，并在被询问时在 `us-east-1` 引导 CDK（它的 WAF 规则位于那里）
+- 用必需的审批人来<Link path="deploy/setup">保护它的 GitHub environment</Link>
+- 为它配置自定义域名和已验证的 SES 身份
+- 对照你预期的流量，检查 `stages.config.ts` 中的请求限额
+- 如果你销售课程，请检查 `payouts` 设置，并在管理门户的 Payments 页面连接一个**生产**（live）Stripe 密钥

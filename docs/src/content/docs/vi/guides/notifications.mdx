@@ -1,0 +1,104 @@
+---
+title: Thông báo
+description: Mọi người được thông báo về điều gì ở chuông và qua email, cách tắt email, và dành cho nhà phát triển là các helper phát hành, khóa dedupe, hộp thư cục bộ và cấu hình stage cho email.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+Thông báo là một tin nhắn ngắn gửi cho một người. Nó hiển thị ở chuông trên phần đầu của mọi cổng và, theo tùy chọn của người đó, được gửi dưới dạng email.
+
+## Bạn được thông báo về điều gì
+
+| Thông báo | Gửi khi | Email |
+| --- | --- | --- |
+| **Course announcements** | Giảng viên đăng thông báo cho một khóa học bạn đang tham gia | Bật |
+| **Discussion replies** | Ai đó trả lời bài đăng của bạn trong một thảo luận bài học | Bật |
+| **Answered questions** | Ai đó đánh dấu một câu trả lời cho câu hỏi của bạn | Bật |
+| **Accepted answers** | Câu trả lời của bạn được đánh dấu là đáp án | Tắt |
+| **Assignment returned** | Giảng viên trả lại bài nộp của bạn | Bật |
+| **Resubmission requested** | Giảng viên yêu cầu bạn nộp lại một bài tập | Bật |
+| **Assignment grade updated** | Giảng viên thay đổi điểm của một bài tập đã trả | Bật |
+| **Certificates** | Bạn nhận được chứng chỉ, và một lời nhắc để thêm nó vào hồ sơ LinkedIn | Bật |
+| **Certificate revoked** | Chứng chỉ bạn đã nhận bị thu hồi | Bật |
+| **Certificate restored** | Chứng chỉ bị thu hồi có hiệu lực trở lại | Bật |
+| **Refunds** | Hoàn tiền toàn bộ cho một khóa học bạn đã mua đã hoàn tất | Luôn luôn |
+| **New assignment submissions** (giảng viên) | Học viên nộp bài cho một bài tập của bạn, tối đa một lần mỗi ngày cho mỗi bài tập | Tắt |
+| **Course reviews** (giảng viên) | Một học viên đánh giá một khóa học của bạn | Tắt |
+
+"Bật" và "Tắt" là các cài đặt bạn bắt đầu với. "Luôn luôn" không thể tắt.
+
+## Chuông
+
+Chuông liệt kê mọi thông báo, bất kể cài đặt email của bạn. Chọn một thông báo sẽ mở trang mà nó nói đến. **Mark all as read** xóa số lượng chưa đọc.
+
+## Bật hoặc tắt email
+
+1. Mở menu tài khoản trong bất kỳ cổng nào và chọn **Notification settings**.
+2. Dùng công tắc bên cạnh một thông báo để chọn xem nó có cũng đến bạn qua email hay không.
+
+Mọi email cũng có một liên kết hủy đăng ký. Nó mở một trang trong cổng học viên, nơi **Stop these emails** tắt loại email đó, và không có gì thay đổi cho đến khi bạn nhấn. **Turn them back on** hoàn tác việc đó.
+
+Phần còn lại của trang này dành cho nhà phát triển thêm thông báo vào một tính năng. Các tính năng phát hành thông báo qua các helper trong `@discava/core-table`. Không có gì khác được ghi các bản ghi thông báo.
+
+## Thêm một loại sự kiện
+
+Mỗi loại thông báo là một mục trong `NOTIFICATION_TYPES` (`packages/databases/core-table/src/helpers/notification-types.ts`):
+
+- `id`: ổn định, `<area>.<event>`, ví dụ `announcement.posted`.
+- `name` và `description`: những gì trang cài đặt hiển thị.
+- `params`: các tham số chuỗi phẳng mà thông báo được dựng từ đó.
+- `emailPolicy`: `default-on`, `default-off`, `required` (luôn gửi) hoặc `never` (chỉ chuông).
+- `build(params)`: thuần túy; trả về `title` (cắt còn 120 ký tự), `body` (cắt còn 500) và `link` (`portal` và một `path` bắt đầu bằng `/`, không chứa bí mật). Nó cũng có thể trả về một `action` tùy chọn (`label` và `path`, trong cùng cổng với link): email hiển thị nó như một nút và dòng thứ hai, còn chuông bỏ qua.
+- `emailPreferenceType` (tùy chọn): id của một loại khác mà cài đặt email, token hủy đăng ký và nhãn cài đặt của nó chi phối loại này. Loại này không có cài đặt riêng, `setNotificationPreference` từ chối nó và trang cài đặt bỏ nó ra. `isEmailEnabled` xử lý việc này.
+
+Bốn loại dành cho chứng chỉ: `certificate.issued` (`link` của nó là trang của chứng chỉ và `action` là "Add to LinkedIn profile"), `certificate.reminder` (cùng link và action, với `emailPreferenceType: 'certificate.issued'`), và `certificate.revoked` cùng `certificate.restored` (cả hai liên kết đến My Learning). Xem <Link path="design/certificates">Chứng chỉ</Link>.
+
+`order.refunded` báo cho học viên rằng việc hoàn tiền toàn bộ cho giao dịch mua của họ đã hoàn tất (`link` của nó là trang khóa học, và email của nó là `required`). Nó được gửi cho mọi lần hoàn tiền toàn bộ được ghi nhận từ Stripe, dù học viên yêu cầu hay một operator thực hiện trong dashboard, và khóa dedupe của nó là ID đơn hàng, nên một lần gửi lặp lại chỉ gửi một thông báo. Xem <Link path="design/payments">Thanh toán</Link>.
+
+Thêm một test cho mục đó trong `notification-types.test.ts`. Không có gì khác thay đổi: cài đặt, chuông và email tự nhận nó.
+
+## Phát hành
+
+Mọi helper nhận cùng một đầu vào: `type`, `params`, `dedupeKey`, `occurredAt`, và `userId` (hoặc `courseId` cho đối tượng là một khóa học).
+
+- `notificationWrites(service, input)` kiểm tra đầu vào và trả về các mục transaction (thông báo và số lượng chưa đọc của người dùng). Thêm chúng vào `service.transaction.write` của bạn, bên cạnh thao tác ghi mà thông báo nói đến, để cả hai cùng commit hoặc cùng không. Một transaction bị hủy được xử lý như mọi lỗi điều kiện khác.
+- `publishNotification(service, input)` làm điều tương tự trong transaction riêng và trả về `'created'` hoặc `'duplicate'`. Dùng khi thông báo không thuộc một thao tác ghi khác.
+- `notifyCourseStudents(service, input)` trả về một mục yêu cầu thông báo cho mọi học viên đã ghi danh vào khóa học (không tính người đã rời). Thêm nó vào transaction của bạn. Pipeline sau đó tạo thông báo của từng học viên với `dedupeKey` của bạn, nên thử lại là an toàn. Chỉ học viên được bao phủ; với giảng viên hãy gọi `notificationWrites` cho từng người.
+
+Đầu vào không hợp lệ (một type chưa đăng ký, thiếu param, khóa rỗng, thời điểm sai) ném `NotificationInputError` trước khi bất cứ thứ gì được đọc hoặc ghi. Các helper không kiểm tra người dùng có tồn tại hay có địa chỉ email hay không.
+
+Đừng gọi `markNotificationRead`, `markNotificationsRead` hoặc `notificationEmailTransitions`: chúng thuộc về API và việc gửi.
+
+## Khóa dedupe và `occurredAt`
+
+Khóa dedupe đặt tên cho sự kiện, ví dụ `${contentItemId}:${version}`. Id của thông báo đến từ type và khóa của nó, nên phát hành cùng một sự kiện hai lần, do thử lại hoặc do mười yêu cầu cùng lúc, chỉ là một thông báo. Hãy dùng thứ giống nhau mỗi lần sự kiện được thử lại và khác nhau với mỗi sự kiện mới; không bao giờ dùng giá trị ngẫu nhiên hay thời gian hiện tại.
+
+`occurredAt` là một thời điểm ISO theo UTC với mili giây (`2026-11-18T21:55:47.000Z`) lấy từ bản ghi của chính bạn (khi bài đăng được tạo, không phải khi code chạy), nên một lần thử lại cho cùng giá trị. Nó sắp xếp danh sách của chuông.
+
+## Tùy chọn và hủy đăng ký
+
+Mỗi người có thể tắt email của từng type trong **Notification settings**, từ menu người dùng ở mỗi cổng. Công tắc của type `required` luôn bật và không thể đổi. Type `never` không gửi email và không được liệt kê. Chuông không bị ảnh hưởng bởi tùy chọn.
+
+Mọi email mang một liên kết hủy đăng ký, được ký để không thể bị sửa, và các header `List-Unsubscribe` cho nút một lần nhấn của ứng dụng mail. Liên kết mở một trang trong cổng học viên không thay đổi gì cho đến khi nút của nó được nhấn, và trang đó có thể bật lại email. Bí mật ký được stack Data tạo cho từng stage.
+
+## Thử cục bộ
+
+Khi `pnpm dev` đang chạy, hãy phát hành bằng target `notify-local`:
+
+```sh
+pnpm nx run @discava/tooling-local-dev:notify-local -- --user <sub> --type announcement.posted
+pnpm nx run @discava/tooling-local-dev:notify-local -- --course <courseId> --type announcement.posted
+```
+
+Lặp lại lệnh với cùng `--key` để thấy một bản trùng không làm gì. Email không rời khỏi máy của bạn: chúng được giữ trong hộp thư cục bộ tại `http://localhost:2024/inbox` (`GET /emails` liệt kê chúng dạng JSON), và `reset-local-data` làm trống nó.
+
+## Email trên một stage
+
+Email được gửi bằng Amazon SES và tắt cho đến khi stage được cấu hình. Dưới `infra.notifications` trong cấu hình của stage (hoặc các override biến môi trường `<STAGE>_INFRA_NOTIFICATIONS_*`):
+
+- `fromAddress`: địa chỉ mà email được gửi từ đó.
+- `sesIdentity`: domain hoặc địa chỉ SES đã xác minh mà hàm gửi được phép gửi từ đó, và không gì khác. `fromAddress` phải thuộc về nó.
+
+Nếu không có `fromAddress`, thông báo vẫn đến chuông và mỗi email được ghi nhận là bị bỏ qua. Trong SES sandbox, người nhận cũng phải được xác minh. Các lần gửi thất bại đi vào hàng đợi lỗi `notification-delivery`, có một cảnh báo.

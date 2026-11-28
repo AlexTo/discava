@@ -1,0 +1,83 @@
+---
+title: 从你的机器部署
+description: 使用你自己的 AWS 凭证部署、更新和销毁一个阶段，无需 GitHub Actions。
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+推荐使用 GitHub Actions 部署。从你的机器部署适合个人测试阶段，或在调试部署时使用。
+
+## 开始之前
+
+- 一个已安装依赖（`pnpm i`）的克隆，以及 AWS CLI
+- 你的 shell 中有目标账户的 AWS 凭证（`aws sts get-caller-identity` 可正常运行）
+- 一个区域，通过 `AWS_REGION` 或你的 AWS profile 指定
+- 在该区域完成 CDK bootstrap，每个账户和区域一次：
+
+  ```sh
+  pnpm exec cdk bootstrap aws://<account-id>/<region>
+  ```
+
+  如果阶段的门户或媒体启用了 WAF，还需要对 `us-east-1` 做 bootstrap。
+
+## 部署
+
+```sh
+pnpm nx deploy @discava/infra "discava-development/*"
+```
+
+模式 `<stage>/*` 会选中该阶段的所有堆栈。这会构建门户和 Lambda 函数，合成模板，并在不请求批准的情况下部署。
+
+如果想让某个阶段每次都使用指定的 AWS profile，请在 `packages/common/infra-config/src/stages.config.ts` 中设置它的 `credentials`。本页的部署、销毁和重新索引命令随后都会使用它：
+
+```ts
+'discava-development': {
+  credentials: { type: 'profile', profile: 'my-profile' },
+  region: 'eu-west-1',
+  infra: { /* … */ },
+},
+```
+
+## 与 GitHub 部署的区别
+
+| | GitHub Actions | 你的机器 |
+| --- | --- | --- |
+| 凭证 | 该阶段限定范围的部署角色和执行角色 | 你自己的，通过 CDK 的 bootstrap 角色 |
+| 权限边界 | 应用于每个角色 | 不应用 |
+| 配置覆盖 | 从 GitHub 环境的变量读取 | 从你的 shell 读取：部署前先 `export DISCAVA_DEVELOPMENT_INFRA_…` |
+| 漏洞扫描 | 先运行 | 自己运行 `pnpm trivy`（需要 Docker） |
+
+由于覆盖项来自你的 shell，如果某个阶段在 GitHub 上使用了自定义域名，在本地部署它会**移除这些域名**，除非你导出相同的变量。每个阶段选定一种部署方式并坚持使用。
+
+## 维护脚本
+
+这些脚本从你的机器针对已部署的阶段运行，无论该阶段是如何部署的。正常使用中都不需要：搜索索引和分析数据会自行保持最新。
+
+| 何时 | 命令 |
+| --- | --- |
+| 重建课程搜索索引，例如在新增搜索字段的部署之后 | `pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development` |
+| 重建字幕搜索索引，针对所有课程或某一门 | `pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development [--course=<courseId>]` |
+| 根据记录重新计算课程的分析数据 | `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` |
+| 写入初始分类 | `pnpm nx run @discava/tooling-deploy:seed-categories` |
+
+两个重新索引命令会在阶段的 CloudFormation 堆栈中查找该阶段的重新索引函数并调用它，所以只需要 AWS 凭证和阶段名称。不带 `--stage` 时，`reindex-transcripts` 针对本地堆栈运行。
+
+最后两个命令直接写入表。请先把它们指向该阶段的表，否则它们会写入本地开发表：
+
+```sh
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
+export DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}"
+```
+
+## 销毁
+
+```sh
+pnpm nx destroy @discava/infra "discava-development/*"
+```
+
+CDK 会请你确认。`discava-development` 会删除所有内容，包括数据。`discava-production` 在删除其堆栈时会保留有状态的资源（包括用户池、表、媒体存储桶和搜索集合），并开启了删除保护：移除这些资源是一个需要刻意手动执行的步骤。
+
+<Link path="deploy/setup">安装脚本</Link>创建的角色和策略不属于任何堆栈。如果不再需要，请在 IAM 控制台中删除它们。
