@@ -18,6 +18,7 @@ export class EventsTranscodeReconciler extends Function {
     super(scope, id, {
       // Checks every stuck video in one run, asking MediaConvert about each.
       timeout: Duration.minutes(2),
+      memorySize: 256,
       runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
       handler: 'index.handler',

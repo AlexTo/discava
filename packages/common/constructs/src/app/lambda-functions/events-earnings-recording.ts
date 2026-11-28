@@ -18,6 +18,7 @@ export class EventsEarningsRecording extends Function {
     super(scope, id, {
       // A batch of at most 100 orders, each a few small transactions.
       timeout: Duration.minutes(1),
+      memorySize: 256,
       runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
       handler: 'index.handler',
