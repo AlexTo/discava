@@ -5,7 +5,7 @@ description: "Task list for deploy-time settings for backend functions"
 
 # Tasks: Deploy-Time Settings for Backend Functions
 
-**Input**: Design documents from `/specs/20261122-093927-runtime-config-env/`
+**Input**: Design documents from `/specs/_archive/20261122-093927-runtime-config-env/`
 
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
 

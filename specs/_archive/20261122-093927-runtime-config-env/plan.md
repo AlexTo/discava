@@ -2,7 +2,7 @@
 
 **Branch**: `20261122-093927-runtime-config-env` | **Date**: 2026-11-22 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/20261122-093927-runtime-config-env/spec.md`
+**Input**: Feature specification from `/specs/_archive/20261122-093927-runtime-config-env/spec.md`
 
 ## Summary
 
@@ -117,7 +117,7 @@ This feature writes no record and reads none in a new way. Every function reads 
 ### Documentation (this feature)
 
 ```text
-specs/20261122-093927-runtime-config-env/
+specs/_archive/20261122-093927-runtime-config-env/
 ├── plan.md
 ├── research.md
 ├── data-model.md
